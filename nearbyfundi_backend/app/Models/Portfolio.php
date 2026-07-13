@@ -1,0 +1,15 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class Portfolio extends Model
+{
+    protected $fillable = ['technician_id', 'image', 'description'];
+
+    public function technician()
+    {
+        return $this->belongsTo(Technician::class);
+    }
+}
