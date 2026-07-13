@@ -1,0 +1,83 @@
+// lib/models/service_request.dart
+
+class ServiceRequest {
+  final int id;
+  final int technicianId;
+  final int customerId;
+  final String description;
+  final String status;
+  final DateTime createdAt;
+  final String technicianName;
+  final String serviceName;
+  final String customerName;
+  final String? technicianArea;
+  final String? technicianPhone;
+  final double? technicianRating;
+
+  ServiceRequest({
+    required this.id,
+    required this.technicianId,
+    required this.customerId,
+    required this.description,
+    required this.status,
+    required this.createdAt,
+    required this.technicianName,
+    required this.serviceName,
+    required this.customerName,
+    this.technicianArea,
+    this.technicianPhone,
+    this.technicianRating,
+  });
+
+  // Status helpers
+  bool get isPending => status == 'pending';
+  bool get isAccepted => status == 'accepted';
+  bool get isCompleted => status == 'completed';
+  bool get isRejected => status == 'rejected';
+  bool get isCancelled => status == 'cancelled';
+  bool get isInProgress => status == 'in_progress';
+  bool get isActive => isPending || isAccepted || isInProgress;
+
+  factory ServiceRequest.fromJson(Map<String, dynamic> json) {
+    // Extract technician data
+    String techName = 'Unknown';
+    String? techArea;
+    String? techPhone;
+    double? techRating;
+
+    if (json['technician'] != null && json['technician'] is Map) {
+      final tech = json['technician'] as Map;
+      if (tech['user'] != null && tech['user'] is Map) {
+        final user = tech['user'] as Map;
+        techName = user['name']?.toString() ?? techName;
+        techPhone = user['phone']?.toString();
+      }
+      techArea = tech['area']?.toString();
+      if (tech['rating'] != null) {
+        techRating = double.tryParse(tech['rating'].toString());
+      }
+    }
+
+    // Fallback to direct fields
+    if (techName == 'Unknown' && json['technician_name'] != null) {
+      techName = json['technician_name'].toString();
+    }
+
+    return ServiceRequest(
+      id: json['id'] ?? 0,
+      technicianId: json['technician_id'] ?? 0,
+      customerId: json['customer_id'] ?? json['customer']?['id'] ?? 0,
+      description: json['description'] ?? '',
+      status: json['status'] ?? 'pending',
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'])
+          : DateTime.now(),
+      technicianName: techName,
+      serviceName: json['service']?['name'] ?? json['service_name'] ?? 'Service',
+      customerName: json['customer']?['name'] ?? 'Customer',
+      technicianArea: techArea,
+      technicianPhone: techPhone,
+      technicianRating: techRating,
+    );
+  }
+}
