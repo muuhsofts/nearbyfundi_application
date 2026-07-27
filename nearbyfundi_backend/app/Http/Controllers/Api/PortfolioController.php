@@ -20,44 +20,50 @@ class PortfolioController extends BaseApiController
         $query = Portfolio::with('technician.user', 'technician.services')
             ->orderBy('created_at', 'desc');
 
-        // Optional filters
         if ($request->filled('technician_id')) {
             $query->where('technician_id', $request->technician_id);
         }
 
         $portfolios = $query->paginate($request->input('per_page', 20));
 
-        $data = $portfolios->map(function($portfolio) {
+        $data = $portfolios->map(function ($portfolio) {
             return [
-                'id' => $portfolio->id,
-                'image' => $portfolio->image ? url('storage/' . $portfolio->image) : null,
+                'id'          => $portfolio->id,
+                'image'       => $portfolio->image ? url('storage/' . $portfolio->image) : null,
                 'description' => $portfolio->description,
-                'created_at' => $portfolio->created_at,
+                'created_at'  => $portfolio->created_at,
+                'social_links' => [
+                    'instagram' => $portfolio->instagram,
+                    'facebook'  => $portfolio->facebook,
+                    'tiktok'    => $portfolio->tiktok,
+                    'twitter'   => $portfolio->twitter,
+                    'telegram'  => $portfolio->telegram,
+                ],
                 'technician' => $portfolio->technician ? [
-                    'id' => $portfolio->technician->id,
-                    'name' => $portfolio->technician->user->name ?? null,
-                    'email' => $portfolio->technician->user->email ?? null,
-                    'phone' => $portfolio->technician->user->phone ?? null,
-                    'profile_photo' => $portfolio->technician->profile_photo 
-                        ? url($portfolio->technician->profile_photo) 
+                    'id'            => $portfolio->technician->id,
+                    'name'          => $portfolio->technician->user->name ?? null,
+                    'email'         => $portfolio->technician->user->email ?? null,
+                    'phone'         => $portfolio->technician->user->phone ?? null,
+                    'profile_photo' => $portfolio->technician->profile_photo
+                        ? url($portfolio->technician->profile_photo)
                         : null,
-                    'area' => $portfolio->technician->area,
-                    'rating' => (float) ($portfolio->technician->rating ?? 0),
-                    'is_online' => (bool) ($portfolio->technician->is_online ?? false),
-                    'verified' => (bool) ($portfolio->technician->verified ?? false),
-                    'services' => $portfolio->technician->services->pluck('name')->toArray(),
-                ] : null
+                    'area'          => $portfolio->technician->area,
+                    'rating'        => (float) ($portfolio->technician->rating ?? 0),
+                    'is_online'     => (bool) ($portfolio->technician->is_online ?? false),
+                    'verified'      => (bool) ($portfolio->technician->verified ?? false),
+                    'services'      => $portfolio->technician->services->pluck('name')->toArray(),
+                ] : null,
             ];
         });
 
         return $this->successResponse([
-            'data' => $data,
+            'data'       => $data,
             'pagination' => [
-                'total' => $portfolios->total(),
-                'per_page' => $portfolios->perPage(),
+                'total'        => $portfolios->total(),
+                'per_page'     => $portfolios->perPage(),
                 'current_page' => $portfolios->currentPage(),
-                'last_page' => $portfolios->lastPage(),
-            ]
+                'last_page'    => $portfolios->lastPage(),
+            ],
         ], 'Portfolios retrieved successfully');
     }
 
@@ -68,29 +74,36 @@ class PortfolioController extends BaseApiController
     public function getByTechnician($technicianId)
     {
         $technician = Technician::with('user', 'services')->findOrFail($technicianId);
-        
+
         $portfolios = Portfolio::where('technician_id', $technicianId)
             ->orderBy('created_at', 'desc')
             ->get()
-            ->map(function($portfolio) {
+            ->map(function ($portfolio) {
                 return [
-                    'id' => $portfolio->id,
-                    'image' => $portfolio->image ? url('storage/' . $portfolio->image) : null,
+                    'id'          => $portfolio->id,
+                    'image'       => $portfolio->image ? url('storage/' . $portfolio->image) : null,
                     'description' => $portfolio->description,
-                    'created_at' => $portfolio->created_at,
+                    'created_at'  => $portfolio->created_at,
+                    'social_links' => [
+                        'instagram' => $portfolio->instagram,
+                        'facebook'  => $portfolio->facebook,
+                        'tiktok'    => $portfolio->tiktok,
+                        'twitter'   => $portfolio->twitter,
+                        'telegram'  => $portfolio->telegram,
+                    ],
                 ];
             });
 
         return $this->successResponse([
             'technician' => [
-                'id' => $technician->id,
-                'name' => $technician->user->name ?? null,
+                'id'            => $technician->id,
+                'name'          => $technician->user->name ?? null,
                 'profile_photo' => $technician->profile_photo ? url($technician->profile_photo) : null,
-                'area' => $technician->area,
-                'rating' => (float) ($technician->rating ?? 0),
-                'is_online' => (bool) ($technician->is_online ?? false),
-                'verified' => (bool) ($technician->verified ?? false),
-                'services' => $technician->services->pluck('name')->toArray(),
+                'area'          => $technician->area,
+                'rating'        => (float) ($technician->rating ?? 0),
+                'is_online'     => (bool) ($technician->is_online ?? false),
+                'verified'      => (bool) ($technician->verified ?? false),
+                'services'      => $technician->services->pluck('name')->toArray(),
             ],
             'portfolios' => $portfolios,
         ], 'Portfolios retrieved successfully');
@@ -110,6 +123,11 @@ class PortfolioController extends BaseApiController
         $data = $request->validate([
             'image'       => 'required|image|mimes:jpg,jpeg,png,webp|max:2048',
             'description' => 'nullable|string|max:255',
+            'instagram'   => 'nullable|string|max:255',
+            'facebook'    => 'nullable|string|max:255',
+            'tiktok'      => 'nullable|string|max:255',
+            'twitter'     => 'nullable|string|max:255',
+            'telegram'    => 'nullable|string|max:255',
         ]);
 
         $path = $request->file('image')->store('portfolios', 'public');
@@ -117,6 +135,11 @@ class PortfolioController extends BaseApiController
             'technician_id' => $technician->id,
             'image'         => $path,
             'description'   => $data['description'] ?? null,
+            'instagram'     => $data['instagram'] ?? null,
+            'facebook'      => $data['facebook'] ?? null,
+            'tiktok'        => $data['tiktok'] ?? null,
+            'twitter'       => $data['twitter'] ?? null,
+            'telegram'      => $data['telegram'] ?? null,
         ]);
 
         $this->logAudit('create_portfolio', 'portfolio', $portfolio->id, 'Added portfolio item');
@@ -132,7 +155,7 @@ class PortfolioController extends BaseApiController
     {
         $portfolio = Portfolio::findOrFail($id);
         $technician = $request->user()->technician;
-        
+
         if (!$technician || $technician->id != $portfolio->technician_id) {
             return $this->forbidden('Unauthorized.');
         }
@@ -140,6 +163,11 @@ class PortfolioController extends BaseApiController
         $data = $request->validate([
             'description' => 'nullable|string|max:255',
             'image'       => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'instagram'   => 'nullable|string|max:255',
+            'facebook'    => 'nullable|string|max:255',
+            'tiktok'      => 'nullable|string|max:255',
+            'twitter'     => 'nullable|string|max:255',
+            'telegram'    => 'nullable|string|max:255',
         ]);
 
         if ($request->hasFile('image')) {
@@ -166,7 +194,7 @@ class PortfolioController extends BaseApiController
     {
         $portfolio = Portfolio::findOrFail($id);
         $technician = $request->user()->technician;
-        
+
         if (!$technician || $technician->id != $portfolio->technician_id) {
             return $this->forbidden('Unauthorized.');
         }
@@ -188,7 +216,7 @@ class PortfolioController extends BaseApiController
     public function destroyAdmin($id)
     {
         $portfolio = Portfolio::findOrFail($id);
-        
+
         if ($portfolio->image && file_exists(public_path($portfolio->image))) {
             unlink(public_path($portfolio->image));
         }
@@ -200,28 +228,67 @@ class PortfolioController extends BaseApiController
     }
 
     /**
- * Get portfolios for the authenticated technician
- * GET /v3/portfolios/my
- */
-public function myPortfolios(Request $request)
-{
-    $technician = $request->user()->technician;
-    if (!$technician) {
-        return $this->forbidden('Only technicians can view their own portfolios.');
+     * Get portfolios for the authenticated technician
+     * GET /v3/portfolios/my
+     */
+    public function myPortfolios(Request $request)
+    {
+        $technician = $request->user()->technician;
+        if (!$technician) {
+            return $this->forbidden('Only technicians can view their own portfolios.');
+        }
+
+        $portfolios = Portfolio::where('technician_id', $technician->id)
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($portfolio) {
+                return [
+                    'id'          => $portfolio->id,
+                    'image'       => $portfolio->image ? url('storage/' . $portfolio->image) : null,
+                    'description' => $portfolio->description,
+                    'created_at'  => $portfolio->created_at,
+                    'social_links' => [
+                        'instagram' => $portfolio->instagram,
+                        'facebook'  => $portfolio->facebook,
+                        'tiktok'    => $portfolio->tiktok,
+                        'twitter'   => $portfolio->twitter,
+                        'telegram'  => $portfolio->telegram,
+                    ],
+                ];
+            });
+
+        return $this->successResponse($portfolios, 'Portfolios retrieved successfully');
     }
 
-    $portfolios = Portfolio::where('technician_id', $technician->id)
-        ->orderBy('created_at', 'desc')
-        ->get()
-        ->map(function($portfolio) {
-            return [
-                'id' => $portfolio->id,
-                'image' => $portfolio->image ? url('storage/' . $portfolio->image) : null,
-                'description' => $portfolio->description,
-                'created_at' => $portfolio->created_at,
-            ];
-        });
+    /**
+     * Update only social links of a specific portfolio (Owner only)
+     * PUT /v3/portfolios/{id}/social-links
+     */
+    public function updateSocialLinks(Request $request, $id)
+    {
+        $portfolio = Portfolio::findOrFail($id);
+        $technician = $request->user()->technician;
 
-    return $this->successResponse($portfolios, 'Portfolios retrieved successfully');
-}
+        if (!$technician || $technician->id != $portfolio->technician_id) {
+            return $this->forbidden('Unauthorized.');
+        }
+
+        $validated = $request->validate([
+            'instagram' => 'nullable|string|max:255',
+            'facebook'  => 'nullable|string|max:255',
+            'tiktok'    => 'nullable|string|max:255',
+            'twitter'   => 'nullable|string|max:255',
+            'telegram'  => 'nullable|string|max:255',
+        ]);
+
+        $old = $portfolio->only(['instagram', 'facebook', 'tiktok', 'twitter', 'telegram']);
+        $portfolio->update($validated);
+        $new = $portfolio->fresh()->only(['instagram', 'facebook', 'tiktok', 'twitter', 'telegram']);
+
+        $this->logAudit('update_portfolio_social_links', 'portfolio', $id, 'Updated social links', $old, $new);
+
+        return $this->successResponse([
+            'social_links' => $new,
+        ], 'Social links updated successfully.');
+    }
 }

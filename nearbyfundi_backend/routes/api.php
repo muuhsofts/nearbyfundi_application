@@ -111,6 +111,7 @@ Route::prefix('v3')->middleware(['auth:sanctum', 'active.session'])->group(funct
     Route::get('portfolios', [PortfolioController::class, 'index']);
     Route::get('portfolios/technician/{technicianId}', [PortfolioController::class, 'getByTechnician']);
     Route::get('portfolios/my', [PortfolioController::class, 'myPortfolios']);
+    Route::put('portfolios/{id}/social-links', [PortfolioController::class, 'updateSocialLinks']);
     Route::delete('admin/portfolios/{id}', [PortfolioController::class, 'destroyAdmin']);
 });
 
@@ -139,7 +140,7 @@ Route::prefix('v4')->middleware(['auth:sanctum', 'active.session'])->group(funct
         Route::get('map', [MonitoringController::class, 'map']);
         Route::get('notifications', [MonitoringController::class, 'getNotifications']);
         Route::get('statuses', [MonitoringController::class, 'getStatuses']);
-        Route::get('pending-history', [MonitoringController::class, 'getPendingHistory']); // ✅ ADDED
+        Route::get('pending-history', [MonitoringController::class, 'getPendingHistory']);
         
         // Technicians
         Route::get('technicians', [MonitoringController::class, 'getTechnicians']);
