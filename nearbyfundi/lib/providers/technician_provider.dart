@@ -11,11 +11,15 @@ class TechnicianProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
 
-  // The geocoded origin point of the last place search — used to draw
-  // a line from the searched place to each nearby technician on the map.
+  // The geocoded origin point of the last place search
   double? _searchLat;
   double? _searchLng;
   String? _searchPlace;
+
+  // ─── Last search parameters (for refresh) ──────────────────────────
+  String? _lastPlace;
+  int? _lastServiceId;
+  int _lastRadius = 20;
 
   List<Technician> get technicians => _technicians;
   Technician? get currentTechnician => _currentTechnician;
@@ -27,12 +31,28 @@ class TechnicianProvider extends ChangeNotifier {
   String? get searchPlace => _searchPlace;
   bool get hasSearchOrigin => _searchLat != null && _searchLng != null;
 
-  // Search by place name (uses OpenStreetMap on the backend).
+  // ─── Refresh last search ────────────────────────────────────────────
+  Future<void> refreshLastSearch() async {
+    if (_lastPlace != null && _lastPlace!.isNotEmpty) {
+      await searchByPlace(
+        place: _lastPlace!,
+        serviceId: _lastServiceId,
+        radius: _lastRadius,
+      );
+    }
+  }
+
+  // ─── Search by place name ──────────────────────────────────────────
   Future<void> searchByPlace({
     required String place,
     int? serviceId,
     int radius = 20,
   }) async {
+    // Store last search parameters
+    _lastPlace = place;
+    _lastServiceId = serviceId;
+    _lastRadius = radius;
+
     _setLoading(true);
     try {
       final res = await _api.searchTechniciansByPlace(
@@ -52,7 +72,7 @@ class TechnicianProvider extends ChangeNotifier {
     }
   }
 
-  // Search by coordinates
+  // ─── Search by coordinates ──────────────────────────────────────────
   Future<void> fetchNearby({
     required double lat,
     required double lng,
@@ -76,7 +96,7 @@ class TechnicianProvider extends ChangeNotifier {
     }
   }
 
-  // Get technician detail
+  // ─── Get technician detail (without portfolios) ────────────────────
   Future<void> fetchTechnicianDetail(int id) async {
     _isLoading = true;
     _error = null;
@@ -99,7 +119,64 @@ class TechnicianProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Get own technician profile
+  // ─── Fetch technician WITH portfolios ──────────────────────────────
+  Future<void> fetchTechnicianWithPortfolios(int id) async {
+    _isLoading = true;
+    _error = null;
+    _currentTechnician = null;
+    notifyListeners();
+
+    try {
+      final detailRes = await _api.getTechnicianDetail(id);
+      if (!detailRes.success || detailRes.data == null) {
+        _error = detailRes.message;
+        _isLoading = false;
+        notifyListeners();
+        return;
+      }
+
+      final tech = Technician.fromJson(detailRes.data, isDetail: false);
+
+      final portfolioRes = await _api.getTechnicianPortfolio(id);
+      List<PortfolioItem> portfolioItems = [];
+
+      if (portfolioRes.success && portfolioRes.data != null) {
+        final data = portfolioRes.data as Map<String, dynamic>;
+        final portfoliosData = data['portfolios'] as List? ?? [];
+        portfolioItems = portfoliosData.map((p) => PortfolioItem.fromJson(p)).toList();
+      }
+
+      _currentTechnician = Technician(
+        id: tech.id,
+        userId: tech.userId,
+        name: tech.name,
+        email: tech.email,
+        phone: tech.phone,
+        profilePhoto: tech.profilePhoto,
+        bio: tech.bio,
+        experience: tech.experience,
+        rating: tech.rating,
+        hourlyRate: tech.hourlyRate,
+        distanceKm: tech.distanceKm,
+        area: tech.area,
+        latitude: tech.latitude,
+        longitude: tech.longitude,
+        isOnline: tech.isOnline,
+        verified: tech.verified,
+        services: tech.services,
+        serviceObjects: tech.serviceObjects,
+        portfolios: portfolioItems,
+      );
+      _error = null;
+    } catch (e) {
+      _error = e.toString();
+    }
+
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  // ─── Get own technician profile ─────────────────────────────────────
   Future<void> fetchMyProfile() async {
     _isLoading = true;
     _error = null;
@@ -121,7 +198,7 @@ class TechnicianProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Update services
+  // ─── Update services ─────────────────────────────────────────────────
   Future<void> updateServices(List<int> serviceIds) async {
     _isLoading = true;
     _error = null;
@@ -143,7 +220,7 @@ class TechnicianProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Toggle online status
+  // ─── Toggle online status ───────────────────────────────────────────
   Future<void> toggleOnline(bool isOnline) async {
     _isLoading = true;
     _error = null;
@@ -165,7 +242,7 @@ class TechnicianProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Update location
+  // ─── Update location ─────────────────────────────────────────────────
   Future<void> updateLocation({
     required double latitude,
     required double longitude,
@@ -212,7 +289,7 @@ class TechnicianProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Clear methods
+  // ─── Clear methods ──────────────────────────────────────────────────
   void clearTechnicians() {
     _technicians = [];
     _searchLat = null;
@@ -228,15 +305,15 @@ class TechnicianProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Private helpers
+  // ─── Private helpers ─────────────────────────────────────────────────
   void _setLoading(bool value) {
     _isLoading = value;
     if (value) _error = null;
     notifyListeners();
   }
 
-  // Handles plain technician-list responses (e.g. fetchNearby,
-  // or any endpoint that returns just a list / {data: [...]})
+  // ─── Response handlers ──────────────────────────────────────────────
+
   void _handleListResponse(ApiResponse res) {
     if (res.success && res.data != null) {
       List dataList;
@@ -268,8 +345,6 @@ class TechnicianProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Handles the nearby-by-place response, which is wrapped as
-  // { technicians: [...], search: { place, latitude, longitude } }
   void _handlePlaceSearchResponse(ApiResponse res) {
     if (res.success && res.data != null) {
       final data = res.data;

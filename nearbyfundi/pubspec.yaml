@@ -3,7 +3,7 @@ description: Customer app for NearbyFundi – request services, see fundi posts.
 version: 1.0.0+1
 
 environment:
-  sdk: ">=3.5.0 <4.0.0"  #
+  sdk: ">=3.5.0 <4.0.0"
 
 dependencies:
   flutter:
@@ -39,14 +39,14 @@ dependencies:
   image_picker: ^1.1.2
   cached_network_image: ^3.4.1
   flutter_image_compress: ^2.4.0
-  file_picker: ^10.3.10  # ✅ Fixed: Added ^ prefix
+  file_picker: ^10.3.10
 
   # Firebase
   firebase_core: ^4.10.0
   firebase_messaging: ^16.3.0
   flutter_local_notifications: ^19.4.1
 
-  # Device
+  # Device & Utilities
   url_launcher: ^6.3.0
   geolocator: ^13.0.2
   permission_handler: ^11.4.0
@@ -57,23 +57,23 @@ dependencies:
   open_file: ^3.3.2
   flutter_cache_manager: ^3.4.1
 
+  # Icons
+  font_awesome_flutter: ^11.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^5.0.0  #
+  flutter_lints: ^5.0.0
   flutter_launcher_icons: ^0.14.3
 
 flutter:
   generate: true
   uses-material-design: true
   assets:
-    # Main Images
     - assets/images/backimg.jpg
     - assets/images/home.jpg
     - assets/images/nearbyfundi_image.jpg
     - assets/icons/nearbylogo.png
-
-    # Chat Assets
     - assets/icons/chat/chat_icon.svg
     - assets/icons/chat/audio_icon.svg
     - assets/audio/

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../providers/auth_provider.dart';
 import '../../config/app_routes.dart';
+import '../../config/app_theme.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/confirmation_dialog.dart';
 import '../../l10n/app_localizations.dart';
@@ -30,141 +32,199 @@ class ProfileScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text(
           l10n.profile,
-          style: const TextStyle(fontWeight: FontWeight.bold),
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
         ),
         elevation: 0,
-        backgroundColor: theme.primaryColor,
-        foregroundColor: theme.colorScheme.onPrimary,
+        backgroundColor: AppTheme.primary,
+        foregroundColor: Colors.white,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+          // ✅ Back button navigates to home (Nearby tab)
+          onPressed: () => Navigator.pushReplacementNamed(context, AppRoutes.home),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+            onPressed: () => context.read<AuthProvider>().loadUser(),
+            tooltip: 'Refresh',
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 20),
         child: Column(
           children: [
-            // Profile Card
+            // ─── Premium Profile Card ──────────────────────────────────
             Container(
               decoration: BoxDecoration(
-                color: theme.cardColor,
+                gradient: LinearGradient(
+                  colors: [
+                    AppTheme.secondary.withOpacity(0.15),
+                    Colors.transparent,
+                    Colors.transparent,
+                    AppTheme.secondary.withOpacity(0.08),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
                 borderRadius: BorderRadius.circular(28),
                 boxShadow: [
                   BoxShadow(
-                    color: theme.shadowColor.withOpacity(0.08),
-                    blurRadius: 20,
+                    color: AppTheme.secondary.withOpacity(0.15),
+                    blurRadius: 30,
                     offset: const Offset(0, 8),
+                    spreadRadius: 2,
                   ),
                 ],
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  children: [
-                    // Avatar with gradient border
-                    Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            theme.primaryColor,
-                            theme.primaryColor.withOpacity(0.4),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: theme.cardColor,
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(
+                    color: AppTheme.secondary.withOpacity(0.2),
+                    width: 1.5,
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    children: [
+                      // ─── Avatar with Gold Gradient Border ────────────
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              AppTheme.secondary,
+                              AppTheme.primary,
+                              AppTheme.secondary.withOpacity(0.6),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.secondary.withOpacity(0.3),
+                              blurRadius: 20,
+                              offset: const Offset(0, 4),
+                            ),
                           ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
                         ),
-                        shape: BoxShape.circle,
-                      ),
-                      child: CircleAvatar(
-                        radius: 56,
-                        backgroundColor: theme.primaryColor.withOpacity(0.1),
-                        child: Text(
-                          initial,
-                          style: TextStyle(
-                            fontSize: 40,
-                            fontWeight: FontWeight.bold,
-                            color: theme.primaryColor,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      user?.name ?? l10n.guest,
-                      style: theme.textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 22,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      user?.email ?? '',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.hintColor,
-                        fontSize: 14,
-                      ),
-                    ),
-                    if (user?.phone != null) ...[
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.phone_outlined,
-                            size: 14,
-                            color: theme.hintColor,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            user!.phone!,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.hintColor,
-                              fontSize: 14,
+                        child: CircleAvatar(
+                          radius: 56,
+                          backgroundColor: AppTheme.primary.withOpacity(0.08),
+                          child: Text(
+                            initial,
+                            style: TextStyle(
+                              fontSize: 40,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.primary,
                             ),
                           ),
-                        ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // ─── Name ──────────────────────────────────────────
+                      Text(
+                        user?.name ?? l10n.guest,
+                        style: theme.textTheme.headlineMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 22,
+                          color: theme.colorScheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        user?.email ?? '',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.hintColor,
+                          fontSize: 14,
+                        ),
+                      ),
+                      if (user?.phone != null) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.phone_outlined,
+                              size: 14,
+                              color: theme.hintColor,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              user!.phone!,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.hintColor,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      // ─── Gold Status Badge ─────────────────────────────
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              AppTheme.secondary.withOpacity(0.2),
+                              AppTheme.secondary.withOpacity(0.05),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: AppTheme.secondary.withOpacity(0.3),
+                            width: 0.8,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: Colors.green,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Active',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: AppTheme.secondary,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
-                    const SizedBox(height: 16),
-                    // Status badge
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: const BoxDecoration(
-                              color: Colors.green,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Active',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: Colors.green,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
             const SizedBox(height: 24),
 
-            // Action buttons
+            // ─── Action Buttons (Gold Accents) ──────────────────────────
             _buildActionButton(
               context,
               icon: Icons.edit_outlined,
               label: l10n.editProfile,
               onTap: () => Navigator.pushNamed(context, AppRoutes.editProfile),
               theme: theme,
+              color: AppTheme.primary,
             ),
             const SizedBox(height: 12),
             _buildActionButton(
@@ -173,16 +233,24 @@ class ProfileScreen extends StatelessWidget {
               label: l10n.settings,
               onTap: () => Navigator.pushNamed(context, AppRoutes.settings),
               theme: theme,
+              color: AppTheme.secondary,
+            ),
+            const SizedBox(height: 12),
+            _buildActionButton(
+              context,
+              icon: Icons.notifications_outlined,
+              label: 'Notifications',
+              onTap: () {},
+              theme: theme,
+              color: Colors.blueAccent,
             ),
 
-            // Extra spacing to push logout button down (replaces Spacer)
             const SizedBox(height: 32),
 
-            // Logout button
+            // ─── Logout Button ──────────────────────────────────────────
             _buildLogoutButton(context, auth, l10n, theme),
-            const SizedBox(height: 8),
 
-            // Version info
+            const SizedBox(height: 8),
             Center(
               child: Text(
                 'Version 0.0.1',
@@ -205,39 +273,50 @@ class ProfileScreen extends StatelessWidget {
         required String label,
         required VoidCallback onTap,
         required ThemeData theme,
+        Color? color,
       }) {
+    final iconColor = color ?? AppTheme.primary;
     return Container(
       decoration: BoxDecoration(
         color: theme.cardColor,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: theme.shadowColor.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: iconColor.withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
+        border: Border.all(
+          color: iconColor.withOpacity(0.08),
+          width: 0.5,
+        ),
       ),
       child: ListTile(
         leading: Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: theme.primaryColor.withOpacity(0.08),
+            gradient: LinearGradient(
+              colors: [iconColor.withOpacity(0.15), iconColor.withOpacity(0.05)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(icon, color: theme.primaryColor, size: 22),
+          child: Icon(icon, color: iconColor, size: 22),
         ),
         title: Text(
           label,
           style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.w500,
             fontSize: 16,
+            color: theme.colorScheme.onSurface,
           ),
         ),
         trailing: Icon(
           Icons.arrow_forward_ios_rounded,
           size: 16,
-          color: theme.hintColor,
+          color: theme.hintColor.withOpacity(0.5),
         ),
         onTap: onTap,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -257,33 +336,37 @@ class ProfileScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: theme.shadowColor.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: AppTheme.error.withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
+        border: Border.all(
+          color: AppTheme.error.withOpacity(0.1),
+          width: 0.5,
+        ),
       ),
       child: ListTile(
         leading: Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: theme.colorScheme.error.withOpacity(0.08),
+            color: AppTheme.error.withOpacity(0.08),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(Icons.logout_rounded, color: theme.colorScheme.error, size: 22),
+          child: Icon(Icons.logout_rounded, color: AppTheme.error, size: 22),
         ),
         title: Text(
           l10n.logout,
           style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.w500,
             fontSize: 16,
-            color: theme.colorScheme.error,
+            color: AppTheme.error,
           ),
         ),
         trailing: Icon(
           Icons.arrow_forward_ios_rounded,
           size: 16,
-          color: theme.colorScheme.error.withOpacity(0.5),
+          color: AppTheme.error.withOpacity(0.4),
         ),
         onTap: () async {
           final confirm = await showConfirmationDialog(

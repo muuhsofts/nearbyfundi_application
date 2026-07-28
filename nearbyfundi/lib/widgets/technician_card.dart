@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../models/technician.dart';
+import '../screens/home/technician_location_map_screen.dart';
 import '../utils/image_utils.dart';
 
 class TechnicianCard extends StatelessWidget {
@@ -13,20 +13,19 @@ class TechnicianCard extends StatelessWidget {
     required this.onTap,
   });
 
-  void _openGoogleMaps() async {
-    final lat = technician.latitude;
-    final lng = technician.longitude;
-    if (lat == null || lng == null) return;
+  /// Opens the in-app OpenStreetMap view for this technician, showing
+  /// their pin (and, if the user came from a place search, the route
+  /// from that search point). Directions to Google Maps are offered
+  /// from within that screen.
+  void _openLocationMap(BuildContext context) {
+    if (technician.latitude == null || technician.longitude == null) return;
 
-    final url = Uri.parse(
-        'https://www.google.com/maps/search/?api=1&query=$lat,$lng'
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TechnicianLocationMapScreen(technician: technician),
+      ),
     );
-
-    try {
-      if (await canLaunchUrl(url)) {
-        await launchUrl(url, mode: LaunchMode.externalApplication);
-      }
-    } catch (_) {}
   }
 
   @override
@@ -248,8 +247,8 @@ class TechnicianCard extends StatelessWidget {
                               size: 18,
                               color: Colors.green.shade700,
                             ),
-                            onPressed: _openGoogleMaps,
-                            tooltip: 'Open in Google Maps',
+                            onPressed: () => _openLocationMap(context),
+                            tooltip: 'View on map',
                           ),
                         ),
                       const SizedBox(width: 4),

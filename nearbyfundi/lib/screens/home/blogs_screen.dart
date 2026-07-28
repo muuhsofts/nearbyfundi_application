@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+
 import '../../providers/post_provider.dart';
 import '../../models/post.dart';
 import '../../config/app_theme.dart';
 import '../../utils/image_utils.dart';
 import '../modals.dart';
 import '../../l10n/app_localizations.dart';
+import '../../config/app_routes.dart';
 
 class BlogsScreen extends StatefulWidget {
   const BlogsScreen({super.key});
+
   @override
   State<BlogsScreen> createState() => _BlogsScreenState();
 }
@@ -36,26 +39,38 @@ class _BlogsScreenState extends State<BlogsScreen> {
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text(l10n.blog, style: theme.appBarTheme.titleTextStyle),
+        title: Text(
+          l10n.blog,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
+        ),
         elevation: 0,
-        backgroundColor: theme.primaryColor,
-        foregroundColor: theme.colorScheme.onPrimary,
+        backgroundColor: AppTheme.primary,
+        foregroundColor: Colors.white,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+          onPressed: () => Navigator.pushReplacementNamed(context, AppRoutes.home),
+        ),
         actions: [
           IconButton(
-            icon: Icon(Icons.refresh_rounded, color: theme.colorScheme.onPrimary),
+            icon: const Icon(Icons.refresh_rounded, color: Colors.white),
             onPressed: () => provider.fetchPosts(refresh: true),
+            tooltip: 'Refresh',
           ),
         ],
       ),
       body: RefreshIndicator(
         onRefresh: () => provider.fetchPosts(refresh: true),
+        color: AppTheme.primary,
         child: provider.isLoading && provider.posts.isEmpty
-            ? Center(child: CircularProgressIndicator(color: theme.primaryColor))
+            ? Center(child: CircularProgressIndicator(color: AppTheme.primary))
             : provider.posts.isEmpty
             ? Center(
           child: Text(
             l10n.noBlogPosts,
-            style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor, fontSize: 18),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.hintColor,
+              fontSize: 18,
+            ),
           ),
         )
             : ListView.builder(
@@ -63,7 +78,7 @@ class _BlogsScreenState extends State<BlogsScreen> {
           itemCount: provider.posts.length,
           itemBuilder: (ctx, i) {
             final post = provider.posts[i];
-            return _InstagramPostCard(post: post, margin: cardMargin);
+            return _BlogPostCard(post: post, margin: cardMargin);
           },
         ),
       ),
@@ -71,11 +86,12 @@ class _BlogsScreenState extends State<BlogsScreen> {
   }
 }
 
-class _InstagramPostCard extends StatelessWidget {
+// ─── Light Card with no black background ────────────────────────────────
+class _BlogPostCard extends StatelessWidget {
   final Post post;
   final double margin;
 
-  const _InstagramPostCard({required this.post, this.margin = 10});
+  const _BlogPostCard({required this.post, this.margin = 10});
 
   void _openPostModal(BuildContext context) {
     showModalBottomSheet(
@@ -96,14 +112,20 @@ class _InstagramPostCard extends StatelessWidget {
       child: Container(
         margin: EdgeInsets.symmetric(horizontal: 0, vertical: margin),
         decoration: BoxDecoration(
-          color: theme.cardColor,
+          color: theme.cardColor, // Light card color (white in light theme)
           borderRadius: BorderRadius.circular(24),
-          boxShadow: [BoxShadow(color: theme.shadowColor.withOpacity(0.06), blurRadius: 12, offset: const Offset(0, 4))],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
+            // ─── Header ──────────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               child: Row(
@@ -114,7 +136,10 @@ class _InstagramPostCard extends StatelessWidget {
                         ? CachedNetworkImageProvider(ImageUtils.getFullImageUrl(post.technicianAvatar!))
                         : null,
                     child: post.technicianAvatar == null
-                        ? Text(post.technicianName[0].toUpperCase(), style: const TextStyle(fontSize: 16))
+                        ? Text(
+                      post.technicianName[0].toUpperCase(),
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    )
                         : null,
                   ),
                   const SizedBox(width: 12),
@@ -122,17 +147,32 @@ class _InstagramPostCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(post.technicianName, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold, fontSize: 15)),
-                        Text(_formatDate(post.createdAt), style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor, fontSize: 12)),
+                        Text(
+                          post.technicianName,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                        ),
+                        Text(
+                          _formatDate(post.createdAt),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.hintColor,
+                            fontSize: 12,
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                  IconButton(icon: Icon(Icons.more_horiz, size: 22, color: theme.hintColor), onPressed: () {}),
+                  IconButton(
+                    icon: Icon(Icons.more_horiz, size: 22, color: theme.hintColor),
+                    onPressed: () {},
+                  ),
                 ],
               ),
             ),
 
-            // Image
+            // ─── Image ──────────────────────────────────────────────────
             if (post.image != null)
               ClipRRect(
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -144,7 +184,7 @@ class _InstagramPostCard extends StatelessWidget {
                   placeholder: (context, url) => Container(
                     height: isTablet ? 380 : 280,
                     color: theme.colorScheme.surfaceContainerHighest,
-                    child: Center(child: CircularProgressIndicator(color: theme.primaryColor)),
+                    child: Center(child: CircularProgressIndicator(color: AppTheme.primary)),
                   ),
                   errorWidget: (context, url, error) => Container(
                     height: isTablet ? 380 : 280,
@@ -158,18 +198,24 @@ class _InstagramPostCard extends StatelessWidget {
                 height: isTablet ? 260 : 200,
                 color: theme.colorScheme.surfaceContainerHighest,
                 child: Center(
-                  child: Text(post.title, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600), textAlign: TextAlign.center),
+                  child: Text(
+                    post.title,
+                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                    textAlign: TextAlign.center,
+                  ),
                 ),
               ),
 
-            // Actions
+            // ─── Actions ────────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               child: Row(
                 children: [
                   IconButton(
-                    icon: Icon(post.likedByUser ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                        color: post.likedByUser ? Colors.red : theme.hintColor),
+                    icon: Icon(
+                      post.likedByUser ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                      color: post.likedByUser ? Colors.red : theme.hintColor,
+                    ),
                     onPressed: () => context.read<PostProvider>().likePost(post.id),
                   ),
                   Text('${post.likesCount}', style: theme.textTheme.bodyMedium),
@@ -183,15 +229,22 @@ class _InstagramPostCard extends StatelessWidget {
               ),
             ),
 
-            // Caption
+            // ─── Caption ─────────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
               child: RichText(
                 text: TextSpan(
                   style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurface),
                   children: [
-                    TextSpan(text: '${post.technicianName} ', style: const TextStyle(fontWeight: FontWeight.bold)),
-                    TextSpan(text: post.content.length > 120 ? '${post.content.substring(0, 120)}...' : post.content),
+                    TextSpan(
+                      text: '${post.technicianName} ',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    TextSpan(
+                      text: post.content.length > 120
+                          ? '${post.content.substring(0, 120)}...'
+                          : post.content,
+                    ),
                   ],
                 ),
               ),

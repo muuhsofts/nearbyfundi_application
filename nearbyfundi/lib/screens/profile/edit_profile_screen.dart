@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../providers/auth_provider.dart';
+import '../../config/app_theme.dart';
 import '../../widgets/custom_button.dart';
 import '../../l10n/app_localizations.dart';
 
@@ -52,7 +54,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               Expanded(child: Text(l10n.profileUpdated)),
             ],
           ),
-          backgroundColor: Colors.green,
+          backgroundColor: AppTheme.success,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
@@ -62,7 +64,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(auth.errorMessage ?? l10n.updateFailed),
-          backgroundColor: theme.colorScheme.error,
+          backgroundColor: AppTheme.error,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
@@ -87,13 +89,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       appBar: AppBar(
         title: Text(
           l10n.editProfile,
-          style: const TextStyle(fontWeight: FontWeight.bold),
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
         ),
         elevation: 0,
-        backgroundColor: theme.primaryColor,
-        foregroundColor: theme.colorScheme.onPrimary,
+        backgroundColor: AppTheme.primary,
+        foregroundColor: Colors.white,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -106,136 +112,157 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               key: _formKey,
               child: Container(
                 decoration: BoxDecoration(
-                  color: theme.cardColor,
+                  gradient: LinearGradient(
+                    colors: [
+                      AppTheme.secondary.withOpacity(0.08),
+                      Colors.transparent,
+                      Colors.transparent,
+                      AppTheme.secondary.withOpacity(0.04),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
                   borderRadius: BorderRadius.circular(28),
                   boxShadow: [
                     BoxShadow(
-                      color: theme.shadowColor.withOpacity(0.08),
-                      blurRadius: 20,
+                      color: AppTheme.secondary.withOpacity(0.12),
+                      blurRadius: 30,
                       offset: const Offset(0, 8),
+                      spreadRadius: 2,
                     ),
                   ],
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.all(28.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Header with gradient circle
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              theme.primaryColor,
-                              theme.primaryColor.withOpacity(0.6),
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: theme.primaryColor.withOpacity(0.3),
-                              blurRadius: 16,
-                              offset: const Offset(0, 4),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: theme.cardColor,
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(
+                      color: AppTheme.secondary.withOpacity(0.15),
+                      width: 1.2,
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(28.0),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // ─── Gold Gradient Header ──────────────────────
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                AppTheme.secondary,
+                                AppTheme.primary,
+                                AppTheme.secondary.withOpacity(0.6),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
                             ),
-                          ],
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppTheme.secondary.withOpacity(0.3),
+                                blurRadius: 20,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.edit_outlined,
+                            size: 32,
+                            color: Colors.white,
+                          ),
                         ),
-                        child: Icon(
-                          Icons.edit_outlined,
-                          size: 32,
-                          color: Colors.white,
+                        const SizedBox(height: 16),
+                        Text(
+                          l10n.updateInfo,
+                          style: theme.textTheme.headlineMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.onSurface,
+                            fontSize: 22,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        l10n.updateInfo,
-                        style: theme.textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.onSurface,
-                          fontSize: 22,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Update your personal information',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.hintColor,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const Divider(height: 32, thickness: 1.5),
-
-                      // Name field
-                      TextFormField(
-                        controller: _nameController,
-                        decoration: InputDecoration(
-                          labelText: l10n.name,
-                          labelStyle: theme.textTheme.bodyMedium?.copyWith(
+                        const SizedBox(height: 4),
+                        Text(
+                          'Update your personal information',
+                          style: theme.textTheme.bodyMedium?.copyWith(
                             color: theme.hintColor,
+                            fontSize: 14,
                           ),
-                          prefixIcon: Icon(Icons.person_outline_rounded, color: theme.primaryColor),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(color: theme.dividerColor),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(color: theme.dividerColor),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(color: theme.primaryColor, width: 2),
-                          ),
-                          filled: true,
-                          fillColor: theme.colorScheme.surfaceContainerHighest,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                         ),
-                        style: theme.textTheme.bodyMedium,
-                        validator: (v) =>
-                        (v != null && v.isNotEmpty) ? null : 'Name is required',
-                      ),
-                      const SizedBox(height: 18),
+                        const Divider(height: 32, thickness: 1.5),
 
-                      // Phone field
-                      TextFormField(
-                        controller: _phoneController,
-                        keyboardType: TextInputType.phone,
-                        decoration: InputDecoration(
-                          labelText: l10n.phone,
-                          labelStyle: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.hintColor,
+                        // ─── Name Field ─────────────────────────────────
+                        TextFormField(
+                          controller: _nameController,
+                          decoration: InputDecoration(
+                            labelText: l10n.name,
+                            labelStyle: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.hintColor,
+                            ),
+                            prefixIcon: Icon(Icons.person_outline_rounded, color: AppTheme.primary),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide(color: theme.dividerColor),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide(color: theme.dividerColor),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide(color: AppTheme.primary, width: 2),
+                            ),
+                            filled: true,
+                            fillColor: theme.colorScheme.surfaceContainerHighest,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                           ),
-                          prefixIcon: Icon(Icons.phone_outlined, color: theme.primaryColor),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(color: theme.dividerColor),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(color: theme.dividerColor),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(color: theme.primaryColor, width: 2),
-                          ),
-                          filled: true,
-                          fillColor: theme.colorScheme.surfaceContainerHighest,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          style: theme.textTheme.bodyMedium,
+                          validator: (v) =>
+                          (v != null && v.isNotEmpty) ? null : 'Name is required',
                         ),
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                      const SizedBox(height: 32),
+                        const SizedBox(height: 18),
 
-                      // Save button
-                      CustomButton(
-                        text: l10n.saveChanges,
-                        onPressed: isLoading ? null : _save,
-                        isLoading: isLoading,
-                      ),
-                      const SizedBox(height: 8),
-                    ],
+                        // ─── Phone Field ────────────────────────────────
+                        TextFormField(
+                          controller: _phoneController,
+                          keyboardType: TextInputType.phone,
+                          decoration: InputDecoration(
+                            labelText: l10n.phone,
+                            labelStyle: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.hintColor,
+                            ),
+                            prefixIcon: Icon(Icons.phone_outlined, color: AppTheme.primary),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide(color: theme.dividerColor),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide(color: theme.dividerColor),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide(color: AppTheme.primary, width: 2),
+                            ),
+                            filled: true,
+                            fillColor: theme.colorScheme.surfaceContainerHighest,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          ),
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                        const SizedBox(height: 32),
+
+                        // ─── Save Button ─────────────────────────────────
+                        CustomButton(
+                          text: l10n.saveChanges,
+                          onPressed: isLoading ? null : _save,
+                          isLoading: isLoading,
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                    ),
                   ),
                 ),
               ),

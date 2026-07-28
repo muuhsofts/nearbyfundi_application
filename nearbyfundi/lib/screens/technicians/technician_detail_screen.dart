@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+
 import '../../providers/technician_provider.dart';
 import '../../providers/request_provider.dart';
 import '../../utils/image_utils.dart';
 import '../../models/technician.dart';
 import '../../l10n/app_localizations.dart';
+import '../../config/app_theme.dart';
+import '../../config/app_routes.dart';
 
 class TechnicianDetailScreen extends StatefulWidget {
   final int technicianId;
@@ -20,7 +24,7 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<TechnicianProvider>().fetchTechnicianDetail(widget.technicianId);
+      context.read<TechnicianProvider>().fetchTechnicianWithPortfolios(widget.technicianId);
       context.read<RequestProvider>().loadMyRequests();
     });
   }
@@ -52,18 +56,27 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
   }
 
   void _launchWhatsApp(String phoneNumber) async {
-    // Clean number: remove all non-digit characters
     final cleanNumber = phoneNumber.replaceAll(RegExp(r'[^0-9]'), '');
-    // Try the WhatsApp app deep link
-    final Uri uri = Uri.parse('whatsapp://send?phone=$cleanNumber');
+    final uri = Uri.parse('whatsapp://send?phone=$cleanNumber');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     } else {
-      // Fallback to WhatsApp Web
-      final Uri fallbackUri = Uri.parse('https://wa.me/$cleanNumber');
+      final fallbackUri = Uri.parse('https://wa.me/$cleanNumber');
       if (await canLaunchUrl(fallbackUri)) {
         await launchUrl(fallbackUri, mode: LaunchMode.externalApplication);
       }
+    }
+  }
+
+  void _launchSocialUrl(String? url) async {
+    if (url == null || url.isEmpty) return;
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open link')),
+      );
     }
   }
 
@@ -84,24 +97,26 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
       appBar: AppBar(
         title: Text(
           tech?.name ?? l10n.technician,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
         ),
-        elevation: 0,
-        backgroundColor: theme.primaryColor,
-        foregroundColor: theme.colorScheme.onPrimary,
-        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+          onPressed: () => Navigator.pushReplacementNamed(context, AppRoutes.home),
+        ),
         actions: [
           IconButton(
-            icon: Icon(Icons.refresh_rounded, color: theme.colorScheme.onPrimary),
-            onPressed: () => provider.fetchTechnicianDetail(widget.technicianId),
+            icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+            onPressed: () => provider.fetchTechnicianWithPortfolios(widget.technicianId),
             tooltip: l10n.refresh,
           ),
         ],
+        backgroundColor: AppTheme.primary,
+        elevation: 0,
       ),
       body: Container(
         color: theme.scaffoldBackgroundColor,
         child: provider.isLoading
-            ? Center(child: CircularProgressIndicator(color: theme.primaryColor))
+            ? Center(child: CircularProgressIndicator(color: AppTheme.primary))
             : provider.error != null || tech == null
             ? _buildErrorView(provider, l10n, theme)
             : _buildContent(tech, horizontalPadding, portfolioColumns, l10n, theme),
@@ -113,14 +128,14 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
               ? _buildAlreadySentWidget(l10n, theme)
               : ElevatedButton.icon(
             onPressed: tech != null ? () => _showRequestModal(tech) : null,
-            icon: Icon(Icons.handyman_rounded, color: theme.colorScheme.onPrimary, size: 20),
+            icon: Icon(Icons.handyman_rounded, color: Colors.white, size: 20),
             label: Text(
               l10n.requestThisFundi,
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             style: ElevatedButton.styleFrom(
-              backgroundColor: theme.primaryColor,
-              foregroundColor: theme.colorScheme.onPrimary,
+              backgroundColor: AppTheme.primary,
+              foregroundColor: Colors.white,
               minimumSize: const Size.fromHeight(52),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               elevation: 2,
@@ -141,10 +156,10 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: theme.colorScheme.error.withOpacity(0.08),
+                color: AppTheme.error.withOpacity(0.08),
                 shape: BoxShape.circle,
               ),
-              child: Icon(Icons.error_outline_rounded, size: 56, color: theme.colorScheme.error),
+              child: Icon(Icons.error_outline_rounded, size: 56, color: AppTheme.error),
             ),
             const SizedBox(height: 16),
             Text(
@@ -154,10 +169,10 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
             ),
             const SizedBox(height: 20),
             ElevatedButton(
-              onPressed: () => provider.fetchTechnicianDetail(widget.technicianId),
+              onPressed: () => provider.fetchTechnicianWithPortfolios(widget.technicianId),
               style: ElevatedButton.styleFrom(
-                backgroundColor: theme.primaryColor,
-                foregroundColor: theme.colorScheme.onPrimary,
+                backgroundColor: AppTheme.primary,
+                foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
               ),
@@ -181,6 +196,8 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
           const SizedBox(height: 16),
           if (tech.bio != null && tech.bio!.isNotEmpty) _buildBioSection(tech.bio!, l10n, theme),
           const SizedBox(height: 16),
+          _buildSocialLinksSection(tech, theme),
+          const SizedBox(height: 16),
           _buildServicesSection(tech, l10n, theme),
           const SizedBox(height: 16),
           _buildPortfolioSection(tech, portfolioColumns, l10n, theme, _showPortfolioModal),
@@ -190,9 +207,97 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
     );
   }
 
-  // ============================================================
-  // CONTACT SECTION – Phone Call + WhatsApp Chat
-  // ============================================================
+  // ─── SOCIAL LINKS SECTION ─────────────────────────────────────────────
+  Widget _buildSocialLinksSection(Technician tech, ThemeData theme) {
+    final Map<String, String> socialLinks = {};
+    for (final item in tech.portfolios) {
+      if (item.instagram != null) socialLinks['Instagram'] = item.instagram!;
+      if (item.facebook != null) socialLinks['Facebook'] = item.facebook!;
+      if (item.tiktok != null) socialLinks['TikTok'] = item.tiktok!;
+      if (item.twitter != null) socialLinks['Twitter'] = item.twitter!;
+      if (item.telegram != null) socialLinks['Telegram'] = item.telegram!;
+    }
+
+    if (socialLinks.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Social Media',
+          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, fontSize: 17),
+        ),
+        const SizedBox(height: 8),
+        Card(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          elevation: 1,
+          shadowColor: theme.shadowColor.withOpacity(0.05),
+          color: theme.cardColor,
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Wrap(
+              spacing: 16,
+              runSpacing: 12,
+              children: socialLinks.entries.map((entry) {
+                return _buildSocialIcon(entry.key, entry.value);
+              }).toList(),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSocialIcon(String label, String url) {
+    FaIconData icon;
+    Color color;
+    switch (label) {
+      case 'Instagram':
+        icon = FontAwesomeIcons.instagram;
+        color = Colors.pink;
+        break;
+      case 'Facebook':
+        icon = FontAwesomeIcons.facebook;
+        color = Colors.blue.shade700;
+        break;
+      case 'TikTok':
+        icon = FontAwesomeIcons.tiktok;
+        color = Colors.black;
+        break;
+      case 'Twitter':
+        icon = FontAwesomeIcons.twitter;
+        color = Colors.blue.shade400;
+        break;
+      case 'Telegram':
+        icon = FontAwesomeIcons.telegram;
+        color = Colors.lightBlue;
+        break;
+      default:
+        icon = FontAwesomeIcons.link;
+        color = AppTheme.primary;
+    }
+    return GestureDetector(
+      onTap: () => _launchSocialUrl(url),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: color.withOpacity(0.2)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FaIcon(icon, size: 18, color: color),
+            const SizedBox(width: 8),
+            Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w500)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── CONTACT SECTION ──────────────────────────────────────────────────
   Widget _buildContactSection(Technician tech, ThemeData theme) {
     final hasPhone = tech.phone != null && tech.phone!.isNotEmpty;
     final hasEmail = tech.email != null && tech.email!.isNotEmpty;
@@ -209,10 +314,9 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
             Row(
               children: [
-                Icon(Icons.contact_phone_rounded, size: 18, color: theme.primaryColor),
+                Icon(Icons.contact_phone_rounded, size: 18, color: AppTheme.primary),
                 const SizedBox(width: 8),
                 Text(
                   'Contact',
@@ -224,12 +328,9 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
               ],
             ),
             const SizedBox(height: 10),
-
-            // Phone actions (Call + WhatsApp)
             if (hasPhone)
               Row(
                 children: [
-                  // Phone Call button
                   Expanded(
                     child: InkWell(
                       onTap: () => _makePhoneCall(tech.phone!),
@@ -237,18 +338,18 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
                         decoration: BoxDecoration(
-                          color: theme.primaryColor.withOpacity(0.06),
+                          color: AppTheme.primary.withOpacity(0.06),
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: theme.primaryColor.withOpacity(0.2)),
+                          border: Border.all(color: AppTheme.primary.withOpacity(0.2)),
                         ),
                         child: Column(
                           children: [
-                            Icon(Icons.phone_rounded, size: 24, color: theme.primaryColor),
+                            Icon(Icons.phone_rounded, size: 24, color: AppTheme.primary),
                             const SizedBox(height: 4),
                             Text(
                               'Call',
                               style: theme.textTheme.labelSmall?.copyWith(
-                                color: theme.primaryColor,
+                                color: AppTheme.primary,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -258,8 +359,6 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-
-                  // WhatsApp Chat button
                   Expanded(
                     child: InkWell(
                       onTap: () => _launchWhatsApp(tech.phone!),
@@ -290,21 +389,18 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
                   ),
                 ],
               ),
-
             if (hasPhone && hasEmail) const SizedBox(height: 12),
-
-            // Email row (if available)
             if (hasEmail)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color: theme.primaryColor.withOpacity(0.04),
+                  color: AppTheme.primary.withOpacity(0.04),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: theme.primaryColor.withOpacity(0.1)),
+                  border: Border.all(color: AppTheme.primary.withOpacity(0.1)),
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.email_rounded, size: 18, color: theme.primaryColor),
+                    Icon(Icons.email_rounded, size: 18, color: AppTheme.primary),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
@@ -323,9 +419,7 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
     );
   }
 
-  // ============================================================
-  // PROFILE CARD (unchanged)
-  // ============================================================
+  // ─── PROFILE CARD ──────────────────────────────────────────────────────
   Widget _buildProfileCard(Technician tech, AppLocalizations l10n, ThemeData theme) {
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -340,14 +434,14 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
               children: [
                 CircleAvatar(
                   radius: 52,
-                  backgroundColor: theme.primaryColor.withOpacity(0.08),
+                  backgroundColor: AppTheme.primary.withOpacity(0.08),
                   backgroundImage: tech.profilePhoto != null
                       ? NetworkImage(ImageUtils.getFullImageUrl(tech.profilePhoto!))
                       : null,
                   child: tech.profilePhoto == null
                       ? Text(
                     tech.name[0].toUpperCase(),
-                    style: TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: theme.primaryColor),
+                    style: TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: AppTheme.primary),
                   )
                       : null,
                 ),
@@ -437,9 +531,7 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
     );
   }
 
-  // ============================================================
-  // BIO SECTION
-  // ============================================================
+  // ─── BIO SECTION ──────────────────────────────────────────────────────
   Widget _buildBioSection(String bio, AppLocalizations l10n, ThemeData theme) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -466,9 +558,7 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
     );
   }
 
-  // ============================================================
-  // SERVICES SECTION
-  // ============================================================
+  // ─── SERVICES SECTION ─────────────────────────────────────────────────
   Widget _buildServicesSection(Technician tech, AppLocalizations l10n, ThemeData theme) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -495,13 +585,13 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
                     children: tech.services.map((s) => Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                       decoration: BoxDecoration(
-                        color: theme.primaryColor.withOpacity(0.08),
+                        color: AppTheme.primary.withOpacity(0.08),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
                         s,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.primaryColor,
+                          color: AppTheme.primary,
                           fontWeight: FontWeight.w500,
                           fontSize: 13,
                         ),
@@ -513,7 +603,7 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
-                      color: theme.primaryColor.withOpacity(0.08),
+                      color: AppTheme.primary.withOpacity(0.08),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
@@ -529,7 +619,7 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
                         Text(
                           'TZS ${tech.hourlyRate!.toStringAsFixed(0)}',
                           style: theme.textTheme.titleMedium?.copyWith(
-                            color: theme.primaryColor,
+                            color: AppTheme.primary,
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
                           ),
@@ -546,9 +636,7 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
     );
   }
 
-  // ============================================================
-  // PORTFOLIO SECTION
-  // ============================================================
+  // ─── REDESIGNED PORTFOLIO SECTION ─────────────────────────────────────
   Widget _buildPortfolioSection(
       Technician tech,
       int columns,
@@ -602,67 +690,16 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
             itemCount: tech.portfolios.length,
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: columns,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              childAspectRatio: 1,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 0.65,
             ),
             itemBuilder: (ctx, i) {
               final item = tech.portfolios[i];
-              return GestureDetector(
+              return _PortfolioGridCard(
+                item: item,
                 onTap: () => onTap(item, tech.portfolios, i),
-                child: Card(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  elevation: 1,
-                  shadowColor: theme.shadowColor.withOpacity(0.05),
-                  color: theme.cardColor,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Image.network(
-                          ImageUtils.getFullImageUrl(item.image),
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            color: theme.colorScheme.surfaceContainerHighest,
-                            child: Icon(Icons.broken_image, size: 40, color: theme.hintColor),
-                          ),
-                        ),
-                        if (item.description != null)
-                          Positioned(
-                            bottom: 0,
-                            left: 0,
-                            right: 0,
-                            child: Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [Colors.transparent, Colors.black.withOpacity(0.7)],
-                                ),
-                              ),
-                              child: Text(
-                                item.description!,
-                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ),
-                        Positioned(
-                          top: 8,
-                          right: 8,
-                          child: Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), shape: BoxShape.circle),
-                            child: const Icon(Icons.fullscreen_rounded, size: 16, color: Colors.white),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                theme: theme,
               );
             },
           ),
@@ -692,9 +729,148 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
   }
 }
 
-// ============================================================
-// Portfolio Modal (unchanged – already dark‑compatible)
-// ============================================================
+// ─── PORTFOLIO GRID CARD ──────────────────────────────────────────────
+class _PortfolioGridCard extends StatefulWidget {
+  final PortfolioItem item;
+  final VoidCallback onTap;
+  final ThemeData theme;
+
+  const _PortfolioGridCard({
+    required this.item,
+    required this.onTap,
+    required this.theme,
+  });
+
+  @override
+  State<_PortfolioGridCard> createState() => _PortfolioGridCardState();
+}
+
+class _PortfolioGridCardState extends State<_PortfolioGridCard> {
+  bool _isExpanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final theme = widget.theme;
+    final desc = item.description ?? '';
+    final shouldShowReadMore = desc.length > 60;
+
+    return GestureDetector(
+      onTap: widget.onTap,
+      child: Card(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        elevation: 2,
+        shadowColor: theme.shadowColor.withOpacity(0.08),
+        color: theme.cardColor,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.network(
+                ImageUtils.getFullImageUrl(item.image),
+                height: 120,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  height: 120,
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  child: Icon(Icons.broken_image, size: 40, color: theme.hintColor),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (desc.isNotEmpty) ...[
+                      Text(
+                        desc,
+                        maxLines: _isExpanded ? null : 2,
+                        overflow: _isExpanded ? TextOverflow.visible : TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontSize: 13,
+                          height: 1.3,
+                          color: theme.colorScheme.onSurface,
+                        ),
+                      ),
+                      if (shouldShowReadMore)
+                        GestureDetector(
+                          onTap: () => setState(() => _isExpanded = !_isExpanded),
+                          child: Text(
+                            _isExpanded ? 'Read less' : 'Read more',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: AppTheme.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 4),
+                    ],
+                    if (item.hasSocialLinks) ...[
+                      Wrap(
+                        spacing: 4,
+                        runSpacing: 2,
+                        children: [
+                          if (item.instagram != null)
+                            _miniIcon(FontAwesomeIcons.instagram, Colors.pink, 'Instagram'),
+                          if (item.facebook != null)
+                            _miniIcon(FontAwesomeIcons.facebook, Colors.blue.shade700, 'Facebook'),
+                          if (item.tiktok != null)
+                            _miniIcon(FontAwesomeIcons.tiktok, Colors.black, 'TikTok'),
+                          if (item.twitter != null)
+                            _miniIcon(FontAwesomeIcons.twitter, Colors.blue.shade400, 'Twitter'),
+                          if (item.telegram != null)
+                            _miniIcon(FontAwesomeIcons.telegram, Colors.lightBlue, 'Telegram'),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                    ],
+                    Align(
+                      alignment: Alignment.bottomRight,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.fullscreen_rounded,
+                            size: 12,
+                            color: theme.hintColor.withOpacity(0.4),
+                          ),
+                          const SizedBox(width: 2),
+                          Text(
+                            'View',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontSize: 10,
+                              color: theme.hintColor.withOpacity(0.4),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _miniIcon(FaIconData icon, Color color, String label) {
+    return Tooltip(
+      message: label,
+      child: Container(
+        padding: const EdgeInsets.all(2),
+        child: FaIcon(icon, size: 13, color: color),
+      ),
+    );
+  }
+}
+
+// ─── PORTFOLIO MODAL ─────────────────────────────────────────────────────
 class _PortfolioModal extends StatefulWidget {
   final List<PortfolioItem> items;
   final int initialIndex;
@@ -727,6 +903,7 @@ class _PortfolioModalState extends State<_PortfolioModal> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final totalItems = widget.items.length;
+    final currentItem = widget.items[_currentIndex];
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.9,
@@ -736,7 +913,6 @@ class _PortfolioModalState extends State<_PortfolioModal> {
       ),
       child: Column(
         children: [
-          // Header
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: Row(
@@ -758,7 +934,6 @@ class _PortfolioModalState extends State<_PortfolioModal> {
               ],
             ),
           ),
-          // Image Carousel
           Expanded(
             child: PageView.builder(
               controller: _pageController,
@@ -788,8 +963,7 @@ class _PortfolioModalState extends State<_PortfolioModal> {
               },
             ),
           ),
-          // Description
-          if (widget.items[_currentIndex].description != null) ...[
+          if (currentItem.description != null || currentItem.hasSocialLinks) ...[
             Container(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
               decoration: BoxDecoration(
@@ -799,20 +973,45 @@ class _PortfolioModalState extends State<_PortfolioModal> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Description',
-                    style: TextStyle(color: Colors.grey.shade400, fontSize: 12, fontWeight: FontWeight.w500),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    widget.items[_currentIndex].description!,
-                    style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.5),
-                  ),
+                  if (currentItem.description != null) ...[
+                    Text(
+                      'Description',
+                      style: TextStyle(color: Colors.grey.shade400, fontSize: 12, fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      currentItem.description!,
+                      style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.5),
+                    ),
+                  ],
+                  if (currentItem.hasSocialLinks) ...[
+                    if (currentItem.description != null) const SizedBox(height: 12),
+                    Text(
+                      'Social Links',
+                      style: TextStyle(color: Colors.grey.shade400, fontSize: 12, fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 8,
+                      children: [
+                        if (currentItem.instagram != null)
+                          _buildModalSocialIcon(FontAwesomeIcons.instagram, currentItem.instagram!, Colors.pink),
+                        if (currentItem.facebook != null)
+                          _buildModalSocialIcon(FontAwesomeIcons.facebook, currentItem.facebook!, Colors.blue.shade700),
+                        if (currentItem.tiktok != null)
+                          _buildModalSocialIcon(FontAwesomeIcons.tiktok, currentItem.tiktok!, Colors.white),
+                        if (currentItem.twitter != null)
+                          _buildModalSocialIcon(FontAwesomeIcons.twitter, currentItem.twitter!, Colors.blue.shade400),
+                        if (currentItem.telegram != null)
+                          _buildModalSocialIcon(FontAwesomeIcons.telegram, currentItem.telegram!, Colors.lightBlue),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
           ],
-          // Thumbnails
           if (totalItems > 1)
             Container(
               height: 70,
@@ -855,11 +1054,29 @@ class _PortfolioModalState extends State<_PortfolioModal> {
       ),
     );
   }
+
+  Widget _buildModalSocialIcon(FaIconData icon, String url, Color color) {
+    return GestureDetector(
+      onTap: () async {
+        final uri = Uri.parse(url);
+        if (await canLaunchUrl(uri)) {
+          launchUrl(uri, mode: LaunchMode.externalApplication);
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.2),
+          shape: BoxShape.circle,
+          border: Border.all(color: color.withOpacity(0.4), width: 1),
+        ),
+        child: FaIcon(icon, size: 20, color: color),
+      ),
+    );
+  }
 }
 
-// ============================================================
-// Request Dialog (unchanged – already themed)
-// ============================================================
+// ─── REQUEST DIALOG ──────────────────────────────────────────────────────
 class _RequestDialog extends StatefulWidget {
   final Technician technician;
   const _RequestDialog({required this.technician});
@@ -942,10 +1159,10 @@ class _RequestDialogState extends State<_RequestDialog> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: theme.primaryColor.withOpacity(0.1),
+                    color: AppTheme.primary.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Icon(Icons.handyman_rounded, color: theme.primaryColor, size: 22),
+                  child: Icon(Icons.handyman_rounded, color: AppTheme.primary, size: 22),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -1002,7 +1219,7 @@ class _RequestDialogState extends State<_RequestDialog> {
                         decoration: InputDecoration(
                           hintText: 'Select a service...',
                           hintStyle: TextStyle(color: theme.hintColor, fontSize: 14),
-                          prefixIcon: Icon(Icons.construction_rounded, color: theme.primaryColor, size: 20),
+                          prefixIcon: Icon(Icons.construction_rounded, color: AppTheme.primary, size: 20),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                             borderSide: BorderSide.none,
@@ -1013,7 +1230,7 @@ class _RequestDialogState extends State<_RequestDialog> {
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: theme.primaryColor, width: 2),
+                            borderSide: BorderSide(color: AppTheme.primary, width: 2),
                           ),
                           filled: true,
                           fillColor: theme.colorScheme.surfaceContainerHighest,
@@ -1040,7 +1257,7 @@ class _RequestDialogState extends State<_RequestDialog> {
                     if (_errorMessage != null && _errorMessage!.contains('service'))
                       Padding(
                         padding: const EdgeInsets.only(top: 6),
-                        child: Text(_errorMessage!, style: TextStyle(color: theme.colorScheme.error, fontSize: 12)),
+                        child: Text(_errorMessage!, style: TextStyle(color: AppTheme.error, fontSize: 12)),
                       ),
                     const SizedBox(height: 16),
 
@@ -1052,7 +1269,7 @@ class _RequestDialogState extends State<_RequestDialog> {
                         hintText: 'Briefly describe what you need help with...',
                         hintStyle: TextStyle(color: theme.hintColor, fontSize: 13),
                         alignLabelWithHint: true,
-                        prefixIcon: Icon(Icons.description_outlined, color: theme.primaryColor, size: 20),
+                        prefixIcon: Icon(Icons.description_outlined, color: AppTheme.primary, size: 20),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide.none,
@@ -1063,7 +1280,7 @@ class _RequestDialogState extends State<_RequestDialog> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: theme.primaryColor, width: 2),
+                          borderSide: BorderSide(color: AppTheme.primary, width: 2),
                         ),
                         filled: true,
                         fillColor: theme.colorScheme.surfaceContainerHighest,
@@ -1083,8 +1300,8 @@ class _RequestDialogState extends State<_RequestDialog> {
                       child: ElevatedButton(
                         onPressed: _submitRequest,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: theme.primaryColor,
-                          foregroundColor: theme.colorScheme.onPrimary,
+                          backgroundColor: AppTheme.primary,
+                          foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                           elevation: 2,
                         ),
@@ -1141,8 +1358,8 @@ class _RequestDialogState extends State<_RequestDialog> {
                       child: ElevatedButton(
                         onPressed: _closeDialog,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: theme.primaryColor,
-                          foregroundColor: theme.colorScheme.onPrimary,
+                          backgroundColor: AppTheme.primary,
+                          foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         ),
                         child: const Text('Done', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
@@ -1158,16 +1375,16 @@ class _RequestDialogState extends State<_RequestDialog> {
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.error.withOpacity(0.06),
+                  color: AppTheme.error.withOpacity(0.06),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: theme.colorScheme.error.withOpacity(0.2)),
+                  border: Border.all(color: AppTheme.error.withOpacity(0.2)),
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.error_outline_rounded, color: theme.colorScheme.error, size: 20),
+                    Icon(Icons.error_outline_rounded, color: AppTheme.error, size: 20),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Text(_errorMessage!, style: TextStyle(color: theme.colorScheme.error, fontSize: 14)),
+                      child: Text(_errorMessage!, style: TextStyle(color: AppTheme.error, fontSize: 14)),
                     ),
                   ],
                 ),

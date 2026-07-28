@@ -27,6 +27,7 @@ class AppTheme {
   static const Color primary = primaryColor;
   static const Color success = successColor;
   static const Color error = errorColor;
+  static const Color warning = warningColor; // ✅ ADDED
 
   // ===== CHAT COLORS =====
   static const Color chatBubbleSent = primaryColor;
@@ -349,7 +350,7 @@ class AppTheme {
   static final ThemeData darkTheme = ThemeData(
     brightness: Brightness.dark,
     primaryColor: primary,
-    scaffoldBackgroundColor: Colors.black, // true black
+    scaffoldBackgroundColor: Colors.black,
     colorScheme: const ColorScheme.dark(
       primary: primary,
       secondary: salat,

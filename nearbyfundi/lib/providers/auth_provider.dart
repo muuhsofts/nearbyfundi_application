@@ -31,7 +31,7 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ---- Register with optional phone ----
+  // ─── Register Customer ─────────────────────────────────────────────
   Future<bool> register(
       String name,
       String email,
@@ -54,7 +54,7 @@ class AuthProvider extends ChangeNotifier {
     return false;
   }
 
-  // ---- Register Fundi ----
+  // ─── Register Fundi ────────────────────────────────────────────────
   Future<bool> registerFundi(Map<String, dynamic> data) async {
     _setLoading(true);
     final res = await _api.registerFundi(data);
@@ -65,7 +65,7 @@ class AuthProvider extends ChangeNotifier {
     return false;
   }
 
-  // ---- Login (identifier can be email or phone) ----
+  // ─── Login ─────────────────────────────────────────────────────────
   Future<bool> login(String identifier, String password) async {
     _setLoading(true);
     final res = await _api.login(identifier, password);
@@ -79,7 +79,7 @@ class AuthProvider extends ChangeNotifier {
     return false;
   }
 
-  // ---- Verify OTP ----
+  // ─── Verify OTP ────────────────────────────────────────────────────
   Future<bool> verifyOtp(String email, String otp) async {
     _setLoading(true);
     final fcmToken = await FcmService.getToken().catchError((_) => null);
@@ -94,7 +94,7 @@ class AuthProvider extends ChangeNotifier {
     return false;
   }
 
-  // ---- Forgot Password ----
+  // ─── Forgot Password ──────────────────────────────────────────────
   Future<bool> forgotPassword(String email) async {
     _setLoading(true);
     final res = await _api.forgotPassword(email);
@@ -105,7 +105,7 @@ class AuthProvider extends ChangeNotifier {
     return false;
   }
 
-  // ---- Reset Password ----
+  // ─── Reset Password ────────────────────────────────────────────────
   Future<bool> resetPassword(String email, String otp, String password) async {
     _setLoading(true);
     final res = await _api.resetPassword(email: email, otp: otp, password: password);
@@ -116,7 +116,7 @@ class AuthProvider extends ChangeNotifier {
     return false;
   }
 
-  // ---- Update Profile ----
+  // ─── Update Profile ────────────────────────────────────────────────
   Future<bool> updateProfile(Map<String, dynamic> data) async {
     _setLoading(true);
     final res = await _api.updateProfile(data);
@@ -133,7 +133,7 @@ class AuthProvider extends ChangeNotifier {
     return false;
   }
 
-  // ---- Change Password ----
+  // ─── Change Password ──────────────────────────────────────────────
   Future<bool> changePassword(String current, String newPwd) async {
     _setLoading(true);
     final res = await _api.changePassword(currentPassword: current, newPassword: newPwd);
@@ -144,7 +144,7 @@ class AuthProvider extends ChangeNotifier {
     return false;
   }
 
-  // ---- Update Locale ----
+  // ─── Update Locale ─────────────────────────────────────────────────
   Future<bool> updateLocale(String locale) async {
     _setLoading(true);
     final res = await _api.updateLocale(locale);
@@ -167,7 +167,7 @@ class AuthProvider extends ChangeNotifier {
     return false;
   }
 
-  // ---- Resend OTP ----
+  // ─── Resend OTP ────────────────────────────────────────────────────
   Future<bool> resendOtp(String email) async {
     _setLoading(true);
     final res = await _api.resendOtp(email);
@@ -178,7 +178,7 @@ class AuthProvider extends ChangeNotifier {
     return false;
   }
 
-  // ---- Delete Account ----
+  // ─── Delete Account ────────────────────────────────────────────────
   Future<bool> deleteAccount() async {
     _setLoading(true);
     final res = await _api.deleteAccount();
@@ -192,7 +192,31 @@ class AuthProvider extends ChangeNotifier {
     return false;
   }
 
-  // ---- Logout ----
+  // ─── Load User (refresh profile) ──────────────────────────────────
+  Future<void> loadUser() async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final res = await _api.getProfile();
+      if (res.success && res.data != null) {
+        final userData = res.data['user'] ?? res.data;
+        _user = User.fromJson(userData, _token!);
+        await _storeUser();
+        _error = null;
+      } else {
+        _error = res.message;
+      }
+    } catch (e) {
+      _error = e.toString();
+    }
+
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  // ─── Logout ────────────────────────────────────────────────────────
   Future<void> logout() async {
     await _api.logout();
     await _clearSession();
