@@ -45,12 +45,10 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
 
     if (_filterQuery.isNotEmpty) {
       final query = _filterQuery.toLowerCase();
-      filtered = filtered
-          .where((r) =>
+      filtered = filtered.where((r) =>
       r.customerName.toLowerCase().contains(query) ||
           r.serviceName.toLowerCase().contains(query) ||
-          r.description.toLowerCase().contains(query))
-          .toList();
+          r.description.toLowerCase().contains(query)).toList();
     }
 
     return filtered;
@@ -71,9 +69,7 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
     }
   }
 
-  Color _statusBgColor(String status) {
-    return _statusColor(status).withOpacity(0.1);
-  }
+  Color _statusBgColor(String status) => _statusColor(status).withOpacity(0.12);
 
   IconData _statusIcon(String status) {
     switch (status) {
@@ -143,12 +139,9 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: theme.colorScheme.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(l10n.completeRequest, style: theme.textTheme.titleMedium),
-        content: Text(l10n.completeConfirmation,
-            style: theme.textTheme.bodyMedium),
+        content: Text(l10n.completeConfirmation, style: theme.textTheme.bodyMedium),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -158,9 +151,7 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.success,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             child: Text(l10n.completeRequest),
           ),
@@ -181,17 +172,14 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
     }
   }
 
-  void _showSnack(BuildContext context, String message,
-      {bool isError = false}) {
+  void _showSnack(BuildContext context, String message, {bool isError = false}) {
     final theme = Theme.of(context);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
         backgroundColor: isError ? AppTheme.error : theme.colorScheme.primary,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.all(12),
       ),
     );
@@ -207,17 +195,23 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text(l10n.requests),
+        title: Text(
+          l10n.requests,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+        ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
           onPressed: () => Navigator.pushReplacementNamed(context, AppRoutes.home),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: provider.refresh,
+            icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+            onPressed: () => provider.refresh(),
+            tooltip: 'Refresh',
           ),
         ],
+        backgroundColor: AppTheme.primary,
+        elevation: 0,
       ),
       body: provider.isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -228,7 +222,12 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
             _buildStatsBar(provider, theme),
             Expanded(
               child: _buildRequestList(
-                  context, provider, filteredRequests, l10n, theme),
+                context,
+                provider,
+                filteredRequests,
+                l10n,
+                theme,
+              ),
             ),
           ],
         ),
@@ -236,6 +235,7 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
     );
   }
 
+  // ─── SEARCH & FILTER ────────────────────────────────────────────────────
   Widget _buildSearchAndFilter(
       BuildContext context, RequestProvider provider, ThemeData theme) {
     final l10n = AppLocalizations.of(context)!;
@@ -255,8 +255,7 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
               decoration: InputDecoration(
                 hintText: l10n.filterByCustomerService,
                 hintStyle: theme.textTheme.bodySmall,
-                prefixIcon:
-                Icon(Icons.search_rounded, color: theme.colorScheme.primary),
+                prefixIcon: Icon(Icons.search_rounded, color: AppTheme.primary),
                 suffixIcon: _filterQuery.isNotEmpty
                     ? IconButton(
                   icon: Icon(Icons.clear_rounded,
@@ -268,8 +267,7 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
                 )
                     : null,
                 border: InputBorder.none,
-                contentPadding:
-                const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
               ),
               onChanged: (value) => setState(() => _filterQuery = value),
             ),
@@ -304,10 +302,10 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
         decoration: BoxDecoration(
-          color: isSelected ? theme.colorScheme.primary : theme.colorScheme.surface,
+          color: isSelected ? AppTheme.primary : theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: isSelected ? theme.colorScheme.primary : theme.dividerColor,
+            color: isSelected ? AppTheme.primary : theme.dividerColor,
           ),
         ),
         child: Text(
@@ -321,22 +319,23 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
     );
   }
 
+  // ─── STATS BAR ──────────────────────────────────────────────────────────
   Widget _buildStatsBar(RequestProvider provider, ThemeData theme) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
         children: [
           _buildStatChip('Total', provider.totalCount,
-              theme.colorScheme.onSurface, theme, Colors.grey.shade800),
+              theme.colorScheme.onSurface, theme, Colors.grey.shade200),
           const SizedBox(width: 8),
           _buildStatChip('Pending', provider.pendingCount,
-              AppTheme.warning, theme, AppTheme.warning.withOpacity(0.1)),
+              AppTheme.warning, theme, AppTheme.warning.withOpacity(0.12)),
           const SizedBox(width: 8),
           _buildStatChip('Accepted', provider.acceptedCount,
-              AppTheme.primary, theme, AppTheme.primary.withOpacity(0.1)),
+              AppTheme.primary, theme, AppTheme.primary.withOpacity(0.12)),
           const SizedBox(width: 8),
           _buildStatChip('Done', provider.completedCount,
-              AppTheme.success, theme, AppTheme.success.withOpacity(0.1)),
+              AppTheme.success, theme, AppTheme.success.withOpacity(0.12)),
         ],
       ),
     );
@@ -374,6 +373,7 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
     );
   }
 
+  // ─── REQUEST LIST ──────────────────────────────────────────────────────
   Widget _buildRequestList(BuildContext context, RequestProvider provider,
       List<ServiceRequest> requests, AppLocalizations l10n, ThemeData theme) {
     if (provider.requests.isEmpty) {
@@ -388,10 +388,13 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
           theme: theme);
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-      itemCount: requests.length,
-      itemBuilder: (ctx, i) => _buildRequestCard(context, requests[i], l10n, theme),
+    return RefreshIndicator(
+      onRefresh: () => provider.refresh(),
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+        itemCount: requests.length,
+        itemBuilder: (ctx, i) => _buildRequestCard(context, requests[i], l10n, theme),
+      ),
     );
   }
 
@@ -421,6 +424,7 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
     );
   }
 
+  // ─── REQUEST CARD ──────────────────────────────────────────────────────
   Widget _buildRequestCard(BuildContext context, ServiceRequest request,
       AppLocalizations l10n, ThemeData theme) {
     final isPending = request.isPending;
@@ -437,7 +441,7 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withOpacity(0.06),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -520,6 +524,7 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
     );
   }
 
+  // ─── ACTION BUTTONS ────────────────────────────────────────────────────
   Widget _buildPendingActions(BuildContext context, ServiceRequest request,
       AppLocalizations l10n, ThemeData theme) {
     return Row(
@@ -593,7 +598,7 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppTheme.success.withOpacity(0.1),
+        color: AppTheme.success.withOpacity(0.08),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppTheme.success.withOpacity(0.2)),
       ),
@@ -659,6 +664,7 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
   }
 }
 
+// ─── PRIMARY BUTTON ──────────────────────────────────────────────────────
 class _PrimaryButton extends StatelessWidget {
   final String label;
   final Color color;

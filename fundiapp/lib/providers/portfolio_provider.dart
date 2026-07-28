@@ -1,5 +1,3 @@
-// lib/providers/portfolio_provider.dart
-
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../models/portfolio.dart';
@@ -16,10 +14,8 @@ class PortfolioProvider extends ChangeNotifier {
 
   Future<void> loadPortfolio() async {
     _setLoading(true);
-    // ✅ Use the dedicated portfolio endpoint
     final res = await _api.getMyPortfolios();
     if (res.success && res.data != null) {
-      // Handle both direct list and wrapped data
       final List<dynamic> data = res.data is List ? res.data : res.data['data'] ?? [];
       _items = data.map((p) => PortfolioItem.fromJson(p)).toList();
       _error = null;
@@ -58,6 +54,19 @@ class PortfolioProvider extends ChangeNotifier {
   Future<bool> deletePortfolio(int id) async {
     _setLoading(true);
     final res = await _api.deletePortfolio(id);
+    if (res.success) {
+      await loadPortfolio();
+      _setLoading(false);
+      return true;
+    }
+    _error = res.message;
+    _setLoading(false);
+    return false;
+  }
+
+  Future<bool> updateSocialLinks(int id, Map<String, dynamic> socialLinks) async {
+    _setLoading(true);
+    final res = await _api.updatePortfolioSocialLinks(id, socialLinks);
     if (res.success) {
       await loadPortfolio();
       _setLoading(false);

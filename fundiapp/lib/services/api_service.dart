@@ -253,43 +253,78 @@ class ApiService {
   Future<ApiResponse> deletePost(int id) => _delete('/v5/posts/$id');
 
   // ============================================================
-  //  FUNDI – PORTFOLIO
+  //  FUNDI – PORTFOLIO (UPDATED: always send social fields)
   // ============================================================
 
+  /// Get portfolios of the authenticated technician.
   Future<ApiResponse> getMyPortfolios() => _get('/v3/portfolios/my');
 
+  /// Create a new portfolio item (with optional social links).
   Future<ApiResponse> createPortfolio(Map<String, dynamic> data) async {
     if (data.containsKey('image') && data['image'] is String && data['image'].isNotEmpty) {
       final file = File(data['image']);
       if (await file.exists()) {
-        final formData = FormData.fromMap({
-          'image': await MultipartFile.fromFile(file.path),
-          'description': data['description'] ?? '',
+        final formData = FormData();
+        // Add all fields – even if they are null, send empty string
+        data.forEach((key, value) {
+          if (key == 'image') {
+            // skip – added as file below
+          } else {
+            // Always add the field, using empty string if null
+            formData.fields.add(MapEntry(key, value?.toString() ?? ''));
+          }
         });
+        formData.files.add(
+          MapEntry('image', await MultipartFile.fromFile(file.path)),
+        );
         return _post('/v3/portfolios', data: formData);
       }
     }
+    // If no image (should not happen as image is required), send as JSON
     return _post('/v3/portfolios', data: data);
   }
 
+  /// Update an existing portfolio item (including social links).
   Future<ApiResponse> updatePortfolio(int id, Map<String, dynamic> data) async {
     if (data.containsKey('image') && data['image'] is String && data['image'].isNotEmpty) {
       final file = File(data['image']);
       if (await file.exists()) {
-        final formData = FormData.fromMap({
-          '_method': 'PUT',
-          'description': data['description'] ?? '',
-          'image': await MultipartFile.fromFile(file.path),
+        final formData = FormData();
+        data.forEach((key, value) {
+          if (key == 'image') {
+            // skip – added as file below
+          } else {
+            // Always add the field, using empty string if null
+            formData.fields.add(MapEntry(key, value?.toString() ?? ''));
+          }
         });
+        formData.files.add(
+          MapEntry('image', await MultipartFile.fromFile(file.path)),
+        );
+        formData.fields.add(MapEntry('_method', 'PUT'));
         return _post('/v3/portfolios/$id', data: formData);
       }
     }
-    return _put('/v3/portfolios/$id', data: {
-      'description': data['description'] ?? '',
-    });
+    return _put('/v3/portfolios/$id', data: data);
   }
 
+  /// Delete a portfolio item.
   Future<ApiResponse> deletePortfolio(int id) => _delete('/v3/portfolios/$id');
+
+  /// Update social links for a specific portfolio.
+  Future<ApiResponse> updatePortfolioSocialLinks(int id, Map<String, dynamic> socialLinks) =>
+      _put('/v3/portfolios/$id/social-links', data: socialLinks);
+
+  /// Public: Get all portfolios (optionally filtered by technician).
+  Future<ApiResponse> getPortfolios({int? technicianId, int page = 1}) =>
+      _get('/v3/portfolios', query: {
+        'page': page,
+        if (technicianId != null) 'technician_id': technicianId,
+      });
+
+  /// Public: Get portfolios by a specific technician ID.
+  Future<ApiResponse> getPortfoliosByTechnician(int technicianId) =>
+      _get('/v3/portfolios/technician/$technicianId');
 
   // ============================================================
   //  REQUESTS
