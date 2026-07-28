@@ -37,6 +37,7 @@ import {
     Autocomplete,
     Badge,
     alpha,
+    Link,
 } from '@mui/material';
 import {
     Close as CloseIcon,
@@ -62,6 +63,12 @@ import {
     Dashboard as DashboardIcon,
     TrendingUp as TrendingUpIcon,
     People as PeopleIcon,
+    Instagram as InstagramIcon,
+    Facebook as FacebookIcon,
+    Twitter as TwitterIcon,
+    Telegram as TelegramIcon,
+    MusicNote as MusicNoteIcon,
+    Link as LinkIcon,
 } from '@mui/icons-material';
 import { portfolioService } from 'services/portfolio.service';
 import { usePermissions } from 'hooks/usePermissions';
@@ -69,6 +76,79 @@ import { showSnackbar } from 'utils/snackbar';
 import appConfig from '../../config';
 
 const colors = appConfig.app.colors;
+
+// ─── Social Link Component ──────────────────────────────────────────────
+const SocialLink = ({ platform, url }) => {
+    if (!url) return null;
+
+    const getIcon = () => {
+        switch (platform.toLowerCase()) {
+            case 'instagram':
+                return <InstagramIcon sx={{ fontSize: 18 }} />;
+            case 'facebook':
+                return <FacebookIcon sx={{ fontSize: 18 }} />;
+            case 'tiktok':
+                return <MusicNoteIcon sx={{ fontSize: 18 }} />;
+            case 'twitter':
+                return <TwitterIcon sx={{ fontSize: 18 }} />;
+            case 'telegram':
+                return <TelegramIcon sx={{ fontSize: 18 }} />;
+            default:
+                return <LinkIcon sx={{ fontSize: 18 }} />;
+        }
+    };
+
+    const getColor = () => {
+        switch (platform.toLowerCase()) {
+            case 'instagram':
+                return '#E4405F';
+            case 'facebook':
+                return '#1877F2';
+            case 'tiktok':
+                return '#000000';
+            case 'twitter':
+                return '#1DA1F2';
+            case 'telegram':
+                return '#0088CC';
+            default:
+                return colors.rain;
+        }
+    };
+
+    const color = getColor();
+
+    return (
+        <Tooltip title={`Open ${platform}`}>
+            <Link
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                sx={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 0.5,
+                    color: color,
+                    textDecoration: 'none',
+                    padding: '4px 10px',
+                    borderRadius: '20px',
+                    backgroundColor: alpha(color, 0.08),
+                    border: `1px solid ${alpha(color, 0.15)}`,
+                    transition: 'all 0.2s ease',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    '&:hover': {
+                        backgroundColor: alpha(color, 0.15),
+                        transform: 'translateY(-1px)',
+                        boxShadow: `0 2px 8px ${alpha(color, 0.2)}`,
+                    },
+                }}
+            >
+                {getIcon()}
+                {platform}
+            </Link>
+        </Tooltip>
+    );
+};
 
 const PortfoliosList = () => {
     const theme = useTheme();
@@ -234,6 +314,26 @@ const PortfoliosList = () => {
             .join('')
             .toUpperCase()
             .substring(0, 2);
+    };
+
+    // ─── Get social links from portfolio ────────────────────────────────
+    const getSocialLinks = (portfolio) => {
+        // Check if social_links exists directly or in the response
+        const socialLinks = portfolio.social_links || portfolio.socialLinks || {};
+        const links = [];
+
+        const platforms = ['instagram', 'facebook', 'tiktok', 'twitter', 'telegram'];
+        platforms.forEach(platform => {
+            if (socialLinks[platform]) {
+                links.push({ platform, url: socialLinks[platform] });
+            }
+        });
+
+        return links;
+    };
+
+    const hasSocialLinks = (portfolio) => {
+        return getSocialLinks(portfolio).length > 0;
     };
 
     const groupPortfoliosByTechnician = () => {
@@ -859,6 +959,7 @@ const PortfoliosList = () => {
                                         const isHovered = hoveredCard === portfolio.id;
                                         const description = portfolio.description || 'No description available';
                                         const shouldTruncate = description.length > 80;
+                                        const socialLinks = getSocialLinks(portfolio);
 
                                         return (
                                             <Grid
@@ -1135,6 +1236,35 @@ const PortfoliosList = () => {
                                                                 >
                                                                     {isExpanded ? 'Read Less' : 'Read More'}
                                                                 </Button>
+                                                            )}
+
+                                                            {/* ─── SOCIAL LINKS ──────────────────────────────── */}
+                                                            {socialLinks.length > 0 && (
+                                                                <Box sx={{ mt: 1.5, mb: 0.5 }}>
+                                                                    <Typography
+                                                                        variant="caption"
+                                                                        sx={{
+                                                                            color: colors.rain,
+                                                                            fontWeight: 600,
+                                                                            display: 'block',
+                                                                            mb: 0.75,
+                                                                            fontSize: '0.7rem',
+                                                                            textTransform: 'uppercase',
+                                                                            letterSpacing: '0.5px',
+                                                                        }}
+                                                                    >
+                                                                        Connect
+                                                                    </Typography>
+                                                                    <Box display="flex" gap={1} flexWrap="wrap">
+                                                                        {socialLinks.map((link, idx) => (
+                                                                            <SocialLink
+                                                                                key={idx}
+                                                                                platform={link.platform}
+                                                                                url={link.url}
+                                                                            />
+                                                                        ))}
+                                                                    </Box>
+                                                                </Box>
                                                             )}
                                                         </Box>
 
@@ -1439,6 +1569,44 @@ const PortfoliosList = () => {
                                                 <Typography variant="body1" sx={{ color: colors.black, lineHeight: 1.9 }}>
                                                     {selectedPortfolio.description}
                                                 </Typography>
+                                            </Paper>
+                                        </Box>
+                                    )}
+
+                                    {/* ─── SOCIAL LINKS (Dialog) ────────────────────────────── */}
+                                    {hasSocialLinks(selectedPortfolio) && (
+                                        <Box sx={{ mt: 3 }}>
+                                            <Typography
+                                                variant="subtitle2"
+                                                sx={{
+                                                    color: colors.rain,
+                                                    mb: 1.5,
+                                                    fontWeight: 700,
+                                                    textTransform: 'uppercase',
+                                                    letterSpacing: '0.5px',
+                                                    fontSize: '0.75rem',
+                                                }}
+                                            >
+                                                Social Links
+                                            </Typography>
+                                            <Paper
+                                                elevation={0}
+                                                sx={{
+                                                    p: 2.5,
+                                                    backgroundColor: '#ffffff',
+                                                    borderRadius: 2.5,
+                                                    border: `1px solid ${alpha(colors.middle, 0.1)}`,
+                                                }}
+                                            >
+                                                <Box display="flex" gap={1.5} flexWrap="wrap">
+                                                    {getSocialLinks(selectedPortfolio).map((link, idx) => (
+                                                        <SocialLink
+                                                            key={idx}
+                                                            platform={link.platform}
+                                                            url={link.url}
+                                                        />
+                                                    ))}
+                                                </Box>
                                             </Paper>
                                         </Box>
                                     )}

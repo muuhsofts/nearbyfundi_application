@@ -1,9 +1,18 @@
 // src/pages/monitoring/MonitoringMap.jsx
 // Full-screen map showing TODAY's PENDING (red), ACCEPTED (green), and COMPLETED (blue) service requests.
 // Pending requests from previous days show as orange.
+//
+// NEW IN THIS VERSION:
+// 1. OSRM Route Fetching (router.project-osrm.org): real driving routes are drawn between a
+//    selected request's technician and the customer location, instead of a straight line.
+// 2. Route caching: routes are cached per (request, technician) pair so re-selecting the same
+//    marker or polling refreshes doesn't refetch OSRM unnecessarily.
+// 3. Map Navigation Controls: interactive Zoom (+ / -) and Recenter / Fit All floating buttons.
+// 4. Interactive Focus: selecting a request marker highlights its route and fits the camera
+//    bounds between the technician and the customer; other markers dim slightly for contrast.
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
@@ -43,6 +52,10 @@ import {
     CalendarToday as CalendarIcon,
     ExpandMore as ExpandMoreIcon,
     KeyboardArrowRight as KeyboardArrowRightIcon,
+    Add as AddIcon,
+    Remove as RemoveIcon,
+    Route as RouteIcon,
+    Timer as TimerIcon,
 } from '@mui/icons-material';
 import { usePermissions } from 'hooks';
 import { monitoringService } from 'services/monitoring.service';
@@ -57,6 +70,7 @@ const DAR_ES_SALAAM = [-6.7924, 39.2083];
 const TIMEOUT_MINUTES = 5;
 const POLL_MS = 15000;
 const DEFAULT_PENDING_DAYS = 3;
+const OSRM_BASE_URL = 'https://router.project-osrm.org/route/v1/driving';
 
 // CSS for pulse animation
 const pulseStyles = `
@@ -117,7 +131,7 @@ const getDayLabel = (dayAgo) => {
     return `${dayAgo} days ago`;
 };
 
-const createIcon = (status, isTimeout, dayAgo) => {
+const createIcon = (status, isTimeout, dayAgo, dimmed) => {
     let color = RED;
     let icon = '⚡';
     let size = 30;
@@ -162,6 +176,8 @@ const createIcon = (status, isTimeout, dayAgo) => {
         fontSize: (isTimeout ? '14' : '12') + 'px',
         boxShadow: '0 2px 10px rgba(0,0,0,0.35)',
         animation: animation,
+        opacity: dimmed ? 0.45 : 1,
+        transition: 'opacity 0.2s ease',
     };
 
     const styleString = Object.entries(markerStyle)
@@ -175,6 +191,30 @@ const createIcon = (status, isTimeout, dayAgo) => {
         iconAnchor: [size / 2, size / 2],
         popupAnchor: [0, -size / 2],
     });
+};
+
+// Fetches a real driving route between two lat/lng points using the public OSRM demo server.
+// Returns { coords, distanceKm, durationMin } or null if the route can't be resolved.
+const fetchOsrmRoute = async (origin, destination) => {
+    try {
+        const url = `${OSRM_BASE_URL}/${origin.lng},${origin.lat};${destination.lng},${destination.lat}?overview=full&geometries=geojson`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`OSRM request failed with status ${res.status}`);
+        const data = await res.json();
+        if (data.code !== 'Ok' || !data.routes?.length) return null;
+
+        const route = data.routes[0];
+        const coords = route.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+
+        return {
+            coords,
+            distanceKm: route.distance / 1000,
+            durationMin: route.duration / 60,
+        };
+    } catch (err) {
+        console.error('OSRM route fetch error:', err);
+        return null;
+    }
 };
 
 const MonitoringMap = () => {
@@ -197,6 +237,12 @@ const MonitoringMap = () => {
     const [toast, setToast] = useState(null);
     const [showScrollTop, setShowScrollTop] = useState(false);
     const [anchorEl, setAnchorEl] = useState(null);
+
+    // --- Route state ---
+    const [routeInfo, setRouteInfo] = useState(null); // { coords, distanceKm, durationMin, requestId }
+    const [routeLoading, setRouteLoading] = useState(false);
+    const routeCacheRef = useRef({}); // key: `${requestId}-${technicianId}` -> route result
+
     const mapRef = useRef(null);
 
     const load = useCallback(async () => {
@@ -236,17 +282,37 @@ const MonitoringMap = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
+    const fitToBounds = useCallback((points, options = {}) => {
+        const map = mapRef.current;
+        if (!map || !points || points.length === 0) return;
+        if (points.length === 1) {
+            map.flyTo(points[0], 15, { duration: 0.75 });
+            return;
+        }
+        const bounds = L.latLngBounds(points);
+        map.flyToBounds(bounds, { padding: [80, 80], maxZoom: 16, duration: 0.75, ...options });
+    }, []);
+
     const handleRecenter = () => {
         const map = mapRef.current;
         if (!map) return;
 
         const mapRequests = requests.filter(r => r.latitude && r.longitude);
         if (mapRequests.length > 0) {
-            const bounds = L.latLngBounds(mapRequests.map((r) => [r.latitude, r.longitude]));
-            map.flyToBounds(bounds, { padding: [60, 60], maxZoom: 15, duration: 0.75 });
+            fitToBounds(mapRequests.map((r) => [r.latitude, r.longitude]), { maxZoom: 15 });
         } else {
             map.flyTo(DAR_ES_SALAAM, 13, { duration: 0.75 });
         }
+    };
+
+    const handleZoomIn = () => {
+        const map = mapRef.current;
+        if (map) map.zoomIn(1);
+    };
+
+    const handleZoomOut = () => {
+        const map = mapRef.current;
+        if (map) map.zoomOut(1);
     };
 
     const handleCallTechnician = async (technicianId, requestId) => {
@@ -305,6 +371,62 @@ const MonitoringMap = () => {
         return () => document.removeEventListener('keydown', handleEscape);
     }, [selected]);
 
+    // --- Route fetching: whenever the selected request changes, fetch (or reuse a cached)
+    // driving route between the assigned technician and the customer location, then fit the
+    // camera to that route. This is the "interactive focus" behavior.
+    useEffect(() => {
+        let cancelled = false;
+
+        const loadRoute = async () => {
+            const hasTechLocation = selected?.technician?.latitude && selected?.technician?.longitude;
+            const hasDestLocation = selected?.latitude && selected?.longitude;
+
+            if (!selected || !hasTechLocation || !hasDestLocation) {
+                setRouteInfo(null);
+                setRouteLoading(false);
+                // Still focus the camera on the request itself even without a technician route.
+                if (selected && hasDestLocation) {
+                    fitToBounds([[selected.latitude, selected.longitude]], { maxZoom: 15 });
+                }
+                return;
+            }
+
+            const cacheKey = `${selected.id}-${selected.technician.id}`;
+            const cached = routeCacheRef.current[cacheKey];
+
+            if (cached) {
+                setRouteInfo({ ...cached, requestId: selected.id });
+                fitToBounds(cached.coords);
+                return;
+            }
+
+            setRouteLoading(true);
+            const origin = { lat: selected.technician.latitude, lng: selected.technician.longitude };
+            const destination = { lat: selected.latitude, lng: selected.longitude };
+            const result = await fetchOsrmRoute(origin, destination);
+
+            if (cancelled) return;
+            setRouteLoading(false);
+
+            if (result) {
+                routeCacheRef.current[cacheKey] = result;
+                setRouteInfo({ ...result, requestId: selected.id });
+                fitToBounds(result.coords);
+            } else {
+                setRouteInfo(null);
+                // Fall back to fitting between the two raw points if OSRM couldn't resolve a route.
+                fitToBounds([
+                    [origin.lat, origin.lng],
+                    [destination.lat, destination.lng],
+                ]);
+            }
+        };
+
+        loadRoute();
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selected?.id]);
+
     if (!canView) {
         return (
             <Box p={3}>
@@ -318,6 +440,10 @@ const MonitoringMap = () => {
     const center = requests.length > 0 && requests[0].latitude && requests[0].longitude
         ? [requests[0].latitude, requests[0].longitude]
         : DAR_ES_SALAAM;
+
+    const routeColor = selected?.status === 'accepted' ? GREEN
+        : selected?.status === 'completed' ? BLUE
+            : RED;
 
     return (
         <Box sx={{
@@ -338,20 +464,36 @@ const MonitoringMap = () => {
                     center={center}
                     zoom={13}
                     style={{ height: '100%', width: '100%' }}
+                    zoomControl={false}
                     ref={mapRef}
                 >
                     <TileLayer
                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                     />
+
+                    {routeInfo?.coords?.length > 0 && (
+                        <Polyline
+                            positions={routeInfo.coords}
+                            pathOptions={{
+                                color: routeColor,
+                                weight: 5,
+                                opacity: 0.8,
+                                dashArray: selected?.status === 'pending' ? '10, 8' : null,
+                                lineCap: 'round',
+                            }}
+                        />
+                    )}
+
                     {requests.map((r) => {
                         if (!r.latitude || !r.longitude) return null;
                         const dayAgo = r.status === 'pending' ? (r.day_ago || 0) : 0;
+                        const dimmed = !!selected && selected.id !== r.id;
                         return (
                             <Marker
                                 key={r.id}
                                 position={[r.latitude, r.longitude]}
-                                icon={createIcon(r.status, r.is_timeout, dayAgo)}
+                                icon={createIcon(r.status, r.is_timeout, dayAgo, dimmed)}
                                 eventHandlers={{ click: () => setSelected(r) }}
                             >
                                 <Popup>
@@ -585,6 +727,47 @@ const MonitoringMap = () => {
                 </Alert>
             )}
 
+            {/* Route info badge (shown while a route is loading or resolved) */}
+            {selected && (routeLoading || routeInfo) && (
+                <Paper
+                    elevation={3}
+                    sx={{
+                        position: 'absolute',
+                        top: { xs: 'auto', sm: 170 },
+                        bottom: { xs: 90, sm: 'auto' },
+                        left: 16,
+                        zIndex: 1000,
+                        px: 1.5,
+                        py: 1,
+                        borderRadius: 2,
+                        bgcolor: 'rgba(255,255,255,0.97)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                    }}
+                >
+                    {routeLoading ? (
+                        <>
+                            <CircularProgress size={14} />
+                            <Typography variant="caption" color="text.secondary">
+                                Calculating route…
+                            </Typography>
+                        </>
+                    ) : (
+                        <>
+                            <RouteIcon sx={{ fontSize: 16, color: routeColor }} />
+                            <Typography variant="caption" fontWeight="600">
+                                {routeInfo.distanceKm.toFixed(1)} km
+                            </Typography>
+                            <TimerIcon sx={{ fontSize: 14, color: '#6b7280', ml: 0.5 }} />
+                            <Typography variant="caption" color="text.secondary">
+                                {Math.round(routeInfo.durationMin)} min
+                            </Typography>
+                        </>
+                    )}
+                </Paper>
+            )}
+
             {/* Legend */}
             {!isMobile && (
                 <Paper
@@ -619,10 +802,14 @@ const MonitoringMap = () => {
                         <Typography variant="caption">⚠️</Typography>
                         <Typography variant="caption">Waiting 5+ min</Typography>
                     </Box>
+                    <Box display="flex" alignItems="center" gap={1.5} sx={{ mt: 0.5 }}>
+                        <Box sx={{ width: 16, height: 3, bgcolor: '#9ca3af', borderRadius: 1 }} />
+                        <Typography variant="caption">Driving route</Typography>
+                    </Box>
                 </Paper>
             )}
 
-            {/* Recenter & Scroll to Top */}
+            {/* Map Navigation Controls: Zoom, Recenter, Scroll to Top */}
             <Box
                 sx={{
                     position: 'absolute',
@@ -634,7 +821,37 @@ const MonitoringMap = () => {
                     gap: 1,
                 }}
             >
-                <Tooltip title="Recenter map" placement="left">
+                <Paper
+                    elevation={3}
+                    sx={{
+                        borderRadius: 2,
+                        overflow: 'hidden',
+                        display: 'flex',
+                        flexDirection: 'column',
+                    }}
+                >
+                    <Tooltip title="Zoom in" placement="left">
+                        <IconButton
+                            size="small"
+                            onClick={handleZoomIn}
+                            sx={{ borderRadius: 0, py: 1 }}
+                        >
+                            <AddIcon fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
+                    <Divider />
+                    <Tooltip title="Zoom out" placement="left">
+                        <IconButton
+                            size="small"
+                            onClick={handleZoomOut}
+                            sx={{ borderRadius: 0, py: 1 }}
+                        >
+                            <RemoveIcon fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
+                </Paper>
+
+                <Tooltip title="Recenter / fit all" placement="left">
                     <Fab
                         size="small"
                         onClick={handleRecenter}
@@ -762,6 +979,35 @@ const MonitoringMap = () => {
                                 />
                             )}
                         </Box>
+
+                        {/* Route summary, when a technician route is available */}
+                        {(routeLoading || routeInfo) && (
+                            <Box
+                                sx={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 1,
+                                    mb: 2,
+                                    p: 1.25,
+                                    borderRadius: 2,
+                                    bgcolor: '#f9fafb',
+                                    border: '1px solid #e5e7eb',
+                                }}
+                            >
+                                <RouteIcon sx={{ fontSize: 18, color: routeColor }} />
+                                {routeLoading ? (
+                                    <Typography variant="body2" color="text.secondary">
+                                        Calculating driving route…
+                                    </Typography>
+                                ) : (
+                                    <Typography variant="body2">
+                                        <strong>{routeInfo.distanceKm.toFixed(1)} km</strong> driving
+                                        {' · '}
+                                        <strong>{Math.round(routeInfo.durationMin)} min</strong> ETA
+                                    </Typography>
+                                )}
+                            </Box>
+                        )}
 
                         <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600, mt: 1 }}>
                             Description
