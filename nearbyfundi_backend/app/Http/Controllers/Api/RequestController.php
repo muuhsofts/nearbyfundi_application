@@ -65,7 +65,6 @@ class RequestController extends BaseApiController
     private function createNotification(int $userId, string $title, string $body, string $type, array $data = []): void
     {
         try {
-            // Sanitize data - convert all values to strings for JSON compatibility
             $sanitizedData = [];
             foreach ($data as $key => $value) {
                 if ($value === null) {
@@ -139,7 +138,8 @@ class RequestController extends BaseApiController
                 'description'   => 'required|string|min:5',
             ]);
 
-            // Check for existing active request
+            // ✅ FIXED: Allow re-booking after cancellation
+            // Check for existing active request (excluding 'cancelled' status)
             $existing = ServiceRequest::where('customer_id', $user->id)
                 ->where('technician_id', $data['technician_id'])
                 ->whereIn('status', ['pending', 'accepted', 'in_progress'])
@@ -162,7 +162,6 @@ class RequestController extends BaseApiController
                 'status'        => 'pending',
             ]);
 
-            // Load relationships for notifications
             $serviceRequest->load(['customer', 'technician.user', 'service']);
 
             DB::commit();
@@ -304,7 +303,6 @@ class RequestController extends BaseApiController
 
             DB::commit();
 
-            // Dispatch event
             try {
                 event(new RequestStatusUpdated($serviceRequest));
             } catch (\Exception $e) {
@@ -321,7 +319,6 @@ class RequestController extends BaseApiController
                 $request->ip()
             );
 
-            // Send notifications based on status
             $this->handleStatusChange($serviceRequest, $newStatus);
 
             $this->logAudit('update_request_status', 'request', $id, "Status changed to {$newStatus}");
@@ -381,7 +378,6 @@ class RequestController extends BaseApiController
     private function handleAccepted(ServiceRequest $serviceRequest): void
     {
         try {
-            // Send email to customer
             if ($serviceRequest->customer && $serviceRequest->customer->email) {
                 Mail::to($serviceRequest->customer->email)
                     ->send(new RequestAcceptedMail($serviceRequest));
@@ -391,7 +387,6 @@ class RequestController extends BaseApiController
         }
 
         try {
-            // Send FCM to customer
             if ($serviceRequest->customer) {
                 $this->fcm->sendToUser(
                     $serviceRequest->customer,
@@ -701,7 +696,6 @@ class RequestController extends BaseApiController
     public function index(Request $request)
     {
         try {
-            // Check permission instead of role
             if (!$request->user()->can('requests.view')) {
                 return $this->forbidden('Unauthorized. You need requests.view permission.');
             }
@@ -715,27 +709,22 @@ class RequestController extends BaseApiController
                 }
             ]);
 
-            // Filter by status
             if ($request->filled('status')) {
                 $query->where('status', $request->status);
             }
 
-            // Filter by customer_id
             if ($request->filled('customer_id')) {
                 $query->where('customer_id', $request->customer_id);
             }
 
-            // Filter by technician_id
             if ($request->filled('technician_id')) {
                 $query->where('technician_id', $request->technician_id);
             }
 
-            // Filter by service_id
             if ($request->filled('service_id')) {
                 $query->where('service_id', $request->service_id);
             }
 
-            // Filter by date range
             if ($request->filled('date_from')) {
                 $query->whereDate('created_at', '>=', $request->date_from);
             }
@@ -743,7 +732,6 @@ class RequestController extends BaseApiController
                 $query->whereDate('created_at', '<=', $request->date_to);
             }
 
-            // Search in description
             if ($request->filled('search')) {
                 $search = $request->search;
                 $query->where(function($q) use ($search) {
@@ -761,11 +749,9 @@ class RequestController extends BaseApiController
                 });
             }
 
-            // Sorting
             $sortField = $request->input('sort_by', 'created_at');
             $sortOrder = $request->input('sort_order', 'desc');
             
-            // Validate sort field to prevent SQL injection
             $allowedSortFields = ['id', 'created_at', 'updated_at', 'status', 'customer_id', 'technician_id'];
             if (!in_array($sortField, $allowedSortFields)) {
                 $sortField = 'created_at';
@@ -796,7 +782,6 @@ class RequestController extends BaseApiController
     public function show($id, Request $request)
     {
         try {
-            // Check permission instead of role
             if (!$request->user()->can('requests.view')) {
                 return $this->forbidden('Unauthorized. You need requests.view permission.');
             }
@@ -831,7 +816,6 @@ class RequestController extends BaseApiController
     public function destroy($id, Request $request)
     {
         try {
-            // Check permission instead of role
             if (!$request->user()->can('requests.delete')) {
                 return $this->forbidden('Unauthorized. You need requests.delete permission.');
             }
@@ -840,7 +824,6 @@ class RequestController extends BaseApiController
             
             DB::beginTransaction();
             
-            // Delete associated logs first
             RequestLog::where('request_id', $id)->delete();
             
             $serviceRequest->delete();
@@ -871,7 +854,6 @@ class RequestController extends BaseApiController
     public function logs($requestId, Request $request)
     {
         try {
-            // Check permission instead of role
             if (!$request->user()->can('requests.view')) {
                 return $this->forbidden('Unauthorized. You need requests.view permission.');
             }
@@ -900,7 +882,6 @@ class RequestController extends BaseApiController
     public function stats(Request $request)
     {
         try {
-            // Check permission instead of role
             if (!$request->user()->can('requests.view')) {
                 return $this->forbidden('Unauthorized. You need requests.view permission.');
             }

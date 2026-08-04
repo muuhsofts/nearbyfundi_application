@@ -24,19 +24,19 @@ use App\Http\Controllers\Api\AnalyticsController;
 use App\Http\Controllers\Api\ChatController;
 use App\Http\Controllers\Api\MonitoringController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\SubscriptionController;
+use App\Http\Controllers\Api\RateCardController;
+use App\Http\Controllers\Api\PaymentMethodController;
 
 // =============================================
 // HEALTH CHECK
 // =============================================
-Route::get('/health', function () { 
-    return response()->json(['status' => 'ok', 'timestamp' => now()]); 
-});
+Route::get('/health', fn() => response()->json(['status' => 'ok', 'timestamp' => now()]));
 
 // =============================================
 // V1 – AUTH & PUBLIC
 // =============================================
 Route::prefix('v1')->group(function () {
-    // Auth Routes
     Route::prefix('auth')->group(function () {
         Route::post('register', [AuthController::class, 'register']);
         Route::post('register-fundi', [AuthController::class, 'registerFundi']);
@@ -54,15 +54,11 @@ Route::prefix('v1')->group(function () {
         Route::delete('account', [AuthController::class, 'deleteAccount'])->middleware('auth:sanctum');
     });
 
-    // Verification
     Route::get('verification/verify-token', [AuthController::class, 'verifyToken']);
-
-    // Device Token Management
     Route::post('device-token', [AuthController::class, 'updateDeviceToken'])->middleware('auth:sanctum');
     Route::get('device-token', [AuthController::class, 'getDeviceToken'])->middleware('auth:sanctum');
     Route::delete('device-token', [AuthController::class, 'deleteDeviceToken'])->middleware('auth:sanctum');
 
-    // Public Resources
     Route::get('services', [ServiceController::class, 'index']);
     Route::get('technicians', [TechnicianController::class, 'publicIndex']);
     Route::get('technicians/nearby', [TechnicianController::class, 'nearby']);
@@ -75,7 +71,6 @@ Route::prefix('v1')->group(function () {
     Route::get('faqs', [FaqController::class, 'index']);
     Route::get('terms', [TermsController::class, 'show']);
 
-    // Authenticated User Sessions
     Route::middleware(['auth:sanctum', 'active.session'])->prefix('sessions')->group(function () {
         Route::get('/', [UserSessionController::class, 'index']);
         Route::delete('/all', [UserSessionController::class, 'destroyAll']);
@@ -85,24 +80,22 @@ Route::prefix('v1')->group(function () {
 });
 
 // =============================================
-// V2 – TECHNICIANS (Fundi)
+// V2 – TECHNICIANS (Fundi) – ✅ SUBSCRIPTION REQUIRED
 // =============================================
-Route::prefix('v2')->middleware(['auth:sanctum', 'active.session'])->group(function () {
+Route::prefix('v2')->middleware(['auth:sanctum', 'active.session', 'subscription'])->group(function () {
     Route::put('technicians/profile', [TechnicianController::class, 'updateProfile']);
     Route::get('technicians/profile', [TechnicianController::class, 'getOwnProfile']);
     Route::post('technicians/services', [TechnicianController::class, 'updateServices']);
     Route::patch('technicians/online-status', [TechnicianController::class, 'toggleOnline']);
     Route::post('technicians/heartbeat', [TechnicianController::class, 'heartbeat']);
     Route::post('technicians/location', [TechnicianController::class, 'updateLocation']);
-    Route::post('technicians/profile/photo', [TechnicianController::class, 'uploadProfilePhoto']); 
-
-    // Admin routes
+    Route::post('technicians/profile/photo', [TechnicianController::class, 'uploadProfilePhoto']);
     Route::patch('technicians/{id}/verify', [TechnicianController::class, 'verify']);
     Route::apiResource('technicians', TechnicianController::class)->except(['show', 'nearby', 'updateProfile', 'toggleOnline']);
 });
 
 // =============================================
-// V3 – PORTFOLIOS
+// V3 – PORTFOLIOS – ✅ SUBSCRIPTION REMOVED
 // =============================================
 Route::prefix('v3')->middleware(['auth:sanctum', 'active.session'])->group(function () {
     Route::post('portfolios', [PortfolioController::class, 'store']);
@@ -116,40 +109,30 @@ Route::prefix('v3')->middleware(['auth:sanctum', 'active.session'])->group(funct
 });
 
 // =============================================
-// V4 – SERVICE REQUESTS & MONITORING
+// V4 – REQUESTS & MONITORING – ✅ SUBSCRIPTION REMOVED
 // =============================================
 Route::prefix('v4')->middleware(['auth:sanctum', 'active.session'])->group(function () {
-    // Request Routes
     Route::post('requests', [RequestController::class, 'store']);
     Route::patch('requests/{id}/status', [RequestController::class, 'updateStatus']);
     Route::delete('requests/{id}/cancel', [RequestController::class, 'cancel']);
     Route::get('my-requests', [RequestController::class, 'myRequests']);
 
-    // Admin Request Routes
     Route::get('admin/requests', [RequestController::class, 'index']);
     Route::get('admin/requests/{id}', [RequestController::class, 'show']);
     Route::delete('admin/requests/{id}', [RequestController::class, 'destroy']);
     Route::get('admin/request-logs/{requestId}', [RequestController::class, 'logs']);
     Route::get('admin/requests/stats', [RequestController::class, 'stats']);
 
-    // =============================================
-    // MONITORING ROUTES - Complete
-    // =============================================
     Route::prefix('monitoring')->group(function () {
-        // Map & Dashboard
         Route::get('map', [MonitoringController::class, 'map']);
         Route::get('notifications', [MonitoringController::class, 'getNotifications']);
         Route::get('statuses', [MonitoringController::class, 'getStatuses']);
         Route::get('pending-history', [MonitoringController::class, 'getPendingHistory']);
-        
-        // Technicians
         Route::get('technicians', [MonitoringController::class, 'getTechnicians']);
         Route::get('technicians/{id}', [MonitoringController::class, 'getTechnician']);
         Route::get('technicians/area/{area}', [MonitoringController::class, 'getTechniciansByArea']);
         Route::get('technicians/{id}/completed-requests', [MonitoringController::class, 'getTechnicianCompletedRequests']);
         Route::post('technicians/{id}/call', [MonitoringController::class, 'callTechnician']);
-        
-        // Requests
         Route::get('requests/{id}/logs', [MonitoringController::class, 'getRequestLogs']);
         Route::patch('requests/{id}/status', [MonitoringController::class, 'updateStatus']);
         Route::post('requests/{id}/complete', [MonitoringController::class, 'completeRequest']);
@@ -157,7 +140,7 @@ Route::prefix('v4')->middleware(['auth:sanctum', 'active.session'])->group(funct
 });
 
 // =============================================
-// V5 – BLOG (Posts, Comments, Likes)
+// V5 – BLOG – ✅ SUBSCRIPTION REMOVED
 // =============================================
 Route::prefix('v5')->middleware(['auth:sanctum', 'active.session'])->group(function () {
     Route::post('posts', [PostController::class, 'store']);
@@ -172,28 +155,21 @@ Route::prefix('v5')->middleware(['auth:sanctum', 'active.session'])->group(funct
 });
 
 // =============================================
-// V6 – STATIC PAGES (About, Terms, FAQs)
+// V6 – STATIC PAGES
 // =============================================
 Route::prefix('v6')->group(function () {
-    // Public GET endpoints – no auth required
     Route::get('about', [AboutController::class, 'show']);
     Route::get('terms', [TermsController::class, 'show']);
     Route::get('faqs', [FaqController::class, 'index']);
     Route::get('faqs/{id}', [FaqController::class, 'show']);
 
-    // Protected write endpoints – auth + permissions
     Route::middleware(['auth:sanctum'])->group(function () {
-        // About – single record (no ID in URL)
         Route::post('about', [AboutController::class, 'store']);
         Route::put('about', [AboutController::class, 'update']);
         Route::delete('about', [AboutController::class, 'destroy']);
-
-        // Terms – single record (no ID in URL)
         Route::post('terms', [TermsController::class, 'store']);
         Route::put('terms', [TermsController::class, 'update']);
         Route::delete('terms', [TermsController::class, 'destroy']);
-
-        // FAQs – collection with ID
         Route::post('faqs', [FaqController::class, 'store']);
         Route::put('faqs/{id}', [FaqController::class, 'update']);
         Route::delete('faqs/{id}', [FaqController::class, 'destroy']);
@@ -304,33 +280,24 @@ Route::prefix('v13')->middleware(['auth:sanctum', 'active.session'])->group(func
 });
 
 // =============================================
-// V14 – REAL-TIME CHAT SYSTEM
+// V14 – CHAT – ✅ SUBSCRIPTION REMOVED
 // =============================================
 Route::prefix('v14')->middleware(['auth:sanctum', 'active.session'])->group(function () {
     Route::prefix('chat')->group(function () {
-        // Conversation routes
         Route::post('conversation', [ChatController::class, 'getOrCreateConversation']);
         Route::get('conversations', [ChatController::class, 'getConversations']);
         Route::get('conversations/{id}/messages', [ChatController::class, 'getMessages']);
         Route::post('conversations/{id}/read', [ChatController::class, 'markConversationAsRead']);
         Route::delete('conversations/{id}', [ChatController::class, 'deleteConversation']);
-        
-        // Message routes
         Route::post('send', [ChatController::class, 'sendMessage']);
         Route::put('messages/{id}/read', [ChatController::class, 'markMessageAsRead']);
         Route::delete('messages/{id}', [ChatController::class, 'deleteMessage']);
-        
-        // Reaction routes
         Route::post('messages/{id}/reaction', [ChatController::class, 'addReaction']);
         Route::delete('messages/{id}/reaction', [ChatController::class, 'removeReaction']);
-        
-        // File routes
         Route::post('upload', [ChatController::class, 'uploadFile']);
         Route::get('files/{id}/download', [ChatController::class, 'downloadFile']);
         Route::get('files/{id}/info', [ChatController::class, 'getFileInfo']);
         Route::delete('files/{id}', [ChatController::class, 'deleteFile']);
-        
-        // Typing & unread routes
         Route::post('typing', [ChatController::class, 'setTypingStatus']);
         Route::get('unread', [ChatController::class, 'getUnreadCount']);
     });
@@ -347,5 +314,56 @@ Route::prefix('v15')->middleware(['auth:sanctum', 'active.session'])->group(func
         Route::put('/read-all', [NotificationController::class, 'markAllAsRead']);
         Route::delete('/{id}', [NotificationController::class, 'destroy']);
         Route::delete('/clear', [NotificationController::class, 'clearAll']);
+    });
+});
+
+
+
+// =============================================
+// V16 – SUBSCRIPTIONS & RATE CARDS
+// =============================================
+Route::prefix('v16')->group(function () {
+    // Public
+    Route::get('rate-cards', [SubscriptionController::class, 'getRateCards']);
+    Route::get('payment-methods', [SubscriptionController::class, 'getPaymentMethods']);
+
+    // User (authenticated)
+    Route::middleware(['auth:sanctum'])->group(function () {
+        Route::get('check-subscription', [SubscriptionController::class, 'checkStatus']);
+        Route::post('subscriptions', [SubscriptionController::class, 'store']);
+        Route::get('my-subscriptions', [SubscriptionController::class, 'mySubscriptions']);
+        Route::get('my-invoices', [SubscriptionController::class, 'myInvoices']);
+        Route::get('invoices/{id}/download', [SubscriptionController::class, 'downloadInvoicePdf']);
+    });
+
+    // Admin (authenticated + permission)
+    Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
+        // ============================================================
+        // RATE CARDS
+        // ============================================================
+        Route::get('rate-cards', [RateCardController::class, 'index']);
+        Route::post('rate-cards', [RateCardController::class, 'store']);
+        Route::put('rate-cards/{id}', [RateCardController::class, 'update']);
+        Route::delete('rate-cards/{id}', [RateCardController::class, 'destroy']);
+
+        // ============================================================
+        // PAYMENT METHODS - Using PaymentMethodController
+        // ============================================================
+        Route::get('payment-methods', [PaymentMethodController::class, 'index']);
+        Route::post('payment-methods', [PaymentMethodController::class, 'store']);
+        Route::get('payment-methods/{id}', [PaymentMethodController::class, 'show']);
+        Route::put('payment-methods/{id}', [PaymentMethodController::class, 'update']);
+        Route::delete('payment-methods/{id}', [PaymentMethodController::class, 'destroy']);
+        Route::get('payment-methods/dropdown', [PaymentMethodController::class, 'dropdown']);
+        Route::patch('payment-methods/{id}/toggle', [PaymentMethodController::class, 'toggle']);
+
+        // ============================================================
+        // SUBSCRIPTIONS
+        // ============================================================
+        Route::get('subscriptions', [SubscriptionController::class, 'adminIndex']);
+        Route::get('subscriptions/stats', [SubscriptionController::class, 'stats']);
+        Route::post('subscriptions/{id}/approve', [SubscriptionController::class, 'approve']);
+        Route::post('subscriptions/{id}/reject', [SubscriptionController::class, 'reject']);
+        Route::get('invoices/{id}/download', [SubscriptionController::class, 'downloadInvoicePdf']);
     });
 });
