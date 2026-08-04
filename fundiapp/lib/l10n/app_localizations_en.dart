@@ -9,10 +9,10 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get appTitle => 'FundiApp';
+  String get appTitle => 'NETSAF FUNDI APP';
 
   @override
-  String get fundiAppTitle => 'FundiApp';
+  String get fundiAppTitle => 'NETSAF FUNDI APP';
 
   @override
   String get hello => 'Hello';
@@ -363,7 +363,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aboutUs => 'About Us';
 
   @override
-  String get aboutFundiApp => 'About FundiApp';
+  String get aboutFundiApp => 'About NETSAF FUNDI APP';
 
   @override
   String get terms => 'Terms & Conditions';
@@ -631,4 +631,206 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noRequestsMatchFilter => 'No requests match the selected filter';
+
+  @override
+  String get subscriptions => 'Subscriptions';
+
+  @override
+  String get mySubscriptions => 'My Subscriptions';
+
+  @override
+  String get subscriptionStatus => 'Subscription Status';
+
+  @override
+  String get choosePlan => 'Choose Your Plan';
+
+  @override
+  String get selectPlan => 'Select a subscription plan that works for you';
+
+  @override
+  String get continueToPayment => 'Continue to Payment';
+
+  @override
+  String get paymentMethods => 'Payment Methods';
+
+  @override
+  String get choosePaymentMethod => 'Choose Payment Method';
+
+  @override
+  String get selectedPlan => 'Selected Plan';
+
+  @override
+  String get paymentReference => 'Payment Reference';
+
+  @override
+  String get paymentReferenceHint => 'e.g., MPESA-123456';
+
+  @override
+  String get notes => 'Notes';
+
+  @override
+  String get notesHint => 'Any additional information...';
+
+  @override
+  String get uploadPaymentProof => 'Upload Payment Proof';
+
+  @override
+  String get tapToUpload => 'Tap to upload payment proof';
+
+  @override
+  String get paymentProofFormats => 'JPG, PNG, or PDF';
+
+  @override
+  String get paymentInstructions => 'Payment Instructions';
+
+  @override
+  String sendAmountTo(Object amount) {
+    return 'Send $amount to:';
+  }
+
+  @override
+  String get account => 'Account';
+
+  @override
+  String get submitSubscription => 'Submit Subscription';
+
+  @override
+  String get subscriptionCreated => 'Subscription Created!';
+
+  @override
+  String get subscriptionCreatedMessage => 'Your subscription request has been created successfully.';
+
+  @override
+  String get waitForApproval => 'Please wait for admin approval. You will receive a notification once your subscription is approved.';
+
+  @override
+  String get goToDashboard => 'Go to Dashboard';
+
+  @override
+  String get renewNow => 'Renew Now';
+
+  @override
+  String get subscribeNow => 'Subscribe Now';
+
+  @override
+  String get subscriptionExpired => 'Subscription Expired';
+
+  @override
+  String get subscriptionPending => 'Pending Approval';
+
+  @override
+  String get subscriptionActive => 'Active';
+
+  @override
+  String get subscriptionInactive => 'Inactive';
+
+  @override
+  String daysRemaining(Object days) {
+    return '$days days remaining';
+  }
+
+  @override
+  String expiresOn(Object date) {
+    return 'Expires: $date';
+  }
+
+  @override
+  String validUntil(Object date) {
+    return 'Valid until: $date';
+  }
+
+  @override
+  String get noSubscriptions => 'No subscriptions yet';
+
+  @override
+  String get noInvoices => 'No invoices available';
+
+  @override
+  String invoiceNumber(Object number) {
+    return 'Invoice #$number';
+  }
+
+  @override
+  String get invoiceStatus => 'Status';
+
+  @override
+  String get viewInvoice => 'View Invoice';
+
+  @override
+  String get downloadPdf => 'Download PDF';
+
+  @override
+  String get subscriptionHistory => 'Subscription History';
+
+  @override
+  String get paid => 'Paid';
+
+  @override
+  String get unpaid => 'Unpaid';
+
+  @override
+  String get yourSubscriptionHasExpired => 'Your subscription has expired. Please renew to continue.';
+
+  @override
+  String get subscriptionPendingApproval => 'Your subscription is pending approval. Please wait.';
+
+  @override
+  String get subscribeToUnlock => 'Subscribe to unlock all Fundi features.';
+
+  @override
+  String get rateCards => 'Rate Cards';
+
+  @override
+  String get subscriptionDetails => 'Subscription Details';
+
+  @override
+  String get invoiceDetails => 'Invoice Details';
+
+  @override
+  String get activePlan => 'Active Plan';
+
+  @override
+  String get amountPaid => 'Amount Paid';
+
+  @override
+  String get paymentMethod => 'Payment Method';
+
+  @override
+  String get paymentReferenceLabel => 'Payment Reference';
+
+  @override
+  String get approvedAt => 'Approved At';
+
+  @override
+  String get approvedBy => 'Approved By';
+
+  @override
+  String get adminNotes => 'Admin Notes';
+
+  @override
+  String get noNotifications => 'No Notifications';
+
+  @override
+  String get allCaughtUp => 'You\'re all caught up!';
+
+  @override
+  String get refresh => 'Refresh';
+
+  @override
+  String get viewNotifications => 'View Notifications';
+
+  @override
+  String get seeAllNotifications => 'See all your incoming notifications';
+
+  @override
+  String get markAllRead => 'Mark All Read';
+
+  @override
+  String get loadingNotifications => 'Loading notifications...';
+
+  @override
+  String get viewAllNotifications => 'View All Notifications';
+
+  @override
+  String get notificationSettings => 'Notification Settings';
 }

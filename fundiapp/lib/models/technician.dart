@@ -1,5 +1,5 @@
 // lib/models/technician.dart
-import 'package:fundiapp/models/portfolio.dart';
+import 'package:netsaf_fund_app/models/portfolio.dart';
 
 class Technician {
   final int id;

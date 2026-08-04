@@ -5,13 +5,18 @@ import 'package:flutter/widgets.dart';
 class Assets {
   Assets._();
 
+  static const AssetGenImage airtel = AssetGenImage('assets/icons/airtel.png');
   static const AssetGenImage backimg =
       AssetGenImage('assets/images/backimg.jpg');
   static const AssetGenImage home = AssetGenImage('assets/images/home.jpg');
+  static const AssetGenImage mixxByYas =
+      AssetGenImage('assets/icons/mixx_by_yas.png');
+  static const AssetGenImage mpesa = AssetGenImage('assets/icons/mpesa.png');
   static const AssetGenImage nearbyfundiImage =
       AssetGenImage('assets/images/nearbyfundi_image.jpg');
   static const AssetGenImage nearbylogo =
       AssetGenImage('assets/icons/nearbylogo.png');
+  static const AssetGenImage netsaf = AssetGenImage('assets/icons/netsaf.png');
 }
 
 class AssetGenImage {

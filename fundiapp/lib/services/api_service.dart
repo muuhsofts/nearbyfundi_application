@@ -1,4 +1,5 @@
 // lib/services/api_service.dart
+
 import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
@@ -65,11 +66,9 @@ class ApiService {
   //  AUTH ENDPOINTS
   // ============================================================
 
-  /// Register a new customer.
   Future<ApiResponse> register(Map<String, dynamic> data) =>
       _post('/v1/auth/register', data: data);
 
-  /// Register a new Fundi (technician).
   Future<ApiResponse> registerFundi(Map<String, dynamic> data) async {
     if (data.containsKey('profile_photo') && data['profile_photo'] is String) {
       final file = File(data['profile_photo']);
@@ -96,11 +95,9 @@ class ApiService {
     return _post('/v1/auth/register-fundi', data: data);
   }
 
-  /// Login – `identifier` can be email or phone (backend checks both).
   Future<ApiResponse> login(String identifier, String password) =>
       _post('/v1/auth/login', data: {'email': identifier, 'password': password});
 
-  /// Verify OTP.
   Future<ApiResponse> verifyOtp(String email, String otp, {String? fcmToken}) =>
       _post('/v1/auth/verify-otp', data: {
         'email': email,
@@ -108,58 +105,50 @@ class ApiService {
         if (fcmToken != null) 'fcm_token': fcmToken,
       });
 
-  /// Request password reset OTP.
   Future<ApiResponse> forgotPassword(String email) =>
       _post('/v1/auth/forgot-password', data: {'email': email});
 
-  /// Reset password with OTP.
   Future<ApiResponse> resetPassword({
     required String email,
     required String otp,
     required String password,
-  }) => _post('/v1/auth/reset-password', data: {
-    'email': email,
-    'otp': otp,
-    'password': password,
-    'password_confirmation': password,
-  });
+  }) =>
+      _post('/v1/auth/reset-password', data: {
+        'email': email,
+        'otp': otp,
+        'password': password,
+        'password_confirmation': password,
+      });
 
-  /// Logout.
   Future<ApiResponse> logout() => _post('/v1/auth/logout');
 
-  /// Get current user profile.
   Future<ApiResponse> getProfile() => _get('/v1/auth/me');
 
-  /// Update user profile.
   Future<ApiResponse> updateProfile(Map<String, dynamic> data) =>
       _put('/v1/auth/profile', data: data);
 
-  /// Change password.
   Future<ApiResponse> changePassword({
     required String currentPassword,
     required String newPassword,
-  }) => _post('/v1/auth/change-password', data: {
-    'current_password': currentPassword,
-    'password': newPassword,
-    'password_confirmation': newPassword,
-  });
+  }) =>
+      _post('/v1/auth/change-password', data: {
+        'current_password': currentPassword,
+        'password': newPassword,
+        'password_confirmation': newPassword,
+      });
 
-  /// Update user locale.
   Future<ApiResponse> updateLocale(String locale) =>
       _post('/v1/auth/locale', data: {'locale': locale});
 
-  /// Update FCM device token.
   Future<ApiResponse> updateDeviceToken(String token) =>
       _post('/v1/device-token', data: {'token': token});
 
-  /// Delete account.
   Future<ApiResponse> deleteAccount() => _delete('/v1/auth/account');
 
   // ============================================================
   //  SERVICES
   // ============================================================
 
-  /// Get list of all services.
   Future<ApiResponse> getServices() => _get('/v1/services');
 
   // ============================================================
@@ -182,16 +171,16 @@ class ApiService {
   //  FUNDI – HEARTBEAT & LOCATION
   // ============================================================
 
-  Future<ApiResponse> sendHeartbeat() =>
-      _post('/v2/technicians/heartbeat');
+  Future<ApiResponse> sendHeartbeat() => _post('/v2/technicians/heartbeat');
 
   Future<ApiResponse> updateLocation({
     required double latitude,
     required double longitude,
-  }) => _post('/v2/technicians/location', data: {
-    'latitude': latitude,
-    'longitude': longitude,
-  });
+  }) =>
+      _post('/v2/technicians/location', data: {
+        'latitude': latitude,
+        'longitude': longitude,
+      });
 
   Future<ApiResponse> resendOtp(String email) =>
       _post('/v1/auth/resend-otp', data: {'email': email});
@@ -253,24 +242,20 @@ class ApiService {
   Future<ApiResponse> deletePost(int id) => _delete('/v5/posts/$id');
 
   // ============================================================
-  //  FUNDI – PORTFOLIO (UPDATED: always send social fields)
+  //  FUNDI – PORTFOLIO
   // ============================================================
 
-  /// Get portfolios of the authenticated technician.
   Future<ApiResponse> getMyPortfolios() => _get('/v3/portfolios/my');
 
-  /// Create a new portfolio item (with optional social links).
   Future<ApiResponse> createPortfolio(Map<String, dynamic> data) async {
     if (data.containsKey('image') && data['image'] is String && data['image'].isNotEmpty) {
       final file = File(data['image']);
       if (await file.exists()) {
         final formData = FormData();
-        // Add all fields – even if they are null, send empty string
         data.forEach((key, value) {
           if (key == 'image') {
             // skip – added as file below
           } else {
-            // Always add the field, using empty string if null
             formData.fields.add(MapEntry(key, value?.toString() ?? ''));
           }
         });
@@ -280,11 +265,9 @@ class ApiService {
         return _post('/v3/portfolios', data: formData);
       }
     }
-    // If no image (should not happen as image is required), send as JSON
     return _post('/v3/portfolios', data: data);
   }
 
-  /// Update an existing portfolio item (including social links).
   Future<ApiResponse> updatePortfolio(int id, Map<String, dynamic> data) async {
     if (data.containsKey('image') && data['image'] is String && data['image'].isNotEmpty) {
       final file = File(data['image']);
@@ -294,7 +277,6 @@ class ApiService {
           if (key == 'image') {
             // skip – added as file below
           } else {
-            // Always add the field, using empty string if null
             formData.fields.add(MapEntry(key, value?.toString() ?? ''));
           }
         });
@@ -308,21 +290,17 @@ class ApiService {
     return _put('/v3/portfolios/$id', data: data);
   }
 
-  /// Delete a portfolio item.
   Future<ApiResponse> deletePortfolio(int id) => _delete('/v3/portfolios/$id');
 
-  /// Update social links for a specific portfolio.
   Future<ApiResponse> updatePortfolioSocialLinks(int id, Map<String, dynamic> socialLinks) =>
       _put('/v3/portfolios/$id/social-links', data: socialLinks);
 
-  /// Public: Get all portfolios (optionally filtered by technician).
   Future<ApiResponse> getPortfolios({int? technicianId, int page = 1}) =>
       _get('/v3/portfolios', query: {
         'page': page,
         if (technicianId != null) 'technician_id': technicianId,
       });
 
-  /// Public: Get portfolios by a specific technician ID.
   Future<ApiResponse> getPortfoliosByTechnician(int technicianId) =>
       _get('/v3/portfolios/technician/$technicianId');
 
@@ -383,22 +361,23 @@ class ApiService {
   Future<ApiResponse> getOrCreateConversation({
     required int customerId,
     required int fundiId,
-  }) => _post('/v14/chat/conversation', data: {
-    'customer_id': customerId,
-    'fundi_id': fundiId,
-  });
+  }) =>
+      _post('/v14/chat/conversation', data: {
+        'customer_id': customerId,
+        'fundi_id': fundiId,
+      });
 
-  Future<ApiResponse> getConversations() =>
-      _get('/v14/chat/conversations');
+  Future<ApiResponse> getConversations() => _get('/v14/chat/conversations');
 
   Future<ApiResponse> getMessages({
     required int conversationId,
     int limit = 50,
     int offset = 0,
-  }) => _get('/v14/chat/conversations/$conversationId/messages', query: {
-    'limit': limit,
-    'offset': offset,
-  });
+  }) =>
+      _get('/v14/chat/conversations/$conversationId/messages', query: {
+        'limit': limit,
+        'offset': offset,
+      });
 
   Future<ApiResponse> sendMessage({
     required int conversationId,
@@ -458,10 +437,11 @@ class ApiService {
   Future<ApiResponse> sendTypingStatus({
     required int conversationId,
     required bool isTyping,
-  }) => _post('/v14/chat/typing', data: {
-    'conversation_id': conversationId,
-    'is_typing': isTyping,
-  });
+  }) =>
+      _post('/v14/chat/typing', data: {
+        'conversation_id': conversationId,
+        'is_typing': isTyping,
+      });
 
   Future<ApiResponse> downloadChatFile(int messageId) =>
       _get('/v14/chat/files/$messageId/download', query: {
@@ -475,9 +455,7 @@ class ApiService {
         '/v14/chat/files/$messageId/download?download=true',
         savePath,
         options: Options(
-          headers: {
-            'Authorization': 'Bearer $token',
-          },
+          headers: {'Authorization': 'Bearer $token'},
           responseType: ResponseType.bytes,
         ),
       );
@@ -501,8 +479,7 @@ class ApiService {
   //  NOTIFICATION ENDPOINTS (V15)
   // ============================================================
 
-  Future<ApiResponse> getNotifications() =>
-      _get('/v15/notifications');
+  Future<ApiResponse> getNotifications() => _get('/v15/notifications');
 
   Future<ApiResponse> getUnreadNotificationCount() =>
       _get('/v15/notifications/unread-count');
@@ -518,6 +495,67 @@ class ApiService {
 
   Future<ApiResponse> clearNotifications() =>
       _delete('/v15/notifications/clear');
+
+  // ============================================================
+  //  SUBSCRIPTION ENDPOINTS (V16)
+  // ============================================================
+
+  Future<ApiResponse> getRateCards() => _get('/v16/rate-cards');
+
+  Future<ApiResponse> getPaymentMethods() => _get('/v16/payment-methods');
+
+  Future<ApiResponse> createSubscription({
+    required int rateCardId,
+    required int paymentMethodId,
+    File? paymentProof,
+    String? paymentReference,
+    String? notes,
+  }) async {
+    if (paymentProof != null && await paymentProof.exists()) {
+      final formData = FormData();
+      formData.fields.addAll([
+        MapEntry('rate_card_id', rateCardId.toString()),
+        MapEntry('payment_method_id', paymentMethodId.toString()),
+        if (paymentReference != null) MapEntry('payment_reference', paymentReference),
+        if (notes != null) MapEntry('notes', notes),
+      ]);
+      formData.files.add(
+        MapEntry('payment_proof', await MultipartFile.fromFile(paymentProof.path)),
+      );
+      return _post('/v16/subscriptions', data: formData);
+    }
+    return _post('/v16/subscriptions', data: {
+      'rate_card_id': rateCardId,
+      'payment_method_id': paymentMethodId,
+      if (paymentReference != null) 'payment_reference': paymentReference,
+      if (notes != null) 'notes': notes,
+    });
+  }
+
+  Future<ApiResponse> getMySubscriptions() => _get('/v16/my-subscriptions');
+
+  Future<ApiResponse> getMyInvoices() => _get('/v16/my-invoices');
+
+  Future<ApiResponse> checkSubscriptionStatus() =>
+      _get('/v16/check-subscription');
+
+  Future<String?> downloadInvoice(int invoiceId) async {
+    try {
+      final token = await StorageService.getToken();
+      final response = await _dio.download(
+        '/v16/invoices/$invoiceId/download',
+        '${Directory.systemTemp.path}/invoice_$invoiceId.pdf',
+        options: Options(
+          headers: {'Authorization': 'Bearer $token'},
+          responseType: ResponseType.bytes,
+        ),
+      );
+      return response.realUri.path;
+    } catch (e) {
+      debugPrint('❌ Download invoice error: $e');
+      return null;
+    }
+  }
 
   // ============================================================
   //  PRIVATE HELPERS

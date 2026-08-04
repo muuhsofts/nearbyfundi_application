@@ -53,7 +53,7 @@
     <!-- APPLICATION                                   -->
     <!-- ============================================= -->
     <application
-        android:label="fundiapp"
+        android:label="netsaffundiapp"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:requestLegacyExternalStorage="true"

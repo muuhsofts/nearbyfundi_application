@@ -109,11 +109,19 @@ class _LoginScreenState extends State<LoginScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('NearbyFundi'),
+        title: const Text(
+          'NETSAF FUNDI APP',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+            color: Colors.white,
+          ),
+        ),
         centerTitle: true,
         elevation: 0,
-        backgroundColor: theme.scaffoldBackgroundColor,
-        foregroundColor: theme.colorScheme.onSurface,
+        backgroundColor: theme.primaryColor,
+        foregroundColor: Colors.white,
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Consumer<AuthProvider>(
         builder: (context, auth, _) => LoadingOverlay(
@@ -125,33 +133,36 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const SizedBox(height: 20),
-                  // Small icon
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          theme.colorScheme.primary,
-                          theme.colorScheme.primary.withOpacity(0.7),
-                        ],
+                  // ---- NETSAF Logo (Plain Card, No Shadow) ----
+                  Center(
+                    child: Container(
+                      width: 120,
+                      height: 120,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
                       ),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: const Icon(
-                      Icons.handyman_rounded,
-                      size: 30,
-                      color: Colors.white,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: Image.asset(
+                          'assets/icons/netsaf.png',
+                          width: 120,
+                          height: 120,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 24),
+
+                  // ---- Welcome Text ----
                   Text(
                     l10n.welcomeBack,
                     style: theme.textTheme.headlineMedium?.copyWith(
                       fontWeight: FontWeight.w800,
                       color: theme.colorScheme.onSurface,
                     ),
+                    textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -159,6 +170,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.hintColor,
                     ),
+                    textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 40),
 

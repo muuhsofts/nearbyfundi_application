@@ -9,10 +9,10 @@ class AppLocalizationsSw extends AppLocalizations {
   AppLocalizationsSw([String locale = 'sw']) : super(locale);
 
   @override
-  String get appTitle => 'FundiApp';
+  String get appTitle => 'NETSAF FUNDI APP';
 
   @override
-  String get fundiAppTitle => 'FundiApp';
+  String get fundiAppTitle => 'NETSAF FUNDI APP';
 
   @override
   String get hello => 'Habari';
@@ -363,7 +363,7 @@ class AppLocalizationsSw extends AppLocalizations {
   String get aboutUs => 'Kuhusu Sisi';
 
   @override
-  String get aboutFundiApp => 'Kuhusu FundiApp';
+  String get aboutFundiApp => 'Kuhusu NETSAF FUNDI APP';
 
   @override
   String get terms => 'Masharti na Sheria';
@@ -631,4 +631,206 @@ class AppLocalizationsSw extends AppLocalizations {
 
   @override
   String get noRequestsMatchFilter => 'Hakuna maombi yanayolingana na kichujio';
+
+  @override
+  String get subscriptions => 'Usajili';
+
+  @override
+  String get mySubscriptions => 'Usajili Wangu';
+
+  @override
+  String get subscriptionStatus => 'Hali ya Usajili';
+
+  @override
+  String get choosePlan => 'Chagua Mpango Wako';
+
+  @override
+  String get selectPlan => 'Chagua mpango wa usajili unaokufaa';
+
+  @override
+  String get continueToPayment => 'Endelea kwa Malipo';
+
+  @override
+  String get paymentMethods => 'Njia za Malipo';
+
+  @override
+  String get choosePaymentMethod => 'Chagua Njia ya Malipo';
+
+  @override
+  String get selectedPlan => 'Mpango Ulichochagua';
+
+  @override
+  String get paymentReference => 'Rejea ya Malipo';
+
+  @override
+  String get paymentReferenceHint => 'mfano, MPESA-123456';
+
+  @override
+  String get notes => 'Maelezo';
+
+  @override
+  String get notesHint => 'Maelezo yoyote ya ziada...';
+
+  @override
+  String get uploadPaymentProof => 'Pakia Uthibitisho wa Malipo';
+
+  @override
+  String get tapToUpload => 'Gonga kupakia uthibitisho wa malipo';
+
+  @override
+  String get paymentProofFormats => 'JPG, PNG, au PDF';
+
+  @override
+  String get paymentInstructions => 'Maelekezo ya Malipo';
+
+  @override
+  String sendAmountTo(Object amount) {
+    return 'Tuma $amount kwa:';
+  }
+
+  @override
+  String get account => 'Akaunti';
+
+  @override
+  String get submitSubscription => 'Wasilisha Usajili';
+
+  @override
+  String get subscriptionCreated => 'Usajili Umeundwa!';
+
+  @override
+  String get subscriptionCreatedMessage => 'Ombi lako la usajili limeundwa kwa mafanikio.';
+
+  @override
+  String get waitForApproval => 'Tafadhali subiri idhini ya msimamizi. Utapokea arifa mara tu usajili wako utakapoidhinishwa.';
+
+  @override
+  String get goToDashboard => 'Nenda kwenye Dashibodi';
+
+  @override
+  String get renewNow => 'Sasisha Sasa';
+
+  @override
+  String get subscribeNow => 'Jisajili Sasa';
+
+  @override
+  String get subscriptionExpired => 'Usajili Umeisha';
+
+  @override
+  String get subscriptionPending => 'Inasubiri Idhini';
+
+  @override
+  String get subscriptionActive => 'Inatumika';
+
+  @override
+  String get subscriptionInactive => 'Haijatumika';
+
+  @override
+  String daysRemaining(Object days) {
+    return '$days siku zimesalia';
+  }
+
+  @override
+  String expiresOn(Object date) {
+    return 'Inaisha: $date';
+  }
+
+  @override
+  String validUntil(Object date) {
+    return 'Inatumika hadi: $date';
+  }
+
+  @override
+  String get noSubscriptions => 'Bado hakuna usajili';
+
+  @override
+  String get noInvoices => 'Hakuna ankara zinazopatikana';
+
+  @override
+  String invoiceNumber(Object number) {
+    return 'Ankara #$number';
+  }
+
+  @override
+  String get invoiceStatus => 'Hali';
+
+  @override
+  String get viewInvoice => 'Tazama Ankara';
+
+  @override
+  String get downloadPdf => 'Pakua PDF';
+
+  @override
+  String get subscriptionHistory => 'Historia ya Usajili';
+
+  @override
+  String get paid => 'Imelipwa';
+
+  @override
+  String get unpaid => 'Haijalipwa';
+
+  @override
+  String get yourSubscriptionHasExpired => 'Usajili wako umeisha. Tafadhali sasisha ili kuendelea.';
+
+  @override
+  String get subscriptionPendingApproval => 'Usajili wako unasubiri idhini. Tafadhali subiri.';
+
+  @override
+  String get subscribeToUnlock => 'Jisajili ili kufungua huduma zote za Fundi.';
+
+  @override
+  String get rateCards => 'Viwango vya Usajili';
+
+  @override
+  String get subscriptionDetails => 'Maelezo ya Usajili';
+
+  @override
+  String get invoiceDetails => 'Maelezo ya Ankara';
+
+  @override
+  String get activePlan => 'Mpango Unaotumika';
+
+  @override
+  String get amountPaid => 'Kiasi Kilicholipwa';
+
+  @override
+  String get paymentMethod => 'Njia ya Malipo';
+
+  @override
+  String get paymentReferenceLabel => 'Rejea ya Malipo';
+
+  @override
+  String get approvedAt => 'Ilioidhinishwa Tarehe';
+
+  @override
+  String get approvedBy => 'Iliidhinishwa Na';
+
+  @override
+  String get adminNotes => 'Maelezo ya Msimamizi';
+
+  @override
+  String get noNotifications => 'Hakuna Arifa';
+
+  @override
+  String get allCaughtUp => 'Hakuna arifa mpya!';
+
+  @override
+  String get refresh => 'Fresha';
+
+  @override
+  String get viewNotifications => 'Tazama Arifa';
+
+  @override
+  String get seeAllNotifications => 'Angalia arifa zako zote';
+
+  @override
+  String get markAllRead => 'Weka Zote kama Zimesomwa';
+
+  @override
+  String get loadingNotifications => 'Inapakia arifa...';
+
+  @override
+  String get viewAllNotifications => 'Tazama Arifa Zote';
+
+  @override
+  String get notificationSettings => 'Mipangilio ya Arifa';
 }

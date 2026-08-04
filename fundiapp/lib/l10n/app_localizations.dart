@@ -98,13 +98,13 @@ abstract class AppLocalizations {
   /// No description provided for @appTitle.
   ///
   /// In en, this message translates to:
-  /// **'FundiApp'**
+  /// **'NETSAF FUNDI APP'**
   String get appTitle;
 
   /// No description provided for @fundiAppTitle.
   ///
   /// In en, this message translates to:
-  /// **'FundiApp'**
+  /// **'NETSAF FUNDI APP'**
   String get fundiAppTitle;
 
   /// No description provided for @hello.
@@ -806,7 +806,7 @@ abstract class AppLocalizations {
   /// No description provided for @aboutFundiApp.
   ///
   /// In en, this message translates to:
-  /// **'About FundiApp'**
+  /// **'About NETSAF FUNDI APP'**
   String get aboutFundiApp;
 
   /// No description provided for @terms.
@@ -1342,6 +1342,390 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No requests match the selected filter'**
   String get noRequestsMatchFilter;
+
+  /// No description provided for @subscriptions.
+  ///
+  /// In en, this message translates to:
+  /// **'Subscriptions'**
+  String get subscriptions;
+
+  /// No description provided for @mySubscriptions.
+  ///
+  /// In en, this message translates to:
+  /// **'My Subscriptions'**
+  String get mySubscriptions;
+
+  /// No description provided for @subscriptionStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Subscription Status'**
+  String get subscriptionStatus;
+
+  /// No description provided for @choosePlan.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose Your Plan'**
+  String get choosePlan;
+
+  /// No description provided for @selectPlan.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a subscription plan that works for you'**
+  String get selectPlan;
+
+  /// No description provided for @continueToPayment.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue to Payment'**
+  String get continueToPayment;
+
+  /// No description provided for @paymentMethods.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment Methods'**
+  String get paymentMethods;
+
+  /// No description provided for @choosePaymentMethod.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose Payment Method'**
+  String get choosePaymentMethod;
+
+  /// No description provided for @selectedPlan.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected Plan'**
+  String get selectedPlan;
+
+  /// No description provided for @paymentReference.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment Reference'**
+  String get paymentReference;
+
+  /// No description provided for @paymentReferenceHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g., MPESA-123456'**
+  String get paymentReferenceHint;
+
+  /// No description provided for @notes.
+  ///
+  /// In en, this message translates to:
+  /// **'Notes'**
+  String get notes;
+
+  /// No description provided for @notesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Any additional information...'**
+  String get notesHint;
+
+  /// No description provided for @uploadPaymentProof.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload Payment Proof'**
+  String get uploadPaymentProof;
+
+  /// No description provided for @tapToUpload.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to upload payment proof'**
+  String get tapToUpload;
+
+  /// No description provided for @paymentProofFormats.
+  ///
+  /// In en, this message translates to:
+  /// **'JPG, PNG, or PDF'**
+  String get paymentProofFormats;
+
+  /// No description provided for @paymentInstructions.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment Instructions'**
+  String get paymentInstructions;
+
+  /// No description provided for @sendAmountTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Send {amount} to:'**
+  String sendAmountTo(Object amount);
+
+  /// No description provided for @account.
+  ///
+  /// In en, this message translates to:
+  /// **'Account'**
+  String get account;
+
+  /// No description provided for @submitSubscription.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit Subscription'**
+  String get submitSubscription;
+
+  /// No description provided for @subscriptionCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Subscription Created!'**
+  String get subscriptionCreated;
+
+  /// No description provided for @subscriptionCreatedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Your subscription request has been created successfully.'**
+  String get subscriptionCreatedMessage;
+
+  /// No description provided for @waitForApproval.
+  ///
+  /// In en, this message translates to:
+  /// **'Please wait for admin approval. You will receive a notification once your subscription is approved.'**
+  String get waitForApproval;
+
+  /// No description provided for @goToDashboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Go to Dashboard'**
+  String get goToDashboard;
+
+  /// No description provided for @renewNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Renew Now'**
+  String get renewNow;
+
+  /// No description provided for @subscribeNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Subscribe Now'**
+  String get subscribeNow;
+
+  /// No description provided for @subscriptionExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'Subscription Expired'**
+  String get subscriptionExpired;
+
+  /// No description provided for @subscriptionPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending Approval'**
+  String get subscriptionPending;
+
+  /// No description provided for @subscriptionActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get subscriptionActive;
+
+  /// No description provided for @subscriptionInactive.
+  ///
+  /// In en, this message translates to:
+  /// **'Inactive'**
+  String get subscriptionInactive;
+
+  /// No description provided for @daysRemaining.
+  ///
+  /// In en, this message translates to:
+  /// **'{days} days remaining'**
+  String daysRemaining(Object days);
+
+  /// No description provided for @expiresOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Expires: {date}'**
+  String expiresOn(Object date);
+
+  /// No description provided for @validUntil.
+  ///
+  /// In en, this message translates to:
+  /// **'Valid until: {date}'**
+  String validUntil(Object date);
+
+  /// No description provided for @noSubscriptions.
+  ///
+  /// In en, this message translates to:
+  /// **'No subscriptions yet'**
+  String get noSubscriptions;
+
+  /// No description provided for @noInvoices.
+  ///
+  /// In en, this message translates to:
+  /// **'No invoices available'**
+  String get noInvoices;
+
+  /// No description provided for @invoiceNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Invoice #{number}'**
+  String invoiceNumber(Object number);
+
+  /// No description provided for @invoiceStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get invoiceStatus;
+
+  /// No description provided for @viewInvoice.
+  ///
+  /// In en, this message translates to:
+  /// **'View Invoice'**
+  String get viewInvoice;
+
+  /// No description provided for @downloadPdf.
+  ///
+  /// In en, this message translates to:
+  /// **'Download PDF'**
+  String get downloadPdf;
+
+  /// No description provided for @subscriptionHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Subscription History'**
+  String get subscriptionHistory;
+
+  /// No description provided for @paid.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid'**
+  String get paid;
+
+  /// No description provided for @unpaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpaid'**
+  String get unpaid;
+
+  /// No description provided for @yourSubscriptionHasExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'Your subscription has expired. Please renew to continue.'**
+  String get yourSubscriptionHasExpired;
+
+  /// No description provided for @subscriptionPendingApproval.
+  ///
+  /// In en, this message translates to:
+  /// **'Your subscription is pending approval. Please wait.'**
+  String get subscriptionPendingApproval;
+
+  /// No description provided for @subscribeToUnlock.
+  ///
+  /// In en, this message translates to:
+  /// **'Subscribe to unlock all Fundi features.'**
+  String get subscribeToUnlock;
+
+  /// No description provided for @rateCards.
+  ///
+  /// In en, this message translates to:
+  /// **'Rate Cards'**
+  String get rateCards;
+
+  /// No description provided for @subscriptionDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Subscription Details'**
+  String get subscriptionDetails;
+
+  /// No description provided for @invoiceDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Invoice Details'**
+  String get invoiceDetails;
+
+  /// No description provided for @activePlan.
+  ///
+  /// In en, this message translates to:
+  /// **'Active Plan'**
+  String get activePlan;
+
+  /// No description provided for @amountPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount Paid'**
+  String get amountPaid;
+
+  /// No description provided for @paymentMethod.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment Method'**
+  String get paymentMethod;
+
+  /// No description provided for @paymentReferenceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment Reference'**
+  String get paymentReferenceLabel;
+
+  /// No description provided for @approvedAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved At'**
+  String get approvedAt;
+
+  /// No description provided for @approvedBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved By'**
+  String get approvedBy;
+
+  /// No description provided for @adminNotes.
+  ///
+  /// In en, this message translates to:
+  /// **'Admin Notes'**
+  String get adminNotes;
+
+  /// No description provided for @noNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'No Notifications'**
+  String get noNotifications;
+
+  /// No description provided for @allCaughtUp.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re all caught up!'**
+  String get allCaughtUp;
+
+  /// No description provided for @refresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get refresh;
+
+  /// No description provided for @viewNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'View Notifications'**
+  String get viewNotifications;
+
+  /// No description provided for @seeAllNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'See all your incoming notifications'**
+  String get seeAllNotifications;
+
+  /// No description provided for @markAllRead.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark All Read'**
+  String get markAllRead;
+
+  /// No description provided for @loadingNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading notifications...'**
+  String get loadingNotifications;
+
+  /// No description provided for @viewAllNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'View All Notifications'**
+  String get viewAllNotifications;
+
+  /// No description provided for @notificationSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Notification Settings'**
+  String get notificationSettings;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

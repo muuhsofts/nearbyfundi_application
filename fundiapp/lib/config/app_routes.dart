@@ -1,5 +1,3 @@
-// lib/config/app_routes.dart
-
 class AppRoutes {
   // ===== AUTH ROUTES =====
   static const String splash = '/';
@@ -12,7 +10,7 @@ class AppRoutes {
 
   // ===== FUNDI MAIN SCREENS =====
   static const String home = '/home';
-  static const String posts = '/posts';           // Blog/Posts screen
+  static const String posts = '/posts';
   static const String createPost = '/create-post';
   static const String editPost = '/edit-post';
   static const String portfolio = '/portfolio';
@@ -30,13 +28,28 @@ class AppRoutes {
   static const String videoCall = '/video-call';
 
   // ===== BLOG/POSTS ROUTE =====
-  static const String blog = '/posts';  // Alias for posts
+  static const String blog = '/posts';
 
   // ===== STATIC PAGES =====
   static const String about = '/about';
   static const String terms = '/terms';
   static const String faq = '/faq';
   static const String contactUs = '/contact-us';
+
+  // =============================================
+  // 🆕 SUBSCRIPTION ROUTES
+  // =============================================
+  static const String subscriptions = '/subscriptions';
+  static const String rateCards = '/rate-cards';
+  static const String createSubscription = '/create-subscription';
+  static const String subscriptionDetails = '/subscription-details';
+  static const String invoiceDetails = '/invoice-details';
+  static const String paymentMethods = '/payment-methods';
+
+  // =============================================
+  // 🆕 DOWNLOADS ROUTE
+  // =============================================
+  static const String downloads = '/downloads';
 
   // ===== NAVIGATION HELPERS =====
   static String getChatRoute(int conversationId) => '/chat/$conversationId';
@@ -73,5 +86,12 @@ class AppRoutes {
     terms: 'Terms & Conditions',
     faq: 'FAQ',
     contactUs: 'Contact Us',
+    subscriptions: 'My Subscriptions',
+    rateCards: 'Rate Cards',
+    createSubscription: 'Create Subscription',
+    subscriptionDetails: 'Subscription Details',
+    invoiceDetails: 'Invoice Details',
+    paymentMethods: 'Payment Methods',
+    downloads: 'Downloads',
   };
 }

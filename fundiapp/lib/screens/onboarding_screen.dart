@@ -16,7 +16,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   final List<OnboardingItem> _items = [
     OnboardingItem(
-      title: 'Welcome to NearbyFundi',
+      title: 'Welcome to NETSAF FUNDI APP',
       description: 'Find trusted technicians near you. Request services like AC repair, plumbing, and more.',
       icon: Icons.handyman_rounded,
       color: AppTheme.primary,
@@ -40,7 +40,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
 
-    // Gradient: primary → dark teal (no white at bottom, eye‑friendly)
+    // Gradient: primary → dark teal (original colors)
     final gradientColors = [
       theme.primaryColor,
       const Color(0xFF0D1F1F), // deep teal (consistent with dark theme)
@@ -58,6 +58,59 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         child: SafeArea(
           child: Column(
             children: [
+              // ✅ NETSAF Logo at top - ENLARGED
+              Padding(
+                padding: const EdgeInsets.only(top: 24),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.15),
+                            blurRadius: 20,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: Image.asset(
+                          'assets/icons/netsaf.png',
+                          width: 100,
+                          height: 100,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'NETSAF FUNDI APP',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: theme.colorScheme.onPrimary,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                    Text(
+                      'Technician Network',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: theme.colorScheme.onPrimary.withOpacity(0.6),
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Onboarding Pages
               Expanded(
                 child: PageView(
                   controller: _pageController,
@@ -65,7 +118,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   children: _items.map((item) => _OnboardingPage(item: item, theme: theme)).toList(),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
+
+              // Bottom Navigation
               Padding(
                 padding: const EdgeInsets.all(24),
                 child: _currentPage == _items.length - 1
@@ -132,6 +187,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ],
                 ),
               ),
+              const SizedBox(height: 8),
             ],
           ),
         ),
@@ -163,7 +219,7 @@ class _OnboardingPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(32),
+      padding: const EdgeInsets.symmetric(horizontal: 32),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -186,7 +242,7 @@ class _OnboardingPage extends StatelessWidget {
           Text(
             item.title,
             style: theme.textTheme.headlineMedium?.copyWith(
-              fontSize: 28,
+              fontSize: 26,
               fontWeight: FontWeight.w800,
               color: theme.colorScheme.onPrimary,
               letterSpacing: -0.5,

@@ -6,6 +6,7 @@ import '../../../providers/theme_provider.dart';
 import '../../../config/app_routes.dart';
 import '../../../config/app_theme.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../notifications/notification_list_screen.dart';
 
 class FundiSettingsScreen extends StatelessWidget {
   const FundiSettingsScreen({super.key});
@@ -40,33 +41,73 @@ class FundiSettingsScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: theme.dividerColor.withOpacity(0.5)),
                 ),
-                child: SwitchListTile(
-                  title: Row(
-                    children: [
-                      Container(
+                child: Column(
+                  children: [
+                    // Toggle Row
+                    SwitchListTile(
+                      title: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primary.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(Icons.notifications_outlined, color: theme.colorScheme.primary, size: 20),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(l10n.pushNotifications, style: theme.textTheme.titleMedium),
+                                Text(l10n.receiveAlerts, style: theme.textTheme.bodySmall),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      value: settings.notificationsEnabled,
+                      onChanged: (val) => settings.updateNotificationStatus(val),
+                      activeColor: theme.colorScheme.primary,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    ),
+                    // Divider
+                    Divider(height: 1, color: theme.dividerColor, indent: 16, endIndent: 16),
+                    // Navigate to Notification List
+                    ListTile(
+                      leading: Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: theme.colorScheme.primary.withOpacity(0.1),
+                          color: Colors.blue.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Icon(Icons.notifications_outlined, color: theme.colorScheme.primary, size: 20),
+                        child: Icon(Icons.notifications_active_rounded, color: Colors.blue, size: 20),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(l10n.pushNotifications, style: theme.textTheme.titleMedium),
-                            Text(l10n.receiveAlerts, style: theme.textTheme.bodySmall),
-                          ],
-                        ),
+                      title: Text(
+                        l10n.viewNotifications,
+                        style: theme.textTheme.titleMedium,
                       ),
-                    ],
-                  ),
-                  value: settings.notificationsEnabled,
-                  onChanged: (val) => settings.updateNotificationStatus(val),
-                  activeColor: theme.colorScheme.primary,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      subtitle: Text(
+                        l10n.seeAllNotifications,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      trailing: Icon(
+                        Icons.arrow_forward_ios,
+                        size: 14,
+                        color: theme.colorScheme.onSurface.withOpacity(0.5),
+                      ),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const NotificationListScreen(),
+                          ),
+                        );
+                      },
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 12),
@@ -87,7 +128,7 @@ class FundiSettingsScreen extends StatelessWidget {
                     ),
                     child: Icon(Icons.language_outlined, color: theme.colorScheme.primary, size: 20),
                   ),
-                  title: Text('Language / Lugha', style: theme.textTheme.titleMedium),
+                  title: Text(l10n.language, style: theme.textTheme.titleMedium),
                   trailing: DropdownButton<String>(
                     value: settings.locale,
                     items: const [
@@ -100,7 +141,11 @@ class FundiSettingsScreen extends StatelessWidget {
                         await auth.updateLocale(val);
                       }
                     },
-                    style: TextStyle(fontSize: 14, color: theme.colorScheme.primary, fontWeight: FontWeight.w500),
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.w500,
+                    ),
                     dropdownColor: theme.colorScheme.surface,
                     underline: Container(),
                     icon: Icon(Icons.arrow_drop_down, color: theme.colorScheme.primary),
@@ -203,8 +248,12 @@ class FundiSettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSettingsTile(BuildContext context,
-      {required IconData icon, required String title, required VoidCallback onTap}) {
+  Widget _buildSettingsTile(
+      BuildContext context, {
+        required IconData icon,
+        required String title,
+        required VoidCallback onTap,
+      }) {
     final theme = Theme.of(context);
     return ListTile(
       leading: Container(
@@ -216,7 +265,11 @@ class FundiSettingsScreen extends StatelessWidget {
         child: Icon(icon, color: theme.colorScheme.primary, size: 20),
       ),
       title: Text(title, style: theme.textTheme.titleMedium),
-      trailing: Icon(Icons.arrow_forward_ios, size: 14, color: theme.colorScheme.onSurface.withOpacity(0.5)),
+      trailing: Icon(
+        Icons.arrow_forward_ios,
+        size: 14,
+        color: theme.colorScheme.onSurface.withOpacity(0.5),
+      ),
       onTap: onTap,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
     );

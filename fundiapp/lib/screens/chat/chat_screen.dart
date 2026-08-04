@@ -179,8 +179,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _pickFile() async {
     try {
-      // ✅ Use static method pickFiles() – works in all recent versions
-      final result = await FilePicker.pickFiles(
+      // ✅ FIXED: Use FilePicker.platform.pickFiles() instead of FilePicker.pickFiles()
+      final result = await FilePicker.platform.pickFiles(
         type: FileType.any,
         allowMultiple: false,
       );
@@ -974,7 +974,6 @@ class _ChatScreenState extends State<ChatScreen> {
                   );
                 }
               },
-              // ✅ Omit config to use defaults – avoids version-specific class name issues
             ),
           ),
       ],
@@ -983,13 +982,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildAmplitudeWaveform() {
     const bars = 6;
-    // Ensure amplitude is a double
     final amplitude = (_amplitude * 100).clamp(5, 100).toDouble();
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(bars, (index) {
-        // Convert height to double
         final height = (amplitude / 100 * 20 * (0.5 + 0.5 * (index / bars)))
             .clamp(4, 20)
             .toDouble();
