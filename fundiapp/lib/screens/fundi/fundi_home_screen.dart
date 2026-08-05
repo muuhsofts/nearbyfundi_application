@@ -288,7 +288,7 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
   }
 
   // ============================================================
-  // LOGOUT
+  // LOGOUT - ALWAYS ACCESSIBLE
   // ============================================================
   Future<void> _logoutWithConfirmation(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
@@ -464,17 +464,6 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
               borderRadius: BorderRadius.circular(12),
             ),
             elevation: 8,
-            onOpened: () {
-              // If no subscription, close the menu immediately
-              if (!hasSubscription) {
-                // We need to close the menu and show dialog
-                // Since we can't cancel from here directly, we'll use a workaround
-                Future.microtask(() {
-                  Navigator.of(context).maybePop();
-                  _showSubscriptionRequiredDialog(context);
-                });
-              }
-            },
             itemBuilder: (context) => _buildMenuItems(context, hasSubscription),
           ),
         ],
@@ -682,12 +671,13 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
   }
 
   // ============================================================
-  // BUILD MENU ITEMS
+  // BUILD MENU ITEMS - LOGOUT ALWAYS UNLOCKED
   // ============================================================
   List<PopupMenuEntry<String>> _buildMenuItems(BuildContext context, bool hasSubscription) {
     final l10n = AppLocalizations.of(context)!;
 
     return [
+      // Settings - Locked without subscription
       _buildPopupMenuItem(
         context,
         key: 'settings',
@@ -702,6 +692,7 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
           }
         },
       ),
+      // Portfolio - Locked without subscription
       _buildPopupMenuItem(
         context,
         key: 'portfolio',
@@ -716,6 +707,7 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
           }
         },
       ),
+      // Subscriptions - Always accessible (view only)
       _buildPopupMenuItem(
         context,
         key: 'subscriptions',
@@ -724,6 +716,7 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
         isLocked: false,
         onTap: () => Navigator.pushNamed(context, AppRoutes.subscriptions),
       ),
+      // Downloads - Locked without subscription
       _buildPopupMenuItem(
         context,
         key: 'downloads',
@@ -739,6 +732,7 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
         },
       ),
       const PopupMenuDivider(),
+      // About Us - Locked without subscription
       _buildPopupMenuItem(
         context,
         key: 'about',
@@ -753,6 +747,7 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
           }
         },
       ),
+      // Terms & Conditions - Locked without subscription
       _buildPopupMenuItem(
         context,
         key: 'terms',
@@ -767,6 +762,7 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
           }
         },
       ),
+      // FAQ - Locked without subscription
       _buildPopupMenuItem(
         context,
         key: 'faq',
@@ -781,6 +777,7 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
           }
         },
       ),
+      // Contact Us - Locked without subscription
       _buildPopupMenuItem(
         context,
         key: 'contact',
@@ -796,19 +793,14 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
         },
       ),
       const PopupMenuDivider(),
+      // ✅ LOGOUT - ALWAYS UNLOCKED (No subscription required)
       _buildPopupMenuItem(
         context,
         key: 'logout',
         icon: Icons.logout_rounded,
-        title: hasSubscription ? l10n.logout : '🔒 ${l10n.logout}',
-        isLocked: !hasSubscription,
-        onTap: () {
-          if (hasSubscription) {
-            _logoutWithConfirmation(context);
-          } else {
-            _showSubscriptionRequiredDialog(context);
-          }
-        },
+        title: l10n.logout,  // Always shows "Logout" without lock icon
+        isLocked: false,     // ✅ Always accessible
+        onTap: () => _logoutWithConfirmation(context),
         isDestructive: true,
       ),
     ];
@@ -829,12 +821,12 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
     return PopupMenuItem<String>(
       value: key,
       onTap: onTap,
-      enabled: !isLocked,
+      enabled: true, // Always enabled - we handle locking in the onTap
       child: Row(
         children: [
           Icon(
             icon,
-            color: isLocked ? Colors.grey : color,
+            color: isDestructive ? Colors.red : (isLocked ? Colors.grey : color),
             size: 22,
           ),
           const SizedBox(width: 12),
@@ -842,7 +834,7 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
             child: Text(
               title,
               style: theme.textTheme.titleMedium?.copyWith(
-                color: isLocked ? Colors.grey : null,
+                color: isDestructive ? Colors.red : (isLocked ? Colors.grey : null),
                 fontWeight: isDestructive ? FontWeight.w600 : FontWeight.normal,
               ),
             ),
