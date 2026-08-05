@@ -31,6 +31,9 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
   // ✅ Track if payment instructions have been shown
   bool _instructionsShown = false;
 
+  // ✅ Track if payment details section is expanded
+  bool _isPaymentDetailsExpanded = true;
+
   @override
   void initState() {
     super.initState();
@@ -120,226 +123,205 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
   }
 
   // ============================================================
-  // ✅ SHOW PAYMENT INSTRUCTIONS MODAL
+  // ✅ SHOW PAYMENT INSTRUCTIONS - NOW INLINE
   // ============================================================
-  void _showPaymentInstructionsModal(BuildContext context, PaymentMethod method) {
+  Widget _buildPaymentInstructionsWidget(BuildContext context, PaymentMethod method) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _getMethodBgColor(method.slug),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _getMethodColor(method.slug).withOpacity(0.3),
+        ),
       ),
-      builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.55,
-        minChildSize: 0.4,
-        maxChildSize: 0.85,
-        expand: false,
-        builder: (context, scrollController) {
-          return Container(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Handle
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header with icon and title
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: _getMethodColor(method.slug).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                const SizedBox(height: 16),
-
-                // Title
-                Row(
+                child: Center(
+                  child: _getMethodIconWidget(method.slug, size: 24),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: _getMethodColor(method.slug).withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Center(
-                        child: _getMethodIconWidget(method.slug, size: 28),
+                    Text(
+                      'Pay with ${method.name}',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: _getMethodColor(method.slug),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Pay with ${method.name}',
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text(
-                            'Follow the instructions below',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.hintColor,
-                            ),
-                          ),
-                        ],
+                    Text(
+                      'Follow the instructions below',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.hintColor,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 24),
+              ),
+              // Close/Dismiss button
+              IconButton(
+                onPressed: () {
+                  setState(() {
+                    _selectedMethod = null;
+                    _isPaymentDetailsExpanded = false;
+                  });
+                },
+                icon: Icon(
+                  Icons.close,
+                  color: Colors.grey.shade600,
+                  size: 20,
+                ),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
 
-                // Payment Instructions
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: _getMethodBgColor(method.slug),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: _getMethodColor(method.slug).withOpacity(0.3),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.info_outline,
-                            color: _getMethodColor(method.slug),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Payment Instructions',
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: _getMethodColor(method.slug),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        '1. Send exactly ${_selectedCard.formattedPrice} to:',
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.grey.shade200),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${_getMethodDisplayName(method.slug)}:',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.hintColor,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              method.phoneNumber,
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: _getMethodColor(method.slug),
-                              ),
-                            ),
-                            if (method.accountName != null && method.accountName!.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Text(
-                                  'Account: ${method.accountName}',
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: theme.hintColor,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        '2. Enter the payment reference in the field below',
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '3. Upload a screenshot of your payment confirmation',
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '4. Submit your subscription for approval',
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.orange.shade200),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Please complete the payment before submitting. Your subscription will be approved after payment confirmation.',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: Colors.orange.shade700,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+          // Payment Instructions
+          Row(
+            children: [
+              Icon(
+                Icons.info_outline,
+                color: _getMethodColor(method.slug),
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Payment Instructions',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: _getMethodColor(method.slug),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '1. Send exactly ${_selectedCard.formattedPrice} to:',
+            style: theme.textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${_getMethodDisplayName(method.slug)}:',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.hintColor,
                   ),
                 ),
-                const SizedBox(height: 24),
-
-                // Confirm Button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      setState(() {
-                        _instructionsShown = true;
-                      });
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: theme.primaryColor,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                const SizedBox(height: 4),
+                Text(
+                  method.phoneNumber,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: _getMethodColor(method.slug),
+                  ),
+                ),
+                if (method.accountName != null && method.accountName!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      'Account: ${method.accountName}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.hintColor,
                       ),
                     ),
-                    child: Text(
-                      'I Understand, Continue',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '2. Enter the payment reference in the field below',
+            style: theme.textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '3. Upload a screenshot of your payment confirmation',
+            style: theme.textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '4. Submit your subscription for approval',
+            style: theme.textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.orange.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.orange.shade200),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Please complete the payment before submitting. Your subscription will be approved after payment confirmation.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: Colors.orange.shade700,
                     ),
                   ),
                 ),
               ],
             ),
-          );
-        },
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  _instructionsShown = true;
+                });
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: theme.primaryColor,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(
+                'I Understand, Continue',
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -559,6 +541,15 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
             icon: const Icon(Icons.arrow_back),
             onPressed: () => Navigator.pop(context),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
         ),
         body: const Center(
           child: Column(
@@ -580,6 +571,18 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
           elevation: 0,
           backgroundColor: theme.scaffoldBackgroundColor,
           foregroundColor: theme.colorScheme.onSurface,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'Cancel',
+                style: TextStyle(
+                  color: theme.primaryColor,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
         ),
         body: const Center(
           child: Column(
@@ -601,6 +604,18 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
           elevation: 0,
           backgroundColor: theme.scaffoldBackgroundColor,
           foregroundColor: theme.colorScheme.onSurface,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'Cancel',
+                style: TextStyle(
+                  color: theme.primaryColor,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
         ),
         body: Center(
           child: Padding(
@@ -630,6 +645,20 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
         elevation: 0,
         backgroundColor: theme.scaffoldBackgroundColor,
         foregroundColor: theme.colorScheme.onSurface,
+        actions: [
+          // ✅ Cancel Button at Top
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: TextStyle(
+                color: theme.primaryColor,
+                fontWeight: FontWeight.w600,
+                fontSize: 16,
+              ),
+            ),
+          ),
+        ],
       ),
       body: LoadingOverlay(
         isLoading: _isSubmitting,
@@ -665,26 +694,165 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
               ),
               const SizedBox(height: 24),
 
-              // Payment Methods Title
+              // ✅ Payment Methods Title
               Text(l10n.choosePaymentMethod, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
 
-              // Payment Methods List - Wrap in Column
+              // ✅ Payment Methods List (Always Expanded)
               ...provider.paymentMethods.map((method) => _buildMethodItem(
                 context,
                 method,
                 _selectedMethod?.id == method.id,
                     () {
                   setState(() {
-                    _selectedMethod = _selectedMethod?.id == method.id ? null : method;
+                    if (_selectedMethod?.id == method.id) {
+                      _selectedMethod = null;
+                      _isPaymentDetailsExpanded = false;
+                    } else {
+                      _selectedMethod = method;
+                      _isPaymentDetailsExpanded = true;
+                      // Show instructions inline, not as bottom sheet
+                    }
                   });
-                  if (_selectedMethod != null && !_instructionsShown) {
-                    _showPaymentInstructionsModal(context, _selectedMethod!);
-                  }
                 },
               )).toList(),
 
               const SizedBox(height: 24),
+
+              // ✅ Payment Instructions - Displayed Inline at Top
+              if (_selectedMethod != null && !_instructionsShown)
+                _buildPaymentInstructionsWidget(context, _selectedMethod!),
+
+              // ✅ Payment Details Section (Collapsible)
+              if (_selectedMethod != null && _instructionsShown) ...[
+                // Expandable/Collapsible Header
+                InkWell(
+                  onTap: () {
+                    setState(() {
+                      _isPaymentDetailsExpanded = !_isPaymentDetailsExpanded;
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              _isPaymentDetailsExpanded
+                                  ? Icons.expand_less
+                                  : Icons.expand_more,
+                              color: _getMethodColor(_selectedMethod!.slug),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Pay with ${_selectedMethod!.name}',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: _getMethodColor(_selectedMethod!.slug),
+                              ),
+                            ),
+                          ],
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: _getMethodColor(_selectedMethod!.slug).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            _selectedCard.formattedPrice,
+                            style: TextStyle(
+                              color: _getMethodColor(_selectedMethod!.slug),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Payment Details Content (Expanded)
+                if (_isPaymentDetailsExpanded)
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: _getMethodBgColor(_selectedMethod!.slug),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: _getMethodColor(_selectedMethod!.slug).withOpacity(0.3),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.info_outline, color: _getMethodColor(_selectedMethod!.slug)),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Payment Details',
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: _getMethodColor(_selectedMethod!.slug),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            _getMethodIconWidget(_selectedMethod!.slug, size: 24),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '${_getMethodDisplayName(_selectedMethod!.slug)}: ${_selectedMethod!.phoneNumber}',
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: _getMethodColor(_selectedMethod!.slug),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (_selectedMethod!.accountName != null && _selectedMethod!.accountName!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              '${l10n.account}: ${_selectedMethod!.accountName}',
+                              style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+                            ),
+                          ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.warning_amber_rounded, size: 16, color: Colors.orange.shade700),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Send exactly ${_selectedCard.formattedPrice} to the number above',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: Colors.orange.shade700,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 16),
+              ],
 
               // Payment Reference
               Text(l10n.paymentReference, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
@@ -719,91 +887,12 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
               _buildProofUpload(context, l10n),
               const SizedBox(height: 24),
 
-              // Payment Instructions Summary (when method selected)
-              if (_selectedMethod != null)
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: _getMethodBgColor(_selectedMethod!.slug),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: _getMethodColor(_selectedMethod!.slug).withOpacity(0.3),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.info_outline, color: _getMethodColor(_selectedMethod!.slug)),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Payment Details',
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: _getMethodColor(_selectedMethod!.slug),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          _getMethodIconWidget(_selectedMethod!.slug, size: 24),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              '${_getMethodDisplayName(_selectedMethod!.slug)}: ${_selectedMethod!.phoneNumber}',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: _getMethodColor(_selectedMethod!.slug),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (_selectedMethod!.accountName != null && _selectedMethod!.accountName!.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            '${l10n.account}: ${_selectedMethod!.accountName}',
-                            style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
-                          ),
-                        ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.warning_amber_rounded, size: 16, color: Colors.orange.shade700),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Send exactly ${_selectedCard.formattedPrice} to the number above',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: Colors.orange.shade700,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-              const SizedBox(height: 32),
-
+              // Submit Button
               CustomButton(
                 text: l10n.submitSubscription,
-                onPressed: _selectedMethod != null && _paymentProof != null ? _submitSubscription : null,
+                onPressed: _selectedMethod != null && _paymentProof != null && _instructionsShown ? _submitSubscription : null,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 32),
             ],
           ),
         ),

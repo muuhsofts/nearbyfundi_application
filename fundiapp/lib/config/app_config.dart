@@ -1,7 +1,7 @@
 // lib/config/app_config.dart
 
 class AppConfig {
-  static const String baseUrl = 'http://192.168.43.87:8000/api';
+  static const String baseUrl = 'http://192.168.100.84:8000/api';
   static const String appName = 'NearbyFundi';
   static const String appVersion = '0.0.1';
 
