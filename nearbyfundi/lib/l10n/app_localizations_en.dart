@@ -556,4 +556,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noServicesFound => 'No services found. Try adjusting your search.';
+
+  @override
+  String get markAllAsRead => 'Mark all as read';
+
+  @override
+  String get noNotificationsYet => 'No notifications yet';
 }

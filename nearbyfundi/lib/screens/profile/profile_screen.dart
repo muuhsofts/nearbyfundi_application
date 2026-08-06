@@ -43,7 +43,6 @@ class ProfileScreen extends StatelessWidget {
         foregroundColor: Colors.white,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-          // ✅ Back button navigates to home (Nearby tab)
           onPressed: () => Navigator.pushReplacementNamed(context, AppRoutes.home),
         ),
         actions: [
@@ -217,7 +216,7 @@ class ProfileScreen extends StatelessWidget {
             ),
             const SizedBox(height: 24),
 
-            // ─── Action Buttons (Gold Accents) ──────────────────────────
+            // ─── Action Buttons ──────────────────────────────────────────
             _buildActionButton(
               context,
               icon: Icons.edit_outlined,
@@ -236,11 +235,12 @@ class ProfileScreen extends StatelessWidget {
               color: AppTheme.secondary,
             ),
             const SizedBox(height: 12),
+            // 👇 Updated Notifications button to navigate
             _buildActionButton(
               context,
               icon: Icons.notifications_outlined,
-              label: 'Notifications',
-              onTap: () {},
+              label: l10n.notifications,
+              onTap: () => Navigator.pushNamed(context, AppRoutes.notifications),
               theme: theme,
               color: Colors.blueAccent,
             ),

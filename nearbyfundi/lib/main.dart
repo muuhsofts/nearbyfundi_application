@@ -17,7 +17,7 @@ import 'providers/settings_provider.dart';
 import 'providers/location_provider.dart';
 import 'providers/static_page_provider.dart';
 import 'providers/theme_provider.dart';
-import 'providers/chat_provider.dart';  // 👈 Add this
+import 'providers/chat_provider.dart';
 import 'services/fcm_service.dart';
 import 'screens/splash_screen.dart';
 import 'screens/onboarding_screen.dart';
@@ -35,8 +35,9 @@ import 'screens/profile/about_screen.dart';
 import 'screens/profile/terms_screen.dart';
 import 'screens/profile/faq_screen.dart';
 import 'screens/profile/contact_us_screen.dart';
-import 'screens/chat/chat_list_screen.dart';  // 👈 Add this
-import 'screens/chat/chat_screen.dart';  // 👈 Add this
+import 'screens/chat/chat_list_screen.dart';
+import 'screens/chat/chat_screen.dart';
+import 'screens/notifications/notifications_screen.dart'; // 👈 Add this
 import 'firebase_options.dart';
 import 'l10n/app_localizations.dart';
 
@@ -66,7 +67,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => LocationProvider()),
         ChangeNotifierProvider(create: (_) => StaticPageProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
-        ChangeNotifierProvider(create: (_) => ChatProvider()),  // 👈 Add this
+        ChangeNotifierProvider(create: (_) => ChatProvider()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {
@@ -149,6 +150,8 @@ class MyApp extends StatelessWidget {
                           conversation: settings.arguments as ChatConversation,
                         ),
                       );
+                    case AppRoutes.notifications: // 👈 Add this
+                      return MaterialPageRoute(builder: (_) => const NotificationsScreen());
                     default:
                       return MaterialPageRoute(builder: (_) => const SplashScreen());
                   }

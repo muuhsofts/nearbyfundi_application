@@ -182,5 +182,7 @@
   "updatePost": "Update Post",
   "myPosts": "My Posts",
   "searchServiceHint": "Search for services (e.g. plumbing, electrician...)",
-  "noServicesFound": "No services found. Try adjusting your search."
+  "noServicesFound": "No services found. Try adjusting your search.",
+  "markAllAsRead": "Mark all as read",
+  "noNotificationsYet": "No notifications yet"
 }

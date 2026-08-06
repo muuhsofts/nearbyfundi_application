@@ -27,7 +27,7 @@ class AppTheme {
   static const Color primary = primaryColor;
   static const Color success = successColor;
   static const Color error = errorColor;
-  static const Color warning = warningColor; // ✅ ADDED
+  static const Color warning = warningColor;
 
   // ===== CHAT COLORS =====
   static const Color chatBubbleSent = primaryColor;
@@ -483,4 +483,35 @@ extension ChatTheme on ThemeData {
   TextStyle get chatTimestampText => AppTheme.chatTimestampText;
   TextStyle get chatNameText => AppTheme.chatNameText;
   TextStyle get chatEmptyText => AppTheme.chatEmptyText;
+  TextStyle get chatHeaderText => AppTheme.chatHeaderText;
+}
+
+// ===== THEME HELPER EXTENSION =====
+extension ThemeHelper on BuildContext {
+  ThemeData get theme => Theme.of(this);
+  TextTheme get textTheme => Theme.of(this).textTheme;
+  ColorScheme get colorScheme => Theme.of(this).colorScheme;
+
+  bool get isDarkMode => Theme.of(this).brightness == Brightness.dark;
+  bool get isLightMode => Theme.of(this).brightness == Brightness.light;
+
+  Color get primaryColor => Theme.of(this).primaryColor;
+  Color get scaffoldBackgroundColor => Theme.of(this).scaffoldBackgroundColor;
+  Color get cardColor => Theme.of(this).cardColor;
+  Color get hintColor => Theme.of(this).hintColor;
+  Color get dividerColor => Theme.of(this).dividerColor;
+  Color get shadowColor => Theme.of(this).shadowColor;
+
+  // Chat specific getters
+  Color get chatBubbleSent => Theme.of(this).chatBubbleSent;
+  Color get chatBubbleReceived => Theme.of(this).chatBubbleReceived;
+  Color get chatOnlineDot => Theme.of(this).chatOnlineDot;
+  Color get chatUnreadBadge => Theme.of(this).chatUnreadBadge;
+
+  // Chat text styles
+  TextStyle get chatMessageText => Theme.of(this).chatMessageText;
+  TextStyle get chatTimestampText => Theme.of(this).chatTimestampText;
+  TextStyle get chatNameText => Theme.of(this).chatNameText;
+  TextStyle get chatEmptyText => Theme.of(this).chatEmptyText;
+  TextStyle get chatHeaderText => Theme.of(this).chatHeaderText;
 }

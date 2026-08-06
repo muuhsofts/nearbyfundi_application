@@ -17,6 +17,7 @@ class Assets {
       AssetGenImage('assets/images/nearbyfundi_image.jpg');
   static const AssetGenImage nearbylogo =
       AssetGenImage('assets/icons/nearbylogo.png');
+  static const AssetGenImage netsaf = AssetGenImage('assets/icons/netsaf.png');
 }
 
 class AssetGenImage {

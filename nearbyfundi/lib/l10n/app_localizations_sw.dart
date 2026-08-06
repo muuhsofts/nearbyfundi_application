@@ -556,4 +556,10 @@ class AppLocalizationsSw extends AppLocalizations {
 
   @override
   String get noServicesFound => 'Hakuna huduma zilizopatikana. Jaribu kubadilisha utafutaji.';
+
+  @override
+  String get markAllAsRead => 'Weka zote kama zimesomwa';
+
+  @override
+  String get noNotificationsYet => 'Hakuna arifa bado';
 }

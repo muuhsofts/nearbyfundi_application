@@ -182,5 +182,7 @@
   "updatePost": "Sasisha Chapisho",
   "myPosts": "Machapisho Yangu",
   "searchServiceHint": "Tafuta huduma (mfano. mabomba, umeme...)",
-  "noServicesFound": "Hakuna huduma zilizopatikana. Jaribu kubadilisha utafutaji."
+  "noServicesFound": "Hakuna huduma zilizopatikana. Jaribu kubadilisha utafutaji.",
+  "markAllAsRead": "Weka zote kama zimesomwa",
+  "noNotificationsYet": "Hakuna arifa bado"
 }

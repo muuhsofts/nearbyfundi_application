@@ -23,4 +23,7 @@ class AppRoutes {
   // ===== CHAT ROUTES =====
   static const String chatList = '/chat-list';
   static const String chatScreen = '/chat-screen';
+
+  // ===== NOTIFICATIONS =====
+  static const String notifications = '/notifications';
 }
