@@ -23,6 +23,7 @@ import {
     LinearProgress,
     TableCell,
     TableRow,
+    Tooltip,
 } from '@mui/material';
 import {
     People as PeopleIcon,
@@ -40,6 +41,12 @@ import {
     CheckCircle as CheckCircleIcon,
     Cancel as CancelIcon,
     TrendingUp as TrendingUpIcon,
+    Subscriptions as SubscriptionIcon,
+    Payment as PaymentIcon,
+    AttachMoney as MoneyIcon,
+    CalendarToday as CalendarIcon,
+    Timer as TimerIcon,
+    Pending as PendingIcon,  // ✅ Added this import
 } from '@mui/icons-material';
 
 import { reportService } from 'services/report.service';
@@ -80,6 +87,39 @@ const formatDate = (dateStr) => {
     }
 };
 
+const formatCurrency = (amount) => {
+    if (!amount) return '0';
+    return `TZS ${parseFloat(amount).toLocaleString()}`;
+};
+
+const getStatusColor = (status) => {
+    const map = {
+        pending: '#f59e0b',
+        active: '#10b981',
+        expired: '#ef4444',
+        cancelled: '#6b7280',
+        approved: '#10b981',
+        rejected: '#ef4444',
+        paid: '#10b981',
+        unpaid: '#f59e0b',
+    };
+    return map[status] || '#6b7280';
+};
+
+const getStatusLabel = (status) => {
+    const map = {
+        pending: 'Pending',
+        active: 'Active',
+        expired: 'Expired',
+        cancelled: 'Cancelled',
+        approved: 'Approved',
+        rejected: 'Rejected',
+        paid: 'Paid',
+        unpaid: 'Unpaid',
+    };
+    return map[status] || status || 'Unknown';
+};
+
 const ReportsDashboard = () => {
     const theme = useTheme();
     const { can } = usePermissions();
@@ -91,8 +131,9 @@ const ReportsDashboard = () => {
     const [search, setSearch] = useState('');
     const [filterStatus, setFilterStatus] = useState('');
     const [filterVerified, setFilterVerified] = useState('');
-    const [filterArea, setFilterArea] = useState('');           // ✅ area filter
+    const [filterArea, setFilterArea] = useState('');
     const [filterRole, setFilterRole] = useState('');
+    const [filterPaymentMethod, setFilterPaymentMethod] = useState('');
     const [period, setPeriod] = useState('');
     const [periodDate, setPeriodDate] = useState(null);
 
@@ -118,6 +159,9 @@ const ReportsDashboard = () => {
             case 5:
                 data = reportData?.technicians_with_most_portfolios;
                 break;
+            case 6:
+                data = reportData?.data?.data;
+                break;
             default:
                 data = [];
         }
@@ -126,7 +170,7 @@ const ReportsDashboard = () => {
 
     const getTotalCount = () => {
         if (!reportData) return 0;
-        if (tabValue <= 2) {
+        if (tabValue <= 2 || tabValue === 6) {
             return reportData?.data?.total || 0;
         } else if (tabValue === 3 || tabValue === 5) {
             return getListData().length;
@@ -149,8 +193,9 @@ const ReportsDashboard = () => {
         if (search) params.search = search;
         if (filterStatus) params.status = filterStatus;
         if (filterVerified) params.verified = filterVerified;
-        if (filterArea) params.area = filterArea;               // ✅ area filter
+        if (filterArea) params.area = filterArea;
         if (filterRole) params.role = filterRole;
+        if (filterPaymentMethod) params.payment_method = filterPaymentMethod;
 
         try {
             let response;
@@ -161,6 +206,7 @@ const ReportsDashboard = () => {
                 case 3: response = await reportService.getServicesReport(params); break;
                 case 4: response = await reportService.getBlogReport(params); break;
                 case 5: response = await reportService.getPortfolioReport(params); break;
+                case 6: response = await reportService.getSubscriptionsReport(params); break;
                 default: return;
             }
             if (response?.data?.status === 'success') {
@@ -180,7 +226,8 @@ const ReportsDashboard = () => {
         // eslint-disable-next-line
     }, [
         tabValue, page, rowsPerPage, search, filterStatus,
-        filterVerified, filterArea, filterRole, period, periodDate, canViewReports,
+        filterVerified, filterArea, filterRole, filterPaymentMethod,
+        period, periodDate, canViewReports,
     ]);
 
     const handleRefresh = () => {
@@ -200,7 +247,7 @@ const ReportsDashboard = () => {
 
     // ---------- Export ----------
     const getCurrentTabLabel = () => {
-        const labels = ['Users', 'Technicians', 'Requests', 'Services', 'Blog', 'Portfolio'];
+        const labels = ['Users', 'Technicians', 'Requests', 'Services', 'Blog', 'Portfolio', 'Subscriptions'];
         return labels[tabValue] || 'Report';
     };
 
@@ -246,6 +293,17 @@ const ReportsDashboard = () => {
             ];
         } else if (tabValue === 5) {
             rows = list.map((item) => [item.technician?.user?.name || 'Unknown', item.count || 0]);
+        } else if (tabValue === 6) {
+            rows = list.map((s) => [
+                `#${s.id}`,
+                s.user?.name || 'N/A',
+                s.rate_card?.name || 'N/A',
+                s.amount || 'N/A',
+                s.status || 'N/A',
+                s.payment_method || 'N/A',
+                formatDate(s.created_at),
+                formatDate(s.expiry_date),
+            ]);
         }
         return rows;
     };
@@ -258,6 +316,7 @@ const ReportsDashboard = () => {
             case 3: return ['Service Name', 'Total Requests'];
             case 4: return ['Metric', 'Value'];
             case 5: return ['Technician', 'Portfolio Items'];
+            case 6: return ['ID', 'User', 'Plan', 'Amount', 'Status', 'Payment Method', 'Created', 'Expiry'];
             default: return [];
         }
     };
@@ -410,6 +469,7 @@ const ReportsDashboard = () => {
                     <Tab icon={<CategoryIcon />} label="Services" />
                     <Tab icon={<CommentIcon />} label="Blog" />
                     <Tab icon={<PhotoIcon />} label="Portfolio" />
+                    <Tab icon={<SubscriptionIcon />} label="Subscriptions" />
                 </Tabs>
 
                 {loading && <Box display="flex" justifyContent="center" py={4}><CircularProgress sx={{ color: colors.sea }} /></Box>}
@@ -470,7 +530,7 @@ const ReportsDashboard = () => {
                     </Box>
                 </TabPanel>
 
-                {/* TECHNICIANS TAB – with Area filter */}
+                {/* TECHNICIANS TAB */}
                 <TabPanel value={tabValue} index={1}>
                     <Box sx={{ p: 2 }}>
                         <SummaryCards items={[
@@ -536,7 +596,7 @@ const ReportsDashboard = () => {
                                 title: s.status,
                                 value: s.count,
                                 icon: <CheckCircleIcon />,
-                                color: colors.sea,
+                                color: getStatusColor(s.status),
                                 md: 1.5,
                             })),
                         ]} />
@@ -637,6 +697,122 @@ const ReportsDashboard = () => {
                                 <TableCell><Chip label={item.count} size="small" sx={{ backgroundColor: colors.salat, color: colors.light }} /></TableCell>
                             </TableRow>
                         ))} total={getTotalCount()} page={page} rowsPerPage={rowsPerPage} onPageChange={handleChangePage} onRowsPerPageChange={handleChangeRowsPerPage} loading={loading} emptyMessage="No portfolio data" />
+                    </Box>
+                </TabPanel>
+
+                {/* SUBSCRIPTIONS TAB */}
+                <TabPanel value={tabValue} index={6}>
+                    <Box sx={{ p: 2 }}>
+                        <SummaryCards items={[
+                            { title: 'Total Subscriptions', value: reportData?.stats?.total || 0, icon: <SubscriptionIcon />, color: colors.sea },
+                            { title: 'Active', value: reportData?.stats?.active || 0, icon: <CheckCircleIcon />, color: colors.salat },
+                            { title: 'Pending', value: reportData?.stats?.pending || 0, icon: <PendingIcon />, color: '#f59e0b' },
+                            { title: 'Expired', value: reportData?.stats?.expired || 0, icon: <TimerIcon />, color: '#ef4444' },
+                            { title: 'Total Revenue', value: formatCurrency(reportData?.stats?.total_revenue), icon: <MoneyIcon />, color: colors.sea },
+                            { title: 'New (Period)', value: reportData?.trend?.length || 0, icon: <TrendingUpIcon />, color: colors.salat },
+                        ]} />
+                        {reportData?.trend && reportData.trend.length > 0 && <TrendChart data={reportData.trend} label="New Subscriptions" color={colors.sea} />}
+
+                        <Box display="flex" gap={2} flexWrap="wrap" my={2}>
+                            <TextField size="small" placeholder="Search subscriptions..." value={search} onChange={(e) => setSearch(e.target.value)}
+                                       InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
+                                       sx={{ minWidth: 200, '& .MuiInputBase-root': { backgroundColor: colors.sky, borderRadius: 2 }, '& .MuiOutlinedInput-notchedOutline': { borderColor: colors.middle } }} />
+                            <FormControl size="small" sx={{ minWidth: 130 }}>
+                                <InputLabel sx={{ color: colors.rain }}>Status</InputLabel>
+                                <Select value={filterStatus} label="Status" onChange={(e) => setFilterStatus(e.target.value)}
+                                        sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: colors.middle }, '& .MuiInputBase-root': { backgroundColor: colors.sky } }}>
+                                    <MenuItem value="">All</MenuItem>
+                                    <MenuItem value="pending">Pending</MenuItem>
+                                    <MenuItem value="active">Active</MenuItem>
+                                    <MenuItem value="expired">Expired</MenuItem>
+                                    <MenuItem value="cancelled">Cancelled</MenuItem>
+                                </Select>
+                            </FormControl>
+                            <FormControl size="small" sx={{ minWidth: 150 }}>
+                                <InputLabel sx={{ color: colors.rain }}>Payment Method</InputLabel>
+                                <Select value={filterPaymentMethod} label="Payment Method" onChange={(e) => setFilterPaymentMethod(e.target.value)}
+                                        sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: colors.middle }, '& .MuiInputBase-root': { backgroundColor: colors.sky } }}>
+                                    <MenuItem value="">All</MenuItem>
+                                    <MenuItem value="M-Pesa">M-Pesa</MenuItem>
+                                    <MenuItem value="Airtel Money">Airtel Money</MenuItem>
+                                    <MenuItem value="Mix by Yas">Mix by Yas</MenuItem>
+                                </Select>
+                            </FormControl>
+                        </Box>
+
+                        <ReportTable columns={[
+                            { key: 'id', label: 'ID' },
+                            { key: 'user', label: 'User' },
+                            { key: 'plan', label: 'Plan' },
+                            { key: 'amount', label: 'Amount' },
+                            { key: 'status', label: 'Status' },
+                            { key: 'payment', label: 'Payment' },
+                            { key: 'created', label: 'Created' },
+                            { key: 'expiry', label: 'Expiry' },
+                        ]} rows={getListData().map((sub) => {
+                            const isExpired = sub.expiry_date && new Date(sub.expiry_date) < new Date();
+                            const displayStatus = isExpired && sub.status === 'active' ? 'expired' : sub.status;
+                            return (
+                                <TableRow key={sub.id} hover>
+                                    <TableCell>#{sub.id}</TableCell>
+                                    <TableCell>
+                                        <Box display="flex" alignItems="center" gap={1}>
+                                            <Avatar sx={{ width: 28, height: 28, bgcolor: colors.sea, fontSize: 12 }}>
+                                                {sub.user?.name?.charAt(0).toUpperCase() || 'U'}
+                                            </Avatar>
+                                            {sub.user?.name || 'N/A'}
+                                        </Box>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Tooltip title={`${sub.rate_card?.duration || ''}`}>
+                                            <Chip
+                                                label={sub.rate_card?.name || 'N/A'}
+                                                size="small"
+                                                sx={{ backgroundColor: alpha(colors.sea, 0.1), color: colors.sea }}
+                                            />
+                                        </Tooltip>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Typography fontWeight="600" color={colors.sea}>
+                                            {sub.amount || 'N/A'}
+                                        </Typography>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Chip
+                                            label={getStatusLabel(displayStatus)}
+                                            size="small"
+                                            sx={{
+                                                backgroundColor: alpha(getStatusColor(displayStatus), 0.1),
+                                                color: getStatusColor(displayStatus),
+                                                fontWeight: 600,
+                                            }}
+                                        />
+                                        {isExpired && sub.status === 'active' && (
+                                            <Tooltip title="Auto-marked as expired based on expiry date">
+                                                <TimerIcon sx={{ fontSize: 14, color: '#ef4444', ml: 0.5 }} />
+                                            </Tooltip>
+                                        )}
+                                    </TableCell>
+                                    <TableCell>
+                                        <Box display="flex" alignItems="center" gap={0.5}>
+                                            <PaymentIcon sx={{ fontSize: 14, color: colors.rain }} />
+                                            <Typography variant="caption">
+                                                {sub.payment_method || 'N/A'}
+                                            </Typography>
+                                        </Box>
+                                    </TableCell>
+                                    <TableCell>{formatDate(sub.created_at)}</TableCell>
+                                    <TableCell>
+                                        <Box display="flex" alignItems="center" gap={0.5}>
+                                            <CalendarIcon sx={{ fontSize: 14, color: colors.rain }} />
+                                            <Typography variant="body2">
+                                                {formatDate(sub.expiry_date)}
+                                            </Typography>
+                                        </Box>
+                                    </TableCell>
+                                </TableRow>
+                            );
+                        })} total={getTotalCount()} page={page} rowsPerPage={rowsPerPage} onPageChange={handleChangePage} onRowsPerPageChange={handleChangeRowsPerPage} loading={loading} emptyMessage="No subscriptions found" />
                     </Box>
                 </TabPanel>
             </Paper>

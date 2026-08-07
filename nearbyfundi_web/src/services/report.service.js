@@ -8,4 +8,6 @@ export const reportService = {
     getServicesReport: (params) => api.get('/v12/reports/services', { params }),
     getBlogReport: (params) => api.get('/v12/reports/blog', { params }),
     getPortfolioReport: (params) => api.get('/v12/reports/portfolio', { params }),
+    getSubscriptionsReport: (params) => api.get('/v12/reports/subscriptions', { params }),
+    getRevenueReport: (params) => api.get('/v12/reports/revenue', { params }),
 };

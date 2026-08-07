@@ -1,5 +1,5 @@
 // src/pages/users/UsersList.jsx
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
     Box,
     Paper,
@@ -32,6 +32,8 @@ import {
     CardContent,
     Divider,
     Alert,
+    Avatar,
+    Tooltip,
 } from '@mui/material';
 import {
     Add as AddIcon,
@@ -51,6 +53,13 @@ import {
     Email as EmailOutlinedIcon,
     Phone as PhoneIcon,
     Work as WorkIcon,
+    CheckCircle as CheckCircleIcon,
+    Cancel as CancelIcon,
+    Pending as PendingIcon,
+    AdminPanelSettings as AdminIcon,
+    People as PeopleIcon,
+    Handyman as HandymanIcon,
+    SupportAgent as SupportIcon,
 } from '@mui/icons-material';
 import { useUserManagement } from 'hooks/useUser';
 import { usePermissions } from 'hooks/usePermissions';
@@ -62,12 +71,12 @@ import appConfig from '../../config';
 const colors = appConfig.app.colors;
 
 const headCells = [
-    { id: 'name', label: 'Name' },
+    { id: 'name', label: 'User' },
     { id: 'email', label: 'Email' },
     { id: 'phone', label: 'Phone' },
     { id: 'role', label: 'Role' },
     { id: 'status', label: 'Status' },
-    { id: 'email_verified', label: 'Verified' },
+    { id: 'subscription', label: 'Subscription' },
     { id: 'created_at', label: 'Created' },
     { id: 'actions', label: 'Actions', disableSort: true },
 ];
@@ -118,7 +127,7 @@ const UsersList = () => {
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [roleFilter, setRoleFilter] = useState('');
-    const [order, setOrder] = useState('asc');
+    const [order, setOrder] = useState('desc');
     const [orderBy, setOrderBy] = useState('created_at');
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -140,9 +149,11 @@ const UsersList = () => {
             getUsers({
                 page: page + 1,
                 per_page: rowsPerPage,
+                search: search || undefined,
+                status: statusFilter || undefined,
             });
         }
-    }, [page, rowsPerPage, showDeleted, getUsers, canView]);
+    }, [page, rowsPerPage, showDeleted, search, statusFilter, getUsers, canView]);
 
     // Fetch deleted users when toggled
     useEffect(() => {
@@ -228,9 +239,9 @@ const UsersList = () => {
                     aValue = a.status || '';
                     bValue = b.status || '';
                     break;
-                case 'email_verified':
-                    aValue = a.email_verified_at ? 1 : 0;
-                    bValue = b.email_verified_at ? 1 : 0;
+                case 'subscription':
+                    aValue = a.subscription_status || 'inactive';
+                    bValue = b.subscription_status || 'inactive';
                     break;
                 case 'created_at':
                     aValue = a.created_at || '';
@@ -433,10 +444,73 @@ const UsersList = () => {
 
     const getUserRoleName = (user) => {
         if (!user?.roles || !Array.isArray(user.roles) || user.roles.length === 0) {
-            return '-';
+            return 'User';
         }
         const role = user.roles[0];
-        return role.display_name || role.name || '-';
+        return role.display_name || role.name || 'User';
+    };
+
+    const getRoleIcon = (user) => {
+        if (!user?.roles || !Array.isArray(user.roles) || user.roles.length === 0) {
+            return <PeopleIcon fontSize="small" />;
+        }
+        const roleName = user.roles[0]?.name || '';
+        switch (roleName) {
+            case 'ADMINISTRATOR':
+                return <AdminIcon fontSize="small" />;
+            case 'MONITORING_OFFICER':
+                return <SupportIcon fontSize="small" />;
+            case 'FUNDI':
+                return <HandymanIcon fontSize="small" />;
+            default:
+                return <PeopleIcon fontSize="small" />;
+        }
+    };
+
+    const getStatusChip = (status) => {
+        const statusMap = {
+            active: { color: '#10b981', bg: '#d1fae5', label: 'Active', icon: <CheckCircleIcon sx={{ fontSize: 14 }} /> },
+            inactive: { color: '#6b7280', bg: '#f3f4f6', label: 'Inactive', icon: <CancelIcon sx={{ fontSize: 14 }} /> },
+            pending: { color: '#f59e0b', bg: '#fef3c7', label: 'Pending', icon: <PendingIcon sx={{ fontSize: 14 }} /> },
+            suspended: { color: '#ef4444', bg: '#fee2e2', label: 'Suspended', icon: <BlockIcon sx={{ fontSize: 14 }} /> },
+        };
+        const s = statusMap[status] || statusMap.inactive;
+        return (
+            <Chip
+                icon={s.icon}
+                label={s.label}
+                size="small"
+                sx={{
+                    backgroundColor: s.bg,
+                    color: s.color,
+                    fontWeight: 600,
+                    '& .MuiChip-icon': { color: s.color },
+                }}
+            />
+        );
+    };
+
+    const getSubscriptionStatus = (user) => {
+        const status = user.subscription_status || 'inactive';
+        const expiresAt = user.subscription_expires_at;
+
+        if (status === 'active' && expiresAt) {
+            const expiry = new Date(expiresAt);
+            const now = new Date();
+            if (expiry < now) {
+                return { label: 'Expired', color: '#ef4444', bg: '#fee2e2' };
+            }
+            const days = Math.ceil((expiry - now) / (1000 * 60 * 60 * 24));
+            return { label: `${days}d left`, color: '#10b981', bg: '#d1fae5' };
+        }
+
+        const statusMap = {
+            active: { label: 'Active', color: '#10b981', bg: '#d1fae5' },
+            inactive: { label: 'Inactive', color: '#6b7280', bg: '#f3f4f6' },
+            expired: { label: 'Expired', color: '#ef4444', bg: '#fee2e2' },
+            pending: { label: 'Pending', color: '#f59e0b', bg: '#fef3c7' },
+        };
+        return statusMap[status] || statusMap.inactive;
     };
 
     if (!canView) {
@@ -620,7 +694,7 @@ const UsersList = () => {
                 {/* Table View */}
                 {showTableView ? (
                     <TableContainer sx={{ width: '100%', overflowX: 'auto' }}>
-                        <Table sx={{ width: '100%', minWidth: 800 }}>
+                        <Table sx={{ width: '100%', minWidth: 900 }}>
                             <TableHead>
                                 <TableRow sx={{ backgroundColor: colors.sky }}>
                                     {headCells.map((cell) => (
@@ -657,64 +731,100 @@ const UsersList = () => {
                                         </TableCell>
                                     </TableRow>
                                 ) : (
-                                    currentData.map((user) => (
-                                        <TableRow key={user.id} hover>
-                                            <TableCell sx={{ color: colors.black }}>{user.name}</TableCell>
-                                            <TableCell sx={{ color: colors.black }}>{user.email}</TableCell>
-                                            <TableCell sx={{ color: colors.black }}>{user.phone || '-'}</TableCell>
-                                            <TableCell>
-                                                <Chip
-                                                    label={getUserRoleName(user)}
-                                                    size="small"
-                                                    sx={{
-                                                        backgroundColor: colors.wave,
-                                                        color: colors.sea,
-                                                    }}
-                                                />
-                                            </TableCell>
-                                            <TableCell>
-                                                {showDeleted ? (
-                                                    <Chip label="Deleted" color="error" size="small" />
-                                                ) : (
+                                    currentData.map((user) => {
+                                        const subscriptionStatus = getSubscriptionStatus(user);
+                                        return (
+                                            <TableRow key={user.id} hover>
+                                                <TableCell>
+                                                    <Box display="flex" alignItems="center" gap={1.5}>
+                                                        <Avatar
+                                                            sx={{
+                                                                width: 32,
+                                                                height: 32,
+                                                                bgcolor: user.email_verified_at ? colors.salat : colors.rain,
+                                                                fontSize: 14,
+                                                                fontWeight: 600,
+                                                            }}
+                                                        >
+                                                            {user.name?.[0]?.toUpperCase() || 'U'}
+                                                        </Avatar>
+                                                        <Box>
+                                                            <Typography variant="body2" fontWeight={500} sx={{ color: colors.dark }}>
+                                                                {user.name}
+                                                            </Typography>
+                                                            <Typography variant="caption" sx={{ color: colors.rain }}>
+                                                                ID: {user.id}
+                                                            </Typography>
+                                                        </Box>
+                                                    </Box>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Typography variant="body2" sx={{ color: colors.black }}>
+                                                        {user.email}
+                                                    </Typography>
+                                                    {user.email_verified_at && (
+                                                        <Chip
+                                                            label="Verified"
+                                                            size="small"
+                                                            icon={<VerifiedIcon sx={{ fontSize: 12 }} />}
+                                                            sx={{
+                                                                height: 18,
+                                                                backgroundColor: colors.salat,
+                                                                color: colors.light,
+                                                                '& .MuiChip-label': { fontSize: 10, px: 1 },
+                                                                '& .MuiChip-icon': { fontSize: 12 },
+                                                            }}
+                                                        />
+                                                    )}
+                                                </TableCell>
+                                                <TableCell sx={{ color: colors.black }}>
+                                                    {user.phone || '-'}
+                                                </TableCell>
+                                                <TableCell>
                                                     <Chip
-                                                        label={user.status || 'pending'}
-                                                        sx={{
-                                                            backgroundColor: user.status === 'active' ? colors.salat :
-                                                                user.status === 'suspended' ? '#fee2e2' :
-                                                                    user.status === 'inactive' ? '#fef3c7' :
-                                                                        user.status === 'pending' ? '#dbeafe' : colors.sky,
-                                                            color: user.status === 'active' ? colors.light :
-                                                                user.status === 'suspended' ? '#991b1b' :
-                                                                    user.status === 'inactive' ? '#92400e' :
-                                                                        user.status === 'pending' ? '#1e40af' : colors.rain,
-                                                        }}
+                                                        icon={getRoleIcon(user)}
+                                                        label={getUserRoleName(user)}
                                                         size="small"
+                                                        sx={{
+                                                            backgroundColor: colors.wave,
+                                                            color: colors.sea,
+                                                            '& .MuiChip-icon': { color: colors.sea },
+                                                        }}
                                                     />
-                                                )}
-                                            </TableCell>
-                                            <TableCell>
-                                                {!showDeleted && (
-                                                    user.email_verified_at ? (
-                                                        <Chip label="Verified" size="small" icon={<VerifiedIcon sx={{ fontSize: 14 }} />} sx={{ backgroundColor: colors.salat, color: colors.light }} />
+                                                </TableCell>
+                                                <TableCell>
+                                                    {showDeleted ? (
+                                                        <Chip label="Deleted" color="error" size="small" />
                                                     ) : (
-                                                        <Chip label="Not Verified" size="small" sx={{ backgroundColor: colors.sky, color: colors.rain }} />
-                                                    )
-                                                )}
-                                            </TableCell>
-                                            <TableCell sx={{ color: colors.black }}>
-                                                {formatDate(user.created_at)}
-                                            </TableCell>
-                                            <TableCell align="center">
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={(e) => handleMenuOpen(e, user)}
-                                                    sx={{ color: colors.rain }}
-                                                >
-                                                    <MoreVertIcon />
-                                                </IconButton>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
+                                                        getStatusChip(user.status)
+                                                    )}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Chip
+                                                        label={subscriptionStatus.label}
+                                                        size="small"
+                                                        sx={{
+                                                            backgroundColor: subscriptionStatus.bg,
+                                                            color: subscriptionStatus.color,
+                                                            fontWeight: 500,
+                                                        }}
+                                                    />
+                                                </TableCell>
+                                                <TableCell sx={{ color: colors.black }}>
+                                                    {formatDate(user.created_at)}
+                                                </TableCell>
+                                                <TableCell align="center">
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={(e) => handleMenuOpen(e, user)}
+                                                        sx={{ color: colors.rain }}
+                                                    >
+                                                        <MoreVertIcon />
+                                                    </IconButton>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })
                                 )}
                             </TableBody>
                         </Table>
@@ -733,81 +843,98 @@ const UsersList = () => {
                                 </Typography>
                             </Paper>
                         ) : (
-                            currentData.map((user) => (
-                                <Card key={user.id} sx={{ mb: 2, borderRadius: 2, border: `1px solid ${colors.middle}` }}>
-                                    <CardContent sx={{ p: 2, backgroundColor: colors.light }}>
-                                        <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1.5}>
-                                            <Box display="flex" alignItems="center" gap={1}>
-                                                <PersonIcon fontSize="small" sx={{ color: colors.rain }} />
-                                                <Typography variant="body1" fontWeight="medium" sx={{ color: colors.dark }}>
-                                                    {user.name}
+                            currentData.map((user) => {
+                                const subscriptionStatus = getSubscriptionStatus(user);
+                                return (
+                                    <Card key={user.id} sx={{ mb: 2, borderRadius: 2, border: `1px solid ${colors.middle}` }}>
+                                        <CardContent sx={{ p: 2, backgroundColor: colors.light }}>
+                                            <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1.5}>
+                                                <Box display="flex" alignItems="center" gap={1.5}>
+                                                    <Avatar
+                                                        sx={{
+                                                            width: 40,
+                                                            height: 40,
+                                                            bgcolor: user.email_verified_at ? colors.salat : colors.rain,
+                                                            fontSize: 16,
+                                                            fontWeight: 600,
+                                                        }}
+                                                    >
+                                                        {user.name?.[0]?.toUpperCase() || 'U'}
+                                                    </Avatar>
+                                                    <Box>
+                                                        <Typography variant="body1" fontWeight="medium" sx={{ color: colors.dark }}>
+                                                            {user.name}
+                                                        </Typography>
+                                                        <Typography variant="caption" sx={{ color: colors.rain }}>
+                                                            ID: {user.id}
+                                                        </Typography>
+                                                    </Box>
+                                                </Box>
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={(e) => handleMenuOpen(e, user)}
+                                                    sx={{ color: colors.rain }}
+                                                >
+                                                    <MoreVertIcon fontSize="small" />
+                                                </IconButton>
+                                            </Box>
+
+                                            <Box display="flex" alignItems="center" gap={1} mb={1}>
+                                                <EmailOutlinedIcon fontSize="small" sx={{ color: colors.rain }} />
+                                                <Typography variant="body2" sx={{ color: colors.black }}>{user.email}</Typography>
+                                                {user.email_verified_at && (
+                                                    <VerifiedIcon sx={{ fontSize: 14, color: colors.salat }} />
+                                                )}
+                                            </Box>
+
+                                            {user.phone && (
+                                                <Box display="flex" alignItems="center" gap={1} mb={1}>
+                                                    <PhoneIcon fontSize="small" sx={{ color: colors.rain }} />
+                                                    <Typography variant="body2" sx={{ color: colors.black }}>{user.phone}</Typography>
+                                                </Box>
+                                            )}
+
+                                            <Box display="flex" alignItems="center" gap={1} mb={1}>
+                                                <WorkIcon fontSize="small" sx={{ color: colors.rain }} />
+                                                <Chip
+                                                    icon={getRoleIcon(user)}
+                                                    label={getUserRoleName(user)}
+                                                    size="small"
+                                                    sx={{
+                                                        backgroundColor: colors.wave,
+                                                        color: colors.sea,
+                                                        '& .MuiChip-icon': { color: colors.sea },
+                                                    }}
+                                                />
+                                            </Box>
+
+                                            <Divider sx={{ my: 1, borderColor: colors.middle }} />
+
+                                            <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
+                                                <Box display="flex" gap={1} flexWrap="wrap">
+                                                    {showDeleted ? (
+                                                        <Chip label="Deleted" color="error" size="small" />
+                                                    ) : (
+                                                        getStatusChip(user.status)
+                                                    )}
+                                                    <Chip
+                                                        label={subscriptionStatus.label}
+                                                        size="small"
+                                                        sx={{
+                                                            backgroundColor: subscriptionStatus.bg,
+                                                            color: subscriptionStatus.color,
+                                                            fontWeight: 500,
+                                                        }}
+                                                    />
+                                                </Box>
+                                                <Typography variant="caption" sx={{ color: colors.rain }}>
+                                                    Joined: {formatDate(user.created_at)}
                                                 </Typography>
                                             </Box>
-                                            <IconButton
-                                                size="small"
-                                                onClick={(e) => handleMenuOpen(e, user)}
-                                                sx={{ color: colors.rain }}
-                                            >
-                                                <MoreVertIcon fontSize="small" />
-                                            </IconButton>
-                                        </Box>
-
-                                        <Box display="flex" alignItems="center" gap={1} mb={1}>
-                                            <EmailOutlinedIcon fontSize="small" sx={{ color: colors.rain }} />
-                                            <Typography variant="body2" sx={{ color: colors.black }}>{user.email}</Typography>
-                                        </Box>
-
-                                        {user.phone && (
-                                            <Box display="flex" alignItems="center" gap={1} mb={1}>
-                                                <PhoneIcon fontSize="small" sx={{ color: colors.rain }} />
-                                                <Typography variant="body2" sx={{ color: colors.black }}>{user.phone}</Typography>
-                                            </Box>
-                                        )}
-
-                                        <Box display="flex" alignItems="center" gap={1} mb={1}>
-                                            <WorkIcon fontSize="small" sx={{ color: colors.rain }} />
-                                            <Typography variant="body2" sx={{ color: colors.black }}>
-                                                {getUserRoleName(user)}
-                                            </Typography>
-                                        </Box>
-
-                                        <Divider sx={{ my: 1, borderColor: colors.middle }} />
-
-                                        <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
-                                            <Box display="flex" gap={1} flexWrap="wrap">
-                                                {showDeleted ? (
-                                                    <Chip label="Deleted" color="error" size="small" />
-                                                ) : (
-                                                    <Chip
-                                                        label={user.status || 'pending'}
-                                                        sx={{
-                                                            backgroundColor: user.status === 'active' ? colors.salat :
-                                                                user.status === 'suspended' ? '#fee2e2' :
-                                                                    user.status === 'inactive' ? '#fef3c7' :
-                                                                        user.status === 'pending' ? '#dbeafe' : colors.sky,
-                                                            color: user.status === 'active' ? colors.light :
-                                                                user.status === 'suspended' ? '#991b1b' :
-                                                                    user.status === 'inactive' ? '#92400e' :
-                                                                        user.status === 'pending' ? '#1e40af' : colors.rain,
-                                                        }}
-                                                        size="small"
-                                                    />
-                                                )}
-                                                {!showDeleted && (
-                                                    user.email_verified_at ? (
-                                                        <Chip label="Verified" size="small" icon={<VerifiedIcon sx={{ fontSize: 14 }} />} sx={{ backgroundColor: colors.salat, color: colors.light }} />
-                                                    ) : (
-                                                        <Chip label="Not Verified" size="small" sx={{ backgroundColor: colors.sky, color: colors.rain }} />
-                                                    )
-                                                )}
-                                            </Box>
-                                            <Typography variant="caption" sx={{ color: colors.rain }}>
-                                                Created: {formatDate(user.created_at)}
-                                            </Typography>
-                                        </Box>
-                                    </CardContent>
-                                </Card>
-                            ))
+                                        </CardContent>
+                                    </Card>
+                                );
+                            })
                         )}
                     </Box>
                 )}

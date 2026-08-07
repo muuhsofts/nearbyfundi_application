@@ -5,6 +5,7 @@ import {
     IconButton, Chip, Menu, MenuItem, Dialog, DialogTitle, DialogContent,
     DialogActions, CircularProgress, useMediaQuery, useTheme, Alert,
     Grid, Card, CardContent, Tooltip, Avatar, LinearProgress,
+    Divider, Badge, Fade, Slide,
 } from '@mui/material';
 import {
     Refresh as RefreshIcon,
@@ -22,6 +23,11 @@ import {
     Cancel as ExpiredIcon,
     Block as CancelledIcon,
     TrendingUp as TrendingUpIcon,
+    Person as PersonIcon,
+    AttachMoney as MoneyIcon,
+    CalendarToday as CalendarIcon,
+    Timer as TimerIcon,
+    Info as InfoIcon,
 } from '@mui/icons-material';
 import { usePermissions } from 'hooks/usePermissions';
 import { subscriptionService } from 'services/subscription.service';
@@ -39,6 +45,7 @@ const headCells = [
     { id: 'payment_method', label: 'Payment Method' },
     { id: 'payment_ref', label: 'Reference' },
     { id: 'created_at', label: 'Date' },
+    { id: 'expiry_date', label: 'Expiry' },
     { id: 'actions', label: 'Actions', disableSort: true },
 ];
 
@@ -78,6 +85,10 @@ const SubscriptionList = () => {
         subscriptionId: null,
     });
     const [downloadingInvoice, setDownloadingInvoice] = useState(null);
+    const [viewDialog, setViewDialog] = useState({
+        open: false,
+        subscription: null,
+    });
 
     // ============================================================
     // FETCH DATA
@@ -102,7 +113,6 @@ const SubscriptionList = () => {
             if (response?.data?.status === 'success') {
                 const data = response.data.data;
 
-                // Set subscriptions
                 if (data?.data) {
                     setSubscriptions(data.data);
                 } else if (Array.isArray(data)) {
@@ -111,12 +121,10 @@ const SubscriptionList = () => {
                     setSubscriptions([]);
                 }
 
-                // Set pagination
                 if (data?.pagination) {
                     setTotalCount(data.pagination.total || 0);
                 }
 
-                // Set stats from filters
                 if (data?.filters) {
                     setStats({
                         pending_count: data.filters.pending_count || 0,
@@ -194,9 +202,6 @@ const SubscriptionList = () => {
         setRejectDialog({ open: false, reason: '', subscriptionId: null });
     };
 
-    // ============================================================
-    // ✅ FIXED: INVOICE DOWNLOAD WITH AUTHENTICATION
-    // ============================================================
     const handleViewInvoice = useCallback(async (sub) => {
         if (!sub.invoice?.id) {
             showSnackbar({ type: 'warning', message: 'No invoice available' });
@@ -210,7 +215,6 @@ const SubscriptionList = () => {
                 responseType: 'blob',
             });
 
-            // Create a blob URL and trigger download
             const blob = new Blob([response.data], { type: 'application/pdf' });
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
@@ -224,10 +228,8 @@ const SubscriptionList = () => {
             showSnackbar({ type: 'success', message: 'Invoice downloaded successfully' });
         } catch (error) {
             console.error('Invoice download error:', error);
-            // If blob download fails, try alternative method with pdf_url
             if (sub.invoice?.pdf_url) {
                 try {
-                    // Try opening the PDF URL in a new tab as fallback
                     window.open(sub.invoice.pdf_url, '_blank');
                     showSnackbar({ type: 'info', message: 'Invoice opened in new tab' });
                 } catch (fallbackError) {
@@ -242,17 +244,8 @@ const SubscriptionList = () => {
         setActionMenu(null);
     }, []);
 
-    // ============================================================
-    // ALTERNATIVE: DOWNLOAD USING PDF_URL (if available)
-    // ============================================================
-    const handleViewInvoiceWithUrl = (sub) => {
-        if (sub.invoice?.pdf_url) {
-            // Use the direct PDF URL if available
-            window.open(sub.invoice.pdf_url, '_blank');
-        } else {
-            // Fallback to blob download
-            handleViewInvoice(sub);
-        }
+    const handleViewDetails = (sub) => {
+        setViewDialog({ open: true, subscription: sub });
         setActionMenu(null);
     };
 
@@ -274,7 +267,7 @@ const SubscriptionList = () => {
     // ============================================================
 
     const exportCSV = () => {
-        const headers = ['User', 'Plan', 'Amount', 'Status', 'Payment Method', 'Reference', 'Date'];
+        const headers = ['User', 'Plan', 'Amount', 'Status', 'Payment Method', 'Reference', 'Date', 'Expiry'];
         const rows = subscriptions.map(sub => [
             sub.user?.name || '-',
             sub.rate_card?.name || '-',
@@ -283,6 +276,7 @@ const SubscriptionList = () => {
             sub.payment_method || '-',
             sub.payment_reference || '-',
             formatDate(sub.created_at),
+            formatDate(sub.expiry_date),
         ]);
 
         let csv = headers.join(',') + '\n';
@@ -308,7 +302,7 @@ const SubscriptionList = () => {
     };
 
     const exportExcel = () => {
-        const headers = ['User', 'Plan', 'Amount', 'Status', 'Payment Method', 'Reference', 'Date'];
+        const headers = ['User', 'Plan', 'Amount', 'Status', 'Payment Method', 'Reference', 'Date', 'Expiry'];
         let html = `
             <html>
             <head><meta charset="UTF-8"><title>Subscriptions Report</title></head>
@@ -327,6 +321,7 @@ const SubscriptionList = () => {
                 <td>${sub.payment_method || '-'}</td>
                 <td>${sub.payment_reference || '-'}</td>
                 <td>${formatDate(sub.created_at)}</td>
+                <td>${formatDate(sub.expiry_date)}</td>
             </tr>`;
         });
         html += `</tbody></table></body></html>`;
@@ -349,15 +344,52 @@ const SubscriptionList = () => {
         try { return new Date(dateStr).toLocaleDateString(); } catch { return '-'; }
     };
 
-    const getStatusChip = (status) => {
+    const isExpired = (sub) => {
+        if (!sub.expiry_date) return false;
+        return new Date(sub.expiry_date) < new Date();
+    };
+
+    const getStatusChip = (status, expiryDate) => {
+        // Check if expired based on expiry date
+        if (status === 'active' && expiryDate && new Date(expiryDate) < new Date()) {
+            status = 'expired';
+        }
+
         const map = {
-            pending: { color: '#f59e0b', bg: '#fef3c7', label: 'Pending' },
-            active: { color: '#10b981', bg: '#d1fae5', label: 'Active' },
-            expired: { color: '#ef4444', bg: '#fee2e2', label: 'Expired' },
-            cancelled: { color: '#6b7280', bg: '#f3f4f6', label: 'Cancelled' },
+            pending: { color: '#f59e0b', bg: '#fef3c7', label: 'Pending', icon: <PendingIcon sx={{ fontSize: 14 }} /> },
+            active: { color: '#10b981', bg: '#d1fae5', label: 'Active', icon: <ActiveIcon sx={{ fontSize: 14 }} /> },
+            expired: { color: '#ef4444', bg: '#fee2e2', label: 'Expired', icon: <ExpiredIcon sx={{ fontSize: 14 }} /> },
+            cancelled: { color: '#6b7280', bg: '#f3f4f6', label: 'Cancelled', icon: <CancelledIcon sx={{ fontSize: 14 }} /> },
         };
-        const s = map[status] || { color: '#6b7280', bg: '#f3f4f6', label: status };
-        return <Chip label={s.label} sx={{ backgroundColor: s.bg, color: s.color }} size="small" />;
+        const s = map[status] || { color: '#6b7280', bg: '#f3f4f6', label: status, icon: null };
+        return (
+            <Chip
+                icon={s.icon}
+                label={s.label}
+                sx={{
+                    backgroundColor: s.bg,
+                    color: s.color,
+                    fontWeight: 600,
+                    '& .MuiChip-icon': { color: s.color },
+                }}
+                size="small"
+            />
+        );
+    };
+
+    const getExpiryStatus = (sub) => {
+        if (!sub.expiry_date) return null;
+        const expiry = new Date(sub.expiry_date);
+        const now = new Date();
+        const daysRemaining = Math.ceil((expiry - now) / (1000 * 60 * 60 * 24));
+
+        if (daysRemaining < 0) {
+            return { label: 'Expired', color: '#ef4444', icon: <ExpiredIcon sx={{ fontSize: 14 }} /> };
+        } else if (daysRemaining <= 3) {
+            return { label: `${daysRemaining} days`, color: '#f59e0b', icon: <TimerIcon sx={{ fontSize: 14 }} /> };
+        } else {
+            return { label: `${daysRemaining} days`, color: '#10b981', icon: <CheckCircleIcon sx={{ fontSize: 14 }} /> };
+        }
     };
 
     // ============================================================
@@ -372,6 +404,7 @@ const SubscriptionList = () => {
             color: '#f59e0b',
             bgColor: '#fffbeb',
             borderColor: '#f59e0b',
+            gradient: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
         },
         {
             title: 'Active',
@@ -380,6 +413,7 @@ const SubscriptionList = () => {
             color: '#10b981',
             bgColor: '#ecfdf5',
             borderColor: '#10b981',
+            gradient: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
         },
         {
             title: 'Expired',
@@ -388,6 +422,7 @@ const SubscriptionList = () => {
             color: '#ef4444',
             bgColor: '#fef2f2',
             borderColor: '#ef4444',
+            gradient: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
         },
         {
             title: 'Cancelled',
@@ -396,6 +431,7 @@ const SubscriptionList = () => {
             color: '#6b7280',
             bgColor: '#f9fafb',
             borderColor: '#6b7280',
+            gradient: 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)',
         },
     ];
 
@@ -441,6 +477,14 @@ const SubscriptionList = () => {
                         display: none !important;
                     }
                 }
+                @keyframes pulse {
+                    0% { transform: scale(1); }
+                    50% { transform: scale(1.05); }
+                    100% { transform: scale(1); }
+                }
+                .pulse {
+                    animation: pulse 2s ease-in-out infinite;
+                }
             `}</style>
 
             <Box sx={{ width: '100%', p: { xs: 1, sm: 2 } }}>
@@ -448,86 +492,100 @@ const SubscriptionList = () => {
                 <Grid container spacing={2} sx={{ mb: 3 }}>
                     {statCards.map((card, index) => (
                         <Grid item xs={6} sm={3} key={index}>
-                            <Card
-                                sx={{
-                                    bgcolor: card.bgColor,
-                                    borderLeft: `4px solid ${card.borderColor}`,
-                                    transition: 'all 0.3s ease',
-                                    '&:hover': {
-                                        transform: 'translateY(-6px)',
-                                        boxShadow: '0 12px 24px rgba(0,0,0,0.1)',
-                                    },
-                                    position: 'relative',
-                                    overflow: 'hidden',
-                                }}
-                            >
-                                <Box
+                            <Slide direction="up" in={true} timeout={500 + index * 100}>
+                                <Card
                                     sx={{
-                                        position: 'absolute',
-                                        right: -20,
-                                        top: -20,
-                                        width: 100,
-                                        height: 100,
-                                        borderRadius: '50%',
-                                        bgcolor: card.color,
-                                        opacity: 0.05,
+                                        bgcolor: card.bgColor,
+                                        borderLeft: `4px solid ${card.borderColor}`,
+                                        transition: 'all 0.3s ease',
+                                        '&:hover': {
+                                            transform: 'translateY(-6px)',
+                                            boxShadow: '0 12px 24px rgba(0,0,0,0.12)',
+                                        },
+                                        position: 'relative',
+                                        overflow: 'hidden',
                                     }}
-                                />
-                                <CardContent sx={{ position: 'relative', zIndex: 1 }}>
-                                    <Box display="flex" alignItems="center" justifyContent="space-between">
-                                        <Box>
-                                            <Typography
-                                                variant="caption"
-                                                sx={{
-                                                    color: card.color,
-                                                    fontWeight: 600,
-                                                    textTransform: 'uppercase',
-                                                    letterSpacing: '0.5px',
-                                                    fontSize: '11px',
-                                                }}
-                                            >
-                                                {card.title}
-                                            </Typography>
-                                            <Typography
-                                                variant="h4"
-                                                sx={{
-                                                    color: card.color,
-                                                    fontWeight: 700,
-                                                    fontSize: { xs: '28px', sm: '32px' },
-                                                    lineHeight: 1.2,
-                                                    mt: 0.5,
-                                                }}
-                                            >
-                                                {card.count}
-                                            </Typography>
-                                        </Box>
-                                        <Avatar
-                                            sx={{
-                                                bgcolor: card.color,
-                                                width: 48,
-                                                height: 48,
-                                                boxShadow: `0 4px 12px ${card.color}40`,
-                                            }}
-                                        >
-                                            {card.icon}
-                                        </Avatar>
-                                    </Box>
-                                    <LinearProgress
-                                        variant="determinate"
-                                        value={Math.min((card.count / (statCards.reduce((sum, c) => sum + c.count, 0) || 1)) * 100, 100)}
+                                >
+                                    <Box
                                         sx={{
-                                            mt: 2,
-                                            height: 3,
-                                            borderRadius: 2,
-                                            bgcolor: '#e5e7eb',
-                                            '& .MuiLinearProgress-bar': {
-                                                bgcolor: card.color,
-                                                borderRadius: 2,
-                                            },
+                                            position: 'absolute',
+                                            right: -30,
+                                            top: -30,
+                                            width: 120,
+                                            height: 120,
+                                            borderRadius: '50%',
+                                            background: card.gradient,
+                                            opacity: 0.08,
                                         }}
                                     />
-                                </CardContent>
-                            </Card>
+                                    <Box
+                                        sx={{
+                                            position: 'absolute',
+                                            right: 20,
+                                            bottom: -10,
+                                            width: 40,
+                                            height: 40,
+                                            borderRadius: '50%',
+                                            background: card.gradient,
+                                            opacity: 0.05,
+                                        }}
+                                    />
+                                    <CardContent sx={{ position: 'relative', zIndex: 1 }}>
+                                        <Box display="flex" alignItems="center" justifyContent="space-between">
+                                            <Box>
+                                                <Typography
+                                                    variant="caption"
+                                                    sx={{
+                                                        color: card.color,
+                                                        fontWeight: 600,
+                                                        textTransform: 'uppercase',
+                                                        letterSpacing: '0.5px',
+                                                        fontSize: '11px',
+                                                    }}
+                                                >
+                                                    {card.title}
+                                                </Typography>
+                                                <Typography
+                                                    variant="h4"
+                                                    sx={{
+                                                        color: card.color,
+                                                        fontWeight: 700,
+                                                        fontSize: { xs: '28px', sm: '32px' },
+                                                        lineHeight: 1.2,
+                                                        mt: 0.5,
+                                                    }}
+                                                >
+                                                    {card.count}
+                                                </Typography>
+                                            </Box>
+                                            <Avatar
+                                                sx={{
+                                                    background: card.gradient,
+                                                    width: 48,
+                                                    height: 48,
+                                                    boxShadow: `0 4px 12px ${card.color}40`,
+                                                }}
+                                            >
+                                                {card.icon}
+                                            </Avatar>
+                                        </Box>
+                                        <LinearProgress
+                                            variant="determinate"
+                                            value={Math.min((card.count / (statCards.reduce((sum, c) => sum + c.count, 0) || 1)) * 100, 100)}
+                                            sx={{
+                                                mt: 2,
+                                                height: 3,
+                                                borderRadius: 2,
+                                                bgcolor: '#e5e7eb',
+                                                '& .MuiLinearProgress-bar': {
+                                                    bgcolor: card.color,
+                                                    borderRadius: 2,
+                                                },
+                                            }}
+                                        />
+                                    </CardContent>
+                                </Card>
+                            </Slide>
                         </Grid>
                     ))}
                 </Grid>
@@ -556,7 +614,7 @@ const SubscriptionList = () => {
                                         Excel
                                     </Button>
                                 </Tooltip>
-                                <Button variant="outlined" startIcon={<RefreshIcon />} onClick={refresh}>
+                                <Button variant="contained" startIcon={<RefreshIcon />} onClick={refresh}>
                                     Refresh
                                 </Button>
                             </Box>
@@ -599,40 +657,42 @@ const SubscriptionList = () => {
                         </Box>
 
                         {showFilters && (
-                            <Box display="flex" gap={2} flexWrap="wrap" alignItems="center" sx={{ mt: 2, pt: 2, borderTop: `1px solid ${colors.middle}` }}>
-                                <TextField
-                                    label="Date From"
-                                    type="date"
-                                    size="small"
-                                    value={dateFrom}
-                                    onChange={(e) => setDateFrom(e.target.value)}
-                                    InputLabelProps={{ shrink: true }}
-                                    sx={{ minWidth: 160 }}
-                                />
-                                <TextField
-                                    label="Date To"
-                                    type="date"
-                                    size="small"
-                                    value={dateTo}
-                                    onChange={(e) => setDateTo(e.target.value)}
-                                    InputLabelProps={{ shrink: true }}
-                                    sx={{ minWidth: 160 }}
-                                />
-                                <Button size="small" variant="contained" color="primary" onClick={refresh}>
-                                    Apply Date Filter
-                                </Button>
-                                <Button
-                                    size="small"
-                                    variant="text"
-                                    onClick={() => {
-                                        setDateFrom('');
-                                        setDateTo('');
-                                        refresh();
-                                    }}
-                                >
-                                    Clear
-                                </Button>
-                            </Box>
+                            <Fade in={showFilters}>
+                                <Box display="flex" gap={2} flexWrap="wrap" alignItems="center" sx={{ mt: 2, pt: 2, borderTop: `1px solid ${colors.middle}` }}>
+                                    <TextField
+                                        label="Date From"
+                                        type="date"
+                                        size="small"
+                                        value={dateFrom}
+                                        onChange={(e) => setDateFrom(e.target.value)}
+                                        InputLabelProps={{ shrink: true }}
+                                        sx={{ minWidth: 160 }}
+                                    />
+                                    <TextField
+                                        label="Date To"
+                                        type="date"
+                                        size="small"
+                                        value={dateTo}
+                                        onChange={(e) => setDateTo(e.target.value)}
+                                        InputLabelProps={{ shrink: true }}
+                                        sx={{ minWidth: 160 }}
+                                    />
+                                    <Button size="small" variant="contained" color="primary" onClick={refresh}>
+                                        Apply Date Filter
+                                    </Button>
+                                    <Button
+                                        size="small"
+                                        variant="text"
+                                        onClick={() => {
+                                            setDateFrom('');
+                                            setDateTo('');
+                                            refresh();
+                                        }}
+                                    >
+                                        Clear
+                                    </Button>
+                                </Box>
+                            </Fade>
                         )}
                     </Box>
 
@@ -667,28 +727,73 @@ const SubscriptionList = () => {
                                 </TableHead>
                                 <TableBody>
                                     {subscriptions.length === 0 ? (
-                                        <TableRow><TableCell colSpan={headCells.length} align="center">No subscriptions found</TableCell></TableRow>
+                                        <TableRow>
+                                            <TableCell colSpan={headCells.length} align="center" sx={{ py: 4 }}>
+                                                <Typography color="textSecondary">No subscriptions found</Typography>
+                                            </TableCell>
+                                        </TableRow>
                                     ) : (
-                                        subscriptions.map((sub) => (
-                                            <TableRow key={sub.id} hover>
-                                                <TableCell>{sub.user?.name || '-'}</TableCell>
-                                                <TableCell>{sub.rate_card?.name || '-'}</TableCell>
-                                                <TableCell>{sub.amount || '-'}</TableCell>
-                                                <TableCell>{getStatusChip(sub.status)}</TableCell>
-                                                <TableCell>{sub.payment_method || '-'}</TableCell>
-                                                <TableCell>{sub.payment_reference || '-'}</TableCell>
-                                                <TableCell>{formatDate(sub.created_at)}</TableCell>
-                                                <TableCell align="center">
-                                                    {downloadingInvoice === sub.id ? (
-                                                        <CircularProgress size={24} />
-                                                    ) : (
-                                                        <IconButton size="small" onClick={(e) => handleMenuOpen(e, sub)}>
-                                                            <MoreVertIcon />
-                                                        </IconButton>
-                                                    )}
-                                                </TableCell>
-                                            </TableRow>
-                                        ))
+                                        subscriptions.map((sub) => {
+                                            const expired = isExpired(sub);
+                                            const actualStatus = expired && sub.status === 'active' ? 'expired' : sub.status;
+                                            return (
+                                                <TableRow key={sub.id} hover>
+                                                    <TableCell>
+                                                        <Box display="flex" alignItems="center" gap={1}>
+                                                            <Avatar sx={{ width: 32, height: 32, bgcolor: colors.primary }}>
+                                                                {sub.user?.name?.[0] || 'U'}
+                                                            </Avatar>
+                                                            <Box>
+                                                                <Typography variant="body2" fontWeight={500}>
+                                                                    {sub.user?.name || '-'}
+                                                                </Typography>
+                                                                <Typography variant="caption" color="textSecondary">
+                                                                    {sub.user?.email || ''}
+                                                                </Typography>
+                                                            </Box>
+                                                        </Box>
+                                                    </TableCell>
+                                                    <TableCell>{sub.rate_card?.name || '-'}</TableCell>
+                                                    <TableCell>
+                                                        <Typography fontWeight={600} color={colors.primary}>
+                                                            {sub.amount || '-'}
+                                                        </Typography>
+                                                    </TableCell>
+                                                    <TableCell>{getStatusChip(actualStatus, sub.expiry_date)}</TableCell>
+                                                    <TableCell>{sub.payment_method || '-'}</TableCell>
+                                                    <TableCell>
+                                                        <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                                                            {sub.payment_reference || '-'}
+                                                        </Typography>
+                                                    </TableCell>
+                                                    <TableCell>{formatDate(sub.created_at)}</TableCell>
+                                                    <TableCell>
+                                                        <Box display="flex" alignItems="center" gap={0.5}>
+                                                            <CalendarIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                                                            <Typography variant="caption">
+                                                                {formatDate(sub.expiry_date)}
+                                                            </Typography>
+                                                            {sub.expiry_date && (
+                                                                <Badge
+                                                                    color={new Date(sub.expiry_date) < new Date() ? 'error' : 'success'}
+                                                                    variant="dot"
+                                                                    sx={{ ml: 0.5 }}
+                                                                />
+                                                            )}
+                                                        </Box>
+                                                    </TableCell>
+                                                    <TableCell align="center">
+                                                        {downloadingInvoice === sub.id ? (
+                                                            <CircularProgress size={24} />
+                                                        ) : (
+                                                            <IconButton size="small" onClick={(e) => handleMenuOpen(e, sub)}>
+                                                                <MoreVertIcon />
+                                                            </IconButton>
+                                                        )}
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })
                                     )}
                                 </TableBody>
                             </Table>
@@ -698,41 +803,85 @@ const SubscriptionList = () => {
                             {subscriptions.length === 0 ? (
                                 <Typography sx={{ py: 2, textAlign: 'center', color: colors.rain }}>No subscriptions found</Typography>
                             ) : (
-                                subscriptions.map(sub => (
-                                    <Card key={sub.id} sx={{ mb: 2 }}>
-                                        <CardContent>
-                                            <Box display="flex" justifyContent="space-between">
-                                                <Typography variant="subtitle1"><strong>{sub.user?.name}</strong></Typography>
-                                                {getStatusChip(sub.status)}
-                                            </Box>
-                                            <Typography variant="body2">Plan: {sub.rate_card?.name}</Typography>
-                                            <Typography variant="body2">Amount: {sub.amount}</Typography>
-                                            <Typography variant="body2">Method: {sub.payment_method}</Typography>
-                                            <Typography variant="body2">Reference: {sub.payment_reference || '-'}</Typography>
-                                            <Typography variant="body2">Date: {formatDate(sub.created_at)}</Typography>
-                                            <Box mt={1} display="flex" gap={1}>
-                                                {canApprove && sub.status === 'pending' && (
-                                                    <>
-                                                        <Button size="small" variant="contained" color="success" onClick={() => handleApprove(sub.id)}>Approve</Button>
-                                                        <Button size="small" variant="contained" color="error" onClick={() => {
-                                                            setRejectDialog({ open: true, reason: '', subscriptionId: sub.id });
-                                                        }}>Reject</Button>
-                                                    </>
-                                                )}
-                                                {sub.invoice && (
-                                                    <Button
-                                                        size="small"
-                                                        startIcon={downloadingInvoice === sub.id ? <CircularProgress size={16} /> : <DownloadIcon />}
-                                                        onClick={() => handleViewInvoice(sub)}
-                                                        disabled={downloadingInvoice === sub.id}
-                                                    >
-                                                        Invoice
+                                subscriptions.map(sub => {
+                                    const expired = isExpired(sub);
+                                    const actualStatus = expired && sub.status === 'active' ? 'expired' : sub.status;
+                                    return (
+                                        <Card key={sub.id} sx={{ mb: 2 }}>
+                                            <CardContent>
+                                                <Box display="flex" justifyContent="space-between" alignItems="flex-start">
+                                                    <Box>
+                                                        <Typography variant="subtitle1">
+                                                            <strong>{sub.user?.name || '-'}</strong>
+                                                        </Typography>
+                                                        <Typography variant="caption" color="textSecondary">
+                                                            {sub.user?.email || ''}
+                                                        </Typography>
+                                                    </Box>
+                                                    {getStatusChip(actualStatus, sub.expiry_date)}
+                                                </Box>
+                                                <Divider sx={{ my: 1 }} />
+                                                <Grid container spacing={1}>
+                                                    <Grid item xs={6}>
+                                                        <Typography variant="caption" color="textSecondary">Plan</Typography>
+                                                        <Typography variant="body2">{sub.rate_card?.name || '-'}</Typography>
+                                                    </Grid>
+                                                    <Grid item xs={6}>
+                                                        <Typography variant="caption" color="textSecondary">Amount</Typography>
+                                                        <Typography variant="body2" fontWeight={600} color={colors.primary}>
+                                                            {sub.amount || '-'}
+                                                        </Typography>
+                                                    </Grid>
+                                                    <Grid item xs={6}>
+                                                        <Typography variant="caption" color="textSecondary">Payment Method</Typography>
+                                                        <Typography variant="body2">{sub.payment_method || '-'}</Typography>
+                                                    </Grid>
+                                                    <Grid item xs={6}>
+                                                        <Typography variant="caption" color="textSecondary">Reference</Typography>
+                                                        <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                                                            {sub.payment_reference || '-'}
+                                                        </Typography>
+                                                    </Grid>
+                                                    <Grid item xs={6}>
+                                                        <Typography variant="caption" color="textSecondary">Date</Typography>
+                                                        <Typography variant="body2">{formatDate(sub.created_at)}</Typography>
+                                                    </Grid>
+                                                    <Grid item xs={6}>
+                                                        <Typography variant="caption" color="textSecondary">Expiry</Typography>
+                                                        <Typography variant="body2">{formatDate(sub.expiry_date)}</Typography>
+                                                    </Grid>
+                                                </Grid>
+                                                <Box mt={2} display="flex" gap={1} flexWrap="wrap">
+                                                    {canApprove && sub.status === 'pending' && (
+                                                        <>
+                                                            <Button size="small" variant="contained" color="success" onClick={() => handleApprove(sub.id)}>
+                                                                Approve
+                                                            </Button>
+                                                            <Button size="small" variant="contained" color="error" onClick={() => {
+                                                                setRejectDialog({ open: true, reason: '', subscriptionId: sub.id });
+                                                            }}>
+                                                                Reject
+                                                            </Button>
+                                                        </>
+                                                    )}
+                                                    {sub.invoice && (
+                                                        <Button
+                                                            size="small"
+                                                            startIcon={downloadingInvoice === sub.id ? <CircularProgress size={16} /> : <DownloadIcon />}
+                                                            onClick={() => handleViewInvoice(sub)}
+                                                            disabled={downloadingInvoice === sub.id}
+                                                        >
+                                                            Invoice
+                                                        </Button>
+                                                    )}
+                                                    <Button size="small" variant="outlined" onClick={() => handleViewDetails(sub)}>
+                                                        View Details
                                                     </Button>
-                                                )}
-                                            </Box>
-                                        </CardContent>
-                                    </Card>
-                                ))
+                                                </Box>
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                })
                             )}
                         </Box>
                     )}
@@ -762,8 +911,12 @@ const SubscriptionList = () => {
                             }}>
                                 <RejectIcon sx={{ mr: 1, color: 'error.main' }} /> Reject
                             </MenuItem>
+                            <Divider />
                         </>
                     )}
+                    <MenuItem onClick={() => handleViewDetails(selectedSub)}>
+                        <InfoIcon sx={{ mr: 1 }} /> View Details
+                    </MenuItem>
                     {selectedSub?.invoice && (
                         <MenuItem onClick={() => handleViewInvoice(selectedSub)}>
                             <DownloadIcon sx={{ mr: 1 }} /> Download Invoice
@@ -773,7 +926,12 @@ const SubscriptionList = () => {
 
                 {/* Reject Dialog */}
                 <Dialog open={rejectDialog.open} onClose={() => setRejectDialog({ open: false, reason: '', subscriptionId: null })}>
-                    <DialogTitle>Reject Subscription</DialogTitle>
+                    <DialogTitle>
+                        <Box display="flex" alignItems="center" gap={1}>
+                            <RejectIcon color="error" />
+                            <Typography variant="h6">Reject Subscription</Typography>
+                        </Box>
+                    </DialogTitle>
                     <DialogContent>
                         <TextField
                             autoFocus
@@ -784,6 +942,7 @@ const SubscriptionList = () => {
                             rows={3}
                             value={rejectDialog.reason || ''}
                             onChange={(e) => setRejectDialog(prev => ({ ...prev, reason: e.target.value }))}
+                            placeholder="Enter reason for rejection..."
                         />
                     </DialogContent>
                     <DialogActions>
@@ -799,6 +958,111 @@ const SubscriptionList = () => {
                         >
                             Reject
                         </Button>
+                    </DialogActions>
+                </Dialog>
+
+                {/* View Details Dialog */}
+                <Dialog
+                    open={viewDialog.open}
+                    onClose={() => setViewDialog({ open: false, subscription: null })}
+                    maxWidth="md"
+                    fullWidth
+                >
+                    <DialogTitle>
+                        <Box display="flex" alignItems="center" gap={1}>
+                            <InfoIcon color="primary" />
+                            <Typography variant="h6">Subscription Details</Typography>
+                        </Box>
+                    </DialogTitle>
+                    <DialogContent>
+                        {viewDialog.subscription && (
+                            <Box>
+                                <Grid container spacing={2}>
+                                    <Grid item xs={12}>
+                                        <Typography variant="subtitle2" color="textSecondary">User</Typography>
+                                        <Typography variant="body1" fontWeight={500}>
+                                            {viewDialog.subscription.user?.name || '-'}
+                                        </Typography>
+                                        <Typography variant="body2" color="textSecondary">
+                                            {viewDialog.subscription.user?.email || ''}
+                                        </Typography>
+                                    </Grid>
+                                    <Grid item xs={6}>
+                                        <Typography variant="subtitle2" color="textSecondary">Plan</Typography>
+                                        <Typography variant="body1">{viewDialog.subscription.rate_card?.name || '-'}</Typography>
+                                    </Grid>
+                                    <Grid item xs={6}>
+                                        <Typography variant="subtitle2" color="textSecondary">Amount</Typography>
+                                        <Typography variant="body1" fontWeight={600} color={colors.primary}>
+                                            {viewDialog.subscription.amount || '-'}
+                                        </Typography>
+                                    </Grid>
+                                    <Grid item xs={6}>
+                                        <Typography variant="subtitle2" color="textSecondary">Status</Typography>
+                                        {getStatusChip(viewDialog.subscription.status, viewDialog.subscription.expiry_date)}
+                                    </Grid>
+                                    <Grid item xs={6}>
+                                        <Typography variant="subtitle2" color="textSecondary">Payment Method</Typography>
+                                        <Typography variant="body1">{viewDialog.subscription.payment_method || '-'}</Typography>
+                                    </Grid>
+                                    <Grid item xs={6}>
+                                        <Typography variant="subtitle2" color="textSecondary">Reference</Typography>
+                                        <Typography variant="body1" sx={{ fontFamily: 'monospace' }}>
+                                            {viewDialog.subscription.payment_reference || '-'}
+                                        </Typography>
+                                    </Grid>
+                                    <Grid item xs={6}>
+                                        <Typography variant="subtitle2" color="textSecondary">Created At</Typography>
+                                        <Typography variant="body1">{formatDate(viewDialog.subscription.created_at)}</Typography>
+                                    </Grid>
+                                    <Grid item xs={6}>
+                                        <Typography variant="subtitle2" color="textSecondary">Start Date</Typography>
+                                        <Typography variant="body1">{formatDate(viewDialog.subscription.start_date)}</Typography>
+                                    </Grid>
+                                    <Grid item xs={6}>
+                                        <Typography variant="subtitle2" color="textSecondary">Expiry Date</Typography>
+                                        <Typography variant="body1">{formatDate(viewDialog.subscription.expiry_date)}</Typography>
+                                    </Grid>
+                                    <Grid item xs={12}>
+                                        <Typography variant="subtitle2" color="textSecondary">Admin Notes</Typography>
+                                        <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
+                                            {viewDialog.subscription.admin_notes || 'No notes'}
+                                        </Typography>
+                                    </Grid>
+                                    {viewDialog.subscription.invoice && (
+                                        <Grid item xs={12}>
+                                            <Divider sx={{ my: 1 }} />
+                                            <Typography variant="subtitle1" fontWeight={600}>Invoice</Typography>
+                                            <Box display="flex" gap={2} mt={1}>
+                                                <Typography variant="body2">
+                                                    <strong>Number:</strong> {viewDialog.subscription.invoice.number}
+                                                </Typography>
+                                                <Typography variant="body2">
+                                                    <strong>Status:</strong> {viewDialog.subscription.invoice.status_label}
+                                                </Typography>
+                                                <Typography variant="body2">
+                                                    <strong>Amount:</strong> {viewDialog.subscription.invoice.amount}
+                                                </Typography>
+                                            </Box>
+                                            {viewDialog.subscription.invoice.pdf_url && (
+                                                <Button
+                                                    size="small"
+                                                    variant="outlined"
+                                                    startIcon={<DownloadIcon />}
+                                                    onClick={() => handleViewInvoice(viewDialog.subscription)}
+                                                    sx={{ mt: 1 }}
+                                                >
+                                                    Download Invoice
+                                                </Button>
+                                            )}
+                                        </Grid>
+                                    )}
+                                </Grid>
+                            </Box>
+                        )}
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={() => setViewDialog({ open: false, subscription: null })}>Close</Button>
                     </DialogActions>
                 </Dialog>
             </Box>
