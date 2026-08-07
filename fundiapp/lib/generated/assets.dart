@@ -5,18 +5,31 @@ import 'package:flutter/widgets.dart';
 class Assets {
   Assets._();
 
-  static const AssetGenImage airtel = AssetGenImage('assets/icons/airtel.png');
-  static const AssetGenImage backimg =
-      AssetGenImage('assets/images/backimg.jpg');
-  static const AssetGenImage home = AssetGenImage('assets/images/home.jpg');
-  static const AssetGenImage mixxByYas =
-      AssetGenImage('assets/icons/mixx_by_yas.png');
-  static const AssetGenImage mpesa = AssetGenImage('assets/icons/mpesa.png');
-  static const AssetGenImage nearbyfundiImage =
-      AssetGenImage('assets/images/nearbyfundi_image.jpg');
-  static const AssetGenImage nearbylogo =
-      AssetGenImage('assets/icons/nearbylogo.png');
-  static const AssetGenImage netsaf = AssetGenImage('assets/icons/netsaf.png');
+  static const $AssetsIconsGen icons = $AssetsIconsGen();
+  static const $AssetsImagesGen images = $AssetsImagesGen();
+}
+
+class $AssetsImagesGen {
+  const $AssetsImagesGen();
+
+  final AssetGenImage backimg =
+      const AssetGenImage('assets/images/backimg.jpg');
+  final AssetGenImage home = const AssetGenImage('assets/images/home.jpg');
+  final AssetGenImage nearbyfundiImage =
+      const AssetGenImage('assets/images/nearbyfundi_image.jpg');
+}
+
+class $AssetsIconsGen {
+  const $AssetsIconsGen();
+
+  final AssetGenImage airtel = const AssetGenImage('assets/icons/airtel.png');
+  final AssetGenImage mixxByYas =
+      const AssetGenImage('assets/icons/mixx_by_yas.png');
+  final AssetGenImage mpesa = const AssetGenImage('assets/icons/mpesa.png');
+  final AssetGenImage nearby = const AssetGenImage('assets/icons/nearby.png');
+  final AssetGenImage nearbylogo =
+      const AssetGenImage('assets/icons/nearbylogo.png');
+  final AssetGenImage netsaf = const AssetGenImage('assets/icons/netsaf.png');
 }
 
 class AssetGenImage {

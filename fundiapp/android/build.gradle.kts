@@ -4,7 +4,21 @@ allprojects {
         mavenCentral()
     }
 
+    // Intercept project evaluation before plugins load their build.gradle files
     subprojects {
+        project.beforeEvaluate {
+            if (project.name == "flutter_inappwebview_android") {
+                val buildGradleFile = project.file("build.gradle")
+                if (buildGradleFile.exists()) {
+                    val content = buildGradleFile.readText()
+                    if (content.contains("proguard-android.txt")) {
+                        val updatedContent = content.replace("proguard-android.txt", "proguard-android-optimize.txt")
+                        buildGradleFile.writeText(updatedContent)
+                    }
+                }
+            }
+        }
+
         afterEvaluate {
             extensions.findByName("android")?.let { android ->
                 val ext = android as com.android.build.gradle.BaseExtension

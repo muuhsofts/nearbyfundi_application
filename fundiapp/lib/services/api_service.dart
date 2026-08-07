@@ -197,46 +197,111 @@ class ApiService {
   }
 
   // ============================================================
-  //  FUNDI – POSTS
+  //  FUNDI – POSTS (WITH YOUTUBE SUPPORT)
   // ============================================================
 
   Future<ApiResponse> getMyPosts() => _get('/v5/my-posts');
 
   Future<ApiResponse> createPost(Map<String, dynamic> data) async {
-    if (data.containsKey('image') && data['image'] is String && data['image'].isNotEmpty) {
+    final hasImage = data.containsKey('image') &&
+        data['image'] is String &&
+        data['image'].isNotEmpty;
+
+    if (hasImage) {
       final file = File(data['image']);
       if (await file.exists()) {
-        final formData = FormData.fromMap({
-          'title': data['title'],
-          'content': data['content'],
-          'image': await MultipartFile.fromFile(file.path),
-        });
+        final formData = FormData();
+
+        // Add fields
+        formData.fields.add(MapEntry('title', data['title'] ?? ''));
+        formData.fields.add(MapEntry('content', data['content'] ?? ''));
+
+        // Add YouTube URL if present
+        if (data.containsKey('youtube_url') && data['youtube_url'] != null && data['youtube_url'].isNotEmpty) {
+          formData.fields.add(MapEntry('youtube_url', data['youtube_url']));
+        }
+
+        // Add image file
+        formData.files.add(
+          MapEntry('image', await MultipartFile.fromFile(file.path)),
+        );
+
         return _post('/v5/posts', data: formData);
       }
     }
-    return _post('/v5/posts', data: {
-      'title': data['title'],
-      'content': data['content'],
-    });
+
+    // No image - send as JSON
+    final Map<String, dynamic> jsonData = {
+      'title': data['title'] ?? '',
+      'content': data['content'] ?? '',
+    };
+
+    if (data.containsKey('youtube_url') && data['youtube_url'] != null && data['youtube_url'].isNotEmpty) {
+      jsonData['youtube_url'] = data['youtube_url'];
+    }
+
+    return _post('/v5/posts', data: jsonData);
   }
 
   Future<ApiResponse> updatePost(int id, Map<String, dynamic> data) async {
-    if (data.containsKey('image') && data['image'] is String && data['image'].isNotEmpty) {
+    final hasImage = data.containsKey('image') &&
+        data['image'] is String &&
+        data['image'].isNotEmpty;
+
+    if (hasImage) {
       final file = File(data['image']);
       if (await file.exists()) {
-        final formData = FormData.fromMap({
-          '_method': 'PUT',
-          'title': data['title'],
-          'content': data['content'],
-          'image': await MultipartFile.fromFile(file.path),
-        });
+        final formData = FormData();
+
+        // Add _method for PUT
+        formData.fields.add(MapEntry('_method', 'PUT'));
+
+        // Add fields
+        if (data.containsKey('title')) {
+          formData.fields.add(MapEntry('title', data['title'] ?? ''));
+        }
+        if (data.containsKey('content')) {
+          formData.fields.add(MapEntry('content', data['content'] ?? ''));
+        }
+
+        // Handle YouTube URL
+        if (data.containsKey('youtube_url')) {
+          if (data['youtube_url'] == null || data['youtube_url'].toString().isEmpty) {
+            formData.fields.add(MapEntry('youtube_url', ''));
+          } else {
+            formData.fields.add(MapEntry('youtube_url', data['youtube_url']));
+          }
+        }
+
+        // Add image file
+        formData.files.add(
+          MapEntry('image', await MultipartFile.fromFile(file.path)),
+        );
+
         return _post('/v5/posts/$id', data: formData);
       }
     }
-    return _put('/v5/posts/$id', data: {
-      'title': data['title'],
-      'content': data['content'],
-    });
+
+    // No image - send as JSON
+    final Map<String, dynamic> jsonData = {};
+
+    if (data.containsKey('title')) {
+      jsonData['title'] = data['title'] ?? '';
+    }
+    if (data.containsKey('content')) {
+      jsonData['content'] = data['content'] ?? '';
+    }
+
+    // Handle YouTube URL
+    if (data.containsKey('youtube_url')) {
+      if (data['youtube_url'] == null || data['youtube_url'].toString().isEmpty) {
+        jsonData['youtube_url'] = '';
+      } else {
+        jsonData['youtube_url'] = data['youtube_url'];
+      }
+    }
+
+    return _put('/v5/posts/$id', data: jsonData);
   }
 
   Future<ApiResponse> deletePost(int id) => _delete('/v5/posts/$id');

@@ -1,11 +1,11 @@
-// lib/providers/post_provider.dart
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../models/post.dart';
 
 class PostProvider extends ChangeNotifier {
   final ApiService _api = ApiService();
+
   List<Post> _posts = [];
   int _page = 1;
   bool _hasMore = true;
@@ -39,7 +39,6 @@ class PostProvider extends ChangeNotifier {
     notifyListeners();
 
     final res = await _api.getPosts(page: _page, technicianId: _filterTechnicianId);
-
     if (res.success && res.data != null) {
       final data = res.data as Map<String, dynamic>;
       final List<dynamic> items = data['data'] ?? [];
@@ -51,7 +50,6 @@ class PostProvider extends ChangeNotifier {
     } else {
       _error = res.message;
     }
-
     _isLoading = false;
     notifyListeners();
   }
@@ -61,12 +59,22 @@ class PostProvider extends ChangeNotifier {
     _isLoading = true;
     _error = null;
     notifyListeners();
+
     final res = await _api.getMyPosts();
     if (res.success && res.data != null) {
       _posts = (res.data as List).map((e) => Post.fromJson(e)).toList();
       _error = null;
+
+      // Debug all posts
+      for (var p in _posts) {
+        debugPrint('📌 Post #${p.id} | image: ${p.image}');
+        debugPrint('   youtubeUrl: ${p.youtubeUrl}');
+        debugPrint('   youtubeEmbed: ${p.youtubeEmbed}');
+        debugPrint('   hasYoutubeVideo: ${p.hasYoutubeVideo}');
+      }
     } else {
       _error = res.message;
+      debugPrint('❌ fetchMyPosts error: $_error');
     }
     _isLoading = false;
     notifyListeners();
@@ -76,6 +84,7 @@ class PostProvider extends ChangeNotifier {
     _isLoading = true;
     _error = null;
     notifyListeners();
+
     final res = await _api.createPost(data);
     _isLoading = false;
     if (res.success) {
@@ -91,6 +100,7 @@ class PostProvider extends ChangeNotifier {
     _isLoading = true;
     _error = null;
     notifyListeners();
+
     final res = await _api.updatePost(id, data);
     _isLoading = false;
     if (res.success) {
@@ -106,6 +116,7 @@ class PostProvider extends ChangeNotifier {
     _isLoading = true;
     _error = null;
     notifyListeners();
+
     final res = await _api.deletePost(id);
     _isLoading = false;
     if (res.success) {
@@ -124,12 +135,17 @@ class PostProvider extends ChangeNotifier {
     final index = _posts.indexWhere((p) => p.id == id);
     if (index != -1) {
       final post = _posts[index];
-      final newLikesCount = post.likedByUser ? post.likesCount - 1 : post.likesCount + 1;
+      final newLikesCount =
+      post.likedByUser ? post.likesCount - 1 : post.likesCount + 1;
+
+      // IMPORTANT: keep youtubeUrl & youtubeEmbed
       _posts[index] = Post(
         id: post.id,
         title: post.title,
         content: post.content,
         image: post.image,
+        youtubeUrl: post.youtubeUrl,
+        youtubeEmbed: post.youtubeEmbed,
         likesCount: newLikesCount,
         commentsCount: post.commentsCount,
         technicianName: post.technicianName,
