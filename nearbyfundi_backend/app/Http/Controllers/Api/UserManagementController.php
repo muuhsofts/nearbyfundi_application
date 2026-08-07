@@ -16,22 +16,103 @@ class UserManagementController extends BaseApiController
     use Auditable;
 
     // ===== LIST =====
-    public function index()
+    public function index(Request $request)
     {
         $this->checkPermission('users.view');
-        return $this->successResponse(User::with('roles', 'technician')->paginate(20));
+        
+        $query = User::with('roles', 'technician');
+        
+        // Apply filters
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'LIKE', "%{$search}%")
+                  ->orWhere('email', 'LIKE', "%{$search}%")
+                  ->orWhere('phone', 'LIKE', "%{$search}%");
+            });
+        }
+        
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+        
+        if ($request->filled('role')) {
+            $query->whereHas('roles', function($q) use ($request) {
+                $q->where('name', $request->role);
+            });
+        }
+        
+        $perPage = $request->input('per_page', 20);
+        $users = $query->orderBy('created_at', 'desc')->paginate($perPage);
+        
+        // ✅ Fix: Return paginated data in the expected format
+        return $this->successResponse([
+            'data' => $users->items(),
+            'pagination' => [
+                'total' => $users->total(),
+                'per_page' => $users->perPage(),
+                'current_page' => $users->currentPage(),
+                'last_page' => $users->lastPage(),
+                'from' => $users->firstItem(),
+                'to' => $users->lastItem(),
+            ]
+        ], 'Users retrieved successfully');
     }
 
-    public function customers()
+    public function customers(Request $request)
     {
         $this->checkPermission('users.view');
-        return $this->successResponse(User::role('CUSTOMER')->with('technician')->paginate(20));
+        
+        $query = User::role('CUSTOMER')->with('technician');
+        
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'LIKE', "%{$search}%")
+                  ->orWhere('email', 'LIKE', "%{$search}%");
+            });
+        }
+        
+        $perPage = $request->input('per_page', 20);
+        $users = $query->orderBy('created_at', 'desc')->paginate($perPage);
+        
+        return $this->successResponse([
+            'data' => $users->items(),
+            'pagination' => [
+                'total' => $users->total(),
+                'per_page' => $users->perPage(),
+                'current_page' => $users->currentPage(),
+                'last_page' => $users->lastPage(),
+            ]
+        ], 'Customers retrieved successfully');
     }
 
-    public function fundis()
+    public function fundis(Request $request)
     {
         $this->checkPermission('users.view');
-        return $this->successResponse(User::role('FUNDI')->with('technician')->paginate(20));
+        
+        $query = User::role('FUNDI')->with('technician');
+        
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'LIKE', "%{$search}%")
+                  ->orWhere('email', 'LIKE', "%{$search}%");
+            });
+        }
+        
+        $perPage = $request->input('per_page', 20);
+        $users = $query->orderBy('created_at', 'desc')->paginate($perPage);
+        
+        return $this->successResponse([
+            'data' => $users->items(),
+            'pagination' => [
+                'total' => $users->total(),
+                'per_page' => $users->perPage(),
+                'current_page' => $users->currentPage(),
+                'last_page' => $users->lastPage(),
+            ]
+        ], 'Fundis retrieved successfully');
     }
 
     public function stats()
@@ -42,9 +123,13 @@ class UserManagementController extends BaseApiController
             'customers'    => User::role('CUSTOMER')->count(),
             'fundis'       => User::role('FUNDI')->count(),
             'admins'       => User::role('ADMINISTRATOR')->count(),
+            'monitoring'   => User::role('MONITORING_OFFICER')->count(),
             'active'       => User::where('is_active', true)->count(),
             'inactive'     => User::where('is_active', false)->count(),
+            'pending'      => User::where('status', 'pending')->count(),
+            'suspended'    => User::where('status', 'suspended')->count(),
             'verified'     => User::whereNotNull('email_verified_at')->count(),
+            'unverified'   => User::whereNull('email_verified_at')->count(),
         ]);
     }
 
@@ -185,7 +270,8 @@ class UserManagementController extends BaseApiController
     public function show($id)
     {
         $this->checkPermission('users.view');
-        return $this->successResponse(User::with('roles', 'technician')->findOrFail($id));
+        $user = User::with('roles', 'technician')->findOrFail($id);
+        return $this->successResponse($user);
     }
 
     public function store(Request $request)
@@ -259,10 +345,32 @@ class UserManagementController extends BaseApiController
     }
 
     // ===== SOFT DELETE RESTORE & FORCE =====
-    public function trashed()
+    public function trashed(Request $request)
     {
         $this->checkPermission('users.view');
-        return $this->successResponse(User::onlyTrashed()->with('roles')->paginate(20));
+        
+        $query = User::onlyTrashed()->with('roles');
+        
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'LIKE', "%{$search}%")
+                  ->orWhere('email', 'LIKE', "%{$search}%");
+            });
+        }
+        
+        $perPage = $request->input('per_page', 20);
+        $users = $query->orderBy('deleted_at', 'desc')->paginate($perPage);
+        
+        return $this->successResponse([
+            'data' => $users->items(),
+            'pagination' => [
+                'total' => $users->total(),
+                'per_page' => $users->perPage(),
+                'current_page' => $users->currentPage(),
+                'last_page' => $users->lastPage(),
+            ]
+        ], 'Deleted users retrieved successfully');
     }
 
     public function restore($id)

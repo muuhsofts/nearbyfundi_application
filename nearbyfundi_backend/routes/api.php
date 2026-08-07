@@ -266,6 +266,7 @@ Route::prefix('v12')->middleware(['auth:sanctum', 'active.session'])->group(func
     Route::get('reports/blog', [ReportController::class, 'blogReport']);
     Route::get('reports/portfolio', [ReportController::class, 'portfolioReport']);
     Route::get('reports/revenue', [ReportController::class, 'revenueReport']);
+    Route::get('reports/subscriptions', [ReportController::class, 'subscriptionsReport']); // ✅ Added
 });
 
 // =============================================
@@ -316,8 +317,6 @@ Route::prefix('v15')->middleware(['auth:sanctum', 'active.session'])->group(func
         Route::delete('/clear', [NotificationController::class, 'clearAll']);
     });
 });
-
-
 
 // =============================================
 // V16 – SUBSCRIPTIONS & RATE CARDS

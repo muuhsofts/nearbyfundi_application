@@ -10,6 +10,7 @@ use App\Models\Comment;
 use App\Models\Portfolio;
 use App\Models\Service;
 use App\Models\Like;
+use App\Models\Subscription;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -275,6 +276,163 @@ class ReportController extends BaseApiController
         ]);
     }
 
+    /**
+     * Subscriptions report – with stats, trends, and filters.
+     */
+    public function subscriptionsReport(Request $request)
+    {
+        $this->checkPermission('reports.view');
+
+        $query = Subscription::with(['user', 'rateCard', 'invoice']);
+
+        // Filters
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+        if ($request->filled('payment_method')) {
+            $query->where('payment_method', 'like', "%{$request->payment_method}%");
+        }
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('payment_reference', 'like', "%{$search}%")
+                    ->orWhereHas('user', function ($uq) use ($search) {
+                        $uq->where('name', 'like', "%{$search}%")
+                            ->orWhere('email', 'like', "%{$search}%")
+                            ->orWhere('phone', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        // Date range from period filters
+        list($start, $end) = $this->parseDateRange($request);
+        if ($start) {
+            $query->whereDate('created_at', '>=', $start);
+        }
+        if ($end) {
+            $query->whereDate('created_at', '<=', $end);
+        }
+
+        $subscriptions = $query->orderBy('created_at', 'desc')
+            ->paginate($request->input('per_page', 20));
+
+        // ✅ Auto-mark expired subscriptions
+        $expiredSubscriptions = Subscription::where('status', 'active')
+            ->where('expiry_date', '<', now())
+            ->get();
+
+        foreach ($expiredSubscriptions as $expiredSub) {
+            $expiredSub->update(['status' => 'expired']);
+            if ($expiredSub->user) {
+                $expiredSub->user->update([
+                    'subscription_status' => 'expired',
+                ]);
+            }
+        }
+
+        // Stats
+        $stats = $this->getSubscriptionStats($start, $end);
+        $trend = $this->getSubscriptionTrend($start, $end);
+
+        // Format subscription data for frontend
+        $formattedData = $subscriptions->map(function ($sub) {
+            // Check if expired based on expiry date
+            $isExpired = $sub->expiry_date && Carbon::parse($sub->expiry_date)->isPast();
+            $status = $isExpired && $sub->status === 'active' ? 'expired' : $sub->status;
+
+            return [
+                'id' => $sub->id,
+                'user' => $sub->user ? [
+                    'id' => $sub->user->id,
+                    'name' => $sub->user->name,
+                    'email' => $sub->user->email,
+                ] : null,
+                'rate_card' => $sub->rateCard ? [
+                    'id' => $sub->rateCard->id,
+                    'name' => $sub->rateCard->name,
+                    'duration' => $sub->rateCard->duration_days . ' days',
+                ] : null,
+                'status' => $status,
+                'status_label' => $this->getStatusLabel($status),
+                'amount' => number_format($sub->amount_paid, 0) . ' ' . ($sub->currency ?? 'TZS'),
+                'payment_method' => $sub->payment_method,
+                'payment_reference' => $sub->payment_reference,
+                'payment_proof' => $sub->payment_proof ? url('storage/' . $sub->payment_proof) : null,
+                'start_date' => $sub->start_date,
+                'expiry_date' => $sub->expiry_date,
+                'days_remaining' => $sub->expiry_date ? now()->diffInDays($sub->expiry_date, false) : null,
+                'approved_at' => $sub->approved_at,
+                'created_at' => $sub->created_at,
+                'invoice' => $sub->invoice ? [
+                    'id' => $sub->invoice->id,
+                    'number' => $sub->invoice->invoice_number,
+                    'amount' => $sub->invoice->formatted_amount,
+                    'status' => $sub->invoice->status,
+                    'status_label' => $sub->invoice->status_label,
+                    'pdf_url' => $sub->invoice->pdf_path ? url('storage/' . $sub->invoice->pdf_path) : null,
+                ] : null,
+            ];
+        });
+
+        return $this->successResponse([
+            'data' => [
+                'data' => $formattedData,
+                'total' => $subscriptions->total(),
+                'per_page' => $subscriptions->perPage(),
+                'current_page' => $subscriptions->currentPage(),
+                'last_page' => $subscriptions->lastPage(),
+            ],
+            'stats' => $stats,
+            'trend' => $trend,
+        ]);
+    }
+
+    /**
+     * Revenue report – combined with subscription data.
+     */
+    public function revenueReport(Request $request)
+    {
+        $this->checkPermission('reports.view');
+
+        list($start, $end) = $this->parseDateRange($request);
+
+        $query = Subscription::query();
+        if ($start) $query->whereDate('created_at', '>=', $start);
+        if ($end)   $query->whereDate('created_at', '<=', $end);
+
+        // ✅ FIX: Sum ALL subscriptions amount_paid for total revenue
+        $totalRevenue = $query->sum('amount_paid');
+
+        // Revenue by payment method - all subscriptions
+        $revenueByMethod = (clone $query)->select('payment_method', DB::raw('sum(amount_paid) as total'))
+            ->groupBy('payment_method')
+            ->get();
+
+        // Revenue by plan - all subscriptions
+        $revenueByPlan = (clone $query)->select('rate_card_id', DB::raw('sum(amount_paid) as total'))
+            ->groupBy('rate_card_id')
+            ->with('rateCard:id,name')
+            ->get();
+
+        // Monthly revenue trend - all subscriptions
+        $monthlyTrend = Subscription::select(
+                DB::raw('DATE_FORMAT(created_at, "%Y-%m") as month'),
+                DB::raw('SUM(amount_paid) as total')
+            )
+            ->when($start, fn($q) => $q->whereDate('created_at', '>=', $start))
+            ->when($end,   fn($q) => $q->whereDate('created_at', '<=', $end))
+            ->groupBy('month')
+            ->orderBy('month', 'asc')
+            ->get();
+
+        return $this->successResponse([
+            'total_revenue' => number_format($totalRevenue, 0) . ' TZS',
+            'by_payment_method' => $revenueByMethod,
+            'by_plan' => $revenueByPlan,
+            'monthly_trend' => $monthlyTrend,
+        ]);
+    }
+
     // ---------- Aggregation Helpers ----------
 
     private function getUserStats($start, $end)
@@ -316,6 +474,61 @@ class ReportController extends BaseApiController
         return ['total' => $total, 'by_status' => $statuses];
     }
 
+    /**
+     * Get subscription statistics.
+     * ✅ FIX: total_revenue sums ALL subscriptions amount_paid
+     */
+    private function getSubscriptionStats($start, $end)
+    {
+        $query = Subscription::query();
+        if ($start) $query->whereDate('created_at', '>=', $start);
+        if ($end)   $query->whereDate('created_at', '<=', $end);
+
+        $total = $query->count();
+        
+        // Active subscriptions (not expired)
+        $active = (clone $query)->where('status', 'active')
+            ->where(function($q) {
+                $q->whereNull('expiry_date')
+                    ->orWhere('expiry_date', '>', now());
+            })
+            ->count();
+
+        // Pending
+        $pending = (clone $query)->where('status', 'pending')->count();
+
+        // Expired (by status OR expiry date)
+        $expired = (clone $query)->where(function($q) {
+            $q->where('status', 'expired')
+                ->orWhere(function($sq) {
+                    $sq->where('status', 'active')
+                        ->where('expiry_date', '<', now());
+                });
+        })->count();
+
+        // Cancelled
+        $cancelled = (clone $query)->where('status', 'cancelled')->count();
+
+        // ✅ FIX: Total Revenue - sum ALL subscriptions amount_paid
+        // This includes all statuses since all have been paid
+        $totalRevenue = (clone $query)->sum('amount_paid');
+
+        // Revenue by payment method - all subscriptions
+        $revenueByMethod = (clone $query)->select('payment_method', DB::raw('sum(amount_paid) as total'))
+            ->groupBy('payment_method')
+            ->get();
+
+        return [
+            'total' => $total,
+            'active' => $active,
+            'pending' => $pending,
+            'expired' => $expired,
+            'cancelled' => $cancelled,
+            'total_revenue' => $totalRevenue,
+            'revenue_by_method' => $revenueByMethod,
+        ];
+    }
+
     private function getUserTrend($start, $end)
     {
         return User::select(
@@ -353,6 +566,36 @@ class ReportController extends BaseApiController
             ->groupBy('date')
             ->orderBy('date', 'asc')
             ->get();
+    }
+
+    /**
+     * Get subscription trend (daily new subscriptions).
+     */
+    private function getSubscriptionTrend($start, $end)
+    {
+        return Subscription::select(
+                DB::raw('DATE(created_at) as date'),
+                DB::raw('COUNT(*) as total')
+            )
+            ->when($start, fn($q) => $q->whereDate('created_at', '>=', $start))
+            ->when($end,   fn($q) => $q->whereDate('created_at', '<=', $end))
+            ->groupBy('date')
+            ->orderBy('date', 'asc')
+            ->get();
+    }
+
+    /**
+     * Get status label.
+     */
+    private function getStatusLabel($status)
+    {
+        $map = [
+            'pending' => 'Pending',
+            'active' => 'Active',
+            'expired' => 'Expired',
+            'cancelled' => 'Cancelled',
+        ];
+        return $map[$status] ?? $status;
     }
 
     /**

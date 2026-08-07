@@ -155,7 +155,7 @@
     <!-- ========================================== -->
     <div class="invoice-header">
         <div class="company-name">NETSAF FINTECH</div>
-        <div class="company-tagline">Financial Technology Solutions</div>
+        <div class="company-tagline"></div>
         <h1>INVOICE</h1>
         <div class="subtitle">#{{ $invoice->invoice_number }}</div>
     </div>
@@ -240,7 +240,7 @@
     <div class="footer">
         <p>
             <span class="company-name">NETSAF FINTECH</span> &bull; 
-            Financial Technology Solutions
+            
         </p>
         <p>Thank you for your business!</p>
         <p style="font-size: 11px; color: #aaa; margin-top: 10px;">

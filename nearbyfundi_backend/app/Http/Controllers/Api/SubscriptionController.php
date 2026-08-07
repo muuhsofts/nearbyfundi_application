@@ -330,7 +330,16 @@ class SubscriptionController extends BaseApiController
     public function checkStatus(Request $request)
     {
         $user = $request->user();
+        
+        // ✅ FIX: Check if subscription is actually expired
         $hasActive = $user->hasActiveSubscription();
+        
+        // If subscription is marked active but expired, fix it
+        if (!$hasActive && $user->subscription_status === 'active') {
+            $user->update([
+                'subscription_status' => 'expired',
+            ]);
+        }
 
         return $this->successResponse([
             'has_active_subscription' => $hasActive,
@@ -385,6 +394,22 @@ class SubscriptionController extends BaseApiController
 
         $subscriptions = $query->orderBy('created_at', 'desc')->paginate($request->input('per_page', 20));
 
+        // ✅ FIX: Auto-mark expired subscriptions
+        $expiredSubscriptions = Subscription::where('status', Subscription::STATUS_ACTIVE)
+            ->where('expiry_date', '<', now())
+            ->get();
+
+        foreach ($expiredSubscriptions as $expiredSub) {
+            $expiredSub->update(['status' => Subscription::STATUS_EXPIRED]);
+            
+            // Update user status
+            if ($expiredSub->user) {
+                $expiredSub->user->update([
+                    'subscription_status' => 'expired',
+                ]);
+            }
+        }
+
         return $this->successResponse([
             'data'       => $subscriptions->map(fn($sub) => [
                 'id'               => $sub->id,
@@ -432,8 +457,13 @@ class SubscriptionController extends BaseApiController
             ],
             'filters'    => [
                 'pending_count'  => Subscription::where('status', Subscription::STATUS_PENDING)->count(),
-                'active_count'   => Subscription::where('status', Subscription::STATUS_ACTIVE)->where('expiry_date', '>', now())->count(),
-                'expired_count'  => Subscription::where('status', Subscription::STATUS_EXPIRED)->orWhere('expiry_date', '<=', now())->count(),
+                'active_count'   => Subscription::where('status', Subscription::STATUS_ACTIVE)
+                    ->where('expiry_date', '>', now())
+                    ->count(),
+                'expired_count'  => Subscription::where(function($query) {
+                    $query->where('status', Subscription::STATUS_EXPIRED)
+                        ->orWhere('expiry_date', '<=', now());
+                })->count(),
                 'cancelled_count'=> Subscription::where('status', Subscription::STATUS_CANCELLED)->count(),
             ],
         ], 'Subscriptions retrieved successfully');
@@ -443,86 +473,85 @@ class SubscriptionController extends BaseApiController
      * Admin: Approve a subscription.
      * POST /api/v16/admin/subscriptions/{id}/approve
      */
-
-public function approve(Request $request, $id)
-{
-    $user = auth()->user();
-    if (!$user || (!$user->hasRole('ADMINISTRATOR') && !$user->can('subscriptions.approve'))) {
-        return $this->forbidden('You need administrator role or subscriptions.approve permission.');
-    }
-
-    $subscription = Subscription::with(['user', 'rateCard'])->findOrFail($id);
-
-    if ($subscription->status !== Subscription::STATUS_PENDING) {
-        return $this->errorResponse('This subscription is not pending approval.', 422);
-    }
-
-    DB::beginTransaction();
-
-    try {
-        $user = $subscription->user;
-        $rateCard = $subscription->rateCard;
-
-        $expiryDate = now()->addDays($rateCard->duration_days);
-
-        $subscription->update([
-            'status'      => Subscription::STATUS_ACTIVE,
-            'start_date'  => now(),
-            'expiry_date' => $expiryDate,
-            'approved_at' => now(),
-            'approved_by' => $request->user()->id,
-        ]);
-
-        // ✅ FIX: Update user's subscription status
-        $user->update([
-            'subscription_status'      => 'active',
-            'subscription_expires_at'  => $expiryDate,
-            'current_subscription_id'  => $subscription->id,
-        ]);
-
-        if ($subscription->invoice) {
-            $subscription->invoice->update([
-                'status'  => Invoice::STATUS_PAID,
-                'paid_at' => now(),
-            ]);
-            $this->generatePdfInvoice($subscription->invoice);
+    public function approve(Request $request, $id)
+    {
+        $user = auth()->user();
+        if (!$user || (!$user->hasRole('ADMINISTRATOR') && !$user->can('subscriptions.approve'))) {
+            return $this->forbidden('You need administrator role or subscriptions.approve permission.');
         }
 
-        // Notify user
-        $this->createNotification(
-            $user->id,
-            'Subscription Approved! 🎉',
-            "Your {$rateCard->name} subscription has been approved. Your account is now active until {$expiryDate->format('M d, Y')}.",
-            'subscription_approved',
-            [
-                'subscription_id' => $subscription->id,
-                'rate_card'       => $rateCard->name,
-                'expiry_date'     => $expiryDate->toIso8601String(),
-                'invoice_number'  => $subscription->invoice?->invoice_number,
-            ]
-        );
+        $subscription = Subscription::with(['user', 'rateCard'])->findOrFail($id);
 
-        $this->sendSubscriptionApprovedEmail($user, $subscription);
-        $this->logAudit('approve_subscription', 'subscription', $subscription->id, "Subscription approved by admin {$request->user()->id}");
+        if ($subscription->status !== Subscription::STATUS_PENDING) {
+            return $this->errorResponse('This subscription is not pending approval.', 422);
+        }
 
-        DB::commit();
+        DB::beginTransaction();
 
-        return $this->successResponse([
-            'subscription' => $subscription->load(['rateCard', 'user', 'invoice']),
-            'user' => [
-                'id'                    => $user->id,
-                'name'                  => $user->name,
-                'subscription_status'   => $user->subscription_status,
-                'expires_at'            => $user->subscription_expires_at,
-            ],
-        ], 'Subscription approved successfully.');
+        try {
+            $user = $subscription->user;
+            $rateCard = $subscription->rateCard;
 
-    } catch (\Exception $e) {
-        DB::rollBack();
-        \Log::error('Failed to approve subscription: ' . $e->getMessage());
-        return $this->serverError('Failed to approve subscription: ' . $e->getMessage());
+            $expiryDate = now()->addDays($rateCard->duration_days);
+
+            $subscription->update([
+                'status'      => Subscription::STATUS_ACTIVE,
+                'start_date'  => now(),
+                'expiry_date' => $expiryDate,
+                'approved_at' => now(),
+                'approved_by' => $request->user()->id,
+            ]);
+
+            // ✅ FIX: Update user's subscription status
+            $user->update([
+                'subscription_status'      => 'active',
+                'subscription_expires_at'  => $expiryDate,
+                'current_subscription_id'  => $subscription->id,
+            ]);
+
+            if ($subscription->invoice) {
+                $subscription->invoice->update([
+                    'status'  => Invoice::STATUS_PAID,
+                    'paid_at' => now(),
+                ]);
+                $this->generatePdfInvoice($subscription->invoice);
+            }
+
+            // Notify user
+            $this->createNotification(
+                $user->id,
+                'Subscription Approved! 🎉',
+                "Your {$rateCard->name} subscription has been approved. Your account is now active until {$expiryDate->format('M d, Y')}.",
+                'subscription_approved',
+                [
+                    'subscription_id' => $subscription->id,
+                    'rate_card'       => $rateCard->name,
+                    'expiry_date'     => $expiryDate->toIso8601String(),
+                    'invoice_number'  => $subscription->invoice?->invoice_number,
+                ]
+            );
+
+            $this->sendSubscriptionApprovedEmail($user, $subscription);
+            $this->logAudit('approve_subscription', 'subscription', $subscription->id, "Subscription approved by admin {$request->user()->id}");
+
+            DB::commit();
+
+            return $this->successResponse([
+                'subscription' => $subscription->load(['rateCard', 'user', 'invoice']),
+                'user' => [
+                    'id'                    => $user->id,
+                    'name'                  => $user->name,
+                    'subscription_status'   => $user->subscription_status,
+                    'expires_at'            => $user->subscription_expires_at,
+                ],
+            ], 'Subscription approved successfully.');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Failed to approve subscription: ' . $e->getMessage());
+            return $this->serverError('Failed to approve subscription: ' . $e->getMessage());
+        }
     }
-}
 
     /**
      * Admin: Reject a subscription.
@@ -589,11 +618,31 @@ public function approve(Request $request, $id)
             return $this->forbidden('You need administrator role or subscriptions.view permission.');
         }
 
+        // ✅ FIX: Auto-mark expired subscriptions
+        $expiredSubscriptions = Subscription::where('status', Subscription::STATUS_ACTIVE)
+            ->where('expiry_date', '<', now())
+            ->get();
+
+        foreach ($expiredSubscriptions as $expiredSub) {
+            $expiredSub->update(['status' => Subscription::STATUS_EXPIRED]);
+            
+            if ($expiredSub->user) {
+                $expiredSub->user->update([
+                    'subscription_status' => 'expired',
+                ]);
+            }
+        }
+
         return $this->successResponse([
             'total'             => Subscription::count(),
             'pending'           => Subscription::where('status', Subscription::STATUS_PENDING)->count(),
-            'active'            => Subscription::where('status', Subscription::STATUS_ACTIVE)->where('expiry_date', '>', now())->count(),
-            'expired'           => Subscription::where('status', Subscription::STATUS_EXPIRED)->orWhere('expiry_date', '<=', now())->count(),
+            'active'            => Subscription::where('status', Subscription::STATUS_ACTIVE)
+                ->where('expiry_date', '>', now())
+                ->count(),
+            'expired'           => Subscription::where(function($query) {
+                $query->where('status', Subscription::STATUS_EXPIRED)
+                    ->orWhere('expiry_date', '<=', now());
+            })->count(),
             'cancelled'         => Subscription::where('status', Subscription::STATUS_CANCELLED)->count(),
             'total_revenue'     => Subscription::where('status', Subscription::STATUS_ACTIVE)->sum('amount_paid'),
             'monthly_revenue'   => Subscription::where('status', Subscription::STATUS_ACTIVE)->whereMonth('created_at', now()->month)->sum('amount_paid'),
@@ -697,5 +746,30 @@ public function approve(Request $request, $id)
         } catch (\Exception $e) {
             \Log::error('Failed to send subscription approved email: ' . $e->getMessage());
         }
+    }
+
+    // ✅ FIX: Add method to check and update expired subscriptions
+    public function checkExpiredSubscriptions()
+    {
+        $expiredSubscriptions = Subscription::where('status', Subscription::STATUS_ACTIVE)
+            ->where('expiry_date', '<', now())
+            ->get();
+
+        $count = 0;
+        foreach ($expiredSubscriptions as $subscription) {
+            $subscription->update(['status' => Subscription::STATUS_EXPIRED]);
+            
+            if ($subscription->user) {
+                $subscription->user->update([
+                    'subscription_status' => 'expired',
+                ]);
+                $count++;
+            }
+        }
+
+        return $this->successResponse([
+            'expired_count' => $count,
+            'message' => "{$count} subscriptions marked as expired.",
+        ], 'Expired subscriptions updated.');
     }
 }
