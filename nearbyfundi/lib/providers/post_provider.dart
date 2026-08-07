@@ -1,3 +1,4 @@
+// providers/post_provider.dart
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../models/post.dart';
@@ -46,6 +47,13 @@ class PostProvider extends ChangeNotifier {
       _hasMore = data['next_page_url'] != null;
       _page++;
       _error = null;
+
+      // Debug YouTube data
+      for (var p in newPosts) {
+        debugPrint('📌 Post #${p.id} | youtubeUrl: ${p.youtubeUrl}');
+        debugPrint('   youtubeEmbed: ${p.youtubeEmbed}');
+        debugPrint('   hasYoutubeVideo: ${p.hasYoutubeVideo}');
+      }
     } else {
       _error = res.message;
     }
@@ -58,7 +66,6 @@ class PostProvider extends ChangeNotifier {
     final res = await _api.likePost(id);
     if (!res.success) return;
 
-    // Optimistic update
     final index = _posts.indexWhere((p) => p.id == id);
     if (index != -1) {
       final post = _posts[index];
@@ -68,6 +75,8 @@ class PostProvider extends ChangeNotifier {
         title: post.title,
         content: post.content,
         image: post.image,
+        youtubeUrl: post.youtubeUrl,
+        youtubeEmbed: post.youtubeEmbed,
         likesCount: newLikesCount,
         commentsCount: post.commentsCount,
         technicianName: post.technicianName,
@@ -83,7 +92,6 @@ class PostProvider extends ChangeNotifier {
   Future<void> addComment(int postId, String comment) async {
     final res = await _api.commentOnPost(postId, comment);
     if (res.success) {
-      // Refresh that single post to get updated comments and count
       await _refreshSinglePost(postId);
     }
   }

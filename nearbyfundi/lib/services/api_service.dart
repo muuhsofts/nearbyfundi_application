@@ -1,6 +1,9 @@
+// lib/services/api_service.dart
+
 import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:path/path.dart' as path;
 import '../config/app_config.dart';
 import 'storage_service.dart';
@@ -62,9 +65,9 @@ class ApiService {
     ));
   }
 
-  // ============================================================
+  // ═══════════════════════════════════════════════════════════════════════
   //  AUTH ENDPOINTS
-  // ============================================================
+  // ═══════════════════════════════════════════════════════════════════════
 
   Future<ApiResponse> register(Map<String, dynamic> data) =>
       _post('/v1/auth/register', data: data);
@@ -144,15 +147,15 @@ class ApiService {
 
   Future<ApiResponse> deleteAccount() => _delete('/v1/auth/account');
 
-  // ============================================================
+  // ═══════════════════════════════════════════════════════════════════════
   //  SERVICES
-  // ============================================================
+  // ═══════════════════════════════════════════════════════════════════════
 
   Future<ApiResponse> getServices() => _get('/v1/services');
 
-  // ============================================================
+  // ═══════════════════════════════════════════════════════════════════════
   //  TECHNICIANS (Customer side)
-  // ============================================================
+  // ═══════════════════════════════════════════════════════════════════════
 
   Future<ApiResponse> getNearbyTechnicians({
     required double lat,
@@ -179,9 +182,9 @@ class ApiService {
   Future<ApiResponse> getTechnicianDetail(int id) =>
       _get('/v1/technicians/$id');
 
-  // ============================================================
+  // ═══════════════════════════════════════════════════════════════════════
   //  TECHNICIAN PROFILE (Fundi side)
-  // ============================================================
+  // ═══════════════════════════════════════════════════════════════════════
 
   Future<ApiResponse> getTechnicianProfile() =>
       _get('/v1/technicians/profile');
@@ -216,19 +219,16 @@ class ApiService {
     return _post('/v1/technicians/upload-photo', data: formData);
   }
 
-  // ============================================================
+  // ═══════════════════════════════════════════════════════════════════════
   //  PORTFOLIOS (V3)
-  // ============================================================
+  // ═══════════════════════════════════════════════════════════════════════
 
-  /// Get portfolios for a specific technician (public)
   Future<ApiResponse> getTechnicianPortfolio(int technicianId) =>
       _get('/v3/portfolios/technician/$technicianId');
 
-  /// Get portfolios of the authenticated technician
   Future<ApiResponse> getMyPortfolios() =>
       _get('/v3/portfolios/my');
 
-  /// Create a new portfolio item with optional social links
   Future<ApiResponse> createPortfolio({
     required File imageFile,
     String? description,
@@ -251,7 +251,6 @@ class ApiService {
     return _post('/v3/portfolios', data: formData);
   }
 
-  /// Update an existing portfolio item
   Future<ApiResponse> updatePortfolio(
       int id, {
         File? imageFile,
@@ -286,17 +285,15 @@ class ApiService {
     });
   }
 
-  /// Delete a portfolio item
   Future<ApiResponse> deletePortfolio(int id) =>
       _delete('/v3/portfolios/$id');
 
-  /// Update only social links (dedicated endpoint)
   Future<ApiResponse> updatePortfolioSocialLinks(int id, Map<String, dynamic> socialLinks) =>
       _put('/v3/portfolios/$id/social-links', data: socialLinks);
 
-  // ============================================================
+  // ═══════════════════════════════════════════════════════════════════════
   //  REQUESTS (Booking)
-  // ============================================================
+  // ═══════════════════════════════════════════════════════════════════════
 
   Future<ApiResponse> createRequest(Map<String, dynamic> data) =>
       _post('/v4/requests', data: data);
@@ -309,9 +306,9 @@ class ApiService {
   Future<ApiResponse> cancelRequest(int id) =>
       _delete('/v4/requests/$id/cancel');
 
-  // ============================================================
-  //  BLOG (Posts, Comments, Likes)
-  // ============================================================
+  // ═══════════════════════════════════════════════════════════════════════
+  //  BLOG (Posts, Comments, Likes) - PUBLIC
+  // ═══════════════════════════════════════════════════════════════════════
 
   Future<ApiResponse> getPosts({int page = 1, int? technicianId}) =>
       _get('/v1/posts', query: {
@@ -329,14 +326,15 @@ class ApiService {
 
   Future<ApiResponse> deleteComment(int id) => _delete('/v5/comments/$id');
 
-  // ============================================================
-  //  BLOG POSTS WITH IMAGE UPLOAD (CRUD for technicians)
-  // ============================================================
+  // ═══════════════════════════════════════════════════════════════════════
+  //  BLOG POSTS CRUD (Technicians only) - WITH YOUTUBE SUPPORT
+  // ═══════════════════════════════════════════════════════════════════════
 
   Future<ApiResponse> createPost({
     required String title,
     required String content,
     File? imageFile,
+    String? youtubeUrl, // Add YouTube URL support
   }) async {
     if (imageFile != null && await imageFile.exists()) {
       final formData = FormData.fromMap({
@@ -344,12 +342,20 @@ class ApiService {
         'content': content,
         'image': await MultipartFile.fromFile(imageFile.path),
       });
+      if (youtubeUrl != null && youtubeUrl.isNotEmpty) {
+        formData.fields.add(MapEntry('youtube_url', youtubeUrl));
+      }
       return _post('/v5/posts', data: formData);
     }
-    return _post('/v5/posts', data: {
+
+    final Map<String, dynamic> data = {
       'title': title,
       'content': content,
-    });
+    };
+    if (youtubeUrl != null && youtubeUrl.isNotEmpty) {
+      data['youtube_url'] = youtubeUrl;
+    }
+    return _post('/v5/posts', data: data);
   }
 
   Future<ApiResponse> updatePost(
@@ -357,6 +363,7 @@ class ApiService {
         String? title,
         String? content,
         File? imageFile,
+        String? youtubeUrl, // Add YouTube URL support
       }) async {
     if (imageFile != null && await imageFile.exists()) {
       final formData = FormData.fromMap({
@@ -365,35 +372,47 @@ class ApiService {
         if (content != null) 'content': content,
         'image': await MultipartFile.fromFile(imageFile.path),
       });
+      if (youtubeUrl != null) {
+        formData.fields.add(MapEntry('youtube_url', youtubeUrl));
+      } else {
+        formData.fields.add(MapEntry('youtube_url', ''));
+      }
       return _post('/v5/posts/$id', data: formData);
     }
-    return _post('/v5/posts/$id', data: {
+
+    final Map<String, dynamic> data = {
       '_method': 'PUT',
       if (title != null) 'title': title,
       if (content != null) 'content': content,
-    });
+    };
+    if (youtubeUrl != null) {
+      data['youtube_url'] = youtubeUrl;
+    } else {
+      data['youtube_url'] = '';
+    }
+    return _post('/v5/posts/$id', data: data);
   }
 
   Future<ApiResponse> deletePost(int id) => _delete('/v5/posts/$id');
 
-  // ============================================================
+  // ═══════════════════════════════════════════════════════════════════════
   //  STATIC PAGES
-  // ============================================================
+  // ═══════════════════════════════════════════════════════════════════════
 
   Future<ApiResponse> getAbout() => _get('/v1/about');
   Future<ApiResponse> getFaqs() => _get('/v1/faqs');
   Future<ApiResponse> getTerms() => _get('/v1/terms');
 
-  // ============================================================
+  // ═══════════════════════════════════════════════════════════════════════
   //  CONTACT
-  // ============================================================
+  // ═══════════════════════════════════════════════════════════════════════
 
   Future<ApiResponse> sendContactMessage(Map<String, dynamic> data) =>
       _post('/v1/contact', data: data);
 
-  // ============================================================
+  // ═══════════════════════════════════════════════════════════════════════
   //  CHAT ENDPOINTS (V14)
-  // ============================================================
+  // ═══════════════════════════════════════════════════════════════════════
 
   Future<ApiResponse> getOrCreateConversation({
     required int customerId,
@@ -485,6 +504,24 @@ class ApiService {
         'download': 'true',
       });
 
+  Future<String?> downloadChatFileToPath(int messageId, String savePath) async {
+    try {
+      final token = await StorageService.getToken();
+      await _dio.download(
+        '/v14/chat/files/$messageId/download?download=true',
+        savePath,
+        options: Options(
+          headers: {'Authorization': 'Bearer $token'},
+          responseType: ResponseType.bytes,
+        ),
+      );
+      return savePath;
+    } catch (e) {
+      debugPrint('❌ Download file error: $e');
+      return null;
+    }
+  }
+
   Future<ApiResponse> getFileInfo(int messageId) =>
       _get('/v14/chat/files/$messageId/info');
 
@@ -494,9 +531,9 @@ class ApiService {
   Future<ApiResponse> deleteConversation(int conversationId) =>
       _delete('/v14/chat/conversations/$conversationId');
 
-  // ============================================================
+  // ═══════════════════════════════════════════════════════════════════════
   //  NOTIFICATION ENDPOINTS (V15)
-  // ============================================================
+  // ═══════════════════════════════════════════════════════════════════════
 
   Future<ApiResponse> getNotifications() =>
       _get('/v15/notifications');
@@ -516,9 +553,70 @@ class ApiService {
   Future<ApiResponse> clearNotifications() =>
       _delete('/v15/notifications/clear');
 
-  // ============================================================
+  // ═══════════════════════════════════════════════════════════════════════
+  //  SUBSCRIPTION ENDPOINTS (V16)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  Future<ApiResponse> getRateCards() => _get('/v16/rate-cards');
+
+  Future<ApiResponse> getPaymentMethods() => _get('/v16/payment-methods');
+
+  Future<ApiResponse> createSubscription({
+    required int rateCardId,
+    required int paymentMethodId,
+    File? paymentProof,
+    String? paymentReference,
+    String? notes,
+  }) async {
+    if (paymentProof != null && await paymentProof.exists()) {
+      final formData = FormData();
+      formData.fields.addAll([
+        MapEntry('rate_card_id', rateCardId.toString()),
+        MapEntry('payment_method_id', paymentMethodId.toString()),
+        if (paymentReference != null) MapEntry('payment_reference', paymentReference),
+        if (notes != null) MapEntry('notes', notes),
+      ]);
+      formData.files.add(
+        MapEntry('payment_proof', await MultipartFile.fromFile(paymentProof.path)),
+      );
+      return _post('/v16/subscriptions', data: formData);
+    }
+    return _post('/v16/subscriptions', data: {
+      'rate_card_id': rateCardId,
+      'payment_method_id': paymentMethodId,
+      if (paymentReference != null) 'payment_reference': paymentReference,
+      if (notes != null) 'notes': notes,
+    });
+  }
+
+  Future<ApiResponse> getMySubscriptions() => _get('/v16/my-subscriptions');
+
+  Future<ApiResponse> getMyInvoices() => _get('/v16/my-invoices');
+
+  Future<ApiResponse> checkSubscriptionStatus() =>
+      _get('/v16/check-subscription');
+
+  Future<String?> downloadInvoice(int invoiceId) async {
+    try {
+      final token = await StorageService.getToken();
+      final response = await _dio.download(
+        '/v16/invoices/$invoiceId/download',
+        '${Directory.systemTemp.path}/invoice_$invoiceId.pdf',
+        options: Options(
+          headers: {'Authorization': 'Bearer $token'},
+          responseType: ResponseType.bytes,
+        ),
+      );
+      return response.realUri.path;
+    } catch (e) {
+      debugPrint('❌ Download invoice error: $e');
+      return null;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
   //  PRIVATE HELPERS
-  // ============================================================
+  // ═══════════════════════════════════════════════════════════════════════
 
   Future<ApiResponse> _get(String path, {Map<String, dynamic>? query}) async {
     try {
@@ -567,6 +665,7 @@ class ApiService {
 
   ApiResponse _handleError(dynamic error) {
     if (error is DioException) {
+      // Handle 401 Unauthorized
       if (error.response?.statusCode == 401) {
         return ApiResponse(
           success: false,
@@ -574,9 +673,12 @@ class ApiService {
           sessionExpired: true,
         );
       }
+
+      // Handle 422 Validation Errors
       if (error.response?.statusCode == 422 && error.response?.data is Map) {
         final data = error.response!.data as Map<String, dynamic>;
         String errorMessage = data['message'] ?? 'Validation failed';
+
         if (data.containsKey('errors') && data['errors'] is Map) {
           final errors = data['errors'] as Map<String, dynamic>;
           final firstError = errors.values.first;
@@ -590,6 +692,8 @@ class ApiService {
           errors: data['errors'] as Map<String, dynamic>?,
         );
       }
+
+      // Handle other error responses
       if (error.response?.data is Map) {
         return ApiResponse(
           success: false,
@@ -597,6 +701,8 @@ class ApiService {
         );
       }
     }
+
+    // Handle network/connection errors
     return ApiResponse(
       success: false,
       message: 'Network error. Please check your connection.',

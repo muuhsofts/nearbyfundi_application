@@ -1,3 +1,4 @@
+// models/post.dart
 class Comment {
   final int id;
   final String comment;
@@ -26,6 +27,8 @@ class Post {
   final String title;
   final String content;
   final String? image;
+  final String? youtubeUrl;
+  final String? youtubeEmbed;
   int likesCount;
   int commentsCount;
   final String technicianName;
@@ -39,6 +42,8 @@ class Post {
     required this.title,
     required this.content,
     this.image,
+    this.youtubeUrl,
+    this.youtubeEmbed,
     required this.likesCount,
     required this.commentsCount,
     required this.technicianName,
@@ -53,7 +58,6 @@ class Post {
         .map((c) => Comment.fromJson(c))
         .toList();
 
-    // Extract technician name – handle nested 'user' if present
     String techName = 'Fundi';
     if (json['technician'] != null) {
       if (json['technician']['user'] != null) {
@@ -65,7 +69,6 @@ class Post {
       techName = json['technician_name'];
     }
 
-    // Profile photo
     String? techAvatar;
     if (json['technician'] != null) {
       techAvatar = json['technician']['profile_photo'];
@@ -76,6 +79,8 @@ class Post {
       title: json['title'] ?? '',
       content: json['content'] ?? '',
       image: json['image'],
+      youtubeUrl: json['youtube_url'],
+      youtubeEmbed: json['youtube_embed'],
       likesCount: json['likes_count'] ?? 0,
       commentsCount: json['comments_count'] ?? 0,
       technicianName: techName,
@@ -85,4 +90,8 @@ class Post {
       comments: commentsList,
     );
   }
+
+  bool get hasYoutubeVideo =>
+      (youtubeUrl != null && youtubeUrl!.isNotEmpty) ||
+          (youtubeEmbed != null && youtubeEmbed!.isNotEmpty);
 }

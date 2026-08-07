@@ -18,6 +18,23 @@ class Assets {
   static const AssetGenImage nearbylogo =
       AssetGenImage('assets/icons/nearbylogo.png');
   static const AssetGenImage netsaf = AssetGenImage('assets/icons/netsaf.png');
+  static const $AssetsAssetsGen assets = $AssetsAssetsGen();
+}
+
+class $AssetsAssetsGen {
+  const $AssetsAssetsGen();
+
+  final $AssetsImagesGen images = const $AssetsImagesGen();
+}
+
+class $AssetsImagesGen {
+  const $AssetsImagesGen();
+
+  final AssetGenImage backimg =
+      const AssetGenImage('assets/images/backimg.jpg');
+  final AssetGenImage home = const AssetGenImage('assets/images/home.jpg');
+  final AssetGenImage nearbyfundiImage =
+      const AssetGenImage('assets/images/nearbyfundi_image.jpg');
 }
 
 class AssetGenImage {
