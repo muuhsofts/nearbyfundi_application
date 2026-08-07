@@ -289,5 +289,19 @@
   "markAllRead": "Weka Zote kama Zimesomwa",
   "loadingNotifications": "Inapakia arifa...",
   "viewAllNotifications": "Tazama Arifa Zote",
-  "notificationSettings": "Mipangilio ya Arifa"
+  "notificationSettings": "Mipangilio ya Arifa",
+
+  "invoices": "Ankara",
+  "certificate": "Cheti",
+  "approvedOn": "Ilioidhinishwa tarehe {date}",
+  "startedOn": "Imeanza: {date}",
+  "createdOn": "Imeundwa: {date}",
+  "paidOn": "Imelipwa: {date}",
+  "dueOn": "Inatarajiwa: {date}",
+  "subscriptionReference": "Usajili #{id}",
+  "plan": "Mpango",
+  "status": "Hali",
+  "download": "Pakua",
+  "share": "Shiriki",
+  "openPdf": "Fungua PDF"
 }

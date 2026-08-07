@@ -1726,6 +1726,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Notification Settings'**
   String get notificationSettings;
+
+  /// No description provided for @invoices.
+  ///
+  /// In en, this message translates to:
+  /// **'Invoices'**
+  String get invoices;
+
+  /// No description provided for @certificate.
+  ///
+  /// In en, this message translates to:
+  /// **'Certificate'**
+  String get certificate;
+
+  /// No description provided for @approvedOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved on {date}'**
+  String approvedOn(Object date);
+
+  /// No description provided for @startedOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Started: {date}'**
+  String startedOn(Object date);
+
+  /// No description provided for @createdOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Created: {date}'**
+  String createdOn(Object date);
+
+  /// No description provided for @paidOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Paid: {date}'**
+  String paidOn(Object date);
+
+  /// No description provided for @dueOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Due: {date}'**
+  String dueOn(Object date);
+
+  /// No description provided for @subscriptionReference.
+  ///
+  /// In en, this message translates to:
+  /// **'Subscription #{id}'**
+  String subscriptionReference(Object id);
+
+  /// No description provided for @plan.
+  ///
+  /// In en, this message translates to:
+  /// **'Plan'**
+  String get plan;
+
+  /// No description provided for @status.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get status;
+
+  /// No description provided for @download.
+  ///
+  /// In en, this message translates to:
+  /// **'Download'**
+  String get download;
+
+  /// No description provided for @share.
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get share;
+
+  /// No description provided for @openPdf.
+  ///
+  /// In en, this message translates to:
+  /// **'Open PDF'**
+  String get openPdf;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

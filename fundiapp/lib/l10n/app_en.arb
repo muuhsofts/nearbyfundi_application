@@ -289,5 +289,19 @@
   "markAllRead": "Mark All Read",
   "loadingNotifications": "Loading notifications...",
   "viewAllNotifications": "View All Notifications",
-  "notificationSettings": "Notification Settings"
+  "notificationSettings": "Notification Settings",
+
+  "invoices": "Invoices",
+  "certificate": "Certificate",
+  "approvedOn": "Approved on {date}",
+  "startedOn": "Started: {date}",
+  "createdOn": "Created: {date}",
+  "paidOn": "Paid: {date}",
+  "dueOn": "Due: {date}",
+  "subscriptionReference": "Subscription #{id}",
+  "plan": "Plan",
+  "status": "Status",
+  "download": "Download",
+  "share": "Share",
+  "openPdf": "Open PDF"
 }

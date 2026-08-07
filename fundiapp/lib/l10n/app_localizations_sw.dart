@@ -833,4 +833,55 @@ class AppLocalizationsSw extends AppLocalizations {
 
   @override
   String get notificationSettings => 'Mipangilio ya Arifa';
+
+  @override
+  String get invoices => 'Ankara';
+
+  @override
+  String get certificate => 'Cheti';
+
+  @override
+  String approvedOn(Object date) {
+    return 'Ilioidhinishwa tarehe $date';
+  }
+
+  @override
+  String startedOn(Object date) {
+    return 'Imeanza: $date';
+  }
+
+  @override
+  String createdOn(Object date) {
+    return 'Imeundwa: $date';
+  }
+
+  @override
+  String paidOn(Object date) {
+    return 'Imelipwa: $date';
+  }
+
+  @override
+  String dueOn(Object date) {
+    return 'Inatarajiwa: $date';
+  }
+
+  @override
+  String subscriptionReference(Object id) {
+    return 'Usajili #$id';
+  }
+
+  @override
+  String get plan => 'Mpango';
+
+  @override
+  String get status => 'Hali';
+
+  @override
+  String get download => 'Pakua';
+
+  @override
+  String get share => 'Shiriki';
+
+  @override
+  String get openPdf => 'Fungua PDF';
 }

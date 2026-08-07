@@ -833,4 +833,55 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get notificationSettings => 'Notification Settings';
+
+  @override
+  String get invoices => 'Invoices';
+
+  @override
+  String get certificate => 'Certificate';
+
+  @override
+  String approvedOn(Object date) {
+    return 'Approved on $date';
+  }
+
+  @override
+  String startedOn(Object date) {
+    return 'Started: $date';
+  }
+
+  @override
+  String createdOn(Object date) {
+    return 'Created: $date';
+  }
+
+  @override
+  String paidOn(Object date) {
+    return 'Paid: $date';
+  }
+
+  @override
+  String dueOn(Object date) {
+    return 'Due: $date';
+  }
+
+  @override
+  String subscriptionReference(Object id) {
+    return 'Subscription #$id';
+  }
+
+  @override
+  String get plan => 'Plan';
+
+  @override
+  String get status => 'Status';
+
+  @override
+  String get download => 'Download';
+
+  @override
+  String get share => 'Share';
+
+  @override
+  String get openPdf => 'Open PDF';
 }

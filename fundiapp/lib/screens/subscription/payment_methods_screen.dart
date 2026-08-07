@@ -28,10 +28,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
   bool _isLoading = true;
   String? _error;
 
-  // ✅ Track if payment instructions have been shown
   bool _instructionsShown = false;
-
-  // ✅ Track if payment details section is expanded
   bool _isPaymentDetailsExpanded = true;
 
   @override
@@ -49,24 +46,18 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
     });
     try {
       final provider = context.read<SubscriptionProvider>();
-      debugPrint('🔄 Loading payment methods...');
       await provider.loadPaymentMethods();
 
-      debugPrint('📊 Payment methods in provider: ${provider.paymentMethods.length}');
-
       if (provider.paymentMethods.isEmpty) {
-        debugPrint('⚠️ No payment methods found in provider');
         setState(() {
           _error = 'No payment methods available. Please try again.';
         });
       } else {
-        debugPrint('✅ Payment methods loaded: ${provider.paymentMethods.map((m) => m.name).join(', ')}');
         setState(() {
           _error = null;
         });
       }
     } catch (e) {
-      debugPrint('❌ Error loading payment methods: $e');
       setState(() {
         _error = 'Failed to load payment methods: $e';
       });
@@ -86,9 +77,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
       final args = ModalRoute.of(context)?.settings.arguments;
       if (args is RateCard) {
         _selectedCard = args;
-        debugPrint('✅ Selected card: ${_selectedCard.name}');
       } else {
-        debugPrint('⚠️ No rate card selected');
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) Navigator.pop(context);
         });
@@ -123,7 +112,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
   }
 
   // ============================================================
-  // ✅ SHOW PAYMENT INSTRUCTIONS - NOW INLINE
+  // PAYMENT INSTRUCTIONS WIDGET
   // ============================================================
   Widget _buildPaymentInstructionsWidget(BuildContext context, PaymentMethod method) {
     final theme = Theme.of(context);
@@ -141,7 +130,6 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header with icon and title
           Row(
             children: [
               Container(
@@ -176,7 +164,6 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                   ],
                 ),
               ),
-              // Close/Dismiss button
               IconButton(
                 onPressed: () {
                   setState(() {
@@ -196,7 +183,6 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Payment Instructions
           Row(
             children: [
               Icon(
@@ -327,7 +313,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
   }
 
   // ============================================================
-  // ✅ SUBMIT WITH CONFIRMATION
+  // SUBMIT WITH CONFIRMATION - CENTERED DIALOG
   // ============================================================
   Future<void> _submitSubscription() async {
     final l10n = AppLocalizations.of(context)!;
@@ -346,77 +332,173 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
       return;
     }
 
-    // ✅ Show confirmation dialog before submitting
+    // ✅ Centered Confirmation Dialog
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700),
-            const SizedBox(width: 12),
-            const Text('Confirm Submission'),
-          ],
+      barrierDismissible: true,
+      builder: (ctx) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'You are about to submit a subscription request for:',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.green.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.green.shade200),
+        elevation: 8,
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Warning Icon
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.warning_amber_rounded,
+                  color: Colors.orange,
+                  size: 48,
+                ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Plan: ${_selectedCard.name}',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+              const SizedBox(height: 16),
+              // Title
+              Text(
+                'Confirm Submission',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.orange.shade700,
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Confirmation message
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text(
+                  'You are about to submit a subscription request for:',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Colors.grey[700],
+                    height: 1.5,
                   ),
-                  Text('Amount: ${_selectedCard.formattedPrice}'),
-                  Text('Payment Method: ${_selectedMethod!.name}'),
-                  if (_referenceController.text.trim().isNotEmpty)
-                    Text('Reference: ${_referenceController.text.trim()}'),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Plan Details
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.green.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Plan: ${_selectedCard.name}',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    Text('Amount: ${_selectedCard.formattedPrice}'),
+                    const SizedBox(height: 4),
+                    Text('Payment Method: ${_selectedMethod!.name}'),
+                    if (_referenceController.text.trim().isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          'Reference: ${_referenceController.text.trim()}',
+                          style: const TextStyle(fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Warning message
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Please ensure you have sent the payment before submitting.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.orange.shade700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              // Action Buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(
+                            color: Colors.grey[300]!,
+                            width: 1,
+                          ),
+                        ),
+                      ),
+                      child: Text(
+                        'Cancel',
+                        style: TextStyle(
+                          color: Colors.grey[700],
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 2,
+                      ),
+                      child: const Text(
+                        'Confirm & Submit',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              '⚠️ Please ensure you have sent the payment before submitting.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.orange.shade700,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Confirm & Submit'),
-          ),
-        ],
       ),
     );
 
     if (confirmed != true) return;
 
-    // ✅ Submit
+    // Submit
     setState(() => _isSubmitting = true);
     final provider = context.read<SubscriptionProvider>();
     final response = await provider.createSubscription(
@@ -439,38 +521,99 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
     }
   }
 
+  // ============================================================
+  // SUCCESS DIALOG - CENTERED
+  // ============================================================
   void _showSuccessDialog(BuildContext context, AppLocalizations l10n) {
     final theme = Theme.of(context);
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            const Icon(Icons.check_circle, color: Colors.green, size: 32),
-            const SizedBox(width: 12),
-            Text(l10n.subscriptionCreated),
-          ],
+      builder: (ctx) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(l10n.subscriptionCreatedMessage, style: theme.textTheme.bodyMedium),
-            const SizedBox(height: 12),
-            Text(l10n.waitForApproval, style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor)),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              Navigator.pushReplacementNamed(context, AppRoutes.home);
-            },
-            child: Text(l10n.goToDashboard),
+        elevation: 8,
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.check_circle,
+                  color: Colors.green,
+                  size: 48,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                l10n.subscriptionCreated,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Column(
+                  children: [
+                    Text(
+                      l10n.subscriptionCreatedMessage,
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: Colors.grey[700],
+                        height: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      l10n.waitForApproval,
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.hintColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    Navigator.pushReplacementNamed(context, AppRoutes.home);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: theme.primaryColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    l10n.goToDashboard,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -646,7 +789,6 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
         backgroundColor: theme.scaffoldBackgroundColor,
         foregroundColor: theme.colorScheme.onSurface,
         actions: [
-          // ✅ Cancel Button at Top
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: Text(
@@ -694,11 +836,9 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
               ),
               const SizedBox(height: 24),
 
-              // ✅ Payment Methods Title
               Text(l10n.choosePaymentMethod, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
 
-              // ✅ Payment Methods List (Always Expanded)
               ...provider.paymentMethods.map((method) => _buildMethodItem(
                 context,
                 method,
@@ -711,7 +851,6 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                     } else {
                       _selectedMethod = method;
                       _isPaymentDetailsExpanded = true;
-                      // Show instructions inline, not as bottom sheet
                     }
                   });
                 },
@@ -719,13 +858,10 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
 
               const SizedBox(height: 24),
 
-              // ✅ Payment Instructions - Displayed Inline at Top
               if (_selectedMethod != null && !_instructionsShown)
                 _buildPaymentInstructionsWidget(context, _selectedMethod!),
 
-              // ✅ Payment Details Section (Collapsible)
               if (_selectedMethod != null && _instructionsShown) ...[
-                // Expandable/Collapsible Header
                 InkWell(
                   onTap: () {
                     setState(() {
@@ -774,7 +910,6 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                   ),
                 ),
 
-                // Payment Details Content (Expanded)
                 if (_isPaymentDetailsExpanded)
                   Container(
                     padding: const EdgeInsets.all(16),
@@ -854,7 +989,6 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                 const SizedBox(height: 16),
               ],
 
-              // Payment Reference
               Text(l10n.paymentReference, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
               TextField(
@@ -868,7 +1002,6 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Notes
               Text(l10n.notes, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
               TextField(
@@ -883,11 +1016,9 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Upload Payment Proof
               _buildProofUpload(context, l10n),
               const SizedBox(height: 24),
 
-              // Submit Button
               CustomButton(
                 text: l10n.submitSubscription,
                 onPressed: _selectedMethod != null && _paymentProof != null && _instructionsShown ? _submitSubscription : null,
