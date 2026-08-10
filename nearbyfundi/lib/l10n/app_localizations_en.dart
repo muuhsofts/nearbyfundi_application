@@ -21,28 +21,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get near => 'Near';
 
   @override
-  String get searchPlaceFirst => 'Search a place first to see it on the map.';
-
-  @override
-  String get searchPlaceHint => 'Go back and search for a location to see technicians nearby.';
-
-  @override
-  String get viewProfile => 'View Profile';
-
-  @override
-  String get directions => 'Directions';
-
-  @override
-  String get kmAway => 'km away';
-
-  @override
   String get blog => 'Blog';
 
   @override
-  String get requests => 'My Requests';
+  String get requests => ' Requests';
 
   @override
-  String get myRequests => 'My Requests';
+  String get myRequests => ' Requests';
 
   @override
   String get profile => 'Profile';
@@ -51,31 +36,170 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settings => 'Settings';
 
   @override
-  String get language => 'Language';
+  String get chat => 'Chat';
 
   @override
-  String get logout => 'Logout';
+  String get payments => 'Payments';
 
   @override
-  String get deleteAccount => 'Delete Account';
+  String get findFundi => 'Find Fundi';
 
   @override
-  String get pushNotifications => 'Push Notifications';
+  String get searchLocation => '📍 Search location...';
 
   @override
-  String get receiveAlerts => 'Receive alerts about requests and updates';
+  String get search => 'Search';
 
   @override
-  String get aboutUs => 'About Us';
+  String get filterByService => '🔧 Filter by service...';
 
   @override
-  String get faq => 'FAQ';
+  String get all => 'All';
 
   @override
-  String get terms => 'Terms & Conditions';
+  String get allServices => 'All Services';
 
   @override
-  String get contactUs => 'Contact Us';
+  String get category => 'Category';
+
+  @override
+  String get noServicesFound => 'No services found';
+
+  @override
+  String get noServicesMatch => 'No services match your filter';
+
+  @override
+  String get clearAllFilters => 'Clear All Filters';
+
+  @override
+  String get clearFilters => 'Clear filters';
+
+  @override
+  String get filtered => 'Filtered';
+
+  @override
+  String get onlineOnly => 'Online only';
+
+  @override
+  String get viewOnMap => 'View on map';
+
+  @override
+  String get refresh => 'Refresh';
+
+  @override
+  String get noFundisFound => 'No Fundis Found';
+
+  @override
+  String get tryAdjustingSearch => 'Try adjusting your search or location';
+
+  @override
+  String get fundisFound => 'Fundis found';
+
+  @override
+  String get searchingForFundis => 'Searching for fundis...';
+
+  @override
+  String get oopsSomethingWentWrong => 'Oops! Something went wrong';
+
+  @override
+  String get pleaseTryAgain => 'Please try again';
+
+  @override
+  String get retry => 'Retry';
+
+  @override
+  String noResultsFor(Object service) {
+    return 'No Fundis for $service';
+  }
+
+  @override
+  String noResultsForServiceCategory(Object category, Object service) {
+    return 'No Fundis for $service ($category)';
+  }
+
+  @override
+  String get tryDifferentCategoryOrService => 'Try a different category or service';
+
+  @override
+  String get tryDifferentService => 'Try selecting a different service';
+
+  @override
+  String get tryAdjustingLocation => 'Try adjusting your search or location';
+
+  @override
+  String get suggestionClearFilters => 'Try clearing your filters';
+
+  @override
+  String get suggestionDifferentLocation => 'Try a different location';
+
+  @override
+  String get suggestionDifferentService => 'Try a different service';
+
+  @override
+  String get suggestionRemoveFilters => 'Try removing service/category filters';
+
+  @override
+  String get suggestionIncreaseRadius => 'Try increasing the search radius';
+
+  @override
+  String get suggestionAllCategories => 'Try selecting \'All Categories\'';
+
+  @override
+  String get suggestionAllServices => 'Try selecting \'All Services\'';
+
+  @override
+  String get kmAway => 'km away';
+
+  @override
+  String get viewProfile => 'View Profile';
+
+  @override
+  String get directions => 'Directions';
+
+  @override
+  String get online => 'Online';
+
+  @override
+  String get offline => 'Offline';
+
+  @override
+  String get request => 'Request';
+
+  @override
+  String get requestThisFundi => 'Request This Fundi';
+
+  @override
+  String get requestAlreadySent => 'Request Already Sent';
+
+  @override
+  String get hourlyRate => 'Hourly Rate';
+
+  @override
+  String get tzs => 'TZS';
+
+  @override
+  String get socialMedia => 'Social Media';
+
+  @override
+  String get contact => 'Contact';
+
+  @override
+  String get call => 'Call';
+
+  @override
+  String get items => 'items';
+
+  @override
+  String get sendingToTechnician => 'Sending to technician...';
+
+  @override
+  String get awaitingResponse => 'Awaiting response...';
+
+  @override
+  String get noServicesSelected => 'No services selected';
+
+  @override
+  String get selectService => 'Select a service';
 
   @override
   String get welcomeBack => 'Welcome Back';
@@ -162,133 +286,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get resetPasswordButton => 'Reset Password';
 
   @override
-  String get editProfile => 'Edit Profile';
-
-  @override
-  String get updateInfo => 'Update Your Info';
-
-  @override
-  String get name => 'Full Name';
-
-  @override
-  String get phone => 'Phone';
-
-  @override
-  String get saveChanges => 'Save Changes';
-
-  @override
-  String get profileUpdated => 'Profile updated';
-
-  @override
-  String get updateFailed => 'Update failed';
-
-  @override
-  String get noRequestsYet => 'No requests yet';
-
-  @override
-  String get requestsWillAppear => 'Your requests will appear here';
-
-  @override
-  String get cancelRequest => 'Cancel Request';
-
-  @override
-  String get areYouSureCancel => 'Are you sure you want to cancel this request?';
-
-  @override
-  String get requestAlreadySent => 'Request Already Sent';
-
-  @override
-  String get requestThisFundi => 'Request This Fundi';
-
-  @override
-  String get aboutFundi => 'About';
-
-  @override
-  String get servicesAndRate => 'Services & Rate';
-
-  @override
-  String get portfolio => 'Portfolio';
-
-  @override
-  String get hourlyRate => 'Hourly Rate';
-
-  @override
-  String get noPortfolioItems => 'No portfolio items available.';
-
-  @override
-  String get noBlogPosts => 'No blog posts yet.';
-
-  @override
-  String get noFundisFound => 'No fundis found. Try another area.';
-
-  @override
-  String get enterPlace => 'Enter place (e.g. Ubungo)';
-
-  @override
-  String get search => 'Search';
-
-  @override
-  String get onlineOnly => 'Online only';
-
-  @override
-  String get selectService => 'Select a service';
-
-  @override
-  String get pleaseSelectService => 'Please select a service';
-
-  @override
-  String get editProfileTitle => 'Edit Profile';
-
-  @override
-  String get version => 'Version';
-
-  @override
-  String get retry => 'Retry';
-
-  @override
-  String get getInTouch => 'Get in Touch';
-
-  @override
-  String get email => 'Email';
-
-  @override
-  String get website => 'Website';
-
-  @override
-  String get phoneNumbers => 'Phone Numbers';
-
-  @override
-  String get call => 'Call';
-
-  @override
-  String get noFaqs => 'No FAQs available.';
-
-  @override
-  String get noContent => 'No content available.';
-
-  @override
-  String get welcomeFundi => 'Find Trusted Fundis';
-
-  @override
-  String get findTrustedDesc => 'Connect with verified, experienced fundis near you. Request services like AC repair, plumbing, and more.';
-
-  @override
-  String get requestTrack => 'Request & Track';
-
-  @override
-  String get requestTrackDesc => 'Post a service request, get accepted by a fundi, and track the status in real time. Simple, fast, and reliable.';
-
-  @override
-  String get getStarted => 'Get Started';
-
-  @override
-  String get next => 'Next';
-
-  @override
-  String get skip => 'Skip';
+  String get logout => 'Logout';
 
   @override
   String get logoutConfirmation => 'Are you sure you want to logout?';
+
+  @override
+  String get deleteAccount => 'Delete Account';
 
   @override
   String get deleteAccountConfirmation => 'This action is permanent. All your data will be lost. Are you sure?';
@@ -309,25 +313,115 @@ class AppLocalizationsEn extends AppLocalizations {
   String get delete => 'Delete';
 
   @override
-  String get online => 'Online';
+  String get editProfile => 'Edit Profile';
 
   @override
-  String get offline => 'Offline';
+  String get editProfileTitle => 'Edit Profile';
 
   @override
-  String get request => 'Request';
+  String get updateInfo => 'Update Your Info';
+
+  @override
+  String get name => 'Full Name';
+
+  @override
+  String get phone => 'Phone';
+
+  @override
+  String get saveChanges => 'Save Changes';
+
+  @override
+  String get profileUpdated => 'Profile updated';
+
+  @override
+  String get updateFailed => 'Update failed';
 
   @override
   String get guest => 'Guest';
-
-  @override
-  String get generalServices => 'General Services';
 
   @override
   String get technician => 'Technician';
 
   @override
   String get technicianNotFound => 'Technician not found';
+
+  @override
+  String get about => 'About';
+
+  @override
+  String get bio => 'Bio';
+
+  @override
+  String get experience => 'Experience';
+
+  @override
+  String get years => 'years';
+
+  @override
+  String get area => 'Area';
+
+  @override
+  String get accountStatus => 'Account Status';
+
+  @override
+  String get active => 'Active';
+
+  @override
+  String get onlineStatus => 'Online Status';
+
+  @override
+  String get youAreOnline => 'You are online';
+
+  @override
+  String get youAreOffline => 'You are offline';
+
+  @override
+  String get servicesIOffer => 'Services I Offer';
+
+  @override
+  String get selectServicesDialogTitle => 'Select Services';
+
+  @override
+  String get selectAtLeastOneService => 'Please select at least one service';
+
+  @override
+  String get servicesUpdated => 'Services updated';
+
+  @override
+  String get pushNotifications => 'Push Notifications';
+
+  @override
+  String get receiveAlerts => 'Receive alerts about requests and updates';
+
+  @override
+  String get language => 'Language';
+
+  @override
+  String get aboutUs => 'About Us';
+
+  @override
+  String get faq => 'FAQ';
+
+  @override
+  String get terms => 'Terms & Conditions';
+
+  @override
+  String get contactUs => 'Contact Us';
+
+  @override
+  String get version => 'Version';
+
+  @override
+  String get noRequestsYet => 'No requests yet';
+
+  @override
+  String get requestsWillAppear => 'Your requests will appear here';
+
+  @override
+  String get cancelRequest => 'Cancel Request';
+
+  @override
+  String get areYouSureCancel => 'Are you sure you want to cancel this request?';
 
   @override
   String get requestSent => 'Request sent successfully!';
@@ -340,12 +434,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get creatingRequest => 'Creating service request...';
-
-  @override
-  String get sendingToTechnician => 'Sending to technician...';
-
-  @override
-  String get awaitingResponse => 'Awaiting response...';
 
   @override
   String get failedToSubmit => 'Failed to submit request.';
@@ -363,6 +451,27 @@ class AppLocalizationsEn extends AppLocalizations {
   String get done => 'Done';
 
   @override
+  String get pleaseSelectService => 'Please select a service';
+
+  @override
+  String get newRequest => 'New Request';
+
+  @override
+  String get requestAccepted => 'Request Accepted';
+
+  @override
+  String get requestRejected => 'Request Rejected';
+
+  @override
+  String get requestInProgress => 'Request In Progress';
+
+  @override
+  String get requestCompleted => 'Request Completed';
+
+  @override
+  String get noBlogPosts => 'No blog posts yet.';
+
+  @override
   String get noCommentsYet => 'No comments yet. Be the first!';
 
   @override
@@ -370,135 +479,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get comments => 'Comments';
-
-  @override
-  String get refresh => 'Refresh';
-
-  @override
-  String get services => 'Services';
-
-  @override
-  String get failed => 'Failed';
-
-  @override
-  String get notifications => 'Notifications';
-
-  @override
-  String get aiAssistant => 'AI Assistant';
-
-  @override
-  String get payments => 'Payments';
-
-  @override
-  String get chat => 'Chat';
-
-  @override
-  String get comingSoon => 'coming soon!';
-
-  @override
-  String get noConversationsYet => 'No conversations yet';
-
-  @override
-  String get startChattingWithFundis => 'Start chatting with fundis near you';
-
-  @override
-  String get noMessagesYet => 'No messages yet';
-
-  @override
-  String get sayHelloToStart => 'Say hello to start chatting!';
-
-  @override
-  String get typeAMessage => 'Type a message...';
-
-  @override
-  String get justNow => 'Just now';
-
-  @override
-  String get copy => 'Copy';
-
-  @override
-  String get messageCopied => 'Message copied';
-
-  @override
-  String get messageDeleted => 'Message deleted';
-
-  @override
-  String get failedToSend => 'Failed to send';
-
-  @override
-  String get failedToSendImage => 'Failed to send image';
-
-  @override
-  String get failedToSendFile => 'Failed to send file';
-
-  @override
-  String get voiceRecordingComingSoon => 'Voice recording coming soon!';
-
-  @override
-  String get selectAtLeastOneService => 'Please select at least one service';
-
-  @override
-  String get servicesUpdated => 'Services updated';
-
-  @override
-  String get servicesIOffer => 'Services I Offer';
-
-  @override
-  String get noServicesSelected => 'No services selected';
-
-  @override
-  String get profileDetails => 'Profile Details';
-
-  @override
-  String get bio => 'Bio';
-
-  @override
-  String get experience => 'Experience';
-
-  @override
-  String get area => 'Area';
-
-  @override
-  String get accountStatus => 'Account Status';
-
-  @override
-  String get active => 'Active';
-
-  @override
-  String get years => 'years';
-
-  @override
-  String get tzs => 'TZS';
-
-  @override
-  String get onlineStatus => 'Online Status';
-
-  @override
-  String get youAreOnline => 'You are online';
-
-  @override
-  String get youAreOffline => 'You are offline';
-
-  @override
-  String get selectServicesDialogTitle => 'Select Services';
-
-  @override
-  String get pleaseEnterLocation => 'Please enter a location';
-
-  @override
-  String get allServices => 'All Services';
-
-  @override
-  String get tryAdjustingSearch => 'Try adjusting your search criteria';
-
-  @override
-  String get fundi => 'Fundi';
-
-  @override
-  String get about => 'About';
-
-  @override
-  String get rate => 'Rate';
 
   @override
   String get postedOn => 'Posted on';
@@ -552,14 +532,154 @@ class AppLocalizationsEn extends AppLocalizations {
   String get myPosts => 'My Posts';
 
   @override
-  String get searchServiceHint => 'Search for services (e.g. plumbing, electrician...)';
+  String get portfolio => 'Portfolio';
 
   @override
-  String get noServicesFound => 'No services found. Try adjusting your search.';
+  String get noPortfolioItems => 'No portfolio items available.';
+
+  @override
+  String get notifications => 'Notifications';
 
   @override
   String get markAllAsRead => 'Mark all as read';
 
   @override
   String get noNotificationsYet => 'No notifications yet';
+
+  @override
+  String get notification => 'Notification';
+
+  @override
+  String get noConversationsYet => 'No conversations yet';
+
+  @override
+  String get startChattingWithFundis => 'Start chatting with fundis near you';
+
+  @override
+  String get noMessagesYet => 'No messages yet';
+
+  @override
+  String get sayHelloToStart => 'Say hello to start chatting!';
+
+  @override
+  String get typeAMessage => 'Type a message...';
+
+  @override
+  String get justNow => 'Just now';
+
+  @override
+  String get copy => 'Copy';
+
+  @override
+  String get messageCopied => 'Message copied';
+
+  @override
+  String get messageDeleted => 'Message deleted';
+
+  @override
+  String get failedToSend => 'Failed to send';
+
+  @override
+  String get failedToSendImage => 'Failed to send image';
+
+  @override
+  String get failedToSendFile => 'Failed to send file';
+
+  @override
+  String get voiceRecordingComingSoon => 'Voice recording coming soon!';
+
+  @override
+  String get noContent => 'No content available.';
+
+  @override
+  String get getInTouch => 'Get in Touch';
+
+  @override
+  String get email => 'Email';
+
+  @override
+  String get website => 'Website';
+
+  @override
+  String get phoneNumbers => 'Phone Numbers';
+
+  @override
+  String get noFaqs => 'No FAQs available.';
+
+  @override
+  String get welcomeFundi => 'Find Trusted Fundis';
+
+  @override
+  String get findTrustedDesc => 'Connect with verified, experienced fundis near you. Request services like AC repair, plumbing, and more.';
+
+  @override
+  String get requestTrack => 'Request & Track';
+
+  @override
+  String get requestTrackDesc => 'Post a service request, get accepted by a fundi, and track the status in real time. Simple, fast, and reliable.';
+
+  @override
+  String get getStarted => 'Get Started';
+
+  @override
+  String get next => 'Next';
+
+  @override
+  String get skip => 'Skip';
+
+  @override
+  String get failed => 'Failed';
+
+  @override
+  String get services => 'Services';
+
+  @override
+  String get generalServices => 'General Services';
+
+  @override
+  String get fundi => 'Fundi';
+
+  @override
+  String get rate => 'Rate';
+
+  @override
+  String get aboutFundi => 'About';
+
+  @override
+  String get servicesAndRate => 'Services & Rate';
+
+  @override
+  String get searchPlaceFirst => 'Search a place first to see it on the map.';
+
+  @override
+  String get searchPlaceHint => 'Go back and search for a location to see technicians nearby.';
+
+  @override
+  String get aiAssistant => 'AI Assistant';
+
+  @override
+  String get comingSoon => 'coming soon!';
+
+  @override
+  String get pleaseEnterLocation => 'Please enter a location';
+
+  @override
+  String get searchServiceHint => 'Search for services (e.g. plumbing, electrician...)';
+
+  @override
+  String noFundisForService(Object service) {
+    return 'No fundis for $service';
+  }
+
+  @override
+  String get refreshed => 'Refreshed';
+
+  @override
+  String get refreshFailed => 'Refresh failed';
+
+  @override
+  String get pullToRefresh => 'Pull to refresh';
+
+  @override
+  String get loading => 'Loading...';
 }

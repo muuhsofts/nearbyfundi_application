@@ -1,3 +1,4 @@
+// widgets/technician_card.dart
 import 'package:flutter/material.dart';
 import '../models/technician.dart';
 import '../screens/home/technician_location_map_screen.dart';
@@ -13,10 +14,6 @@ class TechnicianCard extends StatelessWidget {
     required this.onTap,
   });
 
-  /// Opens the in-app OpenStreetMap view for this technician, showing
-  /// their pin (and, if the user came from a place search, the route
-  /// from that search point). Directions to Google Maps are offered
-  /// from within that screen.
   void _openLocationMap(BuildContext context) {
     if (technician.latitude == null || technician.longitude == null) return;
 
@@ -48,7 +45,7 @@ class TechnicianCard extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ----- Avatar -----
+              // Avatar
               Container(
                 width: 64,
                 height: 64,
@@ -74,7 +71,7 @@ class TechnicianCard extends StatelessWidget {
               ),
               const SizedBox(width: 14),
 
-              // ----- Middle (Info) -----
+              // Middle (Info)
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -220,7 +217,7 @@ class TechnicianCard extends StatelessWidget {
                 ),
               ),
 
-              // ----- Right Actions (Map + Arrow) -----
+              // Right Actions (Map + Arrow)
               Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.end,

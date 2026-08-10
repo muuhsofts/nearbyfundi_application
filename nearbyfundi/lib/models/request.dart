@@ -15,6 +15,8 @@ class ServiceRequest {
   final String? technicianArea;
   final double? technicianRating;
   final bool? technicianIsOnline;
+  final int? categoryId;
+  final String? categoryName;
 
   ServiceRequest({
     required this.id,
@@ -32,9 +34,10 @@ class ServiceRequest {
     this.technicianArea,
     this.technicianRating,
     this.technicianIsOnline,
+    this.categoryId,
+    this.categoryName,
   });
 
-  // Helper getters for status
   bool get isPending => status == 'pending';
   bool get isAccepted => status == 'accepted';
   bool get isCompleted => status == 'completed';
@@ -44,7 +47,7 @@ class ServiceRequest {
   bool get isActive => isPending || isAccepted || isInProgress;
 
   factory ServiceRequest.fromJson(Map<String, dynamic> json) {
-    // Extract technician data - could be nested or direct
+    // Extract technician data
     Map<String, dynamic>? technicianData;
     String techName = 'Unknown';
     String? techEmail;
@@ -54,16 +57,11 @@ class ServiceRequest {
     double? techRating;
     bool? techIsOnline;
 
-    // Try to get technician data from different possible locations
-    if (json['technician'] != null) {
-      technicianData = json['technician'] is Map
-          ? Map<String, dynamic>.from(json['technician'] as Map)
-          : null;
+    if (json['technician'] != null && json['technician'] is Map) {
+      technicianData = Map<String, dynamic>.from(json['technician'] as Map);
     }
 
     if (technicianData != null) {
-      // Try to get technician name from various locations
-      // Case 1: technician['user']['name']
       if (technicianData['user'] != null && technicianData['user'] is Map) {
         final userData = technicianData['user'] as Map;
         techName = userData['name']?.toString() ?? techName;
@@ -71,30 +69,14 @@ class ServiceRequest {
         techPhone = userData['phone']?.toString();
         techIsOnline = userData['is_online'] ?? false;
       }
-
-      // Case 2: technician['name'] (direct)
       if (techName == 'Unknown' && technicianData['name'] != null) {
         techName = technicianData['name'].toString();
       }
-
-      // Case 3: technician['user']['name'] with different casing
-      if (techName == 'Unknown' && technicianData['user'] != null) {
-        final userData = technicianData['user'] as Map;
-        if (userData['name'] != null) {
-          techName = userData['name'].toString();
-        }
-      }
-
-      // Get other technician fields
       techPhoto = technicianData['profile_photo']?.toString();
       techArea = technicianData['area']?.toString();
-
-      // Get rating
       if (technicianData['rating'] != null) {
         techRating = double.tryParse(technicianData['rating'].toString()) ?? 0.0;
       }
-
-      // Get online status
       if (technicianData['is_online'] != null) {
         techIsOnline = technicianData['is_online'] is bool
             ? technicianData['is_online']
@@ -102,7 +84,6 @@ class ServiceRequest {
       }
     }
 
-    // If still no name, try to get from 'technician_name' field
     if (techName == 'Unknown' && json['technician_name'] != null) {
       techName = json['technician_name'].toString();
     }
@@ -115,6 +96,15 @@ class ServiceRequest {
     }
     if (serviceName == 'Service' && json['service_name'] != null) {
       serviceName = json['service_name'].toString();
+    }
+
+    // Extract category data
+    int? categoryId;
+    String? categoryName;
+    if (json['category'] != null && json['category'] is Map) {
+      final categoryData = json['category'] as Map;
+      categoryId = categoryData['id'] ?? categoryData['service_categoryID'];
+      categoryName = categoryData['name'] ?? categoryData['category_name'];
     }
 
     // Extract customer data
@@ -142,6 +132,8 @@ class ServiceRequest {
       technicianArea: techArea,
       technicianRating: techRating,
       technicianIsOnline: techIsOnline,
+      categoryId: categoryId,
+      categoryName: categoryName,
     );
   }
 
@@ -155,5 +147,7 @@ class ServiceRequest {
     'service_name': serviceName,
     'customer_id': customerId,
     'customer_name': customerName,
+    'category_id': categoryId,
+    'category_name': categoryName,
   };
 }

@@ -17,7 +17,6 @@ class RequestProvider extends ChangeNotifier {
   String? get error => _error;
   double get submissionProgress => _submissionProgress;
 
-  // Statistics getters
   int get pendingCount => _requests.where((r) => r.isPending).length;
   int get acceptedCount => _requests.where((r) => r.isAccepted).length;
   int get completedCount => _requests.where((r) => r.isCompleted).length;
@@ -55,7 +54,7 @@ class RequestProvider extends ChangeNotifier {
           .map((e) => ServiceRequest.fromJson(e as Map<String, dynamic>))
           .toList();
     } else {
-      _error = res.message;
+      _error = res.message ?? 'Failed to load requests';
     }
 
     _isLoading = false;
@@ -63,7 +62,11 @@ class RequestProvider extends ChangeNotifier {
   }
 
   Future<bool> createRequest(
-      int technicianId, int serviceId, String description) async {
+      int technicianId,
+      int serviceId,
+      String description, {
+        int? categoryId,
+      }) async {
     if (_isSubmitting) return false;
 
     _submissionProgress = 0.0;
@@ -79,12 +82,20 @@ class RequestProvider extends ChangeNotifier {
 
     updateProgress(0.1);
 
-    final res = await _api.createRequest({
+    final Map<String, dynamic> requestData = {
       'technician_id': technicianId,
       'service_id': serviceId,
       'description': description,
-    });
+    };
 
+    if (categoryId != null) {
+      requestData['category_id'] = categoryId;
+    }
+
+    // Log the request data for debugging
+    debugPrint('Creating request with data: $requestData');
+
+    final res = await _api.createRequest(requestData);
     updateProgress(0.6);
 
     _isLoading = false;
@@ -97,9 +108,10 @@ class RequestProvider extends ChangeNotifier {
       await loadMyRequests();
       return true;
     } else {
-      _error = res.message;
+      _error = res.message ?? 'Failed to create request';
       _submissionProgress = 0.0;
       notifyListeners();
+      debugPrint('Create request error: ${res.message}');
       return false;
     }
   }

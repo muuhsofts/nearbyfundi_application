@@ -21,28 +21,13 @@ class AppLocalizationsSw extends AppLocalizations {
   String get near => 'Karibu na';
 
   @override
-  String get searchPlaceFirst => 'Tafuta eneo kwanza ili kuiona kwenye ramani.';
-
-  @override
-  String get searchPlaceHint => 'Rudi nyuma na utafute eneo kuona mafundi karibu.';
-
-  @override
-  String get viewProfile => 'Angalia Profaili';
-
-  @override
-  String get directions => 'Njia';
-
-  @override
-  String get kmAway => 'km mbali';
-
-  @override
   String get blog => 'Blogu';
 
   @override
-  String get requests => 'Maombi Yangu';
+  String get requests => 'Maombi ';
 
   @override
-  String get myRequests => 'Maombi Yangu';
+  String get myRequests => 'Maombi ';
 
   @override
   String get profile => 'Profaili';
@@ -51,31 +36,170 @@ class AppLocalizationsSw extends AppLocalizations {
   String get settings => 'Mipangilio';
 
   @override
-  String get language => 'Lugha';
+  String get chat => 'Mazungumzo';
 
   @override
-  String get logout => 'Toka';
+  String get payments => 'Malipo';
 
   @override
-  String get deleteAccount => 'Futa Akaunti';
+  String get findFundi => 'Tafuta Fundi';
 
   @override
-  String get pushNotifications => 'Arifa za Kusukuma';
+  String get searchLocation => '📍 Tafuta eneo...';
 
   @override
-  String get receiveAlerts => 'Pokea arifa kuhusu maombi na sasisho';
+  String get search => 'Tafuta';
 
   @override
-  String get aboutUs => 'Kuhusu Sisi';
+  String get filterByService => '🔧 Chuja kwa huduma...';
 
   @override
-  String get faq => 'Maswali Yanayoulizwa Sana';
+  String get all => 'Zote';
 
   @override
-  String get terms => 'Masharti na Sheria';
+  String get allServices => 'Huduma Zote';
 
   @override
-  String get contactUs => 'Wasiliana Nasi';
+  String get category => 'Kategoria';
+
+  @override
+  String get noServicesFound => 'Hakuna huduma zilizopatikana';
+
+  @override
+  String get noServicesMatch => 'Hakuna huduma zinazolingana na kichujio chako';
+
+  @override
+  String get clearAllFilters => 'Futa Vichujio Vyote';
+
+  @override
+  String get clearFilters => 'Futa vichujio';
+
+  @override
+  String get filtered => 'Imechujwa';
+
+  @override
+  String get onlineOnly => 'Walioko mtandaoni pekee';
+
+  @override
+  String get viewOnMap => 'Angalia kwenye ramani';
+
+  @override
+  String get refresh => 'Fresha';
+
+  @override
+  String get noFundisFound => 'Hakuna Mafundi Waliopatikana';
+
+  @override
+  String get tryAdjustingSearch => 'Jaribu kubadilisha utafutaji wako au eneo';
+
+  @override
+  String get fundisFound => 'mafundi wamepatikana';
+
+  @override
+  String get searchingForFundis => 'Kutafuta mafundi...';
+
+  @override
+  String get oopsSomethingWentWrong => 'Lo! Kuna hitilafu imetokea';
+
+  @override
+  String get pleaseTryAgain => 'Tafadhali jaribu tena';
+
+  @override
+  String get retry => 'Jaribu Tena';
+
+  @override
+  String noResultsFor(Object service) {
+    return 'Hakuna Mafundi kwa $service';
+  }
+
+  @override
+  String noResultsForServiceCategory(Object category, Object service) {
+    return 'Hakuna Mafundi kwa $service ($category)';
+  }
+
+  @override
+  String get tryDifferentCategoryOrService => 'Jaribu kategoria au huduma nyingine';
+
+  @override
+  String get tryDifferentService => 'Jaribu kuchagua huduma nyingine';
+
+  @override
+  String get tryAdjustingLocation => 'Jaribu kubadilisha utafutaji wako au eneo';
+
+  @override
+  String get suggestionClearFilters => 'Jaribu kuondoa vichujio vyako';
+
+  @override
+  String get suggestionDifferentLocation => 'Jaribu eneo lingine';
+
+  @override
+  String get suggestionDifferentService => 'Jaribu huduma nyingine';
+
+  @override
+  String get suggestionRemoveFilters => 'Jaribu kuondoa vichujio vya huduma/kategoria';
+
+  @override
+  String get suggestionIncreaseRadius => 'Jaribu kuongeza eneo la utafutaji';
+
+  @override
+  String get suggestionAllCategories => 'Jaribu kuchagua \'Kategoria Zote\'';
+
+  @override
+  String get suggestionAllServices => 'Jaribu kuchagua \'Huduma Zote\'';
+
+  @override
+  String get kmAway => 'km mbali';
+
+  @override
+  String get viewProfile => 'Angalia Profaili';
+
+  @override
+  String get directions => 'Njia';
+
+  @override
+  String get online => 'Mtandaoni';
+
+  @override
+  String get offline => 'Nje ya Mtandao';
+
+  @override
+  String get request => 'Omba';
+
+  @override
+  String get requestThisFundi => 'Omba Fundi huyu';
+
+  @override
+  String get requestAlreadySent => 'Ombi tayari limetumwa';
+
+  @override
+  String get hourlyRate => 'Kiwango cha Saa';
+
+  @override
+  String get tzs => 'TZS';
+
+  @override
+  String get socialMedia => 'Mitandao ya Kijamii';
+
+  @override
+  String get contact => 'Mawasiliano';
+
+  @override
+  String get call => 'Piga';
+
+  @override
+  String get items => 'vitu';
+
+  @override
+  String get sendingToTechnician => 'Inatuma kwa fundi...';
+
+  @override
+  String get awaitingResponse => 'Kusubiri jibu...';
+
+  @override
+  String get noServicesSelected => 'Hakuna huduma zilizochaguliwa';
+
+  @override
+  String get selectService => 'Chagua huduma';
 
   @override
   String get welcomeBack => 'Karibu Tena';
@@ -162,133 +286,13 @@ class AppLocalizationsSw extends AppLocalizations {
   String get resetPasswordButton => 'Weka upya Nenosiri';
 
   @override
-  String get editProfile => 'Hariri Profaili';
-
-  @override
-  String get updateInfo => 'Sasisha Taarifa Zako';
-
-  @override
-  String get name => 'Jina Kamili';
-
-  @override
-  String get phone => 'Simu';
-
-  @override
-  String get saveChanges => 'Hifadhi Mabadiliko';
-
-  @override
-  String get profileUpdated => 'Profaili imesasishwa';
-
-  @override
-  String get updateFailed => 'Kusasisha kumeshindwa';
-
-  @override
-  String get noRequestsYet => 'Hakuna maombi bado';
-
-  @override
-  String get requestsWillAppear => 'Maombi yako yataonekana hapa';
-
-  @override
-  String get cancelRequest => 'Ghairi Ombi';
-
-  @override
-  String get areYouSureCancel => 'Una uhakika unataka kughairi ombi hili?';
-
-  @override
-  String get requestAlreadySent => 'Ombi tayari limetumwa';
-
-  @override
-  String get requestThisFundi => 'Omba Fundi huyu';
-
-  @override
-  String get aboutFundi => 'Kuhusu';
-
-  @override
-  String get servicesAndRate => 'Huduma na Kiwango';
-
-  @override
-  String get portfolio => 'Kwingineko';
-
-  @override
-  String get hourlyRate => 'Kiwango cha Saa';
-
-  @override
-  String get noPortfolioItems => 'Hakuna vitu kwenye kwingineko.';
-
-  @override
-  String get noBlogPosts => 'Bado hakuna machapisho.';
-
-  @override
-  String get noFundisFound => 'Hakuna fundi waliopatikana. Jaribu eneo lingine.';
-
-  @override
-  String get enterPlace => 'Ingiza mahali (mfano Ubungo)';
-
-  @override
-  String get search => 'Tafuta';
-
-  @override
-  String get onlineOnly => 'Walioko mtandaoni pekee';
-
-  @override
-  String get selectService => 'Chagua huduma';
-
-  @override
-  String get pleaseSelectService => 'Tafadhali chagua huduma';
-
-  @override
-  String get editProfileTitle => 'Hariri Profaili';
-
-  @override
-  String get version => 'Toleo';
-
-  @override
-  String get retry => 'Jaribu Tena';
-
-  @override
-  String get getInTouch => 'Wasiliana Nasi';
-
-  @override
-  String get email => 'Barua pepe';
-
-  @override
-  String get website => 'Tovuti';
-
-  @override
-  String get phoneNumbers => 'Namba za Simu';
-
-  @override
-  String get call => 'Piga';
-
-  @override
-  String get noFaqs => 'Hakuna Maswali Yanayoulizwa Sana.';
-
-  @override
-  String get noContent => 'Hakuna maudhui.';
-
-  @override
-  String get welcomeFundi => 'Tafuta Fundi wa Kuaminika';
-
-  @override
-  String get findTrustedDesc => 'Ungana na fundi walio na uthibitisho na uzoefu karibu nawe. Omba huduma kama vile ukarabati wa AC, mabomba, na mengine.';
-
-  @override
-  String get requestTrack => 'Omba na Fuatilia';
-
-  @override
-  String get requestTrackDesc => 'Tuma ombi la huduma, kubaliwa na fundi, na fuata hali kwa wakati halisi. Rahisi, haraka, na ya kuaminika.';
-
-  @override
-  String get getStarted => 'Anza';
-
-  @override
-  String get next => 'Inayofuata';
-
-  @override
-  String get skip => 'Ruka';
+  String get logout => 'Toka';
 
   @override
   String get logoutConfirmation => 'Una uhakika unataka kutoka?';
+
+  @override
+  String get deleteAccount => 'Futa Akaunti';
 
   @override
   String get deleteAccountConfirmation => 'Kitendo hiki ni cha kudumu. Data yako yote itapotea. Una uhakika?';
@@ -309,25 +313,115 @@ class AppLocalizationsSw extends AppLocalizations {
   String get delete => 'Futa';
 
   @override
-  String get online => 'Mtandaoni';
+  String get editProfile => 'Hariri Profaili';
 
   @override
-  String get offline => 'Nje ya Mtandao';
+  String get editProfileTitle => 'Hariri Profaili';
 
   @override
-  String get request => 'Omba';
+  String get updateInfo => 'Sasisha Taarifa Zako';
+
+  @override
+  String get name => 'Jina Kamili';
+
+  @override
+  String get phone => 'Simu';
+
+  @override
+  String get saveChanges => 'Hifadhi Mabadiliko';
+
+  @override
+  String get profileUpdated => 'Profaili imesasishwa';
+
+  @override
+  String get updateFailed => 'Kusasisha kumeshindwa';
 
   @override
   String get guest => 'Mgeni';
-
-  @override
-  String get generalServices => 'Huduma za Jumla';
 
   @override
   String get technician => 'Fundi';
 
   @override
   String get technicianNotFound => 'Fundi hapatikani';
+
+  @override
+  String get about => 'Kuhusu';
+
+  @override
+  String get bio => 'Maelezo';
+
+  @override
+  String get experience => 'Uzoefu';
+
+  @override
+  String get years => 'miaka';
+
+  @override
+  String get area => 'Eneo';
+
+  @override
+  String get accountStatus => 'Hali ya Akaunti';
+
+  @override
+  String get active => 'Inatumika';
+
+  @override
+  String get onlineStatus => 'Hali ya Mtandao';
+
+  @override
+  String get youAreOnline => 'Uko mtandaoni';
+
+  @override
+  String get youAreOffline => 'Uko nje ya mtandao';
+
+  @override
+  String get servicesIOffer => 'Huduma Ninazotoa';
+
+  @override
+  String get selectServicesDialogTitle => 'Chagua Huduma';
+
+  @override
+  String get selectAtLeastOneService => 'Tafadhali chagua angalau huduma moja';
+
+  @override
+  String get servicesUpdated => 'Huduma zimesasishwa';
+
+  @override
+  String get pushNotifications => 'Arifa za Kusukuma';
+
+  @override
+  String get receiveAlerts => 'Pokea arifa kuhusu maombi na sasisho';
+
+  @override
+  String get language => 'Lugha';
+
+  @override
+  String get aboutUs => 'Kuhusu Sisi';
+
+  @override
+  String get faq => 'Maswali Yanayoulizwa Sana';
+
+  @override
+  String get terms => 'Masharti na Sheria';
+
+  @override
+  String get contactUs => 'Wasiliana Nasi';
+
+  @override
+  String get version => 'Toleo';
+
+  @override
+  String get noRequestsYet => 'Hakuna maombi bado';
+
+  @override
+  String get requestsWillAppear => 'Maombi yako yataonekana hapa';
+
+  @override
+  String get cancelRequest => 'Ghairi Ombi';
+
+  @override
+  String get areYouSureCancel => 'Una uhakika unataka kughairi ombi hili?';
 
   @override
   String get requestSent => 'Ombi limetumwa kwa mafanikio!';
@@ -340,12 +434,6 @@ class AppLocalizationsSw extends AppLocalizations {
 
   @override
   String get creatingRequest => 'Kuunda ombi la huduma...';
-
-  @override
-  String get sendingToTechnician => 'Kutuma kwa fundi...';
-
-  @override
-  String get awaitingResponse => 'Kusubiri jibu...';
 
   @override
   String get failedToSubmit => 'Imeshindwa kutuma ombi.';
@@ -363,6 +451,27 @@ class AppLocalizationsSw extends AppLocalizations {
   String get done => 'Imekamilika';
 
   @override
+  String get pleaseSelectService => 'Tafadhali chagua huduma';
+
+  @override
+  String get newRequest => 'Ombi Jipya';
+
+  @override
+  String get requestAccepted => 'Ombi Limekubaliwa';
+
+  @override
+  String get requestRejected => 'Ombi Limekataliwa';
+
+  @override
+  String get requestInProgress => 'Ombi Linaendelea';
+
+  @override
+  String get requestCompleted => 'Ombi Limekamilika';
+
+  @override
+  String get noBlogPosts => 'Bado hakuna machapisho.';
+
+  @override
   String get noCommentsYet => 'Hakuna maoni bado. Kuwa wa kwanza!';
 
   @override
@@ -370,135 +479,6 @@ class AppLocalizationsSw extends AppLocalizations {
 
   @override
   String get comments => 'Maoni';
-
-  @override
-  String get refresh => 'Fresha';
-
-  @override
-  String get services => 'Huduma';
-
-  @override
-  String get failed => 'Imeshindwa';
-
-  @override
-  String get notifications => 'Arifa';
-
-  @override
-  String get aiAssistant => 'Msaidizi wa AI';
-
-  @override
-  String get payments => 'Malipo';
-
-  @override
-  String get chat => 'Mazungumzo';
-
-  @override
-  String get comingSoon => 'inakuja hivi karibuni!';
-
-  @override
-  String get noConversationsYet => 'Hakuna mazungumzo bado';
-
-  @override
-  String get startChattingWithFundis => 'Anza kuzungumza na fundi karibu nawe';
-
-  @override
-  String get noMessagesYet => 'Hakuna ujumbe bado';
-
-  @override
-  String get sayHelloToStart => 'Sema hello kuanza mazungumzo!';
-
-  @override
-  String get typeAMessage => 'Andika ujumbe...';
-
-  @override
-  String get justNow => 'Sasa hivi';
-
-  @override
-  String get copy => 'Nakili';
-
-  @override
-  String get messageCopied => 'Ujumbe umenakiliwa';
-
-  @override
-  String get messageDeleted => 'Ujumbe umefutwa';
-
-  @override
-  String get failedToSend => 'Imeshindwa kutuma';
-
-  @override
-  String get failedToSendImage => 'Imeshindwa kutuma picha';
-
-  @override
-  String get failedToSendFile => 'Imeshindwa kutuma faili';
-
-  @override
-  String get voiceRecordingComingSoon => 'Kurekodi sauti inakuja hivi karibuni!';
-
-  @override
-  String get selectAtLeastOneService => 'Tafadhali chagua angalau huduma moja';
-
-  @override
-  String get servicesUpdated => 'Huduma zimesasishwa';
-
-  @override
-  String get servicesIOffer => 'Huduma Ninazotoa';
-
-  @override
-  String get noServicesSelected => 'Hakuna huduma zilizochaguliwa';
-
-  @override
-  String get profileDetails => 'Maelezo ya Profaili';
-
-  @override
-  String get bio => 'Maelezo';
-
-  @override
-  String get experience => 'Uzoefu';
-
-  @override
-  String get area => 'Eneo';
-
-  @override
-  String get accountStatus => 'Hali ya Akaunti';
-
-  @override
-  String get active => 'Inatumika';
-
-  @override
-  String get years => 'miaka';
-
-  @override
-  String get tzs => 'TZS';
-
-  @override
-  String get onlineStatus => 'Hali ya Mtandao';
-
-  @override
-  String get youAreOnline => 'Uko mtandaoni';
-
-  @override
-  String get youAreOffline => 'Uko nje ya mtandao';
-
-  @override
-  String get selectServicesDialogTitle => 'Chagua Huduma';
-
-  @override
-  String get pleaseEnterLocation => 'Tafadhali ingiza mahali';
-
-  @override
-  String get allServices => 'Huduma Zote';
-
-  @override
-  String get tryAdjustingSearch => 'Jaribu kubadilisha vigezo vya utafutaji';
-
-  @override
-  String get fundi => 'Fundi';
-
-  @override
-  String get about => 'Kuhusu';
-
-  @override
-  String get rate => 'Kiwango';
 
   @override
   String get postedOn => 'Ilichapishwa tarehe';
@@ -552,14 +532,154 @@ class AppLocalizationsSw extends AppLocalizations {
   String get myPosts => 'Machapisho Yangu';
 
   @override
-  String get searchServiceHint => 'Tafuta huduma (mfano. mabomba, umeme...)';
+  String get portfolio => 'Kwingineko';
 
   @override
-  String get noServicesFound => 'Hakuna huduma zilizopatikana. Jaribu kubadilisha utafutaji.';
+  String get noPortfolioItems => 'Hakuna vitu kwenye kwingineko.';
+
+  @override
+  String get notifications => 'Arifa';
 
   @override
   String get markAllAsRead => 'Weka zote kama zimesomwa';
 
   @override
   String get noNotificationsYet => 'Hakuna arifa bado';
+
+  @override
+  String get notification => 'Arifa';
+
+  @override
+  String get noConversationsYet => 'Hakuna mazungumzo bado';
+
+  @override
+  String get startChattingWithFundis => 'Anza kuzungumza na fundi karibu nawe';
+
+  @override
+  String get noMessagesYet => 'Hakuna ujumbe bado';
+
+  @override
+  String get sayHelloToStart => 'Sema hello kuanza mazungumzo!';
+
+  @override
+  String get typeAMessage => 'Andika ujumbe...';
+
+  @override
+  String get justNow => 'Sasa hivi';
+
+  @override
+  String get copy => 'Nakili';
+
+  @override
+  String get messageCopied => 'Ujumbe umenakiliwa';
+
+  @override
+  String get messageDeleted => 'Ujumbe umefutwa';
+
+  @override
+  String get failedToSend => 'Imeshindwa kutuma';
+
+  @override
+  String get failedToSendImage => 'Imeshindwa kutuma picha';
+
+  @override
+  String get failedToSendFile => 'Imeshindwa kutuma faili';
+
+  @override
+  String get voiceRecordingComingSoon => 'Kurekodi sauti inakuja hivi karibuni!';
+
+  @override
+  String get noContent => 'Hakuna maudhui.';
+
+  @override
+  String get getInTouch => 'Wasiliana Nasi';
+
+  @override
+  String get email => 'Barua pepe';
+
+  @override
+  String get website => 'Tovuti';
+
+  @override
+  String get phoneNumbers => 'Namba za Simu';
+
+  @override
+  String get noFaqs => 'Hakuna Maswali Yanayoulizwa Sana.';
+
+  @override
+  String get welcomeFundi => 'Tafuta Fundi wa Kuaminika';
+
+  @override
+  String get findTrustedDesc => 'Ungana na fundi walio na uthibitisho na uzoefu karibu nawe. Omba huduma kama vile ukarabati wa AC, mabomba, na mengine.';
+
+  @override
+  String get requestTrack => 'Omba na Fuatilia';
+
+  @override
+  String get requestTrackDesc => 'Tuma ombi la huduma, kubaliwa na fundi, na fuata hali kwa wakati halisi. Rahisi, haraka, na ya kuaminika.';
+
+  @override
+  String get getStarted => 'Anza';
+
+  @override
+  String get next => 'Inayofuata';
+
+  @override
+  String get skip => 'Ruka';
+
+  @override
+  String get failed => 'Imeshindwa';
+
+  @override
+  String get services => 'Huduma';
+
+  @override
+  String get generalServices => 'Huduma za Jumla';
+
+  @override
+  String get fundi => 'Fundi';
+
+  @override
+  String get rate => 'Kiwango';
+
+  @override
+  String get aboutFundi => 'Kuhusu';
+
+  @override
+  String get servicesAndRate => 'Huduma na Kiwango';
+
+  @override
+  String get searchPlaceFirst => 'Tafuta eneo kwanza ili kuiona kwenye ramani.';
+
+  @override
+  String get searchPlaceHint => 'Rudi nyuma na utafute eneo kuona mafundi karibu.';
+
+  @override
+  String get aiAssistant => 'Msaidizi wa AI';
+
+  @override
+  String get comingSoon => 'inakuja hivi karibuni!';
+
+  @override
+  String get pleaseEnterLocation => 'Tafadhali ingiza mahali';
+
+  @override
+  String get searchServiceHint => 'Tafuta huduma (mfano. mabomba, umeme...)';
+
+  @override
+  String noFundisForService(Object service) {
+    return 'Hakuna mafundi kwa $service';
+  }
+
+  @override
+  String get refreshed => 'Imefresha';
+
+  @override
+  String get refreshFailed => 'Kufresha kumeshindwa';
+
+  @override
+  String get pullToRefresh => 'Buruta ili kufresha';
+
+  @override
+  String get loading => 'Inapakia...';
 }

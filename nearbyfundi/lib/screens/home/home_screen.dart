@@ -1,5 +1,8 @@
+// screens/home/home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../providers/post_provider.dart';
+import '../../providers/request_provider.dart';
 import 'nearby_screen.dart';
 import 'nearby_map_screen.dart';
 import 'blogs_screen.dart';
@@ -10,6 +13,8 @@ import '../../providers/chat_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../providers/technician_provider.dart';
+import '../../providers/service_provider.dart';
+import '../../providers/settings_provider.dart';
 import '../../models/chat_user.dart';
 import '../../config/app_theme.dart';
 import '../../config/app_routes.dart';
@@ -25,10 +30,20 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
   late final List<Widget> _screens;
+  String _currentLocale = 'en';
 
   @override
   void initState() {
     super.initState();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final settings = context.read<SettingsProvider>();
+      _currentLocale = settings.locale;
+
+      // Refresh services with current locale
+      context.read<ServiceProvider>().fetchServices(locale: _currentLocale);
+    });
+
     _screens = const [
       NearbyScreen(),
       BlogsScreen(),
@@ -67,9 +82,71 @@ class _HomeScreenState extends State<HomeScreen> {
     context.read<NotificationProvider>().loadNotifications();
   }
 
+  /// Refresh the current screen content
+  Future<void> _refreshCurrentScreen() async {
+    final l10n = AppLocalizations.of(context)!;
+
+    try {
+      // Refresh based on current index
+      switch (_currentIndex) {
+        case 0: // Nearby
+          await context.read<TechnicianProvider>().refreshLastSearch();
+          break;
+
+        case 1: // Blogs
+          await context.read<PostProvider>().fetchPosts(refresh: true);
+          break;
+
+        case 2: // My Requests
+          await context.read<RequestProvider>().loadMyRequests();
+          break;
+
+        case 3: // Chat
+          await context.read<ChatProvider>().refreshConversations();
+          break;
+
+        case 4: // Profile
+          await context.read<AuthProvider>().loadUser();
+          break;
+      }
+
+      // Always refresh notifications and services
+      await context.read<NotificationProvider>().loadNotifications();
+
+      // Refresh services if locale changed
+      final settings = context.read<SettingsProvider>();
+      if (_currentLocale != settings.locale) {
+        _currentLocale = settings.locale;
+        await context.read<ServiceProvider>().fetchServices(locale: _currentLocale);
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.refreshed),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 1),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.refreshFailed),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
+  }
+
   void _showNotifications(BuildContext context) {
     final notificationProvider = context.read<NotificationProvider>();
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
 
     showModalBottomSheet(
       context: context,
@@ -88,7 +165,6 @@ class _HomeScreenState extends State<HomeScreen> {
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  // Handle
                   Container(
                     width: 40,
                     height: 4,
@@ -102,7 +178,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Notifications',
+                        l10n.notifications,
                         style: theme.textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -112,7 +188,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           notificationProvider.markAllAsRead();
                           Navigator.pop(ctx);
                         },
-                        child: const Text('Mark all as read'),
+                        child: Text(l10n.markAllAsRead),
                       ),
                     ],
                   ),
@@ -138,7 +214,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                                 const SizedBox(height: 16),
                                 Text(
-                                  'No notifications yet',
+                                  l10n.noNotificationsYet,
                                   style: TextStyle(
                                     color: Colors.grey.shade600,
                                     fontSize: 16,
@@ -168,6 +244,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   setState(() => _currentIndex = 2);
                                 }
                               },
+                              locale: _currentLocale,
                             );
                           },
                         );
@@ -188,6 +265,16 @@ class _HomeScreenState extends State<HomeScreen> {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+
+    // Update locale when settings change
+    final settings = context.watch<SettingsProvider>();
+    if (_currentLocale != settings.locale) {
+      _currentLocale = settings.locale;
+      // Refresh services with new locale
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        context.read<ServiceProvider>().fetchServices(locale: _currentLocale);
+      });
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -223,7 +310,16 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: theme.colorScheme.surface,
         foregroundColor: theme.colorScheme.onSurface,
         actions: [
-          // 👇 Notification bell (only)
+          // Refresh button
+          IconButton(
+            icon: Icon(
+              Icons.refresh_rounded,
+              color: theme.colorScheme.onSurface,
+            ),
+            onPressed: _refreshCurrentScreen,
+            tooltip: l10n.refresh,
+          ),
+          // Notification bell
           Consumer<NotificationProvider>(
             builder: (context, notificationProvider, child) {
               final unreadCount = notificationProvider.unreadCount;
@@ -269,7 +365,12 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: _screens[_currentIndex],
+      body: RefreshIndicator(
+        onRefresh: _refreshCurrentScreen,
+        color: theme.primaryColor,
+        backgroundColor: theme.colorScheme.surface,
+        child: _screens[_currentIndex],
+      ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           boxShadow: [
@@ -299,20 +400,20 @@ class _HomeScreenState extends State<HomeScreen> {
               backgroundColor: theme.colorScheme.surface,
               elevation: 0,
               items: [
-                const BottomNavigationBarItem(
-                  icon: Icon(Icons.map_outlined),
-                  activeIcon: Icon(Icons.map_rounded),
-                  label: 'Nearby',
+                BottomNavigationBarItem(
+                  icon: const Icon(Icons.map_outlined),
+                  activeIcon: const Icon(Icons.map_rounded),
+                  label: l10n.nearby,
                 ),
-                const BottomNavigationBarItem(
-                  icon: Icon(Icons.article_outlined),
-                  activeIcon: Icon(Icons.article_rounded),
-                  label: 'Blog',
+                BottomNavigationBarItem(
+                  icon: const Icon(Icons.article_outlined),
+                  activeIcon: const Icon(Icons.article_rounded),
+                  label: l10n.blog,
                 ),
-                const BottomNavigationBarItem(
-                  icon: Icon(Icons.list_alt_outlined),
-                  activeIcon: Icon(Icons.list_alt_rounded),
-                  label: 'Requests',
+                BottomNavigationBarItem(
+                  icon: const Icon(Icons.list_alt_outlined),
+                  activeIcon: const Icon(Icons.list_alt_rounded),
+                  label: l10n.requests,
                 ),
                 BottomNavigationBarItem(
                   icon: Stack(
@@ -373,12 +474,12 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                     ],
                   ),
-                  label: 'Chat',
+                  label: l10n.chat,
                 ),
-                const BottomNavigationBarItem(
-                  icon: Icon(Icons.person_outline),
-                  activeIcon: Icon(Icons.person_rounded),
-                  label: 'Profile',
+                BottomNavigationBarItem(
+                  icon: const Icon(Icons.person_outline),
+                  activeIcon: const Icon(Icons.person_rounded),
+                  label: l10n.profile,
                 ),
               ],
             );
@@ -390,21 +491,43 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // ================================================================
-// Notification Tile (unchanged, just reused)
+// Notification Tile with language support
 // ================================================================
 class _NotificationTile extends StatelessWidget {
   final Map<String, dynamic> notification;
   final VoidCallback onTap;
+  final String locale;
 
   const _NotificationTile({
     required this.notification,
     required this.onTap,
+    required this.locale,
   });
+
+  String _getTypeLabel(String? type) {
+    switch (type) {
+      case 'chat_message':
+        return 'Chat';
+      case 'new_request':
+        return 'New Request';
+      case 'request_accepted':
+        return 'Request Accepted';
+      case 'request_rejected':
+        return 'Request Rejected';
+      case 'request_in_progress':
+        return 'In Progress';
+      case 'request_completed':
+        return 'Completed';
+      default:
+        return 'Notification';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isRead = notification['is_read'] ?? false;
+    final l10n = AppLocalizations.of(context)!;
 
     return ListTile(
       onTap: onTap,
@@ -419,15 +542,29 @@ class _NotificationTile extends StatelessWidget {
         ),
       ),
       title: Text(
-        notification['title'] ?? 'Notification',
+        notification['title'] ?? l10n.notification,
         style: TextStyle(
           fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
         ),
       ),
-      subtitle: Text(
-        notification['body'] ?? '',
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            notification['body'] ?? '',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall,
+          ),
+          if (notification['type'] != null)
+            Text(
+              _getTypeLabel(notification['type']),
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.primaryColor,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+        ],
       ),
       trailing: isRead
           ? null

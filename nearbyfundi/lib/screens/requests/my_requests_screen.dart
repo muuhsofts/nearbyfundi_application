@@ -1,3 +1,4 @@
+// screens/requests/my_requests_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -335,16 +336,30 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ---- Top row: service name + status ----
+                    // ---- Top row: service name + category + status ----
                     Row(
                       children: [
                         Expanded(
-                          child: Text(
-                            r.serviceName,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 17,
-                            ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                r.serviceName,
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 17,
+                                ),
+                              ),
+                              if (r.categoryName != null && r.categoryName!.isNotEmpty)
+                                Text(
+                                  '📂 ${r.categoryName}',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: AppTheme.primary,
+                                    fontWeight: FontWeight.w500,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
                         Container(
@@ -569,6 +584,16 @@ class _RequestDetailModal extends StatelessWidget {
                 theme: theme,
               ),
               const SizedBox(height: 12),
+
+              // ─── Category ──────────────────────────────────────────────
+              if (request.categoryName != null && request.categoryName!.isNotEmpty)
+                _buildDetailRow(
+                  label: 'Category',
+                  value: request.categoryName!,
+                  icon: Icons.category_rounded,
+                  theme: theme,
+                ),
+              if (request.categoryName != null) const SizedBox(height: 12),
 
               // ─── Status ─────────────────────────────────────────────────
               _buildStatusRow(statusColor, statusBg, theme),

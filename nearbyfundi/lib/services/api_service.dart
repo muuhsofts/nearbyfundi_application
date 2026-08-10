@@ -1,5 +1,4 @@
 // lib/services/api_service.dart
-
 import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
@@ -148,13 +147,46 @@ class ApiService {
   Future<ApiResponse> deleteAccount() => _delete('/v1/auth/account');
 
   // ═══════════════════════════════════════════════════════════════════════
-  //  SERVICES
+  //  SERVICES WITH CATEGORIES (V11) - WITH LANGUAGE SUPPORT
   // ═══════════════════════════════════════════════════════════════════════
 
-  Future<ApiResponse> getServices() => _get('/v1/services');
+  Future<ApiResponse> getServicesWithCategories({String locale = 'en'}) =>
+      _get('/v11/services', query: {'locale': locale});
+
+  Future<ApiResponse> getServicesGroupedByCategory({String locale = 'en'}) =>
+      _get('/v11/services/grouped-by-category', query: {'locale': locale});
+
+  Future<ApiResponse> getServicesByCategory(int categoryId, {String locale = 'en'}) =>
+      _get('/v11/services/by-category/$categoryId', query: {'locale': locale});
+
+  Future<ApiResponse> getCategoriesWithServiceCount({String locale = 'en'}) =>
+      _get('/v11/categories/with-service-count', query: {'locale': locale});
+
+  Future<ApiResponse> getServicesDropdown({String locale = 'en'}) =>
+      _get('/v11/services/dropdown', query: {'locale': locale});
+
+  Future<ApiResponse> getServicesByCategorySlug(String slug, {String locale = 'en'}) =>
+      _get('/v11/services/by-category-slug/$slug', query: {'locale': locale});
 
   // ═══════════════════════════════════════════════════════════════════════
-  //  TECHNICIANS (Customer side)
+  //  TECHNICIANS BY SERVICE AND CATEGORY (V4)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  Future<ApiResponse> getTechniciansByServiceCategory({
+    required int serviceId,
+    int? categoryId,
+    String locale = 'en',
+  }) => _get('/v4/technicians/by-service-category', query: {
+    'service_id': serviceId,
+    if (categoryId != null) 'category_id': categoryId,
+    'locale': locale,
+  });
+
+  Future<ApiResponse> getRequestServices({String locale = 'en'}) =>
+      _get('/v4/request-services', query: {'locale': locale});
+
+  // ═══════════════════════════════════════════════════════════════════════
+  //  TECHNICIANS (Customer side) - V1 - WITH LANGUAGE SUPPORT
   // ═══════════════════════════════════════════════════════════════════════
 
   Future<ApiResponse> getNearbyTechnicians({
@@ -162,41 +194,53 @@ class ApiService {
     required double lng,
     int radius = 10,
     int? serviceId,
+    int? categoryId,
+    String locale = 'en',
+    String? search,
   }) => _get('/v1/technicians/nearby', query: {
     'lat': lat,
     'lng': lng,
     'radius': radius,
     if (serviceId != null) 'service_id': serviceId,
+    if (categoryId != null) 'category_id': categoryId,
+    'locale': locale,
+    if (search != null && search.isNotEmpty) 'search': search,
   });
 
   Future<ApiResponse> searchTechniciansByPlace({
     required String place,
     int? serviceId,
+    int? categoryId,
     int radius = 10,
+    String locale = 'en',
+    String? search,
   }) => _get('/v1/technicians/nearby-by-place', query: {
     'place': place,
     if (serviceId != null) 'service_id': serviceId,
+    if (categoryId != null) 'category_id': categoryId,
     'radius': radius,
+    'locale': locale,
+    if (search != null && search.isNotEmpty) 'search': search,
   });
 
-  Future<ApiResponse> getTechnicianDetail(int id) =>
-      _get('/v1/technicians/$id');
+  Future<ApiResponse> getTechnicianDetail(int id, {String locale = 'en'}) =>
+      _get('/v1/technicians/$id', query: {'locale': locale});
 
   // ═══════════════════════════════════════════════════════════════════════
-  //  TECHNICIAN PROFILE (Fundi side)
+  //  TECHNICIAN PROFILE (Fundi side) - V2
   // ═══════════════════════════════════════════════════════════════════════
 
   Future<ApiResponse> getTechnicianProfile() =>
-      _get('/v1/technicians/profile');
+      _get('/v2/technicians/profile');
 
   Future<ApiResponse> updateTechnicianServices(List<int> serviceIds) =>
-      _put('/v1/technicians/services', data: {'service_ids': serviceIds});
+      _put('/v2/technicians/services', data: {'service_ids': serviceIds});
 
   Future<ApiResponse> toggleTechnicianOnline(bool isOnline) =>
-      _post('/v1/technicians/toggle-online', data: {'is_online': isOnline});
+      _patch('/v2/technicians/online-status', data: {'is_online': isOnline});
 
   Future<ApiResponse> updateTechnicianLocation(double latitude, double longitude) =>
-      _post('/v1/technicians/update-location', data: {
+      _post('/v2/technicians/location', data: {
         'latitude': latitude,
         'longitude': longitude,
       });
@@ -204,7 +248,7 @@ class ApiService {
   Future<ApiResponse> sendTechnicianHeartbeat({
     double? latitude,
     double? longitude,
-  }) => _post('/v1/technicians/heartbeat', data: {
+  }) => _post('/v2/technicians/heartbeat', data: {
     if (latitude != null) 'latitude': latitude,
     if (longitude != null) 'longitude': longitude,
   });
@@ -216,7 +260,7 @@ class ApiService {
         filename: path.basename(imageFile.path),
       ),
     });
-    return _post('/v1/technicians/upload-photo', data: formData);
+    return _post('/v2/technicians/profile/photo', data: formData);
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -292,7 +336,7 @@ class ApiService {
       _put('/v3/portfolios/$id/social-links', data: socialLinks);
 
   // ═══════════════════════════════════════════════════════════════════════
-  //  REQUESTS (Booking)
+  //  REQUESTS (Booking) - V4
   // ═══════════════════════════════════════════════════════════════════════
 
   Future<ApiResponse> createRequest(Map<String, dynamic> data) =>
@@ -307,7 +351,7 @@ class ApiService {
       _delete('/v4/requests/$id/cancel');
 
   // ═══════════════════════════════════════════════════════════════════════
-  //  BLOG (Posts, Comments, Likes) - PUBLIC
+  //  BLOG (Posts, Comments, Likes) - V1 & V5
   // ═══════════════════════════════════════════════════════════════════════
 
   Future<ApiResponse> getPosts({int page = 1, int? technicianId}) =>
@@ -327,14 +371,14 @@ class ApiService {
   Future<ApiResponse> deleteComment(int id) => _delete('/v5/comments/$id');
 
   // ═══════════════════════════════════════════════════════════════════════
-  //  BLOG POSTS CRUD (Technicians only) - WITH YOUTUBE SUPPORT
+  //  BLOG POSTS CRUD (Technicians only) - V5
   // ═══════════════════════════════════════════════════════════════════════
 
   Future<ApiResponse> createPost({
     required String title,
     required String content,
     File? imageFile,
-    String? youtubeUrl, // Add YouTube URL support
+    String? youtubeUrl,
   }) async {
     if (imageFile != null && await imageFile.exists()) {
       final formData = FormData.fromMap({
@@ -363,7 +407,7 @@ class ApiService {
         String? title,
         String? content,
         File? imageFile,
-        String? youtubeUrl, // Add YouTube URL support
+        String? youtubeUrl,
       }) async {
     if (imageFile != null && await imageFile.exists()) {
       final formData = FormData.fromMap({
@@ -396,7 +440,7 @@ class ApiService {
   Future<ApiResponse> deletePost(int id) => _delete('/v5/posts/$id');
 
   // ═══════════════════════════════════════════════════════════════════════
-  //  STATIC PAGES
+  //  STATIC PAGES - V1 & V6
   // ═══════════════════════════════════════════════════════════════════════
 
   Future<ApiResponse> getAbout() => _get('/v1/about');
@@ -615,6 +659,25 @@ class ApiService {
   }
 
   // ═══════════════════════════════════════════════════════════════════════
+  //  SERVICE CATEGORIES (V17)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  Future<ApiResponse> getServiceCategories({String locale = 'en'}) =>
+      _get('/v17/service-categories', query: {'locale': locale});
+
+  Future<ApiResponse> getServiceCategory(int id, {String locale = 'en'}) =>
+      _get('/v17/service-categories/$id', query: {'locale': locale});
+
+  Future<ApiResponse> getServiceCategoryBySlug(String slug, {String locale = 'en'}) =>
+      _get('/v17/service-categories/slug/$slug', query: {'locale': locale});
+
+  Future<ApiResponse> getCategoriesDropdown({String locale = 'en'}) =>
+      _get('/v17/service-categories/dropdown/by-id', query: {'locale': locale});
+
+  Future<ApiResponse> getActiveCategoriesDropdown({String locale = 'en'}) =>
+      _get('/v17/service-categories/dropdown/active', query: {'locale': locale});
+
+  // ═══════════════════════════════════════════════════════════════════════
   //  PRIVATE HELPERS
   // ═══════════════════════════════════════════════════════════════════════
 
@@ -665,7 +728,6 @@ class ApiService {
 
   ApiResponse _handleError(dynamic error) {
     if (error is DioException) {
-      // Handle 401 Unauthorized
       if (error.response?.statusCode == 401) {
         return ApiResponse(
           success: false,
@@ -674,7 +736,6 @@ class ApiService {
         );
       }
 
-      // Handle 422 Validation Errors
       if (error.response?.statusCode == 422 && error.response?.data is Map) {
         final data = error.response!.data as Map<String, dynamic>;
         String errorMessage = data['message'] ?? 'Validation failed';
@@ -693,7 +754,6 @@ class ApiService {
         );
       }
 
-      // Handle other error responses
       if (error.response?.data is Map) {
         return ApiResponse(
           success: false,
@@ -702,7 +762,6 @@ class ApiService {
       }
     }
 
-    // Handle network/connection errors
     return ApiResponse(
       success: false,
       message: 'Network error. Please check your connection.',

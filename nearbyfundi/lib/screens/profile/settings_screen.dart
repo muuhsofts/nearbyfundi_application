@@ -1,8 +1,10 @@
+// screens/profile/settings_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../providers/service_provider.dart';
 import '../../config/app_config.dart';
 import '../../config/app_routes.dart';
 import '../../widgets/confirmation_dialog.dart';
@@ -16,6 +18,7 @@ class SettingsScreen extends StatelessWidget {
     final settings = context.watch<SettingsProvider>();
     final auth = context.watch<AuthProvider>();
     final themeProvider = context.watch<ThemeProvider>();
+    final serviceProvider = context.watch<ServiceProvider>();
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
 
@@ -47,6 +50,8 @@ class SettingsScreen extends StatelessWidget {
                 if (val != null) {
                   await settings.updateLocale(val);
                   await auth.updateLocale(val);
+                  // Refresh services with new locale
+                  await serviceProvider.fetchServices(locale: val);
                 }
               },
             ),

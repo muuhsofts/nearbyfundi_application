@@ -1,3 +1,4 @@
+// models/technician.dart
 class TechnicianService {
   final int id;
   final String name;
@@ -12,14 +13,11 @@ class TechnicianService {
   Map<String, dynamic> toJson() => {'id': id, 'name': name};
 }
 
-// ─── UPDATED PORTFOLIO ITEM WITH SOCIAL LINKS ──────────────────────────
 class PortfolioItem {
   final int id;
   final String image;
   final String? description;
   final String? createdAt;
-
-  // NEW: social links from the API
   final String? instagram;
   final String? facebook;
   final String? tiktok;
@@ -39,8 +37,6 @@ class PortfolioItem {
   });
 
   factory PortfolioItem.fromJson(Map<String, dynamic> json) {
-    // The social links might be inside a nested 'social_links' object
-    // or directly in the portfolio JSON.
     final socialLinks = json['social_links'] as Map<String, dynamic>?;
 
     return PortfolioItem(
@@ -68,7 +64,6 @@ class PortfolioItem {
     'telegram': telegram,
   };
 
-  /// Returns true if at least one social link is not null/empty.
   bool get hasSocialLinks {
     return instagram != null ||
         facebook != null ||
@@ -78,7 +73,6 @@ class PortfolioItem {
   }
 }
 
-// ─── TECHNICIAN MODEL (unchanged except the portfolio parsing) ──────────
 class Technician {
   final int id;
   final int userId;
@@ -123,12 +117,10 @@ class Technician {
   });
 
   factory Technician.fromJson(Map<String, dynamic> json, {bool isDetail = false}) {
-    // Helper to safely cast Map to Map<String, dynamic>
     Map<String, dynamic> safeCast(Map<dynamic, dynamic> map) {
       return Map<String, dynamic>.from(map);
     }
 
-    // Helper to safely cast List to List<Map<String, dynamic>>
     List<Map<String, dynamic>> safeCastList(List<dynamic> list) {
       return list.map((item) {
         if (item is Map<dynamic, dynamic>) {
@@ -141,7 +133,6 @@ class Technician {
       }).where((item) => item.isNotEmpty).toList();
     }
 
-    // Extract data from different possible response structures
     Map<String, dynamic> data = json;
 
     if (json['technician'] != null && json['technician'] is Map) {
@@ -168,7 +159,6 @@ class Technician {
           : data['technician'] as Map<String, dynamic>;
     }
 
-    // ---- Get name, email, phone, user_id ----
     String name = data['name'] ?? '';
     if (name.isEmpty && user != null) name = user['name'] ?? '';
     if (name.isEmpty && tech != null) name = tech['name'] ?? '';
@@ -181,7 +171,7 @@ class Technician {
     if (userId == 0 && user != null) userId = user['id'] ?? 0;
     if (userId == 0 && tech != null) userId = tech['user_id'] ?? 0;
 
-    // ---- Parse services ----
+    // Parse services
     List<String> serviceNames = [];
     List<TechnicianService> serviceObjs = [];
 
@@ -220,18 +210,16 @@ class Technician {
       }
     }
 
-    // ---- Parse portfolios (only for detail view) ----
+    // Parse portfolios
     List<PortfolioItem> portfolios = [];
     if (isDetail) {
       dynamic portfoliosData = data['portfolios'] ?? tech?['portfolios'];
       if (portfoliosData != null && portfoliosData is List) {
         final safeList = safeCastList(portfoliosData);
-        // ✅ Use the updated PortfolioItem.fromJson that parses social links
         portfolios = safeList.map((e) => PortfolioItem.fromJson(e)).toList();
       }
     }
 
-    // ---- Parse numeric fields ----
     double parseDouble(dynamic value) {
       if (value == null) return 0.0;
       if (value is num) return value.toDouble();

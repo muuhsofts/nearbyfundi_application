@@ -8,5 +8,5 @@ class AppConfig {
   // 👇 Use Pusher Cloud (works on any network)
   static const String webSocketUrl = 'https://mt1.pusher.com';
 
-  static const String storageBaseUrl = 'http://192.168.43.87:8000/storage';
+  static const String storageBaseUrl = 'http://192.168.100.84:8000/storage';
 }

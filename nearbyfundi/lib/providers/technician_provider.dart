@@ -1,3 +1,4 @@
+// providers/technician_provider.dart
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../models/technician.dart';
@@ -11,15 +12,19 @@ class TechnicianProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
 
-  // The geocoded origin point of the last place search
   double? _searchLat;
   double? _searchLng;
   String? _searchPlace;
 
-  // ─── Last search parameters (for refresh) ──────────────────────────
   String? _lastPlace;
   int? _lastServiceId;
+  int? _lastCategoryId;
   int _lastRadius = 20;
+
+  // Meta info from API response
+  Map<String, dynamic>? _searchMeta;
+  Map<String, dynamic>? _filters;
+  Map<String, dynamic>? _meta;
 
   List<Technician> get technicians => _technicians;
   Technician? get currentTechnician => _currentTechnician;
@@ -30,27 +35,31 @@ class TechnicianProvider extends ChangeNotifier {
   double? get searchLng => _searchLng;
   String? get searchPlace => _searchPlace;
   bool get hasSearchOrigin => _searchLat != null && _searchLng != null;
+  Map<String, dynamic>? get searchMeta => _searchMeta;
+  Map<String, dynamic>? get filters => _filters;
+  Map<String, dynamic>? get meta => _meta;
 
-  // ─── Refresh last search ────────────────────────────────────────────
   Future<void> refreshLastSearch() async {
     if (_lastPlace != null && _lastPlace!.isNotEmpty) {
       await searchByPlace(
         place: _lastPlace!,
         serviceId: _lastServiceId,
-        radius: _lastRadius,
+        categoryId: _lastCategoryId,
+        radius: _lastRadius, locale: '',
       );
     }
   }
 
-  // ─── Search by place name ──────────────────────────────────────────
+  /// Main search method - fetches technicians by place, service, and category
   Future<void> searchByPlace({
     required String place,
     int? serviceId,
-    int radius = 20,
+    int? categoryId,
+    int radius = 20, required String locale, String? search,
   }) async {
-    // Store last search parameters
     _lastPlace = place;
     _lastServiceId = serviceId;
+    _lastCategoryId = categoryId;
     _lastRadius = radius;
 
     _setLoading(true);
@@ -58,6 +67,7 @@ class TechnicianProvider extends ChangeNotifier {
       final res = await _api.searchTechniciansByPlace(
         place: place,
         serviceId: serviceId,
+        categoryId: categoryId,
         radius: radius,
       );
       _handlePlaceSearchResponse(res);
@@ -67,16 +77,19 @@ class TechnicianProvider extends ChangeNotifier {
       _searchLat = null;
       _searchLng = null;
       _searchPlace = null;
+      _searchMeta = null;
+      _filters = null;
+      _meta = null;
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  // ─── Search by coordinates ──────────────────────────────────────────
   Future<void> fetchNearby({
     required double lat,
     required double lng,
     int? serviceId,
+    int? categoryId,
     int radius = 20,
   }) async {
     _setLoading(true);
@@ -86,6 +99,7 @@ class TechnicianProvider extends ChangeNotifier {
         lng: lng,
         radius: radius,
         serviceId: serviceId,
+        categoryId: categoryId,
       );
       _handleListResponse(res);
     } catch (e) {
@@ -96,7 +110,20 @@ class TechnicianProvider extends ChangeNotifier {
     }
   }
 
-  // ─── Get technician detail (without portfolios) ────────────────────
+  /// Clear all technicians and search state
+  void clearTechnicians() {
+    _technicians = [];
+    _searchLat = null;
+    _searchLng = null;
+    _searchPlace = null;
+    _searchMeta = null;
+    _filters = null;
+    _meta = null;
+    _error = null;
+    _isLoading = false;
+    notifyListeners();
+  }
+
   Future<void> fetchTechnicianDetail(int id) async {
     _isLoading = true;
     _error = null;
@@ -119,7 +146,6 @@ class TechnicianProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ─── Fetch technician WITH portfolios ──────────────────────────────
   Future<void> fetchTechnicianWithPortfolios(int id) async {
     _isLoading = true;
     _error = null;
@@ -176,7 +202,6 @@ class TechnicianProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ─── Get own technician profile ─────────────────────────────────────
   Future<void> fetchMyProfile() async {
     _isLoading = true;
     _error = null;
@@ -198,7 +223,6 @@ class TechnicianProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ─── Update services ─────────────────────────────────────────────────
   Future<void> updateServices(List<int> serviceIds) async {
     _isLoading = true;
     _error = null;
@@ -220,7 +244,6 @@ class TechnicianProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ─── Toggle online status ───────────────────────────────────────────
   Future<void> toggleOnline(bool isOnline) async {
     _isLoading = true;
     _error = null;
@@ -242,7 +265,6 @@ class TechnicianProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ─── Update location ─────────────────────────────────────────────────
   Future<void> updateLocation({
     required double latitude,
     required double longitude,
@@ -289,30 +311,11 @@ class TechnicianProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ─── Clear methods ──────────────────────────────────────────────────
-  void clearTechnicians() {
-    _technicians = [];
-    _searchLat = null;
-    _searchLng = null;
-    _searchPlace = null;
-    _error = null;
-    notifyListeners();
-  }
-
-  void clearDetail() {
-    _currentTechnician = null;
-    _error = null;
-    notifyListeners();
-  }
-
-  // ─── Private helpers ─────────────────────────────────────────────────
   void _setLoading(bool value) {
     _isLoading = value;
     if (value) _error = null;
     notifyListeners();
   }
-
-  // ─── Response handlers ──────────────────────────────────────────────
 
   void _handleListResponse(ApiResponse res) {
     if (res.success && res.data != null) {
@@ -346,11 +349,14 @@ class TechnicianProvider extends ChangeNotifier {
   }
 
   void _handlePlaceSearchResponse(ApiResponse res) {
-    if (res.success && res.data != null) {
+    // Always treat as success if we got a response with data
+    if (res.data != null) {
       final data = res.data;
 
       List rawList = [];
       Map<String, dynamic>? searchMeta;
+      Map<String, dynamic>? filters;
+      Map<String, dynamic>? meta;
 
       if (data is Map) {
         if (data['technicians'] != null) {
@@ -361,6 +367,12 @@ class TechnicianProvider extends ChangeNotifier {
         if (data['search'] != null && data['search'] is Map) {
           searchMeta = Map<String, dynamic>.from(data['search'] as Map);
         }
+        if (data['filters'] != null && data['filters'] is Map) {
+          filters = Map<String, dynamic>.from(data['filters'] as Map);
+        }
+        if (data['meta'] != null && data['meta'] is Map) {
+          meta = Map<String, dynamic>.from(data['meta'] as Map);
+        }
       } else if (data is List) {
         rawList = data;
       }
@@ -369,6 +381,10 @@ class TechnicianProvider extends ChangeNotifier {
           .where((e) => e != null)
           .map((e) => Technician.fromJson(e, isDetail: false))
           .toList();
+
+      _searchMeta = searchMeta;
+      _filters = filters;
+      _meta = meta;
 
       if (searchMeta != null) {
         final lat = searchMeta['latitude'];
@@ -382,14 +398,43 @@ class TechnicianProvider extends ChangeNotifier {
         _searchPlace = null;
       }
 
-      _error = null;
+      // Determine if we have a meaningful error message
+      if (_technicians.isEmpty) {
+        // Check if there's a meta with suggestions
+        if (meta != null) {
+          final suggestions = meta['suggestions'] as List? ?? [];
+          final totalNearby = meta['total_technicians_nearby'] ?? 0;
+          final hasFilters = meta['has_filters'] ?? false;
+
+          if (hasFilters && totalNearby > 0) {
+            _error = 'No technicians found with the selected filters. Try clearing filters or selecting a different service/category.';
+          } else if (totalNearby == 0) {
+            _error = res.message ?? 'No technicians found nearby. Try a different location.';
+          } else {
+            _error = res.message ?? 'No technicians found. Try adjusting your search.';
+          }
+
+          // Add suggestions to the error message for display
+          if (suggestions.isNotEmpty) {
+            _error = _error! + '\n\n' + suggestions.join('\n• ');
+          }
+        } else {
+          _error = res.message ?? 'No technicians found. Try adjusting your search.';
+        }
+      } else {
+        _error = null;
+      }
     } else {
-      _error = res.message;
+      _error = res.message ?? 'Failed to search technicians.';
       _technicians = [];
       _searchLat = null;
       _searchLng = null;
       _searchPlace = null;
+      _searchMeta = null;
+      _filters = null;
+      _meta = null;
     }
+
     _isLoading = false;
     notifyListeners();
   }
