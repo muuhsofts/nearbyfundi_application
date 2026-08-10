@@ -57,14 +57,24 @@ class PostController extends BaseApiController
         }
 
         $data = $request->validate([
-            'title'   => 'required|string|max:255',
-            'content' => 'required|string',
-            'image'   => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'title'        => 'required|string|max:255',
+            'content'      => 'required|string',
+            'image'        => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'youtube_url'  => 'nullable|string|max:500',
         ]);
 
-        $post = new Post($data);
+        $post = new Post();
         $post->technician_id = $technician->id;
+        $post->title = $data['title'];
+        $post->content = $data['content'];
 
+        // Handle YouTube URL
+        if ($request->has('youtube_url') && !empty($request->youtube_url)) {
+            $post->youtube_url = $request->youtube_url;
+            $post->youtube_embed = $this->convertToEmbedUrl($request->youtube_url);
+        }
+
+        // Handle image upload
         if ($request->hasFile('image')) {
             $path = $request->file('image')->store('posts', 'public');
             $post->image = $path;
@@ -91,21 +101,45 @@ class PostController extends BaseApiController
         }
 
         $data = $request->validate([
-            'title'   => 'sometimes|string|max:255',
-            'content' => 'sometimes|string',
-            'image'   => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'title'        => 'sometimes|string|max:255',
+            'content'      => 'sometimes|string',
+            'image'        => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'youtube_url'  => 'nullable|string|max:500',
         ]);
 
-        if ($request->hasFile('image')) {
-            if ($post->image && file_exists(public_path($post->image))) {
-                unlink(public_path($post->image));
+        // Handle title and content
+        if ($request->has('title')) {
+            $post->title = $data['title'];
+        }
+        if ($request->has('content')) {
+            $post->content = $data['content'];
+        }
+
+        // Handle YouTube URL
+        if ($request->has('youtube_url')) {
+            if (empty($request->youtube_url)) {
+                $post->youtube_url = null;
+                $post->youtube_embed = null;
+            } else {
+                $post->youtube_url = $request->youtube_url;
+                $post->youtube_embed = $this->convertToEmbedUrl($request->youtube_url);
             }
-            $data['image'] = $request->file('image')->store('posts', 'public');
+        }
+
+        // Handle image upload
+        if ($request->hasFile('image')) {
+            // Delete old image if exists
+            if ($post->image && file_exists(public_path('storage/' . $post->image))) {
+                unlink(public_path('storage/' . $post->image));
+            }
+            $path = $request->file('image')->store('posts', 'public');
+            $post->image = $path;
         }
 
         $old = $post->toArray();
-        $post->update($data);
-        $new = $post->fresh()->toArray();
+        $post->save();
+        $post->refresh();
+        $new = $post->toArray();
 
         $this->logAudit('update_post', 'blog', $id, "Post #{$id} updated", $old, $new);
 
@@ -125,8 +159,8 @@ class PostController extends BaseApiController
             return $this->forbidden('Unauthorized.');
         }
 
-        if ($post->image && file_exists(public_path($post->image))) {
-            unlink(public_path($post->image));
+        if ($post->image && file_exists(public_path('storage/' . $post->image))) {
+            unlink(public_path('storage/' . $post->image));
         }
 
         $post->delete();
@@ -186,5 +220,47 @@ class PostController extends BaseApiController
         $posts = $query->paginate(15);
 
         return $this->successResponse($posts);
+    }
+
+    // ============================================================
+    //  HELPER METHODS
+    // ============================================================
+
+    /**
+     * Convert YouTube URL to embed URL
+     */
+    private function convertToEmbedUrl($url)
+    {
+        // Handle youtu.be format
+        if (strpos($url, 'youtu.be') !== false) {
+            $videoId = $this->extractVideoId($url);
+            if ($videoId) {
+                return "https://www.youtube.com/embed/{$videoId}";
+            }
+        }
+        
+        // Handle youtube.com/watch?v= format
+        if (strpos($url, 'youtube.com/watch') !== false) {
+            parse_str(parse_url($url, PHP_URL_QUERY), $params);
+            if (isset($params['v'])) {
+                return "https://www.youtube.com/embed/{$params['v']}";
+            }
+        }
+        
+        // Handle youtube.com/embed/ format
+        if (strpos($url, 'youtube.com/embed') !== false) {
+            return $url;
+        }
+        
+        return $url;
+    }
+
+    /**
+     * Extract YouTube video ID
+     */
+    private function extractVideoId($url)
+    {
+        preg_match('/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([^&\n?#]+)/', $url, $matches);
+        return $matches[1] ?? null;
     }
 }

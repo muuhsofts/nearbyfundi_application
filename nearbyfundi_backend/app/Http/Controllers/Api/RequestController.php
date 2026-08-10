@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Models\ServiceRequest;
 use App\Models\RequestLog;
 use App\Models\Notification;
+use App\Models\Service;
+use App\Models\ServiceCategory;
 use App\Events\RequestCreated;
 use App\Events\RequestStatusUpdated;
 use App\Mail\RequestAcceptedMail;
@@ -28,9 +30,6 @@ class RequestController extends BaseApiController
         $this->fcm = $fcm;
     }
 
-    /**
-     * Log request actions
-     */
     private function logRequestAction(
         int $requestId,
         int $userId,
@@ -51,17 +50,10 @@ class RequestController extends BaseApiController
                 'ip_address'  => $ip ?? request()->ip(),
             ]);
         } catch (\Exception $e) {
-            Log::error('Failed to log request action: ' . $e->getMessage(), [
-                'request_id' => $requestId,
-                'user_id' => $userId,
-                'action' => $action,
-            ]);
+            Log::error('Failed to log request action: ' . $e->getMessage());
         }
     }
 
-    /**
-     * Create notification for user with sanitized data
-     */
     private function createNotification(int $userId, string $title, string $body, string $type, array $data = []): void
     {
         try {
@@ -89,17 +81,10 @@ class RequestController extends BaseApiController
                 'is_read' => false,
             ]);
         } catch (\Exception $e) {
-            Log::error('Failed to create notification: ' . $e->getMessage(), [
-                'user_id' => $userId,
-                'type' => $type,
-                'error' => $e->getMessage()
-            ]);
+            Log::error('Failed to create notification: ' . $e->getMessage());
         }
     }
 
-    /**
-     * Sanitize data for FCM/notification
-     */
     private function sanitizeData(array $data): array
     {
         $sanitized = [];
@@ -120,7 +105,101 @@ class RequestController extends BaseApiController
     }
 
     /**
-     * CUSTOMER: Create a new request
+     * Get services with their categories for request creation
+     * GET /v4/request-services
+     */
+    public function getServicesWithCategories(Request $request)
+    {
+        try {
+            $services = Service::with(['categories' => function($query) {
+                $query->select('service_categories.service_categoryID', 'category_name', 'slug')
+                      ->orderBy('category_name', 'asc');
+            }])
+            ->select('id', 'name')
+            ->orderBy('name', 'asc')
+            ->get();
+
+            $data = $services->map(function($service) {
+                return [
+                    'id' => $service->id,
+                    'name' => $service->name,
+                    'categories' => $service->categories->map(function($category) {
+                        return [
+                            'id' => $category->service_categoryID,
+                            'name' => $category->category_name,
+                            'slug' => $category->slug,
+                        ];
+                    })
+                ];
+            });
+
+            return $this->successResponse($data, 'Services with categories retrieved successfully');
+        } catch (\Exception $e) {
+            Log::error('Error fetching services with categories: ' . $e->getMessage());
+            return $this->errorResponse('Failed to fetch services. Please try again.', 500);
+        }
+    }
+
+    /**
+     * Get technicians by service and category
+     * GET /v4/technicians/by-service-category
+     */
+    public function getTechniciansByServiceCategory(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'service_id' => 'required|exists:services,id',
+                'category_id' => 'nullable|exists:service_categories,service_categoryID',
+            ]);
+
+            $query = \App\Models\Technician::with(['user', 'services'])
+                ->whereHas('user', function($q) {
+                    $q->where('is_active', true);
+                })
+                ->where('verified', true);
+
+            $query->whereHas('services', function($q) use ($validated) {
+                $q->where('service_id', $validated['service_id']);
+            });
+
+            if (!empty($validated['category_id'])) {
+                $query->whereHas('services.categories', function($q) use ($validated) {
+                    $q->where('service_categoryID', $validated['category_id']);
+                });
+            }
+
+            $technicians = $query->get();
+
+            $data = $technicians->map(function($technician) {
+                return [
+                    'id' => $technician->id,
+                    'name' => $technician->user->name ?? 'Unknown',
+                    'email' => $technician->user->email ?? null,
+                    'phone' => $technician->user->phone ?? null,
+                    'profile_photo' => $technician->profile_photo ? url($technician->profile_photo) : null,
+                    'area' => $technician->area,
+                    'rating' => (float) ($technician->rating ?? 0),
+                    'is_online' => (bool) ($technician->is_online ?? false),
+                    'services' => $technician->services->map(function($service) {
+                        return [
+                            'id' => $service->id,
+                            'name' => $service->name,
+                        ];
+                    }),
+                ];
+            });
+
+            return $this->successResponse($data, 'Technicians retrieved successfully');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return $this->validationError($e->errors());
+        } catch (\Exception $e) {
+            Log::error('Error fetching technicians by service/category: ' . $e->getMessage());
+            return $this->errorResponse('Failed to fetch technicians. Please try again.', 500);
+        }
+    }
+
+      /**
+     * CUSTOMER: Create a new request with service and category
      * POST /v4/requests
      */
     public function store(Request $request)
@@ -135,11 +214,36 @@ class RequestController extends BaseApiController
             $data = $request->validate([
                 'technician_id' => 'required|exists:technicians,id',
                 'service_id'    => 'required|exists:services,id',
+                'category_id'   => 'nullable|exists:service_categories,service_categoryID',
                 'description'   => 'required|string|min:5',
             ]);
 
-            // ✅ FIXED: Allow re-booking after cancellation
-            // Check for existing active request (excluding 'cancelled' status)
+            // Log the incoming request data for debugging
+            Log::info('Request creation data received:', $data);
+
+            // Verify that the service has the selected category
+            if (!empty($data['category_id'])) {
+                $service = Service::find($data['service_id']);
+                
+                if (!$service) {
+                    return $this->errorResponse('Service not found.', 404);
+                }
+
+                // FIXED: Use the hasCategory method which handles ambiguity
+                if (!$service->hasCategory($data['category_id'])) {
+                    Log::warning('Category not associated with service', [
+                        'service_id' => $data['service_id'],
+                        'category_id' => $data['category_id']
+                    ]);
+                    
+                    return $this->errorResponse(
+                        'The selected category is not associated with this service.',
+                        422
+                    );
+                }
+            }
+
+            // Check for existing active request
             $existing = ServiceRequest::where('customer_id', $user->id)
                 ->where('technician_id', $data['technician_id'])
                 ->whereIn('status', ['pending', 'accepted', 'in_progress'])
@@ -158,11 +262,14 @@ class RequestController extends BaseApiController
                 'customer_id'   => $user->id,
                 'technician_id' => $data['technician_id'],
                 'service_id'    => $data['service_id'],
+                'category_id'   => $data['category_id'] ?? null,
                 'description'   => $data['description'],
                 'status'        => 'pending',
             ]);
 
-            $serviceRequest->load(['customer', 'technician.user', 'service']);
+            Log::info('Request created successfully:', ['request_id' => $serviceRequest->id]);
+
+            $serviceRequest->load(['customer', 'technician.user', 'service', 'category']);
 
             DB::commit();
 
@@ -182,26 +289,26 @@ class RequestController extends BaseApiController
                         ->send(new RequestCreatedMail($serviceRequest));
                 }
             } catch (\Exception $e) {
-                Log::error('Failed to send request created email: ' . $e->getMessage(), [
-                    'request_id' => $serviceRequest->id,
-                    'technician_id' => $serviceRequest->technician_id
-                ]);
+                Log::error('Failed to send request created email: ' . $e->getMessage());
             }
 
             // Send FCM notification to technician
             try {
                 if ($serviceRequest->technician && $serviceRequest->technician->user) {
                     $technicianUser = $serviceRequest->technician->user;
-                    
+                    $serviceName = $serviceRequest->service->name ?? 'Service';
+                    $categoryName = $serviceRequest->category->category_name ?? '';
+
                     $this->fcm->sendToUser(
                         $technicianUser,
                         'New Service Request',
-                        "You have a new request for {$serviceRequest->service->name}",
+                        "You have a new request for {$serviceName}" . ($categoryName ? " ({$categoryName})" : ""),
                         $this->sanitizeData([
                             'request_id' => $serviceRequest->id,
                             'type' => 'new_request',
                             'customer_name' => $user->name ?? 'Customer',
-                            'service_name' => $serviceRequest->service->name ?? 'Service',
+                            'service_name' => $serviceName,
+                            'category_name' => $categoryName,
                             'description' => $serviceRequest->description,
                         ])
                     );
@@ -209,22 +316,20 @@ class RequestController extends BaseApiController
                     $this->createNotification(
                         $technicianUser->id,
                         'New Service Request',
-                        "You have a new request for {$serviceRequest->service->name} from {$user->name}",
+                        "You have a new request for {$serviceName}" . ($categoryName ? " ({$categoryName})" : "") . " from {$user->name}",
                         'new_request',
                         [
                             'request_id' => $serviceRequest->id,
                             'customer_id' => $user->id,
                             'customer_name' => $user->name,
-                            'service_name' => $serviceRequest->service->name,
+                            'service_name' => $serviceName,
+                            'category_name' => $categoryName,
                             'description' => $serviceRequest->description,
                         ]
                     );
                 }
             } catch (\Exception $e) {
-                Log::error('Failed to send FCM notification: ' . $e->getMessage(), [
-                    'request_id' => $serviceRequest->id,
-                    'error' => $e->getMessage()
-                ]);
+                Log::error('Failed to send FCM notification: ' . $e->getMessage());
             }
 
             $this->logRequestAction(
@@ -238,8 +343,8 @@ class RequestController extends BaseApiController
 
             $this->logAudit('create_request', 'request', $serviceRequest->id, "Customer {$user->id} created request");
 
-            return $this->created($serviceRequest, 'Request submitted successfully.');
-
+            return $this->created($this->formatSingleRequest($serviceRequest), 'Request submitted successfully.');
+            
         } catch (\Illuminate\Validation\ValidationException $e) {
             return $this->validationError($e->errors());
         } catch (\Exception $e) {
@@ -248,13 +353,13 @@ class RequestController extends BaseApiController
                 'user_id' => $request->user()->id ?? 'unknown',
                 'data' => $request->all()
             ]);
-            
             return $this->errorResponse('Failed to create request. Please try again.', 500);
         }
     }
 
+    
     /**
-     * Update request status (FUNDI, CUSTOMER, ADMIN)
+     * Update request status
      * PATCH /v4/requests/{id}/status
      */
     public function updateStatus(Request $request, $id)
@@ -271,7 +376,6 @@ class RequestController extends BaseApiController
 
             $allowed = false;
             
-            // Fundi can accept, reject, or complete (if accepted)
             if ($user->hasRole('FUNDI')) {
                 if (in_array($newStatus, ['accepted', 'rejected']) && $oldStatus === 'pending') {
                     $allowed = true;
@@ -282,18 +386,14 @@ class RequestController extends BaseApiController
                 if ($newStatus === 'in_progress' && $oldStatus === 'accepted') {
                     $allowed = true;
                 }
-            } 
-            // Customer can cancel only if pending
-            elseif ($user->hasRole('CUSTOMER') && $newStatus === 'cancelled' && $oldStatus === 'pending') {
+            } elseif ($user->hasRole('CUSTOMER') && $newStatus === 'cancelled' && $oldStatus === 'pending') {
                 $allowed = true;
-            } 
-            // Admin/Manager can change any status (permission-based)
-            elseif ($user->can('requests.status.update')) {
+            } elseif ($user->can('requests.status.update')) {
                 $allowed = true;
             }
 
             if (!$allowed) {
-                return $this->forbidden('Invalid status change. Please check your permissions and the current request status.');
+                return $this->forbidden('Invalid status change.');
             }
 
             DB::beginTransaction();
@@ -315,32 +415,23 @@ class RequestController extends BaseApiController
                 $newStatus,
                 $oldStatus,
                 $newStatus,
-                "Status changed from {$oldStatus} to {$newStatus} by " . ($user->hasRole('FUNDI') ? 'fundi' : ($user->hasRole('CUSTOMER') ? 'customer' : 'admin')),
+                "Status changed from {$oldStatus} to {$newStatus}",
                 $request->ip()
             );
 
             $this->handleStatusChange($serviceRequest, $newStatus);
-
             $this->logAudit('update_request_status', 'request', $id, "Status changed to {$newStatus}");
 
             return $this->successResponse($serviceRequest, 'Status updated successfully.');
-
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->notFound('Request not found.');
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Error updating request status: ' . $e->getMessage(), [
-                'request_id' => $id,
-                'status' => $request->status ?? 'unknown'
-            ]);
-            
+            Log::error('Error updating request status: ' . $e->getMessage());
             return $this->errorResponse('Failed to update status. Please try again.', 500);
         }
     }
 
-    /**
-     * Handle status change notifications
-     */
     private function handleStatusChange(ServiceRequest $serviceRequest, string $newStatus): void
     {
         try {
@@ -361,26 +452,18 @@ class RequestController extends BaseApiController
                     $this->handleCompleted($serviceRequest);
                     break;
                 default:
-                    Log::debug('No notification handler for status: ' . $newStatus);
                     break;
             }
         } catch (\Exception $e) {
-            Log::error('Error handling status change: ' . $e->getMessage(), [
-                'request_id' => $serviceRequest->id,
-                'status' => $newStatus
-            ]);
+            Log::error('Error handling status change: ' . $e->getMessage());
         }
     }
 
-    /**
-     * Handle accepted status
-     */
     private function handleAccepted(ServiceRequest $serviceRequest): void
     {
         try {
             if ($serviceRequest->customer && $serviceRequest->customer->email) {
-                Mail::to($serviceRequest->customer->email)
-                    ->send(new RequestAcceptedMail($serviceRequest));
+                Mail::to($serviceRequest->customer->email)->send(new RequestAcceptedMail($serviceRequest));
             }
         } catch (\Exception $e) {
             Log::error('Failed to send accepted email: ' . $e->getMessage());
@@ -417,9 +500,6 @@ class RequestController extends BaseApiController
         }
     }
 
-    /**
-     * Handle rejected status
-     */
     private function handleRejected(ServiceRequest $serviceRequest): void
     {
         try {
@@ -450,9 +530,6 @@ class RequestController extends BaseApiController
         }
     }
 
-    /**
-     * Handle cancelled status
-     */
     private function handleCancelled(ServiceRequest $serviceRequest): void
     {
         try {
@@ -484,9 +561,6 @@ class RequestController extends BaseApiController
         }
     }
 
-    /**
-     * Handle in_progress status
-     */
     private function handleInProgress(ServiceRequest $serviceRequest): void
     {
         try {
@@ -517,15 +591,11 @@ class RequestController extends BaseApiController
         }
     }
 
-    /**
-     * Handle completed status
-     */
     private function handleCompleted(ServiceRequest $serviceRequest): void
     {
         try {
             if ($serviceRequest->customer && $serviceRequest->customer->email) {
-                Mail::to($serviceRequest->customer->email)
-                    ->send(new RequestCompletedMail($serviceRequest));
+                Mail::to($serviceRequest->customer->email)->send(new RequestCompletedMail($serviceRequest));
             }
         } catch (\Exception $e) {
             Log::error('Failed to send completed email: ' . $e->getMessage());
@@ -562,10 +632,6 @@ class RequestController extends BaseApiController
         }
     }
 
-    /**
-     * CUSTOMER: Cancel a request
-     * DELETE /v4/requests/{id}/cancel
-     */
     public function cancel($id, Request $request)
     {
         try {
@@ -604,28 +670,18 @@ class RequestController extends BaseApiController
             );
 
             $this->handleCancelled($serviceRequest);
-
             $this->logAudit('cancel_request', 'request', $id, 'Request cancelled by customer');
 
             return $this->successResponse($serviceRequest, 'Request cancelled successfully.');
-
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->notFound('Request not found.');
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Error cancelling request: ' . $e->getMessage(), [
-                'request_id' => $id,
-                'user_id' => $request->user()->id ?? 'unknown'
-            ]);
-            
+            Log::error('Error cancelling request: ' . $e->getMessage());
             return $this->errorResponse('Failed to cancel request. Please try again.', 500);
         }
     }
 
-    /**
-     * Get my requests (CUSTOMER, FUNDI, ADMIN)
-     * GET /v4/my-requests
-     */
     public function myRequests(Request $request)
     {
         try {
@@ -638,61 +694,38 @@ class RequestController extends BaseApiController
             $perPage = $request->input('per_page', 15);
 
             if ($user->hasRole('CUSTOMER')) {
-                $requests = ServiceRequest::with(['technician.user', 'service'])
+                $requests = ServiceRequest::with(['technician.user', 'service', 'category'])
                     ->where('customer_id', $user->id)
                     ->latest()
                     ->paginate($perPage);
-                    
                 $data = $this->formatRequests($requests);
-                
             } elseif ($user->hasRole('FUNDI')) {
                 $technician = $user->technician;
                 if (!$technician) {
-                    return $this->successResponse([
-                        'data' => [],
-                        'pagination' => [
-                            'total' => 0,
-                            'per_page' => $perPage,
-                            'current_page' => 1,
-                            'last_page' => 1
-                        ]
-                    ], 'No requests found');
+                    return $this->successResponse(['data' => [], 'pagination' => ['total' => 0, 'per_page' => $perPage, 'current_page' => 1, 'last_page' => 1]], 'No requests found');
                 }
-                
-                $requests = ServiceRequest::with(['customer', 'service'])
+                $requests = ServiceRequest::with(['customer', 'service', 'category'])
                     ->where('technician_id', $technician->id)
                     ->latest()
                     ->paginate($perPage);
-                    
                 $data = $this->formatRequests($requests);
             } else {
-                // Admin/Manager with permission to view all requests
                 if (!$user->can('requests.view')) {
                     return $this->forbidden('Unauthorized. You need requests.view permission.');
                 }
-                
-                $requests = ServiceRequest::with(['customer', 'technician.user', 'service'])
+                $requests = ServiceRequest::with(['customer', 'technician.user', 'service', 'category'])
                     ->latest()
                     ->paginate($perPage);
-                    
                 $data = $this->formatRequests($requests);
             }
 
             return $this->successResponse($data, 'Requests retrieved successfully');
-
         } catch (\Exception $e) {
-            Log::error('Error fetching my requests: ' . $e->getMessage(), [
-                'user_id' => $request->user()->id ?? 'unknown'
-            ]);
-            
+            Log::error('Error fetching my requests: ' . $e->getMessage());
             return $this->errorResponse('Failed to fetch requests. Please try again.', 500);
         }
     }
 
-    /**
-     * Get all requests with filters (Permission-based)
-     * GET /v4/admin/requests
-     */
     public function index(Request $request)
     {
         try {
@@ -700,38 +733,31 @@ class RequestController extends BaseApiController
                 return $this->forbidden('Unauthorized. You need requests.view permission.');
             }
 
-            $query = ServiceRequest::with([
-                'customer', 
-                'technician.user', 
-                'service',
-                'logs' => function($q) {
-                    $q->latest()->limit(5);
-                }
-            ]);
+            $query = ServiceRequest::with(['customer', 'technician.user', 'service', 'category', 'logs' => function($q) {
+                $q->latest()->limit(5);
+            }]);
 
             if ($request->filled('status')) {
                 $query->where('status', $request->status);
             }
-
             if ($request->filled('customer_id')) {
                 $query->where('customer_id', $request->customer_id);
             }
-
             if ($request->filled('technician_id')) {
                 $query->where('technician_id', $request->technician_id);
             }
-
             if ($request->filled('service_id')) {
                 $query->where('service_id', $request->service_id);
             }
-
+            if ($request->filled('category_id')) {
+                $query->where('category_id', $request->category_id);
+            }
             if ($request->filled('date_from')) {
                 $query->whereDate('created_at', '>=', $request->date_from);
             }
             if ($request->filled('date_to')) {
                 $query->whereDate('created_at', '<=', $request->date_to);
             }
-
             if ($request->filled('search')) {
                 $search = $request->search;
                 $query->where(function($q) use ($search) {
@@ -751,34 +777,23 @@ class RequestController extends BaseApiController
 
             $sortField = $request->input('sort_by', 'created_at');
             $sortOrder = $request->input('sort_order', 'desc');
-            
             $allowedSortFields = ['id', 'created_at', 'updated_at', 'status', 'customer_id', 'technician_id'];
             if (!in_array($sortField, $allowedSortFields)) {
                 $sortField = 'created_at';
             }
-            
             $query->orderBy($sortField, $sortOrder);
 
             $perPage = $request->input('per_page', 20);
             $requests = $query->paginate($perPage);
-
             $data = $this->formatRequests($requests);
 
             return $this->successResponse($data, 'Requests retrieved successfully');
-
         } catch (\Exception $e) {
-            Log::error('Error fetching requests: ' . $e->getMessage(), [
-                'user_id' => $request->user()->id ?? 'unknown'
-            ]);
-            
+            Log::error('Error fetching requests: ' . $e->getMessage());
             return $this->errorResponse('Failed to fetch requests. Please try again.', 500);
         }
     }
 
-    /**
-     * Get single request with full details (Permission-based)
-     * GET /v4/admin/requests/{id}
-     */
     public function show($id, Request $request)
     {
         try {
@@ -786,33 +801,18 @@ class RequestController extends BaseApiController
                 return $this->forbidden('Unauthorized. You need requests.view permission.');
             }
 
-            $serviceRequest = ServiceRequest::with([
-                'customer', 
-                'technician.user', 
-                'service',
-                'logs.user'
-            ])->findOrFail($id);
-
+            $serviceRequest = ServiceRequest::with(['customer', 'technician.user', 'service', 'category', 'logs.user'])->findOrFail($id);
             $data = $this->formatSingleRequest($serviceRequest);
 
             return $this->successResponse($data, 'Request retrieved successfully');
-
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->notFound('Request not found.');
         } catch (\Exception $e) {
-            Log::error('Error fetching request: ' . $e->getMessage(), [
-                'request_id' => $id,
-                'user_id' => $request->user()->id ?? 'unknown'
-            ]);
-            
+            Log::error('Error fetching request: ' . $e->getMessage());
             return $this->errorResponse('Failed to fetch request. Please try again.', 500);
         }
     }
 
-    /**
-     * Delete request (Permission-based)
-     * DELETE /v4/admin/requests/{id}
-     */
     public function destroy($id, Request $request)
     {
         try {
@@ -823,34 +823,21 @@ class RequestController extends BaseApiController
             $serviceRequest = ServiceRequest::findOrFail($id);
             
             DB::beginTransaction();
-            
             RequestLog::where('request_id', $id)->delete();
-            
             $serviceRequest->delete();
-            
             DB::commit();
             
             $this->logAudit('delete_request', 'request', $id, "Deleted request ID: $id");
-            
             return $this->successResponse(null, 'Request deleted successfully.');
-
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->notFound('Request not found.');
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Error deleting request: ' . $e->getMessage(), [
-                'request_id' => $id,
-                'user_id' => $request->user()->id ?? 'unknown'
-            ]);
-            
+            Log::error('Error deleting request: ' . $e->getMessage());
             return $this->errorResponse('Failed to delete request. Please try again.', 500);
         }
     }
 
-    /**
-     * Get request logs (Permission-based)
-     * GET /v4/admin/request-logs/{requestId}
-     */
     public function logs($requestId, Request $request)
     {
         try {
@@ -858,27 +845,14 @@ class RequestController extends BaseApiController
                 return $this->forbidden('Unauthorized. You need requests.view permission.');
             }
 
-            $logs = RequestLog::where('request_id', $requestId)
-                ->with('user')
-                ->orderBy('created_at', 'desc')
-                ->get();
-
+            $logs = RequestLog::where('request_id', $requestId)->with('user')->orderBy('created_at', 'desc')->get();
             return $this->successResponse($logs, 'Request logs retrieved successfully');
-
         } catch (\Exception $e) {
-            Log::error('Error fetching request logs: ' . $e->getMessage(), [
-                'request_id' => $requestId,
-                'user_id' => $request->user()->id ?? 'unknown'
-            ]);
-            
+            Log::error('Error fetching request logs: ' . $e->getMessage());
             return $this->errorResponse('Failed to fetch logs. Please try again.', 500);
         }
     }
 
-    /**
-     * Get request statistics (Permission-based)
-     * GET /v4/admin/requests/stats
-     */
     public function stats(Request $request)
     {
         try {
@@ -900,20 +874,12 @@ class RequestController extends BaseApiController
             ];
 
             return $this->successResponse($stats, 'Request statistics retrieved successfully');
-
         } catch (\Exception $e) {
-            Log::error('Error fetching request stats: ' . $e->getMessage(), [
-                'user_id' => $request->user()->id ?? 'unknown'
-            ]);
-            
+            Log::error('Error fetching request stats: ' . $e->getMessage());
             return $this->errorResponse('Failed to fetch statistics. Please try again.', 500);
         }
     }
 
-    /**
-     * Get request by customer (for customers to see their requests)
-     * GET /v4/customer/requests
-     */
     public function customerRequests(Request $request)
     {
         try {
@@ -926,8 +892,7 @@ class RequestController extends BaseApiController
             $perPage = $request->input('per_page', 15);
             $status = $request->input('status');
 
-            $query = ServiceRequest::with(['technician.user', 'service'])
-                ->where('customer_id', $user->id);
+            $query = ServiceRequest::with(['technician.user', 'service', 'category'])->where('customer_id', $user->id);
 
             if ($status) {
                 $query->where('status', $status);
@@ -937,20 +902,12 @@ class RequestController extends BaseApiController
             $data = $this->formatRequests($requests);
 
             return $this->successResponse($data, 'Customer requests retrieved successfully');
-
         } catch (\Exception $e) {
-            Log::error('Error fetching customer requests: ' . $e->getMessage(), [
-                'user_id' => $request->user()->id ?? 'unknown'
-            ]);
-            
+            Log::error('Error fetching customer requests: ' . $e->getMessage());
             return $this->errorResponse('Failed to fetch requests. Please try again.', 500);
         }
     }
 
-    /**
-     * Get request by technician (for technicians to see their requests)
-     * GET /v4/technician/requests
-     */
     public function technicianRequests(Request $request)
     {
         try {
@@ -962,22 +919,13 @@ class RequestController extends BaseApiController
 
             $technician = $user->technician;
             if (!$technician) {
-                return $this->successResponse([
-                    'data' => [],
-                    'pagination' => [
-                        'total' => 0,
-                        'per_page' => 15,
-                        'current_page' => 1,
-                        'last_page' => 1
-                    ]
-                ], 'No requests found');
+                return $this->successResponse(['data' => [], 'pagination' => ['total' => 0, 'per_page' => 15, 'current_page' => 1, 'last_page' => 1]], 'No requests found');
             }
 
             $perPage = $request->input('per_page', 15);
             $status = $request->input('status');
 
-            $query = ServiceRequest::with(['customer', 'service'])
-                ->where('technician_id', $technician->id);
+            $query = ServiceRequest::with(['customer', 'service', 'category'])->where('technician_id', $technician->id);
 
             if ($status) {
                 $query->where('status', $status);
@@ -987,19 +935,12 @@ class RequestController extends BaseApiController
             $data = $this->formatRequests($requests);
 
             return $this->successResponse($data, 'Technician requests retrieved successfully');
-
         } catch (\Exception $e) {
-            Log::error('Error fetching technician requests: ' . $e->getMessage(), [
-                'user_id' => $request->user()->id ?? 'unknown'
-            ]);
-            
+            Log::error('Error fetching technician requests: ' . $e->getMessage());
             return $this->errorResponse('Failed to fetch requests. Please try again.', 500);
         }
     }
 
-    /**
-     * Format requests for response
-     */
     private function formatRequests($requests): array
     {
         $data = $requests->map(function($request) {
@@ -1017,9 +958,6 @@ class RequestController extends BaseApiController
         ];
     }
 
-    /**
-     * Format single request
-     */
     private function formatSingleRequest($request): array
     {
         return [
@@ -1049,6 +987,11 @@ class RequestController extends BaseApiController
             'service' => $request->service ? [
                 'id' => $request->service->id,
                 'name' => $request->service->name,
+            ] : null,
+            'category' => $request->category ? [
+                'id' => $request->category->service_categoryID,
+                'name' => $request->category->category_name,
+                'slug' => $request->category->slug,
             ] : null,
             'logs' => $request->logs ? $request->logs->map(function($log) {
                 return [

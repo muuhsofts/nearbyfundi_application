@@ -96,18 +96,26 @@ class SubscriptionController extends BaseApiController
         $rateCard = RateCard::findOrFail($data['rate_card_id']);
         $paymentMethod = PaymentMethod::findOrFail($data['payment_method_id']);
 
-        // Prevent duplicate pending subscriptions
-        if (Subscription::where('user_id', $user->id)->where('status', Subscription::STATUS_PENDING)->exists()) {
-            return $this->errorResponse('You already have a pending subscription. Please wait for admin approval.', 422);
-        }
-
-        // Prevent duplicate active subscriptions
+        // ✅ FIX: Check if user already has an ACTIVE subscription
         if ($user->hasActiveSubscription()) {
+            $expiryDate = $user->subscription_expires_at ? $user->subscription_expires_at->format('Y-m-d H:i:s') : 'unknown';
             return $this->errorResponse(
-                'You already have an active subscription. It will expire on ' . $user->subscription_expires_at->format('Y-m-d') . '.',
+                "You already have an active subscription. It will expire on {$expiryDate}. Please wait until it expires before subscribing again.",
                 422
             );
         }
+
+        // ✅ FIX: Check if user has a PENDING subscription
+        if (Subscription::where('user_id', $user->id)->where('status', Subscription::STATUS_PENDING)->exists()) {
+            return $this->errorResponse(
+                'You already have a pending subscription request. Please wait for admin approval.',
+                422
+            );
+        }
+
+        // ✅ FIX: Check if user has an EXPIRED subscription that hasn't been cleaned up
+        // Allow expired users to subscribe again, but make sure there's no active subscription
+        // This check is already covered by hasActiveSubscription() above
 
         DB::beginTransaction();
 
@@ -209,6 +217,21 @@ class SubscriptionController extends BaseApiController
     public function mySubscriptions(Request $request)
     {
         $user = $request->user();
+
+        // ✅ FIX: Auto-mark expired subscriptions for this user
+        $expiredSubscriptions = Subscription::where('user_id', $user->id)
+            ->where('status', Subscription::STATUS_ACTIVE)
+            ->where('expiry_date', '<', now())
+            ->get();
+
+        foreach ($expiredSubscriptions as $expiredSub) {
+            $expiredSub->update(['status' => Subscription::STATUS_EXPIRED]);
+        }
+
+        // Also update user status if expired
+        if (!$user->hasActiveSubscription() && $user->subscription_status === 'active') {
+            $user->update(['subscription_status' => 'expired']);
+        }
 
         $subscriptions = Subscription::with(['rateCard', 'invoice'])
             ->where('user_id', $user->id)
@@ -331,7 +354,17 @@ class SubscriptionController extends BaseApiController
     {
         $user = $request->user();
         
-        // ✅ FIX: Check if subscription is actually expired
+        // ✅ FIX: Auto-mark expired subscriptions for this user
+        $expiredSubscriptions = Subscription::where('user_id', $user->id)
+            ->where('status', Subscription::STATUS_ACTIVE)
+            ->where('expiry_date', '<', now())
+            ->get();
+
+        foreach ($expiredSubscriptions as $expiredSub) {
+            $expiredSub->update(['status' => Subscription::STATUS_EXPIRED]);
+        }
+        
+        // Check if subscription is actually expired
         $hasActive = $user->hasActiveSubscription();
         
         // If subscription is marked active but expired, fix it
@@ -486,10 +519,18 @@ class SubscriptionController extends BaseApiController
             return $this->errorResponse('This subscription is not pending approval.', 422);
         }
 
+        // ✅ FIX: Check if user already has an active subscription before approving
+        $user = $subscription->user;
+        if ($user->hasActiveSubscription()) {
+            return $this->errorResponse(
+                "This user already has an active subscription. It will expire on {$user->subscription_expires_at->format('Y-m-d H:i:s')}.",
+                422
+            );
+        }
+
         DB::beginTransaction();
 
         try {
-            $user = $subscription->user;
             $rateCard = $subscription->rateCard;
 
             $expiryDate = now()->addDays($rateCard->duration_days);
@@ -748,7 +789,9 @@ class SubscriptionController extends BaseApiController
         }
     }
 
-    // ✅ FIX: Add method to check and update expired subscriptions
+    /**
+     * Check and update expired subscriptions (public method for cron/command).
+     */
     public function checkExpiredSubscriptions()
     {
         $expiredSubscriptions = Subscription::where('status', Subscription::STATUS_ACTIVE)

@@ -27,10 +27,8 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\SubscriptionController;
 use App\Http\Controllers\Api\RateCardController;
 use App\Http\Controllers\Api\PaymentMethodController;
+use App\Http\Controllers\Api\ServiceCategoryController;
 
-// =============================================
-// HEALTH CHECK
-// =============================================
 Route::get('/health', fn() => response()->json(['status' => 'ok', 'timestamp' => now()]));
 
 // =============================================
@@ -80,7 +78,7 @@ Route::prefix('v1')->group(function () {
 });
 
 // =============================================
-// V2 – TECHNICIANS (Fundi) – ✅ SUBSCRIPTION REQUIRED
+// V2 – TECHNICIANS (Fundi)
 // =============================================
 Route::prefix('v2')->middleware(['auth:sanctum', 'active.session', 'subscription'])->group(function () {
     Route::put('technicians/profile', [TechnicianController::class, 'updateProfile']);
@@ -95,7 +93,7 @@ Route::prefix('v2')->middleware(['auth:sanctum', 'active.session', 'subscription
 });
 
 // =============================================
-// V3 – PORTFOLIOS – ✅ SUBSCRIPTION REMOVED
+// V3 – PORTFOLIOS
 // =============================================
 Route::prefix('v3')->middleware(['auth:sanctum', 'active.session'])->group(function () {
     Route::post('portfolios', [PortfolioController::class, 'store']);
@@ -109,20 +107,33 @@ Route::prefix('v3')->middleware(['auth:sanctum', 'active.session'])->group(funct
 });
 
 // =============================================
-// V4 – REQUESTS & MONITORING – ✅ SUBSCRIPTION REMOVED
+// V4 – REQUESTS & MONITORING
 // =============================================
 Route::prefix('v4')->middleware(['auth:sanctum', 'active.session'])->group(function () {
+    // Services with categories for request creation
+    Route::get('request-services', [RequestController::class, 'getServicesWithCategories']);
+    
+    // Get technicians by service and category
+    Route::get('technicians/by-service-category', [RequestController::class, 'getTechniciansByServiceCategory']);
+    
+    // Request CRUD
     Route::post('requests', [RequestController::class, 'store']);
     Route::patch('requests/{id}/status', [RequestController::class, 'updateStatus']);
     Route::delete('requests/{id}/cancel', [RequestController::class, 'cancel']);
     Route::get('my-requests', [RequestController::class, 'myRequests']);
 
+    // Admin routes
     Route::get('admin/requests', [RequestController::class, 'index']);
     Route::get('admin/requests/{id}', [RequestController::class, 'show']);
     Route::delete('admin/requests/{id}', [RequestController::class, 'destroy']);
     Route::get('admin/request-logs/{requestId}', [RequestController::class, 'logs']);
     Route::get('admin/requests/stats', [RequestController::class, 'stats']);
 
+    // Customer specific routes
+    Route::get('customer/requests', [RequestController::class, 'customerRequests']);
+    Route::get('technician/requests', [RequestController::class, 'technicianRequests']);
+
+    // Monitoring
     Route::prefix('monitoring')->group(function () {
         Route::get('map', [MonitoringController::class, 'map']);
         Route::get('notifications', [MonitoringController::class, 'getNotifications']);
@@ -140,7 +151,7 @@ Route::prefix('v4')->middleware(['auth:sanctum', 'active.session'])->group(funct
 });
 
 // =============================================
-// V5 – BLOG – ✅ SUBSCRIPTION REMOVED
+// V5 – BLOG
 // =============================================
 Route::prefix('v5')->middleware(['auth:sanctum', 'active.session'])->group(function () {
     Route::post('posts', [PostController::class, 'store']);
@@ -246,13 +257,25 @@ Route::prefix('v10')->middleware(['auth:sanctum', 'active.session'])->group(func
 });
 
 // =============================================
-// V11 – SERVICES (Admin)
+// V11 – SERVICES (Updated with categories)
 // =============================================
-Route::prefix('v11')->middleware(['auth:sanctum', 'active.session'])->group(function () {
+Route::prefix('v11')->group(function () {
     Route::get('services', [ServiceController::class, 'index']);
-    Route::post('services', [ServiceController::class, 'store']);
-    Route::put('services/{id}', [ServiceController::class, 'update']);
-    Route::delete('services/{id}', [ServiceController::class, 'destroy']);
+    Route::get('services/{id}', [ServiceController::class, 'show']);
+    Route::get('services/dropdown', [ServiceController::class, 'getServicesDropdown']);
+    Route::get('services/grouped-by-category', [ServiceController::class, 'getServicesGroupedByCategory']);
+    Route::get('services/by-category/{categoryId}', [ServiceController::class, 'getServicesByCategory']);
+    Route::get('services/by-category-slug/{slug}', [ServiceController::class, 'getServicesByCategorySlug']);
+    Route::get('categories/with-service-count', [ServiceController::class, 'getCategoriesWithServiceCount']);
+    
+    Route::middleware(['auth:sanctum', 'active.session'])->group(function () {
+        Route::post('services', [ServiceController::class, 'store']);
+        Route::put('services/{id}', [ServiceController::class, 'update']);
+        Route::delete('services/{id}', [ServiceController::class, 'destroy']);
+        Route::post('services/{id}/attach-categories', [ServiceController::class, 'attachCategories']);
+        Route::delete('services/{id}/detach-categories', [ServiceController::class, 'detachCategories']);
+        Route::put('services/{id}/sync-categories', [ServiceController::class, 'syncCategories']);
+    });
 });
 
 // =============================================
@@ -266,7 +289,7 @@ Route::prefix('v12')->middleware(['auth:sanctum', 'active.session'])->group(func
     Route::get('reports/blog', [ReportController::class, 'blogReport']);
     Route::get('reports/portfolio', [ReportController::class, 'portfolioReport']);
     Route::get('reports/revenue', [ReportController::class, 'revenueReport']);
-    Route::get('reports/subscriptions', [ReportController::class, 'subscriptionsReport']); // ✅ Added
+    Route::get('reports/subscriptions', [ReportController::class, 'subscriptionsReport']);
 });
 
 // =============================================
@@ -281,7 +304,7 @@ Route::prefix('v13')->middleware(['auth:sanctum', 'active.session'])->group(func
 });
 
 // =============================================
-// V14 – CHAT – ✅ SUBSCRIPTION REMOVED
+// V14 – CHAT
 // =============================================
 Route::prefix('v14')->middleware(['auth:sanctum', 'active.session'])->group(function () {
     Route::prefix('chat')->group(function () {
@@ -322,11 +345,9 @@ Route::prefix('v15')->middleware(['auth:sanctum', 'active.session'])->group(func
 // V16 – SUBSCRIPTIONS & RATE CARDS
 // =============================================
 Route::prefix('v16')->group(function () {
-    // Public
     Route::get('rate-cards', [SubscriptionController::class, 'getRateCards']);
     Route::get('payment-methods', [SubscriptionController::class, 'getPaymentMethods']);
 
-    // User (authenticated)
     Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('check-subscription', [SubscriptionController::class, 'checkStatus']);
         Route::post('subscriptions', [SubscriptionController::class, 'store']);
@@ -335,19 +356,12 @@ Route::prefix('v16')->group(function () {
         Route::get('invoices/{id}/download', [SubscriptionController::class, 'downloadInvoicePdf']);
     });
 
-    // Admin (authenticated + permission)
     Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
-        // ============================================================
-        // RATE CARDS
-        // ============================================================
         Route::get('rate-cards', [RateCardController::class, 'index']);
         Route::post('rate-cards', [RateCardController::class, 'store']);
         Route::put('rate-cards/{id}', [RateCardController::class, 'update']);
         Route::delete('rate-cards/{id}', [RateCardController::class, 'destroy']);
 
-        // ============================================================
-        // PAYMENT METHODS - Using PaymentMethodController
-        // ============================================================
         Route::get('payment-methods', [PaymentMethodController::class, 'index']);
         Route::post('payment-methods', [PaymentMethodController::class, 'store']);
         Route::get('payment-methods/{id}', [PaymentMethodController::class, 'show']);
@@ -356,13 +370,30 @@ Route::prefix('v16')->group(function () {
         Route::get('payment-methods/dropdown', [PaymentMethodController::class, 'dropdown']);
         Route::patch('payment-methods/{id}/toggle', [PaymentMethodController::class, 'toggle']);
 
-        // ============================================================
-        // SUBSCRIPTIONS
-        // ============================================================
         Route::get('subscriptions', [SubscriptionController::class, 'adminIndex']);
         Route::get('subscriptions/stats', [SubscriptionController::class, 'stats']);
         Route::post('subscriptions/{id}/approve', [SubscriptionController::class, 'approve']);
         Route::post('subscriptions/{id}/reject', [SubscriptionController::class, 'reject']);
         Route::get('invoices/{id}/download', [SubscriptionController::class, 'downloadInvoicePdf']);
+    });
+});
+
+// =============================================
+// V17 – SERVICE CATEGORIES
+// =============================================
+Route::prefix('v17')->group(function () {
+    Route::get('service-categories', [ServiceCategoryController::class, 'index']);
+    Route::get('service-categories/{id}', [ServiceCategoryController::class, 'show']);
+    Route::get('service-categories/slug/{slug}', [ServiceCategoryController::class, 'showBySlug']);
+    Route::get('service-categories/dropdown/by-id', [ServiceCategoryController::class, 'dropdownById']);
+    Route::get('service-categories/dropdown/active', [ServiceCategoryController::class, 'dropdownActive']);
+    Route::get('service-categories/dropdown/paginated', [ServiceCategoryController::class, 'dropdownPaginated']);
+
+    Route::middleware(['auth:sanctum', 'active.session'])->group(function () {
+        Route::post('service-categories', [ServiceCategoryController::class, 'store']);
+        Route::put('service-categories/{id}', [ServiceCategoryController::class, 'update']);
+        Route::delete('service-categories/{id}', [ServiceCategoryController::class, 'destroy']);
+        Route::delete('service-categories/bulk-delete', [ServiceCategoryController::class, 'bulkDelete']);
+        Route::get('service-categories/stats', [ServiceCategoryController::class, 'stats']);
     });
 });
