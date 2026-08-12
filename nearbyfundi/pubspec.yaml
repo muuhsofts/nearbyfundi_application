@@ -107,10 +107,26 @@ flutter:
     # Audio
     - assets/audio/
 
+# ============================================================
+# LAUNCHER ICON CONFIGURATION - LARGER ICON
+# ============================================================
 flutter_launcher_icons:
   android: true
   ios: true
   image_path: "assets/icons/netsaf.png"
+
+  # Adaptive icon for Android
   adaptive_icon_background: "#006B5E"
   adaptive_icon_foreground: "assets/icons/netsaf.png"
   min_sdk_android: 21
+
+  # ⭐ KEY SETTINGS FOR LARGER ICON ⭐
+  # Lower inset = larger icon (0 = maximum size)
+  adaptive_icon_foreground_inset: 10  # Changed from 20 to 10
+
+  # Remove any padding
+  adaptive_icon_padding: false
+
+  # iOS settings
+  remove_alpha_ios: true
+  ios_content_mode: "center"

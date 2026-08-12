@@ -1,9 +1,9 @@
-// main.dart
-
+// main.dart - Alternative using SystemChrome
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/services.dart';
 import 'config/app_routes.dart';
 import 'config/app_theme.dart';
 import 'models/chat_conversation.dart';
@@ -19,6 +19,7 @@ import 'providers/static_page_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/chat_provider.dart';
 import 'services/fcm_service.dart';
+import 'services/security_service.dart';
 import 'screens/splash_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/auth/login_screen.dart';
@@ -37,7 +38,7 @@ import 'screens/profile/faq_screen.dart';
 import 'screens/profile/contact_us_screen.dart';
 import 'screens/chat/chat_list_screen.dart';
 import 'screens/chat/chat_screen.dart';
-import 'screens/notifications/notifications_screen.dart'; // 👈 Add this
+import 'screens/notifications/notifications_screen.dart';
 import 'firebase_options.dart';
 import 'l10n/app_localizations.dart';
 
@@ -47,6 +48,18 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await FcmService.init();
+
+  // Enable secure screen globally
+  await SecurityService.enableSecureScreen();
+
+  // Set system UI overlay style globally
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.dark,
+    systemNavigationBarColor: Colors.transparent,
+    systemNavigationBarIconBrightness: Brightness.light,
+  ));
+
   runApp(const MyApp());
 }
 
@@ -150,7 +163,7 @@ class MyApp extends StatelessWidget {
                           conversation: settings.arguments as ChatConversation,
                         ),
                       );
-                    case AppRoutes.notifications: // 👈 Add this
+                    case AppRoutes.notifications:
                       return MaterialPageRoute(builder: (_) => const NotificationsScreen());
                     default:
                       return MaterialPageRoute(builder: (_) => const SplashScreen());

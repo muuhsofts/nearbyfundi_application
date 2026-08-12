@@ -1,12 +1,15 @@
 <!-- android/app/src/main/AndroidManifest.xml -->
-
+<!-- ✅ REMOVED package="com.nearbyfundi" from the manifest tag -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
-    package="com.example.nearbyfundi">
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- ============================================================
          INTERNET & NETWORK PERMISSIONS
          ============================================================ -->
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
@@ -60,6 +63,10 @@
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
     <!-- ============================================================
+         SECURITY - Prevent screenshots (No permission needed)
+         ============================================================ -->
+
+    <!-- ============================================================
          APPLICATION
          ============================================================ -->
     <application
@@ -74,7 +81,7 @@
         tools:targetApi="34">
 
         <!-- ============================================================
-             MAIN ACTIVITY
+             MAIN ACTIVITY - WITH SECURE FLAG
              ============================================================ -->
         <activity
             android:name=".MainActivity"
@@ -84,7 +91,9 @@
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="adjustResize"
+            android:excludeFromRecents="false"
+            android:autoRemoveFromRecents="false">
 
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
@@ -163,6 +172,15 @@
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="http" />
+        </intent>
+        <!-- For WhatsApp -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" android:host="api.whatsapp.com" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="whatsapp" />
         </intent>
     </queries>
 
