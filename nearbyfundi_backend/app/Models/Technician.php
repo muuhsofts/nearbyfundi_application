@@ -13,6 +13,9 @@ class Technician extends Model
         'latitude', 'longitude', 'area', 'verified',
         'last_activity_at', 'is_online', 'hourly_rate',
         'location_updated_at',
+        // NEW FIELDS
+        'verification_status', 'id_document_type', 'id_document_image',
+        'completed_jobs_count',
     ];
 
     protected $casts = [
@@ -22,11 +25,16 @@ class Technician extends Model
         'last_activity_at'    => 'datetime',
         'location_updated_at' => 'datetime',
         'hourly_rate'         => 'decimal:2',
+        'completed_jobs_count'=> 'integer',
     ];
 
     protected $hidden = [
         'nida', // sensitive — don't expose in default JSON; admins access via dedicated field selection
     ];
+
+    // ============================================================
+    // RELATIONSHIPS
+    // ============================================================
 
     public function user()
     {
@@ -36,6 +44,16 @@ class Technician extends Model
     public function services()
     {
         return $this->belongsToMany(Service::class, 'technician_services');
+    }
+
+    /**
+     * Service prices pivot with min/max
+     */
+    public function servicePrices()
+    {
+        return $this->belongsToMany(Service::class, 'technician_services')
+                    ->withPivot('min_price', 'max_price')
+                    ->withTimestamps();
     }
 
     public function portfolios()
@@ -52,6 +70,20 @@ class Technician extends Model
     {
         return $this->hasMany(ServiceRequest::class);
     }
+
+    public function reviews()
+    {
+        return $this->hasMany(Review::class);
+    }
+
+    public function locationHistory()
+    {
+        return $this->hasMany(TechnicianLocationHistory::class);
+    }
+
+    // ============================================================
+    // ONLINE STATUS
+    // ============================================================
 
     public function getComputedOnlineAttribute(): bool
     {
@@ -73,5 +105,47 @@ class Technician extends Model
         }
 
         $this->save();
+    }
+
+    // ============================================================
+    // RATING RECALCULATION (NEW)
+    // ============================================================
+
+    /**
+     * Recalculate and update the average rating from all reviews.
+     */
+    public function recalculateRating(): void
+    {
+        $avg = $this->reviews()->avg('rating') ?? 0.0;
+        $this->rating = round($avg, 1);
+        $this->save();
+    }
+
+    // ============================================================
+    // AGGREGATION HELPERS
+    // ============================================================
+
+    /**
+     * Increment the completed jobs counter (called after a review is added)
+     */
+    public function incrementCompletedJobs(): void
+    {
+        $this->increment('completed_jobs_count');
+    }
+
+    /**
+     * Get average rating from all reviews
+     */
+    public function getAverageRatingAttribute(): float
+    {
+        return $this->reviews()->avg('rating') ?? 0.0;
+    }
+
+    /**
+     * Get the technician's display name (user name)
+     */
+    public function getDisplayNameAttribute(): string
+    {
+        return $this->user->name ?? 'Unknown Technician';
     }
 }

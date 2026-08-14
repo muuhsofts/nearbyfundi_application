@@ -15,8 +15,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\DB;
+use Google_Client;
 use Illuminate\Support\Facades\Log;
 use Spatie\Permission\Models\Role;
+use Laravel\Socialite\Facades\Socialite;
+
 
 class AuthController extends BaseApiController
 {
@@ -363,6 +366,156 @@ public function login(Request $request)
         'roles' => $user->getRoleNames(),
         'token' => $token,
     ], 'Login successful.');
+}
+
+public function googleLogin(Request $request)
+{
+    $request->validate([
+        'id_token'  => 'required|string',
+        'fcm_token' => 'nullable|string|min:10',
+    ]);
+
+    try {
+        $client = new Google_Client(['client_id' => config('services.google.client_id')]);
+        $payload = $client->verifyIdToken($request->id_token);
+
+        if (!$payload) {
+            return $this->unauthorized('Invalid Google token.');
+        }
+
+        $email    = $payload['email'];
+        $name     = $payload['name'] ?? 'Google User';
+        $googleId = $payload['sub'];
+
+        // Find existing user or create a new Customer
+        $user = User::where('email', $email)->first();
+
+        if (!$user) {
+            $user = User::create([
+                'name'              => $name,
+                'email'             => $email,
+                'google_id'         => $googleId,
+                'password'          => bcrypt(\Str::random(24)),
+                'email_verified_at' => now(),
+                'status'            => 'active',
+                'is_active'         => true,
+            ]);
+
+            $user->assignRole('CUSTOMER');
+            $this->logAudit('register_google', 'auth', 'user', "Customer registered via Google ID Token: {$user->email}");
+        } else {
+            if (!$user->email_verified_at) {
+                $user->update(['email_verified_at' => now()]);
+            }
+            if ($user->status !== 'active') {
+                $user->update(['status' => 'active', 'is_active' => true]);
+            }
+        }
+
+        // Generate Sanctum access token
+        $token = $user->createToken('auth_token')->plainTextToken;
+        $this->createSession($user, $request, $token);
+
+        // Store FCM device token if passed
+        if ($request->filled('fcm_token')) {
+            $this->storeFcmToken($user, $request->fcm_token);
+        }
+
+        $this->logAudit('login_google', 'auth', 'user', "User logged in via Google ID Token: {$user->email}");
+
+        return $this->successResponse([
+            'user'  => $user->only(['id', 'name', 'email', 'phone', 'locale', 'fcm_device_token']),
+            'roles' => $user->getRoleNames(),
+            'token' => $token,
+        ], 'Google login successful.');
+
+    } catch (\Exception $e) {
+        Log::error('Google ID token authentication failed: ' . $e->getMessage());
+        return $this->serverError('Google authentication failed: ' . $e->getMessage());
+    }
+}
+
+/**
+ * Redirect to Google OAuth (for web frontend)
+ */
+public function redirectToGoogle()
+{
+    return response()->json([
+        'url' => Socialite::driver('google')
+            ->stateless()
+            ->redirect()
+            ->getTargetUrl(),
+    ]);
+}
+
+/**
+ * Handle Google callback (for both web & mobile)
+ */
+public function handleGoogleCallback(Request $request)
+{
+    try {
+        $code = $request->input('code');
+        if (!$code) {
+            return $this->errorResponse('No authorization code provided.', 422);
+        }
+
+        // 1. Exchange the authorization code for an access token response array
+        $response = Socialite::driver('google')->getAccessTokenResponse($code);
+        $token = $response['access_token'] ?? null;
+
+        if (!$token) {
+            return $this->errorResponse('Failed to retrieve access token from Google.', 401);
+        }
+
+        // 2. Retrieve user profile using the access token
+        $googleUser = Socialite::driver('google')->userFromToken($token);
+
+        // Find or create user
+        $user = User::where('email', $googleUser->getEmail())->first();
+
+        if (!$user) {
+            // Create new customer account
+            $user = User::create([
+                'name'              => $googleUser->getName(),
+                'email'             => $googleUser->getEmail(),
+                'password'          => bcrypt(\Str::random(16)),
+                'email_verified_at' => now(),
+                'status'            => 'active',
+                'is_active'         => true,
+            ]);
+            $user->assignRole('CUSTOMER');
+            $this->logAudit('register_google', 'auth', 'user', "Customer registered via Google: {$user->email}");
+        } else {
+            // Ensure the account is active and verified
+            if (!$user->email_verified_at) {
+                $user->update(['email_verified_at' => now()]);
+            }
+            if ($user->status !== 'active') {
+                $user->update(['status' => 'active', 'is_active' => true]);
+            }
+        }
+
+        // Generate Sanctum token
+        $sanctumToken = $user->createToken('auth_token')->plainTextToken;
+        $this->createSession($user, $request, $sanctumToken);
+
+        // Store FCM token if provided
+        if ($request->filled('fcm_token')) {
+            $this->storeFcmToken($user, $request->fcm_token);
+        }
+
+        $this->logAudit('login_google', 'auth', 'user', "User logged in via Google: {$user->email}");
+
+        return $this->successResponse([
+            'user'  => $user->only(['id', 'name', 'email', 'phone', 'locale', 'fcm_device_token']),
+            'roles' => $user->getRoleNames(),
+            'token' => $sanctumToken,
+        ], 'Google login successful.');
+
+    } catch (\Exception $e) {
+        Log::error('Google callback failed: ' . $e->getMessage());
+        return $this->errorResponse('Google authentication failed: ' . $e->getMessage(), 500);
+    }
 }
 
     // ------------------ LOGOUT ------------------

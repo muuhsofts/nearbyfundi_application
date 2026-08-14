@@ -28,6 +28,9 @@ use App\Http\Controllers\Api\SubscriptionController;
 use App\Http\Controllers\Api\RateCardController;
 use App\Http\Controllers\Api\PaymentMethodController;
 use App\Http\Controllers\Api\ServiceCategoryController;
+// NEW controllers for Phase 2
+use App\Http\Controllers\Api\ReviewController;
+use App\Http\Controllers\Api\PrivacyPolicyController;
 
 Route::get('/health', fn() => response()->json(['status' => 'ok', 'timestamp' => now()]));
 
@@ -38,6 +41,10 @@ Route::prefix('v1')->group(function () {
     Route::prefix('auth')->group(function () {
         Route::post('register', [AuthController::class, 'register']);
         Route::post('register-fundi', [AuthController::class, 'registerFundi']);
+        // Google OAuth (public)
+        Route::post('google', [AuthController::class, 'googleLogin']);
+        Route::get('google/redirect', [AuthController::class, 'redirectToGoogle']);
+        Route::match(['get', 'post'], 'google/callback', [AuthController::class, 'handleGoogleCallback']);
         Route::post('login', [AuthController::class, 'login']);
         Route::post('verify-otp', [AuthController::class, 'verifyOtp']);
         Route::post('resend-otp', [AuthController::class, 'resendOtp']);
@@ -90,6 +97,9 @@ Route::prefix('v2')->middleware(['auth:sanctum', 'active.session', 'subscription
     Route::post('technicians/profile/photo', [TechnicianController::class, 'uploadProfilePhoto']);
     Route::patch('technicians/{id}/verify', [TechnicianController::class, 'verify']);
     Route::apiResource('technicians', TechnicianController::class)->except(['show', 'nearby', 'updateProfile', 'toggleOnline']);
+
+    // ✅ NEW: Technician service price management
+    Route::put('technicians/service-prices', [TechnicianController::class, 'updateServicePrices']);
 });
 
 // =============================================
@@ -133,6 +143,11 @@ Route::prefix('v4')->middleware(['auth:sanctum', 'active.session'])->group(funct
     Route::get('customer/requests', [RequestController::class, 'customerRequests']);
     Route::get('technician/requests', [RequestController::class, 'technicianRequests']);
 
+    // ✅ NEW: Request tracking endpoints
+    Route::patch('requests/{id}/on-the-way', [RequestController::class, 'markOnTheWay']);
+    Route::patch('requests/{id}/arrive', [RequestController::class, 'markArrived']);
+    Route::get('requests/{id}/tracking', [RequestController::class, 'trackingData']);
+
     // Monitoring
     Route::prefix('monitoring')->group(function () {
         Route::get('map', [MonitoringController::class, 'map']);
@@ -147,6 +162,8 @@ Route::prefix('v4')->middleware(['auth:sanctum', 'active.session'])->group(funct
         Route::get('requests/{id}/logs', [MonitoringController::class, 'getRequestLogs']);
         Route::patch('requests/{id}/status', [MonitoringController::class, 'updateStatus']);
         Route::post('requests/{id}/complete', [MonitoringController::class, 'completeRequest']);
+        // ✅ NEW: Geofence arrival detection
+        Route::post('requests/{id}/check-arrival', [MonitoringController::class, 'checkArrival']);
     });
 });
 
@@ -395,5 +412,24 @@ Route::prefix('v17')->group(function () {
         Route::delete('service-categories/{id}', [ServiceCategoryController::class, 'destroy']);
         Route::delete('service-categories/bulk-delete', [ServiceCategoryController::class, 'bulkDelete']);
         Route::get('service-categories/stats', [ServiceCategoryController::class, 'stats']);
+    });
+});
+
+// =============================================
+// V18 – REVIEWS & PRIVACY POLICY (Phase 2)
+// =============================================
+Route::prefix('v18')->group(function () {
+    // Public endpoints
+    Route::get('privacy-policy', [PrivacyPolicyController::class, 'show']);
+    Route::get('technicians/{id}/reviews', [ReviewController::class, 'technicianReviews']);
+
+    // Authenticated endpoints
+    Route::middleware(['auth:sanctum', 'active.session'])->group(function () {
+        Route::post('reviews', [ReviewController::class, 'store']);
+
+        // Admin only (requires 'privacy.edit' permission)
+        Route::middleware(['permission:privacy.edit'])->group(function () {
+            Route::put('privacy-policy', [PrivacyPolicyController::class, 'update']);
+        });
     });
 });

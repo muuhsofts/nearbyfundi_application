@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class ServiceRequest extends Model
 {
@@ -27,6 +28,9 @@ class ServiceRequest extends Model
         'category_id',
         'description',
         'status',
+        // location fields
+        'latitude',
+        'longitude',
     ];
 
     /**
@@ -37,7 +41,26 @@ class ServiceRequest extends Model
     protected $casts = [
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        'latitude'   => 'float',
+        'longitude'  => 'float',
     ];
+
+    // ============================================================
+    // STATUS CONSTANTS
+    // ============================================================
+
+    const STATUS_PENDING     = 'pending';
+    const STATUS_ACCEPTED    = 'accepted';
+    const STATUS_ON_THE_WAY  = 'on_the_way';
+    const STATUS_ARRIVED     = 'arrived';
+    const STATUS_IN_PROGRESS = 'in_progress';
+    const STATUS_COMPLETED   = 'completed';
+    const STATUS_CANCELLED   = 'cancelled';
+    const STATUS_REJECTED    = 'rejected';
+
+    // ============================================================
+    // RELATIONSHIPS
+    // ============================================================
 
     /**
      * Get the customer who created the request.
@@ -80,139 +103,145 @@ class ServiceRequest extends Model
     }
 
     /**
-     * Scope a query to only include pending requests.
+     * Get the review for this request (if any).
+     * Explicitly specify foreign key 'request_id'.
      */
+    public function review(): HasOne
+    {
+        return $this->hasOne(Review::class, 'request_id');
+    }
+
+    // ============================================================
+    // SCOPES
+    // ============================================================
+
     public function scopePending($query)
     {
-        return $query->where('status', 'pending');
+        return $query->where('status', self::STATUS_PENDING);
     }
 
     /**
-     * Scope a query to only include active requests (pending, accepted, in_progress).
+     * Scope to include all active statuses (from pending to in_progress)
      */
     public function scopeActive($query)
     {
-        return $query->whereIn('status', ['pending', 'accepted', 'in_progress']);
+        return $query->whereIn('status', [
+            self::STATUS_PENDING,
+            self::STATUS_ACCEPTED,
+            self::STATUS_ON_THE_WAY,
+            self::STATUS_ARRIVED,
+            self::STATUS_IN_PROGRESS,
+        ]);
     }
 
-    /**
-     * Scope a query to only include completed requests.
-     */
     public function scopeCompleted($query)
     {
-        return $query->where('status', 'completed');
+        return $query->where('status', self::STATUS_COMPLETED);
     }
 
-    /**
-     * Scope a query to only include cancelled requests.
-     */
     public function scopeCancelled($query)
     {
-        return $query->where('status', 'cancelled');
+        return $query->where('status', self::STATUS_CANCELLED);
     }
 
-    /**
-     * Scope a query to only include rejected requests.
-     */
     public function scopeRejected($query)
     {
-        return $query->where('status', 'rejected');
+        return $query->where('status', self::STATUS_REJECTED);
     }
 
-    /**
-     * Check if the request is pending.
-     */
+    // ============================================================
+    // STATUS CHECK HELPERS
+    // ============================================================
+
     public function isPending(): bool
     {
-        return $this->status === 'pending';
+        return $this->status === self::STATUS_PENDING;
     }
 
-    /**
-     * Check if the request is accepted.
-     */
     public function isAccepted(): bool
     {
-        return $this->status === 'accepted';
+        return $this->status === self::STATUS_ACCEPTED;
     }
 
-    /**
-     * Check if the request is in progress.
-     */
+    public function isOnTheWay(): bool
+    {
+        return $this->status === self::STATUS_ON_THE_WAY;
+    }
+
+    public function isArrived(): bool
+    {
+        return $this->status === self::STATUS_ARRIVED;
+    }
+
     public function isInProgress(): bool
     {
-        return $this->status === 'in_progress';
+        return $this->status === self::STATUS_IN_PROGRESS;
     }
 
-    /**
-     * Check if the request is completed.
-     */
     public function isCompleted(): bool
     {
-        return $this->status === 'completed';
+        return $this->status === self::STATUS_COMPLETED;
     }
 
-    /**
-     * Check if the request is cancelled.
-     */
     public function isCancelled(): bool
     {
-        return $this->status === 'cancelled';
+        return $this->status === self::STATUS_CANCELLED;
     }
 
-    /**
-     * Check if the request is rejected.
-     */
     public function isRejected(): bool
     {
-        return $this->status === 'rejected';
+        return $this->status === self::STATUS_REJECTED;
     }
 
     /**
-     * Check if the request is active (not completed, cancelled, or rejected).
+     * Check if the request is active (not terminal)
      */
     public function isActive(): bool
     {
-        return in_array($this->status, ['pending', 'accepted', 'in_progress']);
+        return in_array($this->status, [
+            self::STATUS_PENDING,
+            self::STATUS_ACCEPTED,
+            self::STATUS_ON_THE_WAY,
+            self::STATUS_ARRIVED,
+            self::STATUS_IN_PROGRESS,
+        ]);
     }
 
-    /**
-     * Get the service name with category.
-     */
+    // ============================================================
+    // ACCESSORS
+    // ============================================================
+
     public function getServiceWithCategoryAttribute(): string
     {
         $serviceName = $this->service->name ?? 'Unknown Service';
         $categoryName = $this->category->category_name ?? '';
-        
         return $categoryName ? "{$serviceName} ({$categoryName})" : $serviceName;
     }
 
-    /**
-     * Get the request details for notifications.
-     */
     public function getNotificationData(): array
     {
         return [
-            'id' => $this->id,
+            'id'          => $this->id,
             'description' => $this->description,
-            'status' => $this->status,
-            'service' => [
-                'id' => $this->service_id,
+            'status'      => $this->status,
+            'service'     => [
+                'id'   => $this->service_id,
                 'name' => $this->service->name ?? null,
             ],
-            'category' => $this->category ? [
-                'id' => $this->category_id,
+            'category'    => $this->category ? [
+                'id'   => $this->category_id,
                 'name' => $this->category->category_name,
             ] : null,
-            'customer' => $this->customer ? [
-                'id' => $this->customer->id,
-                'name' => $this->customer->name,
+            'customer'    => $this->customer ? [
+                'id'    => $this->customer->id,
+                'name'  => $this->customer->name,
                 'email' => $this->customer->email,
             ] : null,
-            'technician' => $this->technician ? [
-                'id' => $this->technician->id,
+            'technician'  => $this->technician ? [
+                'id'   => $this->technician->id,
                 'name' => $this->technician->user->name ?? null,
             ] : null,
-            'created_at' => $this->created_at,
+            'created_at'  => $this->created_at,
         ];
     }
 }

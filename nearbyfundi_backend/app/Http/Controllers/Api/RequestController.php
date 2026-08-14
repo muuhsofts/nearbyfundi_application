@@ -30,6 +30,10 @@ class RequestController extends BaseApiController
         $this->fcm = $fcm;
     }
 
+    // ============================================================
+    // PRIVATE HELPERS (existing)
+    // ============================================================
+
     private function logRequestAction(
         int $requestId,
         int $userId,
@@ -103,6 +107,54 @@ class RequestController extends BaseApiController
         }
         return $sanitized;
     }
+
+    // ============================================================
+    // NEW PRIVATE HELPERS (Phase 2)
+    // ============================================================
+
+    /**
+     * Send push and database notification to customer about request status change
+     */
+    private function notifyCustomer(ServiceRequest $request, string $event): void
+    {
+        $title = 'Request Update';
+        $body = "Your request #{$request->id} is now: " . str_replace('_', ' ', $event);
+        $data = ['request_id' => $request->id, 'status' => $event];
+
+        try {
+            if ($request->customer) {
+                $this->fcm->sendToUser($request->customer, $title, $body, $data);
+                $this->createNotification(
+                    $request->customer_id,
+                    $title,
+                    $body,
+                    'request_' . $event,
+                    $data
+                );
+            }
+        } catch (\Exception $e) {
+            Log::error('Failed to notify customer: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Haversine distance in km
+     */
+    private function haversineDistance($lat1, $lon1, $lat2, $lon2): float
+    {
+        $earthRadius = 6371; // km
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLon = deg2rad($lon2 - $lon1);
+        $a = sin($dLat/2) * sin($dLat/2) +
+             cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
+             sin($dLon/2) * sin($dLon/2);
+        $c = 2 * atan2(sqrt($a), sqrt(1-$a));
+        return $earthRadius * $c;
+    }
+
+    // ============================================================
+    // PUBLIC METHODS
+    // ============================================================
 
     /**
      * Get services with their categories for request creation
@@ -198,7 +250,7 @@ class RequestController extends BaseApiController
         }
     }
 
-      /**
+    /**
      * CUSTOMER: Create a new request with service and category
      * POST /v4/requests
      */
@@ -218,24 +270,18 @@ class RequestController extends BaseApiController
                 'description'   => 'required|string|min:5',
             ]);
 
-            // Log the incoming request data for debugging
             Log::info('Request creation data received:', $data);
 
-            // Verify that the service has the selected category
             if (!empty($data['category_id'])) {
                 $service = Service::find($data['service_id']);
-                
                 if (!$service) {
                     return $this->errorResponse('Service not found.', 404);
                 }
-
-                // FIXED: Use the hasCategory method which handles ambiguity
                 if (!$service->hasCategory($data['category_id'])) {
                     Log::warning('Category not associated with service', [
                         'service_id' => $data['service_id'],
                         'category_id' => $data['category_id']
                     ]);
-                    
                     return $this->errorResponse(
                         'The selected category is not associated with this service.',
                         422
@@ -243,7 +289,6 @@ class RequestController extends BaseApiController
                 }
             }
 
-            // Check for existing active request
             $existing = ServiceRequest::where('customer_id', $user->id)
                 ->where('technician_id', $data['technician_id'])
                 ->whereIn('status', ['pending', 'accepted', 'in_progress'])
@@ -273,14 +318,12 @@ class RequestController extends BaseApiController
 
             DB::commit();
 
-            // Dispatch event
             try {
                 event(new RequestCreated($serviceRequest));
             } catch (\Exception $e) {
                 Log::error('Failed to dispatch RequestCreated event: ' . $e->getMessage());
             }
 
-            // Send email notification to technician
             try {
                 if ($serviceRequest->technician && 
                     $serviceRequest->technician->user && 
@@ -292,7 +335,6 @@ class RequestController extends BaseApiController
                 Log::error('Failed to send request created email: ' . $e->getMessage());
             }
 
-            // Send FCM notification to technician
             try {
                 if ($serviceRequest->technician && $serviceRequest->technician->user) {
                     $technicianUser = $serviceRequest->technician->user;
@@ -357,9 +399,8 @@ class RequestController extends BaseApiController
         }
     }
 
-    
     /**
-     * Update request status
+     * Update request status (UPDATED to allow on_the_way & arrived)
      * PATCH /v4/requests/{id}/status
      */
     public function updateStatus(Request $request, $id)
@@ -384,6 +425,13 @@ class RequestController extends BaseApiController
                     $allowed = true;
                 }
                 if ($newStatus === 'in_progress' && $oldStatus === 'accepted') {
+                    $allowed = true;
+                }
+                // NEW: allow technician to set on_the_way and arrived
+                if ($newStatus === 'on_the_way' && $oldStatus === 'accepted') {
+                    $allowed = true;
+                }
+                if ($newStatus === 'arrived' && $oldStatus === 'on_the_way') {
                     $allowed = true;
                 }
             } elseif ($user->hasRole('CUSTOMER') && $newStatus === 'cancelled' && $oldStatus === 'pending') {
@@ -432,6 +480,9 @@ class RequestController extends BaseApiController
         }
     }
 
+    /**
+     * Handle status change – updated to include on_the_way and arrived
+     */
     private function handleStatusChange(ServiceRequest $serviceRequest, string $newStatus): void
     {
         try {
@@ -451,6 +502,12 @@ class RequestController extends BaseApiController
                 case 'completed':
                     $this->handleCompleted($serviceRequest);
                     break;
+                case 'on_the_way':
+                    $this->handleOnTheWay($serviceRequest);
+                    break;
+                case 'arrived':
+                    $this->handleArrived($serviceRequest);
+                    break;
                 default:
                     break;
             }
@@ -458,6 +515,8 @@ class RequestController extends BaseApiController
             Log::error('Error handling status change: ' . $e->getMessage());
         }
     }
+
+    // ----- Individual status handlers (existing + new) -----
 
     private function handleAccepted(ServiceRequest $serviceRequest): void
     {
@@ -632,6 +691,20 @@ class RequestController extends BaseApiController
         }
     }
 
+    // NEW handlers for on_the_way and arrived
+    private function handleOnTheWay(ServiceRequest $serviceRequest): void
+    {
+        $this->notifyCustomer($serviceRequest, 'on_the_way');
+    }
+
+    private function handleArrived(ServiceRequest $serviceRequest): void
+    {
+        $this->notifyCustomer($serviceRequest, 'arrived');
+    }
+
+    /**
+     * Cancel a request (customer only)
+     */
     public function cancel($id, Request $request)
     {
         try {
@@ -682,6 +755,11 @@ class RequestController extends BaseApiController
         }
     }
 
+    /**
+     * Get authenticated user's requests (customer or technician)
+     * 
+     * UPDATED: eager loads 'review' relationship for the current user.
+     */
     public function myRequests(Request $request)
     {
         try {
@@ -694,11 +772,16 @@ class RequestController extends BaseApiController
             $perPage = $request->input('per_page', 15);
 
             if ($user->hasRole('CUSTOMER')) {
-                $requests = ServiceRequest::with(['technician.user', 'service', 'category'])
+                $requests = ServiceRequest::with([
+                    'technician.user',
+                    'service',
+                    'category',
+                    'review'                   // ← eager load the review
+                ])
                     ->where('customer_id', $user->id)
                     ->latest()
                     ->paginate($perPage);
-                $data = $this->formatRequests($requests);
+                $data = $this->formatRequests($requests, $user->id);
             } elseif ($user->hasRole('FUNDI')) {
                 $technician = $user->technician;
                 if (!$technician) {
@@ -726,6 +809,9 @@ class RequestController extends BaseApiController
         }
     }
 
+    /**
+     * Admin: list all requests with filters
+     */
     public function index(Request $request)
     {
         try {
@@ -794,6 +880,9 @@ class RequestController extends BaseApiController
         }
     }
 
+    /**
+     * Admin: show single request details
+     */
     public function show($id, Request $request)
     {
         try {
@@ -813,6 +902,9 @@ class RequestController extends BaseApiController
         }
     }
 
+    /**
+     * Admin: delete a request
+     */
     public function destroy($id, Request $request)
     {
         try {
@@ -838,6 +930,9 @@ class RequestController extends BaseApiController
         }
     }
 
+    /**
+     * Get logs for a specific request (admin)
+     */
     public function logs($requestId, Request $request)
     {
         try {
@@ -853,6 +948,9 @@ class RequestController extends BaseApiController
         }
     }
 
+    /**
+     * Get request statistics (admin)
+     */
     public function stats(Request $request)
     {
         try {
@@ -880,6 +978,9 @@ class RequestController extends BaseApiController
         }
     }
 
+    /**
+     * Get requests for the authenticated customer
+     */
     public function customerRequests(Request $request)
     {
         try {
@@ -908,6 +1009,9 @@ class RequestController extends BaseApiController
         }
     }
 
+    /**
+     * Get requests for the authenticated technician
+     */
     public function technicianRequests(Request $request)
     {
         try {
@@ -941,10 +1045,131 @@ class RequestController extends BaseApiController
         }
     }
 
-    private function formatRequests($requests): array
+    // ============================================================
+    // NEW: TRACKING METHODS (Phase 2)
+    // ============================================================
+
+    /**
+     * Technician marks request as "On the Way"
+     * PATCH /v4/requests/{id}/on-the-way
+     */
+    public function markOnTheWay(Request $request, $id)
     {
-        $data = $requests->map(function($request) {
-            return $this->formatSingleRequest($request);
+        $serviceRequest = ServiceRequest::findOrFail($id);
+        $user = $request->user();
+
+        if (!$user->technician || $user->technician->id !== $serviceRequest->technician_id) {
+            return $this->forbidden('You are not the technician assigned to this request.');
+        }
+
+        if ($serviceRequest->status !== ServiceRequest::STATUS_ACCEPTED) {
+            return $this->errorResponse('Request must be accepted first.', 422);
+        }
+
+        $serviceRequest->status = ServiceRequest::STATUS_ON_THE_WAY;
+        $serviceRequest->save();
+
+        $this->handleOnTheWay($serviceRequest);
+        $this->logRequestAction(
+            $serviceRequest->id,
+            $user->id,
+            'on_the_way',
+            ServiceRequest::STATUS_ACCEPTED,
+            ServiceRequest::STATUS_ON_THE_WAY,
+            'Technician is on the way'
+        );
+        $this->logAudit('mark_on_the_way', 'request', $serviceRequest->id, 'Technician marked on the way');
+
+        return $this->successResponse($serviceRequest, 'Now on the way.');
+    }
+
+    /**
+     * Technician marks request as "Arrived" (manual)
+     * PATCH /v4/requests/{id}/arrive
+     */
+    public function markArrived(Request $request, $id)
+    {
+        $serviceRequest = ServiceRequest::findOrFail($id);
+        $user = $request->user();
+
+        if (!$user->technician || $user->technician->id !== $serviceRequest->technician_id) {
+            return $this->forbidden('You are not the technician assigned to this request.');
+        }
+
+        if ($serviceRequest->status !== ServiceRequest::STATUS_ON_THE_WAY) {
+            return $this->errorResponse('Must be on the way first.', 422);
+        }
+
+        $serviceRequest->status = ServiceRequest::STATUS_ARRIVED;
+        $serviceRequest->save();
+
+        $this->handleArrived($serviceRequest);
+        $this->logRequestAction(
+            $serviceRequest->id,
+            $user->id,
+            'arrived',
+            ServiceRequest::STATUS_ON_THE_WAY,
+            ServiceRequest::STATUS_ARRIVED,
+            'Technician arrived'
+        );
+        $this->logAudit('mark_arrived', 'request', $serviceRequest->id, 'Technician marked arrived');
+
+        return $this->successResponse($serviceRequest, 'Arrived at location.');
+    }
+
+    /**
+     * Get live tracking data for a request
+     * GET /v4/requests/{id}/tracking
+     */
+    public function trackingData($id)
+    {
+        $request = ServiceRequest::with('technician')->findOrFail($id);
+
+        $customerLat = $request->latitude;
+        $customerLng = $request->longitude;
+        $techLat = $request->technician->latitude;
+        $techLng = $request->technician->longitude;
+
+        $distance = null;
+        $eta = null;
+        if ($customerLat && $customerLng && $techLat && $techLng) {
+            $distance = $this->haversineDistance($customerLat, $customerLng, $techLat, $techLng);
+            // Estimate ETA: assume average speed 30 km/h => 2 min per km
+            $etaMinutes = $distance * 2;
+            $eta = now()->addMinutes($etaMinutes)->toIso8601String();
+        }
+
+        return $this->successResponse([
+            'technician_location' => [
+                'lat' => $techLat ? (float) $techLat : null,
+                'lng' => $techLng ? (float) $techLng : null,
+            ],
+            'customer_location' => [
+                'lat' => $customerLat ? (float) $customerLat : null,
+                'lng' => $customerLng ? (float) $customerLng : null,
+            ],
+            'status' => $request->status,
+            'distance_km' => $distance ? round($distance, 2) : null,
+            'eta' => $eta,
+            'last_updated' => $request->technician->location_updated_at?->toIso8601String(),
+        ], 'Tracking data retrieved.');
+    }
+
+    // ============================================================
+    // PRIVATE FORMATTING HELPERS
+    // ============================================================
+
+    /**
+     * Format a paginated request collection.
+     *
+     * @param mixed $requests
+     * @param int|null $userId Optional user ID for 'has_review' flag.
+     * @return array
+     */
+    private function formatRequests($requests, ?int $userId = null): array
+    {
+        $data = $requests->map(function($request) use ($userId) {
+            return $this->formatSingleRequest($request, $userId);
         });
 
         return [
@@ -958,9 +1183,16 @@ class RequestController extends BaseApiController
         ];
     }
 
-    private function formatSingleRequest($request): array
+    /**
+     * Format a single request.
+     *
+     * @param mixed $request
+     * @param int|null $userId Optional user ID to check for existing review.
+     * @return array
+     */
+    private function formatSingleRequest($request, ?int $userId = null): array
     {
-        return [
+        $data = [
             'id' => $request->id,
             'description' => $request->description,
             'status' => $request->status,
@@ -1008,5 +1240,19 @@ class RequestController extends BaseApiController
                 ];
             }) : [],
         ];
+
+        // --- Add has_review flag ---
+        // If a user ID is provided, check if a review exists for that customer.
+        // Otherwise, fallback to the authenticated user (if any) or false.
+        if ($userId !== null) {
+            $hasReview = $request->review()->where('customer_id', $userId)->exists();
+        } elseif (auth()->check()) {
+            $hasReview = $request->review()->where('customer_id', auth()->id())->exists();
+        } else {
+            $hasReview = false;
+        }
+        $data['has_review'] = $hasReview;
+
+        return $data;
     }
 }

@@ -7,6 +7,9 @@ use App\Models\Otp;
 use App\Models\Technician;
 use App\Models\Service;
 use App\Models\ServiceCategory;
+use App\Models\Notification;
+use App\Models\Subscription;
+use App\Models\RateCard;
 use Carbon\Carbon;
 use App\Services\GeocodingService;
 use Illuminate\Http\Request;
@@ -81,7 +84,7 @@ class TechnicianController extends BaseApiController
     }
 
     // =============================================
-    // FUNDI REGISTRATION (WITH OSM VALIDATION)
+    // FUNDI REGISTRATION (with price ranges)
     // =============================================
     public function registerFundi(Request $request, GeocodingService $geocoder)
     {
@@ -100,12 +103,21 @@ class TechnicianController extends BaseApiController
             'service_ids'   => 'required|array|min:1',
             'service_ids.*' => 'exists:services,id',
             'profile_photo' => 'required|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'price_ranges'  => 'required|array|min:1',
+            'price_ranges.*.min' => 'required|numeric|min:0',
+            'price_ranges.*.max' => 'required|numeric|min:0|gte:price_ranges.*.min',
         ]);
 
+        foreach ($data['service_ids'] as $serviceId) {
+            if (!isset($data['price_ranges'][$serviceId])) {
+                return $this->errorResponse("Price range missing for service ID {$serviceId}", 422);
+            }
+        }
+
         $coords = $this->validateAndGeocodeArea(
-            $data['area'], 
-            $data['latitude'] ?? null, 
-            $data['longitude'] ?? null, 
+            $data['area'],
+            $data['latitude'] ?? null,
+            $data['longitude'] ?? null,
             $geocoder
         );
         $data['latitude']  = $coords['lat'];
@@ -139,12 +151,20 @@ class TechnicianController extends BaseApiController
                 'location_updated_at' => now(),
                 'verified'            => false,
                 'is_online'           => false,
+                'verification_status' => 'pending',
             ];
 
             $technicianData['profile_photo'] = $this->uploadImage($request->file('profile_photo'));
 
             $technician = Technician::create($technicianData);
-            $technician->services()->sync($data['service_ids']);
+
+            // Attach services with price ranges
+            foreach ($data['service_ids'] as $serviceId) {
+                $technician->servicePrices()->attach($serviceId, [
+                    'min_price' => $data['price_ranges'][$serviceId]['min'],
+                    'max_price' => $data['price_ranges'][$serviceId]['max'],
+                ]);
+            }
 
             $otp = Otp::create([
                 'email'      => $user->email,
@@ -177,11 +197,9 @@ class TechnicianController extends BaseApiController
         }
     }
 
-       /**
-     * SEARCH TECHNICIANS BY PLACE WITH SERVICE AND CATEGORY FILTERS
-     * GET /v1/technicians/nearby-by-place
-     * Supports Swahili search
-     */
+    // =============================================
+    // SEARCH TECHNICIANS BY PLACE (with filters)
+    // =============================================
     public function nearbyByPlace(Request $request, GeocodingService $geocoder)
     {
         $request->validate([
@@ -189,7 +207,7 @@ class TechnicianController extends BaseApiController
             'service_id'  => 'nullable|exists:services,id',
             'category_id' => 'nullable|exists:service_categories,service_categoryID',
             'radius'      => 'nullable|integer|min:1|max:100',
-            'search'      => 'nullable|string|max:255', // For text search
+            'search'      => 'nullable|string|max:255',
         ]);
 
         $place      = trim($request->input('place'));
@@ -197,30 +215,26 @@ class TechnicianController extends BaseApiController
         $serviceId  = $request->input('service_id');
         $categoryId = $request->input('category_id');
         $searchText = $request->input('search');
-        $locale = $request->header('Accept-Language', 'en');
 
         $coords = $geocoder->geocode($place);
 
-        $query = Technician::with(['user', 'services', 'services.categories'])
+        $query = Technician::with(['user', 'services.categories'])
             ->where('verified', true)
             ->whereHas('user', fn($q) => $q->where('is_active', true));
 
-        // Search in both English and Swahili service names
         if ($searchText) {
-            $query->whereHas('services', function($q) use ($searchText) {
+            $query->whereHas('services', function ($q) use ($searchText) {
                 $q->where('name', 'LIKE', "%{$searchText}%")
                   ->orWhere('swahili_name', 'LIKE', "%{$searchText}%");
             });
         }
 
         if ($serviceId) {
-            $query->whereHas('services', function($q) use ($serviceId) {
-                $q->where('services.id', $serviceId);
-            });
+            $query->whereHas('services', fn($q) => $q->where('services.id', $serviceId));
         }
 
         if ($categoryId) {
-            $query->whereHas('services.categories', function($q) use ($categoryId) {
+            $query->whereHas('services.categories', function ($q) use ($categoryId) {
                 $q->where('service_categories.service_categoryID', $categoryId);
             });
         }
@@ -255,60 +269,7 @@ class TechnicianController extends BaseApiController
 
         $technicians = $query->get();
 
-        $serviceName = null;
-        $categoryName = null;
-        
-        if ($serviceId) {
-            $service = Service::find($serviceId);
-            $serviceName = $service ? $service->getNameForLocale($locale) : null;
-        }
-
-        if ($categoryId) {
-            $category = ServiceCategory::find($categoryId);
-            $categoryName = $category ? $category->getNameForLocale($locale) : null;
-        }
-
         if ($technicians->isEmpty()) {
-            $totalQuery = Technician::with(['user', 'services'])
-                ->where('verified', true)
-                ->whereHas('user', fn($q) => $q->where('is_active', true));
-
-            if ($coords) {
-                $totalQuery->selectRaw("
-                    technicians.*,
-                    (
-                        6371 * acos(
-                            cos(radians(?)) * cos(radians(latitude)) *
-                            cos(radians(longitude) - radians(?)) +
-                            sin(radians(?)) * sin(radians(latitude))
-                        )
-                    ) AS distance
-                ", [$coords['lat'], $coords['lng'], $coords['lat']]);
-
-                $totalQuery->where(function ($q) use ($place, $radius, $coords) {
-                    $q->where('area', 'like', "%{$place}%")
-                      ->orWhereRaw("
-                            (6371 * acos(
-                                cos(radians(?)) * cos(radians(latitude)) *
-                                cos(radians(longitude) - radians(?)) +
-                                sin(radians(?)) * sin(radians(latitude))
-                            )) <= ?
-                        ", [$coords['lat'], $coords['lng'], $coords['lat'], $radius]);
-                });
-            } else {
-                $totalQuery->where('area', 'like', "%{$place}%");
-            }
-
-            $totalTechnicians = $totalQuery->count();
-
-            $message = $locale === 'sw' 
-                ? "Hakuna mafundi waliopatikana karibu na '{$place}'"
-                : "No technicians found near '{$place}'";
-            
-            $suggestions = $locale === 'sw'
-                ? ['Jaribu kuondoa vichujio', 'Jaribu eneo lingine', 'Jaribu huduma nyingine']
-                : ['Try removing filters', 'Try a different location', 'Try a different service'];
-
             return $this->successResponse([
                 'technicians' => [],
                 'search' => [
@@ -317,20 +278,17 @@ class TechnicianController extends BaseApiController
                     'longitude' => $coords['lng'] ?? null,
                 ],
                 'filters' => [
-                    'service_id' => $serviceId,
-                    'service_name' => $serviceName,
+                    'service_id'  => $serviceId,
                     'category_id' => $categoryId,
-                    'category_name' => $categoryName,
                 ],
                 'meta' => [
-                    'total_technicians_nearby' => $totalTechnicians,
-                    'has_filters' => ($serviceId || $categoryId),
-                    'suggestions' => $suggestions,
+                    'total_found' => 0,
+                    'has_filters' => !empty($serviceId) || !empty($categoryId),
                 ]
-            ], $message, 200);
+            ], 'No technicians found.');
         }
 
-        $formatted = $technicians->map(function ($tech) use ($locale) {
+        $formatted = $technicians->map(function ($tech) {
             return [
                 'id'            => $tech->id,
                 'user_id'       => $tech->user_id,
@@ -343,35 +301,22 @@ class TechnicianController extends BaseApiController
                 'latitude'      => $tech->latitude ? (float) $tech->latitude : null,
                 'longitude'     => $tech->longitude ? (float) $tech->longitude : null,
                 'hourly_rate'   => $tech->hourly_rate ? (float) $tech->hourly_rate : null,
-                'experience'    => $tech->experience ? (int) $tech->experience : 0,
+                'experience'    => (int) ($tech->experience ?? 0),
                 'rating'        => (float) ($tech->rating ?? 0),
                 'is_online'     => (bool) $tech->is_online,
                 'verified'      => (bool) $tech->verified,
                 'distance'      => isset($tech->distance) ? (float) round($tech->distance, 2) : null,
-                'services'      => $tech->services->map(function($service) use ($locale) {
+                'services'      => $tech->services->pluck('name')->toArray(),
+                'service_prices'=> $tech->servicePrices->map(function ($service) {
                     return [
-                        'id' => $service->id,
-                        'name' => $service->getNameForLocale($locale),
-                        'name_en' => $service->name,
-                        'name_sw' => $service->swahili_name,
-                        'categories' => $service->categories->map(function($category) use ($locale) {
-                            return [
-                                'id' => $category->service_categoryID,
-                                'name' => $category->getNameForLocale($locale),
-                                'name_en' => $category->category_name,
-                                'name_sw' => $category->swahili_name,
-                                'slug' => $category->slug,
-                            ];
-                        }),
+                        'id'        => $service->id,
+                        'name'      => $service->name,
+                        'min_price' => (float) $service->pivot->min_price,
+                        'max_price' => (float) $service->pivot->max_price,
                     ];
-                }),
-                'service_names' => $tech->services->pluck('name')->toArray(),
+                })->values()->toArray(),
             ];
         });
-
-        $message = $locale === 'sw'
-            ? "Mafundi waliopatikana karibu na {$place}"
-            : "Technicians found near {$place}";
 
         return $this->successResponse([
             'technicians' => $formatted,
@@ -381,20 +326,19 @@ class TechnicianController extends BaseApiController
                 'longitude' => $coords['lng'] ?? null,
             ],
             'filters' => [
-                'service_id' => $serviceId,
+                'service_id'  => $serviceId,
                 'category_id' => $categoryId,
             ],
             'meta' => [
-                'total_found' => $technicians->count(),
-                'has_filters' => ($serviceId || $categoryId),
+                'total_found' => $formatted->count(),
+                'has_filters' => !empty($serviceId) || !empty($categoryId),
             ]
-        ], $message);
+        ], 'Technicians found.');
     }
 
-    /**
-     * NEARBY TECHNICIANS WITH COORDINATES, SERVICE AND CATEGORY FILTERS
-     * GET /v1/technicians/nearby
-     */
+    // =============================================
+    // NEARBY TECHNICIANS (by GPS coordinates)
+    // =============================================
     public function nearby(Request $request)
     {
         $request->validate([
@@ -403,24 +347,33 @@ class TechnicianController extends BaseApiController
             'radius'      => 'nullable|integer|min:1|max:100',
             'service_id'  => 'nullable|exists:services,id',
             'category_id' => 'nullable|exists:service_categories,service_categoryID',
+            'search'      => 'nullable|string|max:255',
         ]);
 
-        $lat       = $request->input('lat');
-        $lng       = $request->input('lng');
-        $radius    = $request->input('radius', 10);
+        $lat       = (float) $request->input('lat');
+        $lng       = (float) $request->input('lng');
+        $radius    = (int) $request->input('radius', 10);
         $serviceId = $request->input('service_id');
         $categoryId = $request->input('category_id');
+        $searchText = $request->input('search');
 
-        $query = Technician::with(['user', 'services', 'services.categories'])
+        $query = Technician::with(['user', 'services.categories'])
             ->where('verified', true)
             ->whereHas('user', fn($q) => $q->where('is_active', true));
+
+        if ($searchText) {
+            $query->whereHas('services', function ($q) use ($searchText) {
+                $q->where('name', 'LIKE', "%{$searchText}%")
+                  ->orWhere('swahili_name', 'LIKE', "%{$searchText}%");
+            });
+        }
 
         if ($serviceId) {
             $query->whereHas('services', fn($q) => $q->where('services.id', $serviceId));
         }
 
         if ($categoryId) {
-            $query->whereHas('services.categories', function($q) use ($categoryId) {
+            $query->whereHas('services.categories', function ($q) use ($categoryId) {
                 $q->where('service_categories.service_categoryID', $categoryId);
             });
         }
@@ -441,60 +394,6 @@ class TechnicianController extends BaseApiController
 
         $technicians = $query->get();
 
-        if ($technicians->isEmpty()) {
-            // Get total technicians nearby for reference
-            $totalQuery = Technician::with(['user', 'services'])
-                ->where('verified', true)
-                ->whereHas('user', fn($q) => $q->where('is_active', true));
-
-            $totalQuery->selectRaw("
-                technicians.*,
-                (
-                    6371 * acos(
-                        cos(radians(?)) * cos(radians(latitude)) *
-                        cos(radians(longitude) - radians(?)) +
-                        sin(radians(?)) * sin(radians(latitude))
-                    )
-                ) AS distance
-            ", [$lat, $lng, $lat]);
-
-            $totalQuery->having('distance', '<=', $radius);
-            $totalTechnicians = $totalQuery->count();
-
-            $message = "No technicians found within {$radius}km radius";
-            $suggestions = [];
-
-            if ($serviceId || $categoryId) {
-                $suggestions[] = "Try removing service/category filters";
-                $suggestions[] = "Try increasing the search radius";
-            } else {
-                $suggestions[] = "Try increasing the search radius";
-                $suggestions[] = "Try a different location";
-            }
-
-            if ($totalTechnicians > 0) {
-                $message .= ". There are {$totalTechnicians} other technicians nearby.";
-            }
-
-            return $this->successResponse([
-                'technicians' => [],
-                'search' => [
-                    'latitude'  => (float) $lat,
-                    'longitude' => (float) $lng,
-                    'radius' => (int) $radius,
-                ],
-                'filters' => [
-                    'service_id' => $serviceId,
-                    'category_id' => $categoryId,
-                ],
-                'meta' => [
-                    'total_technicians_nearby' => $totalTechnicians,
-                    'has_filters' => ($serviceId || $categoryId),
-                    'suggestions' => $suggestions,
-                ]
-            ], $message, 200);
-        }
-
         $formatted = $technicians->map(function ($tech) {
             return [
                 'id'            => $tech->id,
@@ -508,90 +407,117 @@ class TechnicianController extends BaseApiController
                 'latitude'      => $tech->latitude ? (float) $tech->latitude : null,
                 'longitude'     => $tech->longitude ? (float) $tech->longitude : null,
                 'hourly_rate'   => $tech->hourly_rate ? (float) $tech->hourly_rate : null,
-                'experience'    => $tech->experience ? (int) $tech->experience : 0,
+                'experience'    => (int) ($tech->experience ?? 0),
                 'rating'        => (float) ($tech->rating ?? 0),
                 'is_online'     => (bool) $tech->is_online,
                 'verified'      => (bool) $tech->verified,
                 'distance'      => isset($tech->distance) ? (float) round($tech->distance, 2) : null,
-                'services'      => $tech->services->map(function($service) {
+                'services'      => $tech->services->pluck('name')->toArray(),
+                'service_prices'=> $tech->servicePrices->map(function ($service) {
                     return [
-                        'id' => $service->id,
-                        'name' => $service->name,
-                        'categories' => $service->categories->map(function($category) {
-                            return [
-                                'id' => $category->service_categoryID,
-                                'name' => $category->category_name,
-                                'slug' => $category->slug,
-                            ];
-                        }),
+                        'id'        => $service->id,
+                        'name'      => $service->name,
+                        'min_price' => (float) $service->pivot->min_price,
+                        'max_price' => (float) $service->pivot->max_price,
                     ];
-                }),
-                'service_names' => $tech->services->pluck('name')->toArray(),
+                })->values()->toArray(),
             ];
         });
+
+        if ($formatted->isEmpty()) {
+            return $this->successResponse([
+                'technicians' => [],
+                'search' => [
+                    'latitude'  => $lat,
+                    'longitude' => $lng,
+                    'radius'    => $radius,
+                ],
+                'filters' => [
+                    'service_id'  => $serviceId,
+                    'category_id' => $categoryId,
+                ],
+                'meta' => [
+                    'total_found' => 0,
+                    'has_filters' => !empty($serviceId) || !empty($categoryId),
+                ]
+            ], 'No technicians found within radius.');
+        }
 
         return $this->successResponse([
             'technicians' => $formatted,
             'search' => [
-                'latitude'  => (float) $lat,
-                'longitude' => (float) $lng,
+                'latitude'  => $lat,
+                'longitude' => $lng,
+                'radius'    => $radius,
             ],
             'filters' => [
-                'service_id' => $serviceId,
+                'service_id'  => $serviceId,
                 'category_id' => $categoryId,
             ],
             'meta' => [
-                'total_found' => $technicians->count(),
-                'has_filters' => ($serviceId || $categoryId),
+                'total_found' => $formatted->count(),
+                'has_filters' => !empty($serviceId) || !empty($categoryId),
             ]
         ], 'Technicians found within radius.');
     }
 
-
     // =============================================
-    // GET TECHNICIAN DETAIL
+    // GET TECHNICIAN DETAIL (with service price ranges)
     // =============================================
     public function show($id)
-    {
-        $tech = Technician::with(['user', 'services', 'portfolios'])->find($id);
+{
+    $tech = Technician::with(['user', 'servicePrices', 'portfolios'])->find($id);
 
-        if (!$tech) {
-            return $this->notFound('Technician profile not found.');
-        }
-
-        $formatted = [
-            'id' => $tech->id,
-            'user_id' => $tech->user_id,
-            'name' => $tech->user->name ?? 'Unknown',
-            'email' => $tech->user->email ?? '',
-            'phone' => $tech->user->phone ?? '',
-            'profile_photo' => $tech->profile_photo ? url('storage/' . $tech->profile_photo) : null,
-            'bio' => $tech->bio,
-            'area' => $tech->area,
-            'latitude' => $tech->latitude ? (float) $tech->latitude : null,
-            'longitude' => $tech->longitude ? (float) $tech->longitude : null,
-            'hourly_rate' => $tech->hourly_rate ? (float) $tech->hourly_rate : null,
-            'experience' => $tech->experience ? (int) $tech->experience : 0,
-            'rating' => (float) ($tech->rating ?? 0),
-            'is_online' => (bool) $tech->is_online,
-            'verified' => (bool) $tech->verified,
-            'distance_km' => 0.0,
-            'services' => $tech->services->pluck('name')->toArray(),
-            'portfolios' => $tech->portfolios->map(function($portfolio) {
-                return [
-                    'id' => $portfolio->id,
-                    'image' => $portfolio->image ? url('storage/' . $portfolio->image) : '',
-                    'description' => $portfolio->description,
-                    'created_at' => $portfolio->created_at ? $portfolio->created_at->toIso8601String() : null,
-                ];
-            })->toArray()
-        ];
-
-        return $this->successResponse($formatted, 'Technician detail profile retrieved successfully.');
+    if (!$tech) {
+        return $this->notFound('Technician profile not found.');
     }
 
+    // Calculate overall min/max price from service prices
+    $minPrice = $tech->servicePrices->min('pivot.min_price');
+    $maxPrice = $tech->servicePrices->max('pivot.max_price');
+
+    $formatted = [
+        'id'            => $tech->id,
+        'user_id'       => $tech->user_id,
+        'name'          => $tech->user->name ?? 'Unknown',
+        'email'         => $tech->user->email ?? '',
+        'phone'         => $tech->user->phone ?? '',
+        'profile_photo' => $tech->profile_photo ? url('storage/' . $tech->profile_photo) : null,
+        'bio'           => $tech->bio,
+        'area'          => $tech->area,
+        'latitude'      => $tech->latitude ? (float) $tech->latitude : null,
+        'longitude'     => $tech->longitude ? (float) $tech->longitude : null,
+        'hourly_rate'   => $tech->hourly_rate ? (float) $tech->hourly_rate : null,
+        'experience'    => (int) ($tech->experience ?? 0),
+        'rating'        => (float) ($tech->rating ?? 0),
+        'is_online'     => (bool) $tech->is_online,
+        'verified'      => (bool) $tech->verified,
+        'completed_jobs_count' => (int) ($tech->completed_jobs_count ?? 0), // NEW
+        'price_range'   => ($minPrice !== null && $maxPrice !== null)
+            ? ['min' => (float) $minPrice, 'max' => (float) $maxPrice]
+            : null,
+        'service_prices'=> $tech->servicePrices->map(function ($service) {
+            return [
+                'id'        => $service->id,
+                'name'      => $service->name,
+                'min_price' => (float) $service->pivot->min_price,
+                'max_price' => (float) $service->pivot->max_price,
+            ];
+        })->values()->toArray(),
+        'portfolios'    => $tech->portfolios->map(function ($portfolio) {
+            return [
+                'id'          => $portfolio->id,
+                'image'       => $portfolio->image ? url('storage/' . $portfolio->image) : '',
+                'description' => $portfolio->description,
+                'created_at'  => $portfolio->created_at ? $portfolio->created_at->toIso8601String() : null,
+            ];
+        })->toArray()
+    ];
+
+    return $this->successResponse($formatted, 'Technician detail profile retrieved successfully.');
+}
     // =============================================
-    // GET OWN PROFILE
+    // GET OWN TECHNICIAN PROFILE
     // =============================================
     public function getOwnProfile(Request $request)
     {
@@ -604,7 +530,7 @@ class TechnicianController extends BaseApiController
     }
 
     // =============================================
-    // UPDATE PROFILE
+    // UPDATE TECHNICIAN PROFILE
     // =============================================
     public function updateProfile(Request $request, GeocodingService $geocoder)
     {
@@ -638,7 +564,7 @@ class TechnicianController extends BaseApiController
     }
 
     // =============================================
-    // UPDATE SERVICES
+    // UPDATE TECHNICIAN SERVICES (simple sync, no prices)
     // =============================================
     public function updateServices(Request $request)
     {
@@ -681,7 +607,7 @@ class TechnicianController extends BaseApiController
     }
 
     // =============================================
-    // HEARTBEAT (KEEP ALIVE)
+    // HEARTBEAT (keep alive)
     // =============================================
     public function heartbeat(Request $request)
     {
@@ -750,7 +676,7 @@ class TechnicianController extends BaseApiController
     }
 
     // =============================================
-    // VERIFY TECHNICIAN
+    // VERIFY TECHNICIAN (admin)
     // =============================================
     public function verify($id)
     {
@@ -764,40 +690,39 @@ class TechnicianController extends BaseApiController
     }
 
     // =============================================
-    // PUBLIC - List all technicians (with filters)
-    // GET /v1/technicians
+    // PUBLIC LIST (with filters)
     // =============================================
     public function publicIndex(Request $request)
     {
         $query = Technician::with(['user', 'services'])
             ->where('verified', true)
-            ->whereHas('user', function($q) {
+            ->whereHas('user', function ($q) {
                 $q->where('is_active', true);
             });
 
         if ($request->filled('search')) {
             $search = $request->search;
-            $query->where(function($q) use ($search) {
-                $q->whereHas('user', function($u) use ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('user', function ($u) use ($search) {
                     $u->where('name', 'like', "%{$search}%");
                 })->orWhere('area', 'like', "%{$search}%");
             });
         }
 
         if ($request->filled('service_id')) {
-            $query->whereHas('services', function($q) use ($request) {
+            $query->whereHas('services', function ($q) use ($request) {
                 $q->where('services.id', $request->service_id);
             });
         }
 
         if ($request->filled('category_id')) {
-            $query->whereHas('services.categories', function($q) use ($request) {
+            $query->whereHas('services.categories', function ($q) use ($request) {
                 $q->where('service_categories.service_categoryID', $request->category_id);
             });
         }
 
         if ($request->filled('service')) {
-            $query->whereHas('services', function($q) use ($request) {
+            $query->whereHas('services', function ($q) use ($request) {
                 $q->where('name', 'like', "%{$request->service}%");
             });
         }
@@ -808,7 +733,7 @@ class TechnicianController extends BaseApiController
 
         $sortField = $request->input('sort_by', 'created_at');
         $sortOrder = $request->input('sort_order', 'desc');
-        
+
         $sortMap = [
             'name' => 'user_id',
             'area' => 'area',
@@ -816,9 +741,9 @@ class TechnicianController extends BaseApiController
             'experience' => 'experience',
             'created_at' => 'created_at',
         ];
-        
+
         $sortColumn = $sortMap[$sortField] ?? 'created_at';
-        
+
         if ($sortField === 'name') {
             $query->join('users', 'technicians.user_id', '=', 'users.id')
                   ->orderBy('users.name', $sortOrder)
@@ -830,35 +755,128 @@ class TechnicianController extends BaseApiController
         $perPage = $request->input('per_page', 10);
         $technicians = $query->paginate($perPage);
 
-        $formatted = $technicians->map(function($tech) {
+        $formatted = $technicians->map(function ($tech) {
             return [
-                'id' => $tech->id,
-                'user_id' => $tech->user_id,
-                'name' => $tech->user->name ?? 'Unknown',
-                'email' => $tech->user->email ?? '',
-                'phone' => $tech->user->phone ?? '',
+                'id'            => $tech->id,
+                'user_id'       => $tech->user_id,
+                'name'          => $tech->user->name ?? 'Unknown',
+                'email'         => $tech->user->email ?? '',
+                'phone'         => $tech->user->phone ?? '',
                 'profile_photo' => $tech->profile_photo ? url('storage/' . $tech->profile_photo) : null,
-                'bio' => $tech->bio,
-                'area' => $tech->area,
-                'latitude' => $tech->latitude ? (float) $tech->latitude : null,
-                'longitude' => $tech->longitude ? (float) $tech->longitude : null,
-                'hourly_rate' => $tech->hourly_rate ? (float) $tech->hourly_rate : null,
-                'experience' => $tech->experience ? (int) $tech->experience : 0,
-                'rating' => (float) ($tech->rating ?? 0),
-                'is_online' => (bool) $tech->is_online,
-                'verified' => (bool) $tech->verified,
-                'services' => $tech->services->pluck('name')->toArray(),
-                'created_at' => $tech->created_at ? $tech->created_at->toIso8601String() : null,
+                'bio'           => $tech->bio,
+                'area'          => $tech->area,
+                'latitude'      => $tech->latitude ? (float) $tech->latitude : null,
+                'longitude'     => $tech->longitude ? (float) $tech->longitude : null,
+                'hourly_rate'   => $tech->hourly_rate ? (float) $tech->hourly_rate : null,
+                'experience'    => (int) ($tech->experience ?? 0),
+                'rating'        => (float) ($tech->rating ?? 0),
+                'is_online'     => (bool) $tech->is_online,
+                'verified'      => (bool) $tech->verified,
+                'services'      => $tech->services->pluck('name')->toArray(),
+                'created_at'    => $tech->created_at ? $tech->created_at->toIso8601String() : null,
             ];
         });
 
         return $this->successResponse([
-            'data' => $formatted,
-            'total' => $technicians->total(),
-            'per_page' => $technicians->perPage(),
-            'current_page' => $technicians->currentPage(),
-            'last_page' => $technicians->lastPage(),
+            'data'        => $formatted,
+            'total'       => $technicians->total(),
+            'per_page'    => $technicians->perPage(),
+            'current_page'=> $technicians->currentPage(),
+            'last_page'   => $technicians->lastPage(),
         ], 'Technicians retrieved successfully');
+    }
+
+    // =============================================
+    // UPDATE SERVICE PRICES (technician)
+    // =============================================
+    public function updateServicePrices(Request $request)
+    {
+        $technician = $request->user()->technician;
+        if (!$technician) {
+            return $this->notFound('Technician not found.');
+        }
+
+        $data = $request->validate([
+            'prices' => 'required|array',
+            'prices.*.service_id' => 'required|exists:services,id',
+            'prices.*.min_price' => 'required|numeric|min:0',
+            'prices.*.max_price' => 'required|numeric|min:0|gte:prices.*.min_price',
+        ]);
+
+        foreach ($data['prices'] as $price) {
+            $technician->servicePrices()->syncWithoutDetaching([
+                $price['service_id'] => [
+                    'min_price' => $price['min_price'],
+                    'max_price' => $price['max_price'],
+                ]
+            ]);
+        }
+
+        $this->logAudit('update_service_prices', 'technician', $technician->id, 'Updated service prices');
+
+        return $this->successResponse(
+            $technician->load('servicePrices'),
+            'Prices updated successfully.'
+        );
+    }
+
+    // =============================================
+    // ADMIN: APPROVE TECHNICIAN (with 1-day free trial)
+    // =============================================
+    public function approve($id)
+    {
+        $technician = Technician::findOrFail($id);
+        $technician->verification_status = 'approved';
+        $technician->verified = true;
+        $technician->save();
+
+        $freeTrialRate = RateCard::where('name', 'Free Trial')->first();
+        if (!$freeTrialRate) {
+            $freeTrialRate = RateCard::create([
+                'name'          => 'Free Trial',
+                'slug'          => 'free-trial',
+                'price'         => 0,
+                'duration_days' => 1,
+                'currency'      => 'TZS',
+                'description'   => '1-day free trial after verification',
+                'is_active'     => true,
+                'display_order' => 0,
+            ]);
+        }
+
+        $subscription = Subscription::create([
+            'user_id'        => $technician->user_id,
+            'rate_card_id'   => $freeTrialRate->id,
+            'status'         => Subscription::STATUS_ACTIVE,
+            'start_date'     => now(),
+            'expiry_date'    => now()->addDay(),
+            'amount_paid'    => 0,
+            'currency'       => 'TZS',
+            'payment_method' => 'Free Trial',
+            'approved_at'    => now(),
+            'approved_by'    => auth()->id(),
+        ]);
+
+        $technician->user->update([
+            'subscription_status'      => 'active',
+            'subscription_expires_at'  => $subscription->expiry_date,
+            'current_subscription_id'  => $subscription->id,
+        ]);
+
+        $this->createNotification(
+            $technician->user_id,
+            'Account Approved 🎉',
+            'Your fundi account has been approved! You now have a 1-day free trial.',
+            'technician_approved',
+            [
+                'technician_id' => $technician->id,
+                'trial_expires' => $subscription->expiry_date->toIso8601String(),
+            ]
+        );
+
+        $this->logAudit('approve_technician', 'technician', $technician->id, "Technician #{$id} approved");
+
+        return $this->successResponse($technician, 'Technician approved and free trial activated.');
     }
 
     // =============================================
@@ -870,9 +888,9 @@ class TechnicianController extends BaseApiController
     }
 
     private function validateAndGeocodeArea(
-        string $area, 
-        ?float $lat, 
-        ?float $lng, 
+        string $area,
+        ?float $lat,
+        ?float $lng,
         GeocodingService $geocoder
     ): array {
         if ($lat !== null && $lng !== null) {
@@ -883,13 +901,27 @@ class TechnicianController extends BaseApiController
         }
 
         $coords = $geocoder->geocode($area);
-        
         if (!$coords) {
             $message = "We couldn't locate '{$area}' in OpenStreetMap. ";
             $message .= "Please check the spelling or enter a more specific location.";
             abort(422, $message);
         }
-
         return $coords;
+    }
+
+    private function createNotification(int $userId, string $title, string $body, string $type, array $data = []): void
+    {
+        try {
+            Notification::create([
+                'user_id' => $userId,
+                'title'   => $title,
+                'body'    => $body,
+                'type'    => $type,
+                'data'    => json_encode($data),
+                'is_read' => false,
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Failed to create notification: ' . $e->getMessage());
+        }
     }
 }
