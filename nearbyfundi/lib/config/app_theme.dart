@@ -55,40 +55,40 @@ class AppTheme {
   static Color get greyText => Colors.grey.shade600;
   static Color get darkText => black;
 
-  // ===== TEXT STYLES =====
-  static TextStyle get bodyText => GoogleFonts.poppins(
+  // ===== TEXT STYLES (NUNITO) =====
+  static TextStyle get bodyText => GoogleFonts.nunito(
     fontSize: 14,
     color: greyText,
   );
-  static TextStyle get headline2 => GoogleFonts.poppins(
+  static TextStyle get headline2 => GoogleFonts.nunito(
     fontSize: 22,
     fontWeight: FontWeight.w600,
     color: darkText,
   );
-  static TextStyle get buttonText => GoogleFonts.poppins(
+  static TextStyle get buttonText => GoogleFonts.nunito(
     fontSize: 16,
     fontWeight: FontWeight.w600,
     color: light,
   );
 
-  static TextStyle get chatMessageText => GoogleFonts.poppins(
+  static TextStyle get chatMessageText => GoogleFonts.nunito(
     fontSize: 15,
     fontWeight: FontWeight.w400,
   );
-  static TextStyle get chatTimestampText => GoogleFonts.poppins(
+  static TextStyle get chatTimestampText => GoogleFonts.nunito(
     fontSize: 10,
     fontWeight: FontWeight.w400,
   );
-  static TextStyle get chatNameText => GoogleFonts.poppins(
+  static TextStyle get chatNameText => GoogleFonts.nunito(
     fontSize: 16,
     fontWeight: FontWeight.w600,
   );
-  static TextStyle get chatEmptyText => GoogleFonts.poppins(
+  static TextStyle get chatEmptyText => GoogleFonts.nunito(
     fontSize: 16,
     fontWeight: FontWeight.w400,
     color: Colors.grey,
   );
-  static TextStyle get chatHeaderText => GoogleFonts.poppins(
+  static TextStyle get chatHeaderText => GoogleFonts.nunito(
     fontSize: 18,
     fontWeight: FontWeight.w600,
   );
@@ -198,7 +198,7 @@ class AppTheme {
         borderSide: const BorderSide(color: errorColor, width: 2),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      labelStyle: GoogleFonts.poppins(color: Colors.grey.shade600, fontSize: 14),
+      labelStyle: GoogleFonts.nunito(color: Colors.grey.shade600, fontSize: 14),
     );
   }
 
@@ -208,7 +208,7 @@ class AppTheme {
   }) {
     return InputDecoration(
       hintText: hint ?? 'Type a message...',
-      hintStyle: GoogleFonts.poppins(
+      hintStyle: GoogleFonts.nunito(
         color: isDark ? Colors.white54 : Colors.grey.shade400,
         fontSize: 14,
       ),
@@ -230,7 +230,7 @@ class AppTheme {
     );
   }
 
-  // ===== LIGHT THEME =====
+  // ===== LIGHT THEME (NUNITO) =====
   static final ThemeData lightTheme = ThemeData(
     brightness: Brightness.light,
     primaryColor: primary,
@@ -241,40 +241,40 @@ class AppTheme {
       error: errorColor,
       surface: Colors.white,
     ),
-    textTheme: GoogleFonts.poppinsTextTheme().copyWith(
+    textTheme: GoogleFonts.nunitoTextTheme().copyWith(
       bodyLarge: const TextStyle(color: Colors.black87),
       bodyMedium: const TextStyle(color: Colors.black54),
-      headlineMedium: TextStyle(
+      headlineMedium: GoogleFonts.nunito(
         fontSize: 22,
         fontWeight: FontWeight.w600,
         color: Colors.black87,
       ),
-      titleMedium: TextStyle(
+      titleMedium: GoogleFonts.nunito(
         fontSize: 16,
         fontWeight: FontWeight.w600,
         color: Colors.black87,
       ),
-      titleSmall: TextStyle(
+      titleSmall: GoogleFonts.nunito(
         fontSize: 14,
         fontWeight: FontWeight.w500,
         color: Colors.black54,
       ),
-      bodySmall: TextStyle(
+      bodySmall: GoogleFonts.nunito(
         fontSize: 12,
         color: Colors.black54,
       ),
     ),
-    appBarTheme: const AppBarTheme(
+    appBarTheme: AppBarTheme(
       backgroundColor: Colors.white,
       foregroundColor: Colors.black,
       elevation: 0,
       centerTitle: false,
-      titleTextStyle: TextStyle(
+      titleTextStyle: GoogleFonts.nunito(
         fontSize: 20,
         fontWeight: FontWeight.w600,
         color: Colors.black,
       ),
-      iconTheme: IconThemeData(color: Colors.black),
+      iconTheme: const IconThemeData(color: Colors.black),
     ),
     inputDecorationTheme: const InputDecorationTheme(
       filled: true,
@@ -306,7 +306,7 @@ class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(borderRadiusMedium),
         ),
-        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        textStyle: GoogleFonts.nunito(fontSize: 16, fontWeight: FontWeight.w600),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
@@ -317,13 +317,13 @@ class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(borderRadiusMedium),
         ),
-        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        textStyle: GoogleFonts.nunito(fontSize: 16, fontWeight: FontWeight.w600),
       ),
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
         foregroundColor: primary,
-        textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+        textStyle: GoogleFonts.nunito(fontSize: 13, fontWeight: FontWeight.w500),
       ),
     ),
     cardTheme: const CardThemeData(
@@ -346,7 +346,7 @@ class AppTheme {
     ),
   );
 
-  // ===== DARK THEME – true black background, dark gray surfaces =====
+  // ===== DARK THEME (NUNITO) =====
   static final ThemeData darkTheme = ThemeData(
     brightness: Brightness.dark,
     primaryColor: primary,
@@ -357,45 +357,45 @@ class AppTheme {
       error: errorColor,
       surface: Color(0xFF1A1A1A),
     ),
-    textTheme: GoogleFonts.poppinsTextTheme().copyWith(
+    textTheme: GoogleFonts.nunitoTextTheme().copyWith(
       bodyLarge: const TextStyle(color: Colors.white),
       bodyMedium: const TextStyle(color: Colors.white70),
-      headlineMedium: TextStyle(
+      headlineMedium: GoogleFonts.nunito(
         fontSize: 22,
         fontWeight: FontWeight.w600,
         color: Colors.white,
       ),
-      titleLarge: TextStyle(
+      titleLarge: GoogleFonts.nunito(
         fontSize: 20,
         fontWeight: FontWeight.w600,
         color: Colors.white,
       ),
-      titleMedium: TextStyle(
+      titleMedium: GoogleFonts.nunito(
         fontSize: 16,
         fontWeight: FontWeight.w600,
         color: Colors.white,
       ),
-      titleSmall: TextStyle(
+      titleSmall: GoogleFonts.nunito(
         fontSize: 14,
         fontWeight: FontWeight.w500,
         color: Colors.white70,
       ),
-      bodySmall: TextStyle(
+      bodySmall: GoogleFonts.nunito(
         fontSize: 12,
         color: Colors.white70,
       ),
     ),
-    appBarTheme: const AppBarTheme(
+    appBarTheme: AppBarTheme(
       backgroundColor: Colors.black,
       foregroundColor: Colors.white,
       elevation: 0,
       centerTitle: false,
-      titleTextStyle: TextStyle(
+      titleTextStyle: GoogleFonts.nunito(
         fontSize: 20,
         fontWeight: FontWeight.w600,
         color: Colors.white,
       ),
-      iconTheme: IconThemeData(color: Colors.white),
+      iconTheme: const IconThemeData(color: Colors.white),
     ),
     inputDecorationTheme: const InputDecorationTheme(
       filled: true,
@@ -427,7 +427,7 @@ class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(borderRadiusMedium),
         ),
-        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        textStyle: GoogleFonts.nunito(fontSize: 16, fontWeight: FontWeight.w600),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
@@ -438,13 +438,13 @@ class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(borderRadiusMedium),
         ),
-        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        textStyle: GoogleFonts.nunito(fontSize: 16, fontWeight: FontWeight.w600),
       ),
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
         foregroundColor: primary,
-        textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+        textStyle: GoogleFonts.nunito(fontSize: 13, fontWeight: FontWeight.w500),
       ),
     ),
     cardTheme: const CardThemeData(
@@ -468,7 +468,7 @@ class AppTheme {
   );
 }
 
-// ===== THEME EXTENSION =====
+// ===== THEME EXTENSION (Nunito-based) =====
 extension ChatTheme on ThemeData {
   Color get chatBubbleSent => AppTheme.chatBubbleSent;
   Color get chatBubbleReceived => AppTheme.chatBubbleReceived;
