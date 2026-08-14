@@ -65,7 +65,7 @@ class AuthProvider extends ChangeNotifier {
     return false;
   }
 
-  // ─── Login ─────────────────────────────────────────────────────────
+  // ─── Login (email or phone) ──────────────────────────────────────
   Future<bool> login(String identifier, String password) async {
     _setLoading(true);
     final res = await _api.login(identifier, password);
@@ -76,6 +76,24 @@ class AuthProvider extends ChangeNotifier {
     }
     _error = res.message;
     _setLoading(false);
+    return false;
+  }
+
+  // ─── Google Login ──────────────────────────────────────────────────
+  Future<bool> loginWithGoogle(String idToken) async {
+    _setLoading(true);
+    final fcmToken = await FcmService.getToken().catchError((_) => null);
+
+    // Pass idToken to your ApiService method
+    final res = await _api.loginWithGoogle(idToken, fcmToken: fcmToken);
+
+    _setLoading(false);
+    if (res.success && res.data != null) {
+      await _saveSession(res.data);
+      return true;
+    }
+    _error = res.message;
+    notifyListeners();
     return false;
   }
 

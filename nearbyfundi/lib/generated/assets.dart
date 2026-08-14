@@ -35,6 +35,7 @@ class $AssetsImagesGen {
   final AssetGenImage home = const AssetGenImage('assets/images/home.jpg');
   final AssetGenImage nearbyfundiImage =
       const AssetGenImage('assets/images/nearbyfundi_image.jpg');
+  final AssetGenImage search = const AssetGenImage('assets/images/google_logo.png');
 }
 
 class AssetGenImage {

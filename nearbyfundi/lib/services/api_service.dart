@@ -99,6 +99,16 @@ class ApiService {
   Future<ApiResponse> login(String identifier, String password) =>
       _post('/v1/auth/login', data: {'email': identifier, 'password': password});
 
+  /// ─── NEW: Google login ──────────────────────────────────────────────
+  Future<ApiResponse> loginWithGoogle(String idToken, {String? fcmToken}) async {
+    final body = <String, dynamic>{
+      'id_token': idToken,
+      if (fcmToken != null && fcmToken.isNotEmpty) 'fcm_token': fcmToken,
+    };
+
+    return _post('/v1/auth/google', data: body);
+  }
+
   Future<ApiResponse> verifyOtp(String email, String otp, {String? fcmToken}) =>
       _post('/v1/auth/verify-otp', data: {
         'email': email,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:provider/provider.dart';
+import 'package:google_sign_in/google_sign_in.dart'; // ← added
 import '../../config/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../config/app_routes.dart';
@@ -8,7 +9,7 @@ import '../../widgets/custom_button.dart';
 import '../../widgets/loading_overlay.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/country.dart';
-import '../../config/country_codes.dart';   // <-- static country list
+import '../../config/country_codes.dart';
 import '../../widgets/country_picker.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -29,7 +30,6 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _rememberMe = false;
   bool _isEmailLogin = true;
 
-  // Country picker – using static config
   late final List<Country> _countries;
   late Country _selectedCountry;
 
@@ -51,21 +51,12 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  // ─── Normal Login ─────────────────────────────────────────────────
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
 
     if (!_termsAccepted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Please accept the Terms & Conditions to continue',
-            style: const TextStyle(color: Colors.white),
-          ),
-          backgroundColor: Colors.orange.shade700,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
+      _showErrorSnackBar('Please accept the Terms & Conditions to continue');
       return;
     }
 
@@ -84,22 +75,73 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
 
     if (success) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        Navigator.pushReplacementNamed(context, AppRoutes.home);
-      });
+      _navigateToHome();
     } else if (auth.errorMessage != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(auth.errorMessage!),
-          backgroundColor: Theme.of(context).colorScheme.error,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
+      _showErrorSnackBar(auth.errorMessage!);
     }
   }
 
+  // ─── Google Sign‑In ──────────────────────────────────────────────
+  Future<void> _handleGoogleSignIn() async {
+    final auth = context.read<AuthProvider>();
+    auth.clearError();
+
+    try {
+      final GoogleSignIn googleSignIn = GoogleSignIn(
+        serverClientId: '217153819583-i53f9rsb46uiid53ikuiv6r68o93qe4s.apps.googleusercontent.com',
+        scopes: ['email', 'profile'],
+      );
+
+      // Ensure stale sessions are cleared
+      await googleSignIn.signOut();
+
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+      if (googleUser == null) return;
+
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+
+      // Switch from serverAuthCode to idToken
+      final String? idToken = googleAuth.idToken;
+
+      if (idToken == null) {
+        throw Exception('Failed to obtain ID token');
+      }
+
+      // Pass idToken to your auth provider / Laravel API endpoint
+      final bool success = await auth.loginWithGoogle(idToken);
+
+      if (success && mounted) {
+        _navigateToHome();
+      } else if (auth.errorMessage != null && mounted) {
+        _showErrorSnackBar(auth.errorMessage!);
+      }
+    } catch (e) {
+      debugPrint('Google sign‑in error: $e');
+      if (mounted) {
+        _showErrorSnackBar('Google sign‑in failed: $e');
+      }
+    }
+  }
+
+  void _navigateToHome() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, AppRoutes.home);
+    });
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Theme.of(context).colorScheme.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  // ─── Build ──────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -107,7 +149,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('NearbyFundi'),
+        title: const Text('NearbyFundi'),
         centerTitle: true,
         elevation: 0,
         backgroundColor: theme.scaffoldBackgroundColor,
@@ -124,7 +166,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const SizedBox(height: 20),
-                  // Small icon
                   Container(
                     width: 60,
                     height: 60,
@@ -160,7 +201,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 40),
 
-                  // Toggle: Email / Phone
+                  // Toggle Email / Phone
                   SegmentedButton<String>(
                     segments: const [
                       ButtonSegment(value: 'email', label: Text('Email')),
@@ -186,7 +227,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Conditional field
+                  // Email or Phone field
                   if (_isEmailLogin)
                     _buildField(
                       context,
@@ -397,14 +438,59 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 28),
 
-                  // Sign In
+                  // ─── Sign In Button ──────────────────────────────────
                   CustomButton(
                     text: l10n.signIn,
                     onPressed: _handleLogin,
                   ),
+                  const SizedBox(height: 16),
+
+                  // ─── OR Divider ──────────────────────────────────────
+                  Row(
+                    children: [
+                      Expanded(child: Divider(color: theme.hintColor.withOpacity(0.3))),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          'OR',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.hintColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      Expanded(child: Divider(color: theme.hintColor.withOpacity(0.3))),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // ─── Google Sign‑In Button ──────────────────────────
+                  OutlinedButton.icon(
+                    onPressed: _handleGoogleSignIn,
+                    icon: Image.asset(
+                      'assets/images/google_logo.png', // ensure you add this asset
+                      height: 24,
+                      width: 24,
+                    ),
+                    label: Text(
+                      'Sign in with Google',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: Colors.grey.shade300),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 20),
 
-                  // Sign Up
+                  // ─── Sign Up Link ────────────────────────────────────
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -441,6 +527,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  // ─── Helpers ─────────────────────────────────────────────────────────
   Widget _buildFieldLabel(String label) {
     return Text(
       label.toUpperCase(),
@@ -465,7 +552,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-// ---- Shared input decoration ----
+// ─── Shared Input Decoration ──────────────────────────────────────────
 InputDecoration _inputDecoration(
     BuildContext context, {
       required String hintText,
