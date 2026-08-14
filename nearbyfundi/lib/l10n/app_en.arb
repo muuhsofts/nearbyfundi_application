@@ -2,7 +2,7 @@
   "@@locale": "en",
   "appTitle": "NearbyFundi",
 
-  "nearby": "Nearby",
+  "nearby": "Home",
   "nearbyMap": "Nearby Map",
   "near": "Near",
   "blog": "Blog",
@@ -244,5 +244,9 @@
   "refreshed": "Refreshed",
   "refreshFailed": "Refresh failed",
   "pullToRefresh": "Pull to refresh",
-  "loading": "Loading..."
+  "loading": "Loading...",
+  "pullToRefresh": "Pull to refresh",
+    "loading": "Loading...",
+    "showList": "Show List",
+    "viewAll": "View All"
 }

@@ -1,12 +1,14 @@
 // screens/requests/my_requests_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
+import '../../models/request.dart';
 import '../../providers/request_provider.dart';
+import '../../providers/technician_provider.dart';
 import '../../config/app_theme.dart';
+import '../../config/app_routes.dart';
 import '../../widgets/confirmation_dialog.dart';
 import '../../l10n/app_localizations.dart';
-import '../../config/app_routes.dart';
+import '../../services/api_service.dart';
 
 class MyRequestsScreen extends StatefulWidget {
   const MyRequestsScreen({super.key});
@@ -79,6 +81,10 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> {
         return 'Cancelled';
       case 'in_progress':
         return 'In Progress';
+      case 'on_the_way':
+        return 'On The Way';
+      case 'arrived':
+        return 'Arrived';
       default:
         return status.toUpperCase();
     }
@@ -93,12 +99,87 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> {
     return 'Just now';
   }
 
-  // ─── Show Request Details Modal ──────────────────────────────────────
-  void _showRequestDetails(BuildContext context, dynamic request) {
+  // ---- Show Request Details Modal ----
+  void _showRequestDetails(BuildContext context, ServiceRequest request) {
     showDialog(
       context: context,
       barrierDismissible: true,
       builder: (_) => _RequestDetailModal(request: request),
+    );
+  }
+
+  // ---- Review Dialog for completed requests ----
+  Future<void> _showReviewDialog(BuildContext context, ServiceRequest request) async {
+    final api = ApiService();
+    final controller = TextEditingController();
+    int rating = 5;
+    bool submitting = false;
+
+    return showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: const Text('Rate & Review'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(5, (i) {
+                  return IconButton(
+                    icon: Icon(
+                      i < rating ? Icons.star_rounded : Icons.star_border_rounded,
+                      color: Colors.amber,
+                      size: 32,
+                    ),
+                    onPressed: () => setState(() => rating = i + 1),
+                  );
+                }),
+              ),
+              TextField(
+                controller: controller,
+                decoration: const InputDecoration(
+                  hintText: 'Write your review...',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 3,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                setState(() => submitting = true);
+                final res = await api.submitReview(
+                  requestId: request.id,
+                  rating: rating,
+                  comment: controller.text.trim().isNotEmpty ? controller.text.trim() : null,
+                );
+                setState(() => submitting = false);
+                if (res.success) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Review submitted!')),
+                  );
+                  context.read<RequestProvider>().loadMyRequests();
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(res.message ?? 'Failed to submit review')),
+                  );
+                }
+              },
+              child: submitting
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Submit'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -123,11 +204,7 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> {
       appBar: AppBar(
         title: Text(
           l10n.myRequests,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
-          ),
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
         ),
         elevation: 0,
         backgroundColor: AppTheme.primary,
@@ -203,6 +280,8 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> {
                 DropdownMenuItem<String?>(value: null, child: Text('All')),
                 DropdownMenuItem<String?>(value: 'pending', child: Text('Pending')),
                 DropdownMenuItem<String?>(value: 'accepted', child: Text('Accepted')),
+                DropdownMenuItem<String?>(value: 'on_the_way', child: Text('On The Way')),
+                DropdownMenuItem<String?>(value: 'arrived', child: Text('Arrived')),
                 DropdownMenuItem<String?>(value: 'in_progress', child: Text('In Progress')),
                 DropdownMenuItem<String?>(value: 'completed', child: Text('Completed')),
                 DropdownMenuItem<String?>(value: 'rejected', child: Text('Rejected')),
@@ -251,7 +330,7 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> {
   // ---- Content ----
   Widget _buildContent(
       RequestProvider provider,
-      List<dynamic> filteredRequests,
+      List<ServiceRequest> filteredRequests,
       ThemeData theme,
       AppLocalizations l10n,
       double hPadding,
@@ -465,9 +544,25 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> {
                     ],
                     // ---- Actions ----
                     const SizedBox(height: 4),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
+                        // Track button (if request is accepted, on_the_way, or arrived)
+                        if (r.isAccepted || r.isOnTheWay || r.isArrived)
+                          TextButton.icon(
+                            onPressed: () => Navigator.pushNamed(
+                              context,
+                              AppRoutes.tracking,
+                              arguments: r.id,
+                            ),
+                            icon: Icon(Icons.track_changes_rounded, size: 18, color: AppTheme.primary),
+                            label: Text(
+                              'Track',
+                              style: TextStyle(color: AppTheme.primary, fontSize: 13),
+                            ),
+                          ),
+                        // Cancel button (only for pending)
                         if (isPending)
                           TextButton.icon(
                             onPressed: provider.isLoading
@@ -487,22 +582,28 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> {
                               l10n.cancelRequest,
                               style: TextStyle(color: AppTheme.error, fontSize: 13),
                             ),
-                            style: TextButton.styleFrom(
-                              foregroundColor: AppTheme.error,
-                            ),
+                            style: TextButton.styleFrom(foregroundColor: AppTheme.error),
                           ),
-                        if (r.isAccepted || r.isCompleted || r.isInProgress)
+                        // Review button (if completed and not yet reviewed)
+                        if (isCompleted)
                           TextButton.icon(
-                            onPressed: () => _showRequestDetails(context, r),
-                            icon: Icon(Icons.visibility_outlined, size: 18, color: AppTheme.primary),
+                            onPressed: () => _showReviewDialog(context, r),
+                            icon: Icon(Icons.star_rate_rounded, size: 18, color: Colors.amber.shade700),
                             label: Text(
-                              'View Details',
-                              style: TextStyle(color: AppTheme.primary, fontSize: 13),
-                            ),
-                            style: TextButton.styleFrom(
-                              foregroundColor: AppTheme.primary,
+                              'Review',
+                              style: TextStyle(color: Colors.amber.shade700, fontSize: 13),
                             ),
                           ),
+                        // View Details always
+                        TextButton.icon(
+                          onPressed: () => _showRequestDetails(context, r),
+                          icon: Icon(Icons.visibility_outlined, size: 18, color: AppTheme.primary),
+                          label: Text(
+                            'View Details',
+                            style: TextStyle(color: AppTheme.primary, fontSize: 13),
+                          ),
+                          style: TextButton.styleFrom(foregroundColor: AppTheme.primary),
+                        ),
                       ],
                     ),
                   ],
@@ -518,7 +619,7 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> {
 
 // ─── REQUEST DETAIL MODAL ──────────────────────────────────────────────
 class _RequestDetailModal extends StatelessWidget {
-  final dynamic request;
+  final ServiceRequest request;
 
   const _RequestDetailModal({required this.request});
 
@@ -780,6 +881,10 @@ class _RequestDetailModal extends StatelessWidget {
         return AppTheme.error;
       case 'in_progress':
         return Colors.purple.shade700;
+      case 'on_the_way':
+        return Colors.orange;
+      case 'arrived':
+        return Colors.teal;
       default:
         return AppTheme.warning;
     }
@@ -802,6 +907,10 @@ class _RequestDetailModal extends StatelessWidget {
         return Icons.do_not_disturb_on_outlined;
       case 'in_progress':
         return Icons.hourglass_top_rounded;
+      case 'on_the_way':
+        return Icons.directions_car_rounded;
+      case 'arrived':
+        return Icons.location_on_rounded;
       default:
         return Icons.hourglass_empty_rounded;
     }
@@ -821,6 +930,10 @@ class _RequestDetailModal extends StatelessWidget {
         return 'Cancelled';
       case 'in_progress':
         return 'In Progress';
+      case 'on_the_way':
+        return 'On The Way';
+      case 'arrived':
+        return 'Arrived';
       default:
         return status.toUpperCase();
     }

@@ -5,6 +5,7 @@ import '../l10n/app_localizations.dart';
 import '../providers/technician_provider.dart';
 import '../providers/service_provider.dart';
 import '../providers/request_provider.dart';
+import '../providers/location_provider.dart';
 import '../models/technician.dart';
 import '../models/service.dart';
 import '../config/app_theme.dart';
@@ -94,11 +95,22 @@ class _RequestDialogState extends State<RequestDialog> {
       _errorMessage = null;
     });
 
+    // Capture current location
+    final locProvider = context.read<LocationProvider>();
+    final position = locProvider.position;
+    double? lat, lng;
+    if (position != null) {
+      lat = position.latitude;
+      lng = position.longitude;
+    }
+
     final success = await context.read<RequestProvider>().createRequest(
-      widget.technician.id,
-      _selectedServiceId!,
-      _descController.text.trim(),
+      technicianId: widget.technician.id,
+      serviceId: _selectedServiceId!,
+      description: _descController.text.trim(),
       categoryId: _selectedCategoryId,
+      latitude: lat,
+      longitude: lng,
     );
 
     if (!mounted) return;

@@ -1,4 +1,3 @@
-// providers/request_provider.dart
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../models/request.dart';
@@ -61,12 +60,15 @@ class RequestProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> createRequest(
-      int technicianId,
-      int serviceId,
-      String description, {
-        int? categoryId,
-      }) async {
+  /// Create a new service request – must be called with named parameters.
+  Future<bool> createRequest({
+    required int technicianId,
+    required int serviceId,
+    required String description,
+    int? categoryId,
+    double? latitude,
+    double? longitude,
+  }) async {
     if (_isSubmitting) return false;
 
     _submissionProgress = 0.0;
@@ -82,20 +84,16 @@ class RequestProvider extends ChangeNotifier {
 
     updateProgress(0.1);
 
-    final Map<String, dynamic> requestData = {
-      'technician_id': technicianId,
-      'service_id': serviceId,
-      'description': description,
-    };
+    // Now passing named arguments – matches ApiService.createRequest exactly
+    final res = await _api.createRequest(
+      technicianId: technicianId,
+      serviceId: serviceId,
+      description: description,
+      categoryId: categoryId,
+      latitude: latitude,
+      longitude: longitude,
+    );
 
-    if (categoryId != null) {
-      requestData['category_id'] = categoryId;
-    }
-
-    // Log the request data for debugging
-    debugPrint('Creating request with data: $requestData');
-
-    final res = await _api.createRequest(requestData);
     updateProgress(0.6);
 
     _isLoading = false;
@@ -122,6 +120,23 @@ class RequestProvider extends ChangeNotifier {
     notifyListeners();
 
     final res = await _api.cancelRequest(id);
+    if (res.success) {
+      await loadMyRequests();
+      return true;
+    }
+
+    _error = res.message;
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
+  Future<bool> updateRequestStatus(int id, String status) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    final res = await _api.updateRequestStatus(id, status);
     if (res.success) {
       await loadMyRequests();
       return true;

@@ -1,4 +1,4 @@
-// main.dart - Alternative using SystemChrome
+// main.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
@@ -39,6 +39,8 @@ import 'screens/profile/contact_us_screen.dart';
 import 'screens/chat/chat_list_screen.dart';
 import 'screens/chat/chat_screen.dart';
 import 'screens/notifications/notifications_screen.dart';
+import 'screens/static/privacy_policy_screen.dart';
+import 'screens/tracking/tracking_screen.dart';
 import 'firebase_options.dart';
 import 'l10n/app_localizations.dart';
 
@@ -49,10 +51,8 @@ void main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await FcmService.init();
 
-  // Enable secure screen globally
   await SecurityService.enableSecureScreen();
 
-  // Set system UI overlay style globally
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.dark,
@@ -165,6 +165,14 @@ class MyApp extends StatelessWidget {
                       );
                     case AppRoutes.notifications:
                       return MaterialPageRoute(builder: (_) => const NotificationsScreen());
+                    case AppRoutes.privacyPolicy:
+                      return MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen());
+                    case AppRoutes.tracking:
+                      return MaterialPageRoute(
+                        builder: (_) => TrackingScreen(
+                          requestId: settings.arguments as int,
+                        ),
+                      );
                     default:
                       return MaterialPageRoute(builder: (_) => const SplashScreen());
                   }

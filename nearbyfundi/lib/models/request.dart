@@ -17,6 +17,8 @@ class ServiceRequest {
   final bool? technicianIsOnline;
   final int? categoryId;
   final String? categoryName;
+  final double? latitude;   // added to match tracking
+  final double? longitude;  // added to match tracking
 
   ServiceRequest({
     required this.id,
@@ -36,7 +38,11 @@ class ServiceRequest {
     this.technicianIsOnline,
     this.categoryId,
     this.categoryName,
+    this.latitude,
+    this.longitude,
   });
+
+  // ─── STATUS GETTERS ──────────────────────────────────────────────
 
   bool get isPending => status == 'pending';
   bool get isAccepted => status == 'accepted';
@@ -44,10 +50,15 @@ class ServiceRequest {
   bool get isRejected => status == 'rejected';
   bool get isCancelled => status == 'cancelled';
   bool get isInProgress => status == 'in_progress';
-  bool get isActive => isPending || isAccepted || isInProgress;
+  bool get isOnTheWay => status == 'on_the_way';
+  bool get isArrived => status == 'arrived';
+
+  /// True if the request is in a non‑terminal state (from pending to arrived).
+  bool get isActive => isPending || isAccepted || isInProgress || isOnTheWay || isArrived;
+
+  // ─── FACTORY ──────────────────────────────────────────────────────
 
   factory ServiceRequest.fromJson(Map<String, dynamic> json) {
-    // Extract technician data
     Map<String, dynamic>? technicianData;
     String techName = 'Unknown';
     String? techEmail;
@@ -88,7 +99,6 @@ class ServiceRequest {
       techName = json['technician_name'].toString();
     }
 
-    // Extract service name
     String serviceName = 'Service';
     if (json['service'] != null && json['service'] is Map) {
       final serviceData = json['service'] as Map;
@@ -98,7 +108,6 @@ class ServiceRequest {
       serviceName = json['service_name'].toString();
     }
 
-    // Extract category data
     int? categoryId;
     String? categoryName;
     if (json['category'] != null && json['category'] is Map) {
@@ -107,13 +116,21 @@ class ServiceRequest {
       categoryName = categoryData['name'] ?? categoryData['category_name'];
     }
 
-    // Extract customer data
     int customerId = 0;
     String? customerName;
     if (json['customer'] != null && json['customer'] is Map) {
       final customerData = json['customer'] as Map;
       customerId = int.tryParse(customerData['id']?.toString() ?? '0') ?? 0;
       customerName = customerData['name']?.toString();
+    }
+
+    // Extract location fields (if present in the API response)
+    double? lat, lng;
+    if (json['latitude'] != null) {
+      lat = double.tryParse(json['latitude'].toString());
+    }
+    if (json['longitude'] != null) {
+      lng = double.tryParse(json['longitude'].toString());
     }
 
     return ServiceRequest(
@@ -134,6 +151,8 @@ class ServiceRequest {
       technicianIsOnline: techIsOnline,
       categoryId: categoryId,
       categoryName: categoryName,
+      latitude: lat,
+      longitude: lng,
     );
   }
 
@@ -149,5 +168,7 @@ class ServiceRequest {
     'customer_name': customerName,
     'category_id': categoryId,
     'category_name': categoryName,
+    if (latitude != null) 'latitude': latitude,
+    if (longitude != null) 'longitude': longitude,
   };
 }

@@ -104,7 +104,7 @@ abstract class AppLocalizations {
   /// No description provided for @nearby.
   ///
   /// In en, this message translates to:
-  /// **'Nearby'**
+  /// **'Home'**
   String get nearby;
 
   /// No description provided for @nearbyMap.
@@ -1432,6 +1432,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Loading...'**
   String get loading;
+
+  /// No description provided for @showList.
+  ///
+  /// In en, this message translates to:
+  /// **'Show List'**
+  String get showList;
+
+  /// No description provided for @viewAll.
+  ///
+  /// In en, this message translates to:
+  /// **'View All'**
+  String get viewAll;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

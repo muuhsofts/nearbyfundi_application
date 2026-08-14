@@ -26,4 +26,7 @@ class AppRoutes {
 
   // ===== NOTIFICATIONS =====
   static const String notifications = '/notifications';
+
+  static const String privacyPolicy = '/privacy-policy';
+  static const String tracking = '/tracking';
 }

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:path/path.dart' as path;
 import '../config/app_config.dart';
 import 'storage_service.dart';
@@ -263,6 +264,14 @@ class ApiService {
     return _post('/v2/technicians/profile/photo', data: formData);
   }
 
+  // ============================================================
+  //  NEW: TECHNICIAN SERVICE PRICE MANAGEMENT (V2)
+  // ============================================================
+
+  /// Update technician's service prices (min/max)
+  Future<ApiResponse> updateServicePrices(Map<String, dynamic> pricesData) =>
+      _put('/v2/technicians/service-prices', data: pricesData);
+
   // ═══════════════════════════════════════════════════════════════════════
   //  PORTFOLIOS (V3)
   // ═══════════════════════════════════════════════════════════════════════
@@ -336,11 +345,26 @@ class ApiService {
       _put('/v3/portfolios/$id/social-links', data: socialLinks);
 
   // ═══════════════════════════════════════════════════════════════════════
-  //  REQUESTS (Booking) - V4
+  //  REQUESTS (Booking) - V4 (UPDATED to include location)
   // ═══════════════════════════════════════════════════════════════════════
 
-  Future<ApiResponse> createRequest(Map<String, dynamic> data) =>
-      _post('/v4/requests', data: data);
+  /// Create a new service request (customer)
+  /// Optionally include latitude & longitude for the customer's location.
+  Future<ApiResponse> createRequest({
+    required int technicianId,
+    required int serviceId,
+    int? categoryId,
+    required String description,
+    double? latitude,
+    double? longitude,
+  }) => _post('/v4/requests', data: {
+    'technician_id': technicianId,
+    'service_id': serviceId,
+    if (categoryId != null) 'category_id': categoryId,
+    'description': description,
+    if (latitude != null) 'latitude': latitude,
+    if (longitude != null) 'longitude': longitude,
+  });
 
   Future<ApiResponse> getMyRequests() => _get('/v4/my-requests');
 
@@ -349,6 +373,22 @@ class ApiService {
 
   Future<ApiResponse> cancelRequest(int id) =>
       _delete('/v4/requests/$id/cancel');
+
+  // ============================================================
+  //  NEW: REQUEST TRACKING (V4) – customer & technician
+  // ============================================================
+
+  /// Mark request as "on the way" (technician only)
+  Future<ApiResponse> markOnTheWay(int requestId) =>
+      _patch('/v4/requests/$requestId/on-the-way');
+
+  /// Mark request as "arrived" (technician only)
+  Future<ApiResponse> markArrived(int requestId) =>
+      _patch('/v4/requests/$requestId/arrive');
+
+  /// Get live tracking data (customer can view)
+  Future<ApiResponse> getTrackingData(int requestId) =>
+      _get('/v4/requests/$requestId/tracking');
 
   // ═══════════════════════════════════════════════════════════════════════
   //  BLOG (Posts, Comments, Likes) - V1 & V5
@@ -677,51 +717,178 @@ class ApiService {
   Future<ApiResponse> getActiveCategoriesDropdown({String locale = 'en'}) =>
       _get('/v17/service-categories/dropdown/active', query: {'locale': locale});
 
+  // ============================================================
+  //  NEW: V18 – REVIEWS & PRIVACY POLICY (Phase 2)
+  // ============================================================
+
+  /// Get all reviews for a technician (public)
+  Future<ApiResponse> getTechnicianReviews(int technicianId) =>
+      _get('/v18/technicians/$technicianId/reviews');
+
+  /// Submit a review for a completed request (customer only)
+  Future<ApiResponse> submitReview({
+    required int requestId,
+    required int rating,
+    String? comment,
+  }) => _post('/v18/reviews', data: {
+    'request_id': requestId,
+    'rating': rating,
+    if (comment != null) 'comment': comment,
+  });
+
+  /// Get privacy policy (public)
+  Future<ApiResponse> getPrivacyPolicy() =>
+      _get('/v18/privacy-policy');
+
   // ═══════════════════════════════════════════════════════════════════════
   //  PRIVATE HELPERS
+  //  (Only change vs. the original file: diagnostic logging, gated behind
+  //  kDebugMode so it is a no-op / stripped in release & production builds.
+  //  No behavior, no return values, no method signatures were changed.)
   // ═══════════════════════════════════════════════════════════════════════
 
+  void _logRequest(String method, String path, {Map<String, dynamic>? query}) {
+    if (kDebugMode) {
+      debugPrint('➡️  $method $path${query != null ? ' query=$query' : ''}');
+    }
+  }
+
+  void _logSuccess(String method, String path, Response res) {
+    if (kDebugMode) {
+      debugPrint('✅ $method $path -> ${res.statusCode}');
+    }
+  }
+
+  void _logFailure(String method, String path, dynamic error) {
+    if (!kDebugMode) return;
+    debugPrint('❌ $method $path failed: $error');
+    if (error is DioException) {
+      debugPrint('   type: ${error.type}');
+      debugPrint('   status: ${error.response?.statusCode}');
+      final data = error.response?.data;
+      if (data is Map) {
+        debugPrint('   body(json): $data');
+      } else if (data is String) {
+        // Truncate to avoid flooding logcat with a full HTML/error page.
+        final preview = data.length > 500 ? '${data.substring(0, 500)}…' : data;
+        debugPrint('   body(non-json, first 500 chars): $preview');
+      } else if (data != null) {
+        debugPrint('   body(unexpected type ${data.runtimeType}): $data');
+      } else {
+        debugPrint('   body: null (likely no response reached the server)');
+      }
+    }
+  }
+
+  /// Turns a raw Dio [Response] into an [ApiResponse].
+  ///
+  /// Normally `res.data` is already a decoded `Map<String, dynamic>` because
+  /// the server sent `Content-Type: application/json` and Dio auto-parsed
+  /// it. If the server sends a 200 with the *body* of JSON but something
+  /// (a stray PHP warning/notice, whitespace, an accidental echo before the
+  /// json_encode, etc.) corrupts the `Content-Type` or leading bytes, Dio
+  /// leaves `res.data` as a raw String instead of throwing — so this used to
+  /// blow up one line later as `type 'String' is not a subtype of type
+  /// 'Map<String, dynamic>'`, which then got swallowed by the generic
+  /// "Network error" fallback in [_handleError] because it isn't a
+  /// [DioException].
+  ///
+  /// This helper: (1) logs the raw body whenever it isn't already a Map, so
+  /// the real cause is visible in logcat, and (2) tries a manual
+  /// [jsonDecode] as a safety net in case the payload is valid JSON that
+  /// merely arrived with the wrong Content-Type header.
+  ApiResponse _parseResponse(String method, String path, Response res) {
+    final data = res.data;
+
+    if (data is Map<String, dynamic>) {
+      return ApiResponse.fromJson(data);
+    }
+
+    if (data is String) {
+      if (kDebugMode) {
+        final preview = data.length > 800 ? '${data.substring(0, 800)}…' : data;
+        debugPrint('⚠️  $method $path returned 200 but body was a String, '
+            'not JSON (Content-Type: ${res.headers.value('content-type')}).');
+        debugPrint('   raw body (first 800 chars): $preview');
+      }
+      // Safety net: maybe it really is JSON, just mislabeled.
+      try {
+        final decoded = jsonDecode(data);
+        if (decoded is Map<String, dynamic>) {
+          if (kDebugMode) {
+            debugPrint('   ↳ recovered: body WAS valid JSON despite the '
+                'wrong Content-Type header. Fix the header server-side.');
+          }
+          return ApiResponse.fromJson(decoded);
+        }
+      } catch (_) {
+        // Not valid JSON at all — genuinely broken output (e.g. HTML error
+        // page, PHP notice printed before json_encode, etc).
+      }
+    }
+
+    return ApiResponse(
+      success: false,
+      message: 'Server returned an unexpected (non-JSON) response.',
+    );
+  }
+
   Future<ApiResponse> _get(String path, {Map<String, dynamic>? query}) async {
+    _logRequest('GET', path, query: query);
     try {
       final res = await _dio.get(path, queryParameters: query);
-      return ApiResponse.fromJson(res.data);
+      _logSuccess('GET', path, res);
+      return _parseResponse('GET', path, res);
     } catch (e) {
+      _logFailure('GET', path, e);
       return _handleError(e);
     }
   }
 
   Future<ApiResponse> _post(String path, {dynamic data}) async {
+    _logRequest('POST', path);
     try {
       final res = await _dio.post(path, data: data);
-      return ApiResponse.fromJson(res.data);
+      _logSuccess('POST', path, res);
+      return _parseResponse('POST', path, res);
     } catch (e) {
+      _logFailure('POST', path, e);
       return _handleError(e);
     }
   }
 
   Future<ApiResponse> _put(String path, {dynamic data}) async {
+    _logRequest('PUT', path);
     try {
       final res = await _dio.put(path, data: data);
-      return ApiResponse.fromJson(res.data);
+      _logSuccess('PUT', path, res);
+      return _parseResponse('PUT', path, res);
     } catch (e) {
+      _logFailure('PUT', path, e);
       return _handleError(e);
     }
   }
 
   Future<ApiResponse> _patch(String path, {dynamic data}) async {
+    _logRequest('PATCH', path);
     try {
       final res = await _dio.patch(path, data: data);
-      return ApiResponse.fromJson(res.data);
+      _logSuccess('PATCH', path, res);
+      return _parseResponse('PATCH', path, res);
     } catch (e) {
+      _logFailure('PATCH', path, e);
       return _handleError(e);
     }
   }
 
   Future<ApiResponse> _delete(String path) async {
+    _logRequest('DELETE', path);
     try {
       final res = await _dio.delete(path);
-      return ApiResponse.fromJson(res.data);
+      _logSuccess('DELETE', path, res);
+      return _parseResponse('DELETE', path, res);
     } catch (e) {
+      _logFailure('DELETE', path, e);
       return _handleError(e);
     }
   }

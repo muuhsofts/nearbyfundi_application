@@ -2,7 +2,7 @@
   "@@locale": "sw",
   "appTitle": "NearbyFundi",
 
-  "nearby": "Karibu",
+  "nearby": "Home",
   "nearbyMap": "Ramani ya Karibu",
   "near": "Karibu na",
   "blog": "Blogu",
@@ -245,6 +245,10 @@
   "refreshed": "Imefresha",
   "refreshFailed": "Kufresha kumeshindwa",
   "pullToRefresh": "Buruta ili kufresha",
-  "loading": "Inapakia..."
+  "loading": "Inapakia...",
+  "pullToRefresh": "Buruta ili kufresha",
+    "loading": "Inapakia...",
+    "showList": "Orodha",
+    "viewAll": "Ona Yote"
 
 }

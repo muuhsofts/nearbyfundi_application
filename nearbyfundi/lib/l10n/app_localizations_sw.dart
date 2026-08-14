@@ -12,7 +12,7 @@ class AppLocalizationsSw extends AppLocalizations {
   String get appTitle => 'NearbyFundi';
 
   @override
-  String get nearby => 'Karibu';
+  String get nearby => 'Home';
 
   @override
   String get nearbyMap => 'Ramani ya Karibu';
@@ -682,4 +682,10 @@ class AppLocalizationsSw extends AppLocalizations {
 
   @override
   String get loading => 'Inapakia...';
+
+  @override
+  String get showList => 'Orodha';
+
+  @override
+  String get viewAll => 'Ona Yote';
 }

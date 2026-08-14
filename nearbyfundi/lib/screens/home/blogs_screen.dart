@@ -1,3 +1,4 @@
+// screens/home/blogs_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -7,10 +8,10 @@ import '../../providers/post_provider.dart';
 import '../../models/post.dart';
 import '../../config/app_theme.dart';
 import '../../utils/image_utils.dart';
-import '../modals.dart';
 import '../../l10n/app_localizations.dart';
 import '../../config/app_routes.dart';
 import '../../widgets/safe_youtube_embed.dart';
+import '../modals.dart';
 
 class BlogsScreen extends StatefulWidget {
   const BlogsScreen({super.key});
@@ -42,8 +43,8 @@ class _BlogsScreenState extends State<BlogsScreen> {
 
   List<Post> get _filteredPosts {
     final posts = context.watch<PostProvider>().posts;
-    if (_filterQuery.isEmpty) return posts;
-    final q = _filterQuery.toLowerCase();
+    if (_filterQuery.trim().isEmpty) return posts;
+    final q = _filterQuery.toLowerCase().trim();
     return posts.where((post) =>
     post.title.toLowerCase().contains(q) ||
         post.content.toLowerCase().contains(q)
@@ -172,9 +173,11 @@ class _BlogsScreenState extends State<BlogsScreen> {
     );
   }
 
+  // ─── IMPROVED SEARCH BAR ──────────────────────────────────────────
   Widget _buildSearchBar(BuildContext context) {
     final theme = Theme.of(context);
     final postCount = context.watch<PostProvider>().posts.length;
+    final filteredCount = _filteredPosts.length;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
@@ -208,16 +211,23 @@ class _BlogsScreenState extends State<BlogsScreen> {
                 onTap: () => setState(() => _searchExpanded = true),
                 decoration: InputDecoration(
                   isDense: true,
-                  hintText: 'Search posts...',
-                  hintStyle: theme.textTheme.bodySmall,
-                  prefixIcon: Icon(Icons.search_rounded,
-                      size: 20, color: AppTheme.primary),
+                  // Shortened hint + search icon
+                  hintText: 'Search...',
+                  hintStyle: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.hintColor.withOpacity(0.6),
+                  ),
+                  prefixIcon: Icon(
+                    Icons.search_rounded,
+                    size: 20,
+                    color: AppTheme.primary,
+                  ),
                   suffixIcon: _filterQuery.isNotEmpty
                       ? IconButton(
-                    icon: Icon(Icons.clear_rounded,
-                        size: 18,
-                        color: theme.colorScheme.onSurface
-                            .withOpacity(0.5)),
+                    icon: Icon(
+                      Icons.clear_rounded,
+                      size: 18,
+                      color: theme.colorScheme.onSurface.withOpacity(0.5),
+                    ),
                     onPressed: () {
                       _filterController.clear();
                       setState(() => _filterQuery = '');
@@ -227,12 +237,15 @@ class _BlogsScreenState extends State<BlogsScreen> {
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(vertical: 10),
                 ),
-                onChanged: (value) => setState(() => _filterQuery = value),
+                onChanged: (value) {
+                  setState(() => _filterQuery = value);
+                },
               ),
             ),
           ),
           if (postCount > 0) ...[
             const SizedBox(width: 10),
+            // Count chip – shows filtered count when searching
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
               decoration: BoxDecoration(
@@ -240,7 +253,7 @@ class _BlogsScreenState extends State<BlogsScreen> {
                 borderRadius: BorderRadius.circular(23),
               ),
               child: Text(
-                '$postCount',
+                _filterQuery.isNotEmpty ? '$filteredCount' : '$postCount',
                 style: TextStyle(
                   color: AppTheme.primary,
                   fontWeight: FontWeight.w700,
@@ -640,7 +653,6 @@ class _MediaSection extends StatelessWidget {
     final isTablet = MediaQuery.of(context).size.width > 600;
     final double imageHeight = isTablet ? 380.0 : 280.0;
 
-    // If both image and video exist, show image with video badge
     if (hasImage) {
       return Stack(
         fit: StackFit.passthrough,

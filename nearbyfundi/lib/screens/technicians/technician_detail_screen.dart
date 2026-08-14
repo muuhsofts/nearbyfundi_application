@@ -8,6 +8,7 @@ import '../../models/service.dart';
 import '../../providers/technician_provider.dart';
 import '../../providers/request_provider.dart';
 import '../../providers/service_provider.dart';
+import '../../providers/location_provider.dart';
 import '../../utils/image_utils.dart';
 import '../../models/technician.dart';
 import '../../l10n/app_localizations.dart';
@@ -1161,7 +1162,7 @@ class _PortfolioModalState extends State<PortfolioModal> {
   }
 }
 
-// ─── REQUEST DIALOG ──────────────────────────────────────────────────────
+// ─── REQUEST DIALOG (fixed) ──────────────────────────────────────────
 class RequestDialog extends StatefulWidget {
   final Technician technician;
 
@@ -1204,7 +1205,7 @@ class _RequestDialogState extends State<RequestDialog> {
 
   void _loadData() {
     if (mounted) {
-      context.read<ServiceProvider>().fetchServices();
+      context.read<ServiceProvider>().fetchServices(locale: _locale);
     }
   }
 
@@ -1247,11 +1248,23 @@ class _RequestDialogState extends State<RequestDialog> {
       _errorMessage = null;
     });
 
+    // ─── Get current location ──────────────────────────────────────────
+    final locProvider = context.read<LocationProvider>();
+    final position = locProvider.position;
+    double? lat, lng;
+    if (position != null) {
+      lat = position.latitude;
+      lng = position.longitude;
+    }
+
+    // ─── Named parameters ──────────────────────────────────────────────
     final success = await context.read<RequestProvider>().createRequest(
-      widget.technician.id,
-      _selectedServiceId!,
-      _descController.text.trim(),
+      technicianId: widget.technician.id,
+      serviceId: _selectedServiceId!,
+      description: _descController.text.trim(),
       categoryId: _selectedCategoryId,
+      latitude: lat,
+      longitude: lng,
     );
 
     if (!mounted) return;
