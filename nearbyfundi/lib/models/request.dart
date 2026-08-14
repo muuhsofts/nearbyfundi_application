@@ -17,8 +17,9 @@ class ServiceRequest {
   final bool? technicianIsOnline;
   final int? categoryId;
   final String? categoryName;
-  final double? latitude;   // added to match tracking
-  final double? longitude;  // added to match tracking
+  final double? latitude;
+  final double? longitude;
+  final bool hasReview;
 
   ServiceRequest({
     required this.id,
@@ -40,6 +41,7 @@ class ServiceRequest {
     this.categoryName,
     this.latitude,
     this.longitude,
+    this.hasReview = false,
   });
 
   // ─── STATUS GETTERS ──────────────────────────────────────────────
@@ -54,7 +56,8 @@ class ServiceRequest {
   bool get isArrived => status == 'arrived';
 
   /// True if the request is in a non‑terminal state (from pending to arrived).
-  bool get isActive => isPending || isAccepted || isInProgress || isOnTheWay || isArrived;
+  bool get isActive =>
+      isPending || isAccepted || isInProgress || isOnTheWay || isArrived;
 
   // ─── FACTORY ──────────────────────────────────────────────────────
 
@@ -72,6 +75,14 @@ class ServiceRequest {
       technicianData = Map<String, dynamic>.from(json['technician'] as Map);
     }
 
+    // ─── Extract technician ID from nested object ──────────────────
+    int techId = 0;
+    if (json['technician_id'] != null) {
+      techId = json['technician_id'] as int;
+    } else if (technicianData != null && technicianData['id'] != null) {
+      techId = technicianData['id'] as int;
+    }
+
     if (technicianData != null) {
       if (technicianData['user'] != null && technicianData['user'] is Map) {
         final userData = technicianData['user'] as Map;
@@ -86,7 +97,8 @@ class ServiceRequest {
       techPhoto = technicianData['profile_photo']?.toString();
       techArea = technicianData['area']?.toString();
       if (technicianData['rating'] != null) {
-        techRating = double.tryParse(technicianData['rating'].toString()) ?? 0.0;
+        techRating =
+            double.tryParse(technicianData['rating'].toString()) ?? 0.0;
       }
       if (technicianData['is_online'] != null) {
         techIsOnline = technicianData['is_online'] is bool
@@ -133,12 +145,16 @@ class ServiceRequest {
       lng = double.tryParse(json['longitude'].toString());
     }
 
+    // ─── NEW: Parse has_review ──────────────────────────────────────
+    bool hasReview = json['has_review'] ?? false;
+
     return ServiceRequest(
       id: json['id'] ?? 0,
-      technicianId: json['technician_id'] ?? 0,
+      technicianId: techId,
       description: json['description'] ?? '',
       status: json['status'] ?? 'pending',
-      createdAt: DateTime.parse(json['created_at'] ?? DateTime.now().toIso8601String()),
+      createdAt: DateTime.parse(
+          json['created_at'] ?? DateTime.now().toIso8601String()),
       technicianName: techName,
       serviceName: serviceName,
       customerId: customerId,
@@ -153,22 +169,24 @@ class ServiceRequest {
       categoryName: categoryName,
       latitude: lat,
       longitude: lng,
+      hasReview: hasReview,
     );
   }
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'technician_id': technicianId,
-    'description': description,
-    'status': status,
-    'created_at': createdAt.toIso8601String(),
-    'technician_name': technicianName,
-    'service_name': serviceName,
-    'customer_id': customerId,
-    'customer_name': customerName,
-    'category_id': categoryId,
-    'category_name': categoryName,
-    if (latitude != null) 'latitude': latitude,
-    if (longitude != null) 'longitude': longitude,
-  };
+        'id': id,
+        'technician_id': technicianId,
+        'description': description,
+        'status': status,
+        'created_at': createdAt.toIso8601String(),
+        'technician_name': technicianName,
+        'service_name': serviceName,
+        'customer_id': customerId,
+        'customer_name': customerName,
+        'category_id': categoryId,
+        'category_name': categoryName,
+        if (latitude != null) 'latitude': latitude,
+        if (longitude != null) 'longitude': longitude,
+        'has_review': hasReview,
+      };
 }

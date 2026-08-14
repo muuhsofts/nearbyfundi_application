@@ -51,6 +51,15 @@ class _BlogsScreenState extends State<BlogsScreen> {
     ).toList();
   }
 
+  // ─── Navigation to technician detail ──────────────────────────────
+  void _goToTechnicianDetail(int technicianId) {
+    Navigator.pushNamed(
+      context,
+      AppRoutes.technicianDetail,
+      arguments: technicianId,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<PostProvider>();
@@ -173,17 +182,23 @@ class _BlogsScreenState extends State<BlogsScreen> {
     );
   }
 
-  // ─── IMPROVED SEARCH BAR ──────────────────────────────────────────
+  // ─── SEARCH BAR – Centered & Responsive ──────────────────────────
   Widget _buildSearchBar(BuildContext context) {
     final theme = Theme.of(context);
     final postCount = context.watch<PostProvider>().posts.length;
     final filteredCount = _filteredPosts.length;
+    final isTablet = MediaQuery.of(context).size.width > 600;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      padding: EdgeInsets.symmetric(
+        horizontal: isTablet ? 40.0 : 16.0,
+        vertical: 6.0,
+      ),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Expanded(
+            flex: 3,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 220),
               curve: Curves.easeOut,
@@ -211,8 +226,7 @@ class _BlogsScreenState extends State<BlogsScreen> {
                 onTap: () => setState(() => _searchExpanded = true),
                 decoration: InputDecoration(
                   isDense: true,
-                  // Shortened hint + search icon
-                  hintText: 'Search...',
+                  hintText: 'Search posts...',
                   hintStyle: theme.textTheme.bodySmall?.copyWith(
                     color: theme.hintColor.withOpacity(0.6),
                   ),
@@ -245,9 +259,8 @@ class _BlogsScreenState extends State<BlogsScreen> {
           ),
           if (postCount > 0) ...[
             const SizedBox(width: 10),
-            // Count chip – shows filtered count when searching
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
                 color: AppTheme.primary.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(23),
@@ -276,6 +289,7 @@ class _BlogsScreenState extends State<BlogsScreen> {
             key: ValueKey(post.id),
             post: post,
             isGrid: false,
+            onTechnicianTap: _goToTechnicianDetail,
           );
         },
         childCount: posts.length,
@@ -298,6 +312,7 @@ class _BlogsScreenState extends State<BlogsScreen> {
             key: ValueKey(post.id),
             post: post,
             isGrid: true,
+            onTechnicianTap: _goToTechnicianDetail,
           );
         },
         childCount: posts.length,
@@ -378,11 +393,13 @@ class _BlogsScreenState extends State<BlogsScreen> {
 class _BlogPostCard extends StatefulWidget {
   final Post post;
   final bool isGrid;
+  final void Function(int technicianId) onTechnicianTap;
 
   const _BlogPostCard({
     super.key,
     required this.post,
     this.isGrid = false,
+    required this.onTechnicianTap,
   });
 
   @override
@@ -469,45 +486,70 @@ class _BlogPostCardState extends State<_BlogPostCard>
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               child: Row(
                 children: [
-                  CircleAvatar(
-                    radius: 20,
-                    backgroundImage: post.technicianAvatar != null
-                        ? CachedNetworkImageProvider(
-                        ImageUtils.getFullImageUrl(post.technicianAvatar!))
-                        : null,
-                    child: post.technicianAvatar == null
-                        ? Text(
-                      post.technicianName[0].toUpperCase(),
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold),
-                    )
-                        : null,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          post.technicianName,
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                          ),
-                        ),
-                        Text(
-                          _formatDate(post.createdAt),
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.hintColor,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
+                  // ─── Tappable Avatar ──────────────────────────────────
+                  GestureDetector(
+                    onTap: () => widget.onTechnicianTap(post.technicianId),
+                    child: CircleAvatar(
+                      radius: 20,
+                      backgroundImage: post.technicianAvatar != null
+                          ? CachedNetworkImageProvider(
+                          ImageUtils.getFullImageUrl(post.technicianAvatar!))
+                          : null,
+                      child: post.technicianAvatar == null
+                          ? Text(
+                        post.technicianName[0].toUpperCase(),
+                        style: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold),
+                      )
+                          : null,
                     ),
                   ),
-                  IconButton(
+                  const SizedBox(width: 12),
+                  // ─── Tappable Name ────────────────────────────────────
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => widget.onTechnicianTap(post.technicianId),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            post.technicianName,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                            ),
+                          ),
+                          Text(
+                            _formatDate(post.createdAt),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.hintColor,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // ─── Overflow Menu with "View Profile" ──────────────
+                  PopupMenuButton<String>(
                     icon: Icon(Icons.more_horiz, size: 22, color: theme.hintColor),
-                    onPressed: () {},
+                    onSelected: (value) {
+                      if (value == 'profile') {
+                        widget.onTechnicianTap(post.technicianId);
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem<String>(
+                        value: 'profile',
+                        child: Row(
+                          children: [
+                            Icon(Icons.person_outline, size: 18),
+                            SizedBox(width: 8),
+                            Text('View Profile'),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

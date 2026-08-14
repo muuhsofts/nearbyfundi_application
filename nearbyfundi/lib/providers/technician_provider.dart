@@ -2,9 +2,11 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../models/technician.dart';
+import '../services/technician_heartbeat_service.dart'; // ✅ added
 
 class TechnicianProvider extends ChangeNotifier {
   final ApiService _api = ApiService();
+  final TechnicianHeartbeatService _heartbeatService = TechnicianHeartbeatService();
 
   List<Technician> _technicians = [];
   Technician? _currentTechnician;
@@ -26,6 +28,7 @@ class TechnicianProvider extends ChangeNotifier {
   Map<String, dynamic>? _filters;
   Map<String, dynamic>? _meta;
 
+  // ─── Getters ───────────────────────────────────────────────────────────
   List<Technician> get technicians => _technicians;
   Technician? get currentTechnician => _currentTechnician;
   Technician? get technician => _myTechnician;
@@ -39,23 +42,38 @@ class TechnicianProvider extends ChangeNotifier {
   Map<String, dynamic>? get filters => _filters;
   Map<String, dynamic>? get meta => _meta;
 
+  // ─── Heartbeat controls ──────────────────────────────────────────────
+  void startHeartbeat() {
+    _heartbeatService.start();
+  }
+
+  void stopHeartbeat() {
+    _heartbeatService.stop();
+  }
+
+  bool get isHeartbeatRunning => _heartbeatService.isRunning;
+
+  // ─── Refresh last search ───────────────────────────────────────────────
   Future<void> refreshLastSearch() async {
     if (_lastPlace != null && _lastPlace!.isNotEmpty) {
       await searchByPlace(
         place: _lastPlace!,
         serviceId: _lastServiceId,
         categoryId: _lastCategoryId,
-        radius: _lastRadius, locale: '',
+        radius: _lastRadius,
+        locale: '',
       );
     }
   }
 
-  /// Main search method - fetches technicians by place, service, and category
+  // ─── Search by place name ──────────────────────────────────────────────
   Future<void> searchByPlace({
     required String place,
     int? serviceId,
     int? categoryId,
-    int radius = 20, required String locale, String? search,
+    int radius = 20,
+    required String locale,
+    String? search,
   }) async {
     _lastPlace = place;
     _lastServiceId = serviceId;
@@ -63,12 +81,15 @@ class TechnicianProvider extends ChangeNotifier {
     _lastRadius = radius;
 
     _setLoading(true);
+
     try {
       final res = await _api.searchTechniciansByPlace(
         place: place,
         serviceId: serviceId,
         categoryId: categoryId,
         radius: radius,
+        search: search,
+        locale: locale,
       );
       _handlePlaceSearchResponse(res);
     } catch (e) {
@@ -85,14 +106,24 @@ class TechnicianProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> fetchNearby({
+  // ─── Search by GPS coordinates (Map Picker) ───────────────────────────
+  Future<void> searchByCoordinates({
     required double lat,
     required double lng,
     int? serviceId,
     int? categoryId,
     int radius = 20,
+    String? search,
+    String locale = 'en',
+    String? placeName,
   }) async {
+    _lastPlace = placeName ?? '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
+    _lastServiceId = serviceId;
+    _lastCategoryId = categoryId;
+    _lastRadius = radius;
+
     _setLoading(true);
+
     try {
       final res = await _api.getNearbyTechnicians(
         lat: lat,
@@ -100,17 +131,48 @@ class TechnicianProvider extends ChangeNotifier {
         radius: radius,
         serviceId: serviceId,
         categoryId: categoryId,
+        search: search,
+        locale: locale,
       );
+
+      _searchLat = lat;
+      _searchLng = lng;
+      _searchPlace = placeName ?? _lastPlace;
+
       _handleListResponse(res);
     } catch (e) {
       _error = e.toString();
       _technicians = [];
+      _searchLat = null;
+      _searchLng = null;
+      _searchPlace = null;
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  /// Clear all technicians and search state
+  // ─── Legacy fetchNearby (now calls searchByCoordinates) ────────────────
+  Future<void> fetchNearby({
+    required double lat,
+    required double lng,
+    int? serviceId,
+    int? categoryId,
+    int radius = 20,
+    String? search,
+    String locale = 'en',
+  }) async {
+    await searchByCoordinates(
+      lat: lat,
+      lng: lng,
+      serviceId: serviceId,
+      categoryId: categoryId,
+      radius: radius,
+      search: search,
+      locale: locale,
+    );
+  }
+
+  // ─── Clear state ───────────────────────────────────────────────────────
   void clearTechnicians() {
     _technicians = [];
     _searchLat = null;
@@ -124,6 +186,7 @@ class TechnicianProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ─── Detail ────────────────────────────────────────────────────────────
   Future<void> fetchTechnicianDetail(int id) async {
     _isLoading = true;
     _error = null;
@@ -141,11 +204,11 @@ class TechnicianProvider extends ChangeNotifier {
     } catch (e) {
       _error = e.toString();
     }
-
     _isLoading = false;
     notifyListeners();
   }
 
+  // ─── UPDATED: Fetch technician with portfolios (preserves new fields) ──
   Future<void> fetchTechnicianWithPortfolios(int id) async {
     _isLoading = true;
     _error = null;
@@ -161,17 +224,20 @@ class TechnicianProvider extends ChangeNotifier {
         return;
       }
 
+      // Parse the technician (includes all new fields)
       final tech = Technician.fromJson(detailRes.data, isDetail: false);
 
+      // Fetch portfolios separately
       final portfolioRes = await _api.getTechnicianPortfolio(id);
       List<PortfolioItem> portfolioItems = [];
-
       if (portfolioRes.success && portfolioRes.data != null) {
         final data = portfolioRes.data as Map<String, dynamic>;
         final portfoliosData = data['portfolios'] as List? ?? [];
-        portfolioItems = portfoliosData.map((p) => PortfolioItem.fromJson(p)).toList();
+        portfolioItems =
+            portfoliosData.map((p) => PortfolioItem.fromJson(p)).toList();
       }
 
+      // Rebuild the technician preserving all fields, only replacing portfolios
       _currentTechnician = Technician(
         id: tech.id,
         userId: tech.userId,
@@ -192,16 +258,20 @@ class TechnicianProvider extends ChangeNotifier {
         services: tech.services,
         serviceObjects: tech.serviceObjects,
         portfolios: portfolioItems,
+        // ─── NEW FIELDS ──────────────────────────────────────────────
+        completedJobsCount: tech.completedJobsCount,
+        priceRange: tech.priceRange,
+        servicePrices: tech.servicePrices,
       );
       _error = null;
     } catch (e) {
       _error = e.toString();
     }
-
     _isLoading = false;
     notifyListeners();
   }
 
+  // ─── My profile (Fundi side) ───────────────────────────────────────────
   Future<void> fetchMyProfile() async {
     _isLoading = true;
     _error = null;
@@ -218,7 +288,6 @@ class TechnicianProvider extends ChangeNotifier {
     } catch (e) {
       _error = e.toString();
     }
-
     _isLoading = false;
     notifyListeners();
   }
@@ -239,11 +308,11 @@ class TechnicianProvider extends ChangeNotifier {
     } catch (e) {
       _error = e.toString();
     }
-
     _isLoading = false;
     notifyListeners();
   }
 
+  // ─── UPDATED toggleOnline – now starts/stops heartbeat ────────────────
   Future<void> toggleOnline(bool isOnline) async {
     _isLoading = true;
     _error = null;
@@ -254,13 +323,18 @@ class TechnicianProvider extends ChangeNotifier {
       if (res.success && res.data != null) {
         _myTechnician = Technician.fromJson(res.data, isDetail: true);
         _error = null;
+        // ─── Auto start/stop heartbeat ──────────────────────────────
+        if (isOnline) {
+          startHeartbeat();
+        } else {
+          stopHeartbeat();
+        }
       } else {
         _error = res.message;
       }
     } catch (e) {
       _error = e.toString();
     }
-
     _isLoading = false;
     notifyListeners();
   }
@@ -297,6 +371,10 @@ class TechnicianProvider extends ChangeNotifier {
             services: _myTechnician!.services,
             serviceObjects: _myTechnician!.serviceObjects,
             portfolios: _myTechnician!.portfolios,
+            // ─── PRESERVE NEW FIELDS ──────────────────────────────────
+            completedJobsCount: _myTechnician!.completedJobsCount,
+            priceRange: _myTechnician!.priceRange,
+            servicePrices: _myTechnician!.servicePrices,
           );
         }
         _error = null;
@@ -306,11 +384,11 @@ class TechnicianProvider extends ChangeNotifier {
     } catch (e) {
       _error = e.toString();
     }
-
     _isLoading = false;
     notifyListeners();
   }
 
+  // ─── Private helpers ───────────────────────────────────────────────────
   void _setLoading(bool value) {
     _isLoading = value;
     if (value) _error = null;
@@ -328,6 +406,17 @@ class TechnicianProvider extends ChangeNotifier {
           dataList = res.data['data'] as List;
         } else {
           dataList = [];
+        }
+
+        if (res.data['search'] != null && res.data['search'] is Map) {
+          final searchMeta = Map<String, dynamic>.from(res.data['search']);
+          _searchMeta = searchMeta;
+          final lat = searchMeta['latitude'];
+          final lng = searchMeta['longitude'];
+          if (lat != null && lng != null) {
+            _searchLat = lat is num ? lat.toDouble() : double.tryParse('$lat');
+            _searchLng = lng is num ? lng.toDouble() : double.tryParse('$lng');
+          }
         }
       } else if (res.data is List) {
         dataList = res.data as List;
@@ -349,10 +438,8 @@ class TechnicianProvider extends ChangeNotifier {
   }
 
   void _handlePlaceSearchResponse(ApiResponse res) {
-    // Always treat as success if we got a response with data
     if (res.data != null) {
       final data = res.data;
-
       List rawList = [];
       Map<String, dynamic>? searchMeta;
       Map<String, dynamic>? filters;
@@ -364,6 +451,7 @@ class TechnicianProvider extends ChangeNotifier {
         } else if (data['data'] != null) {
           rawList = data['data'] as List;
         }
+
         if (data['search'] != null && data['search'] is Map) {
           searchMeta = Map<String, dynamic>.from(data['search'] as Map);
         }
@@ -398,28 +486,29 @@ class TechnicianProvider extends ChangeNotifier {
         _searchPlace = null;
       }
 
-      // Determine if we have a meaningful error message
       if (_technicians.isEmpty) {
-        // Check if there's a meta with suggestions
         if (meta != null) {
           final suggestions = meta['suggestions'] as List? ?? [];
           final totalNearby = meta['total_technicians_nearby'] ?? 0;
           final hasFilters = meta['has_filters'] ?? false;
 
           if (hasFilters && totalNearby > 0) {
-            _error = 'No technicians found with the selected filters. Try clearing filters or selecting a different service/category.';
+            _error =
+            'No technicians found with the selected filters. Try clearing filters or selecting a different service/category.';
           } else if (totalNearby == 0) {
-            _error = res.message ?? 'No technicians found nearby. Try a different location.';
+            _error = res.message ??
+                'No technicians found nearby. Try a different location.';
           } else {
-            _error = res.message ?? 'No technicians found. Try adjusting your search.';
+            _error =
+                res.message ?? 'No technicians found. Try adjusting your search.';
           }
 
-          // Add suggestions to the error message for display
           if (suggestions.isNotEmpty) {
             _error = _error! + '\n\n' + suggestions.join('\n• ');
           }
         } else {
-          _error = res.message ?? 'No technicians found. Try adjusting your search.';
+          _error =
+              res.message ?? 'No technicians found. Try adjusting your search.';
         }
       } else {
         _error = null;
@@ -434,7 +523,6 @@ class TechnicianProvider extends ChangeNotifier {
       _filters = null;
       _meta = null;
     }
-
     _isLoading = false;
     notifyListeners();
   }

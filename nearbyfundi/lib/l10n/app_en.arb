@@ -2,6 +2,7 @@
   "@@locale": "en",
   "appTitle": "NearbyFundi",
 
+
   "nearby": "Home",
   "nearbyMap": "Nearby Map",
   "near": "Near",
@@ -237,16 +238,19 @@
   "pleaseEnterLocation": "Please enter a location",
   "searchServiceHint": "Search for services (e.g. plumbing, electrician...)",
   "noFundisForService": "No fundis for {service}",
-  "tryDifferentCategoryOrService": "Try a different category or service",
-  "tryDifferentService": "Try selecting a different service",
   "viewOnMap": "View on map",
   "clearFilters": "Clear filters",
   "refreshed": "Refreshed",
   "refreshFailed": "Refresh failed",
   "pullToRefresh": "Pull to refresh",
   "loading": "Loading...",
-  "pullToRefresh": "Pull to refresh",
-    "loading": "Loading...",
-    "showList": "Show List",
-    "viewAll": "View All"
+  "showList": "Show List",
+  "viewAll": "View All",
+
+  "jobsCompleted": "jobs completed",
+  "rating": "Rating",
+  "privacyPolicy": "Privacy Policy",
+    "refresh": "Refresh",
+    "retry": "Retry",
+    "noContent": "No content available."
 }

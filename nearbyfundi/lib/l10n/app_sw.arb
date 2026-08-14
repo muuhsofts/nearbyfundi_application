@@ -2,7 +2,8 @@
   "@@locale": "sw",
   "appTitle": "NearbyFundi",
 
-  "nearby": "Home",
+  "nearby": "Nyumbani",
+  "nearbyMap": "Ramani ya Karibu",
   "nearbyMap": "Ramani ya Karibu",
   "near": "Karibu na",
   "blog": "Blogu",
@@ -193,7 +194,6 @@
   "noNotificationsYet": "Hakuna arifa bado",
   "notification": "Arifa",
 
-
   "noConversationsYet": "Hakuna mazungumzo bado",
   "startChattingWithFundis": "Anza kuzungumza na fundi karibu nawe",
   "noMessagesYet": "Hakuna ujumbe bado",
@@ -238,17 +238,19 @@
   "pleaseEnterLocation": "Tafadhali ingiza mahali",
   "searchServiceHint": "Tafuta huduma (mfano. mabomba, umeme...)",
   "noFundisForService": "Hakuna mafundi kwa {service}",
-  "tryDifferentCategoryOrService": "Jaribu kategoria au huduma nyingine",
-  "tryDifferentService": "Jaribu kuchagua huduma nyingine",
   "viewOnMap": "Angalia kwenye ramani",
   "clearFilters": "Futa vichujio",
   "refreshed": "Imefresha",
   "refreshFailed": "Kufresha kumeshindwa",
   "pullToRefresh": "Buruta ili kufresha",
   "loading": "Inapakia...",
-  "pullToRefresh": "Buruta ili kufresha",
-    "loading": "Inapakia...",
-    "showList": "Orodha",
-    "viewAll": "Ona Yote"
+  "showList": "Orodha",
+  "viewAll": "Ona Yote",
 
+  "jobsCompleted": "kazi zilizokamilika",
+  "rating": "Ukadiriaji",
+  "privacyPolicy": "Sera ya Faragha",
+    "refresh": "Fresha",
+    "retry": "Jaribu Tena",
+    "noContent": "Hakuna maudhui."
 }

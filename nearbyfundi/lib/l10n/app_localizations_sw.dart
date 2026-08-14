@@ -12,7 +12,7 @@ class AppLocalizationsSw extends AppLocalizations {
   String get appTitle => 'NearbyFundi';
 
   @override
-  String get nearby => 'Home';
+  String get nearby => 'Nyumbani';
 
   @override
   String get nearbyMap => 'Ramani ya Karibu';
@@ -688,4 +688,13 @@ class AppLocalizationsSw extends AppLocalizations {
 
   @override
   String get viewAll => 'Ona Yote';
+
+  @override
+  String get jobsCompleted => 'kazi zilizokamilika';
+
+  @override
+  String get rating => 'Ukadiriaji';
+
+  @override
+  String get privacyPolicy => 'Sera ya Faragha';
 }

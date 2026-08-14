@@ -10,6 +10,12 @@ import '../../widgets/confirmation_dialog.dart';
 import '../../l10n/app_localizations.dart';
 import '../../services/api_service.dart';
 
+// ─── Helper function to format full date with timezone conversion ───
+String formatDateFull(DateTime date) {
+  final local = date.toLocal();
+  return '${local.day}/${local.month}/${local.year} ${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+}
+
 class MyRequestsScreen extends StatefulWidget {
   const MyRequestsScreen({super.key});
 
@@ -40,7 +46,7 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> {
         return AppTheme.error;
       case 'in_progress':
         return Colors.purple.shade700;
-      default: // pending
+      default:
         return AppTheme.warning;
     }
   }
@@ -62,7 +68,7 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> {
         return Icons.do_not_disturb_on_outlined;
       case 'in_progress':
         return Icons.hourglass_top_rounded;
-      default: // pending
+      default:
         return Icons.hourglass_empty_rounded;
     }
   }
@@ -108,7 +114,7 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> {
     );
   }
 
-  // ---- Review Dialog for completed requests ----
+  // ---- Review Dialog (vertical layout, taller comment field) ----
   Future<void> _showReviewDialog(BuildContext context, ServiceRequest request) async {
     final api = ApiService();
     final controller = TextEditingController();
@@ -117,68 +123,142 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> {
 
     return showDialog(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: true,
       builder: (_) => StatefulBuilder(
-        builder: (ctx, setState) => AlertDialog(
-          title: const Text('Rate & Review'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(5, (i) {
-                  return IconButton(
-                    icon: Icon(
-                      i < rating ? Icons.star_rounded : Icons.star_border_rounded,
-                      color: Colors.amber,
-                      size: 32,
-                    ),
-                    onPressed: () => setState(() => rating = i + 1),
-                  );
-                }),
-              ),
-              TextField(
-                controller: controller,
-                decoration: const InputDecoration(
-                  hintText: 'Write your review...',
-                  border: OutlineInputBorder(),
+        builder: (ctx, setState) {
+          return AlertDialog(
+            title: Row(
+              children: [
+                const Icon(Icons.rate_review_rounded, color: AppTheme.primary),
+                const SizedBox(width: 8),
+                const Text('Rate & Review'),
+              ],
+            ),
+            titlePadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+            contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Divider(
+                  thickness: 2,
+                  color: Theme.of(context).dividerColor.withOpacity(0.6),
                 ),
-                maxLines: 3,
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Text(
+                      'Your Rating:',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Row(
+                      children: List.generate(5, (i) {
+                        return GestureDetector(
+                          onTap: () => setState(() => rating = i + 1),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 2),
+                            child: Icon(
+                              i < rating ? Icons.star_rounded : Icons.star_border_rounded,
+                              color: Colors.amber,
+                              size: 30,
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '$rating / 5',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).hintColor,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Your Review',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: controller,
+                      maxLines: 4,
+                      minLines: 3,
+                      decoration: InputDecoration(
+                        hintText: 'Share your experience...',
+                        hintStyle: TextStyle(color: Theme.of(context).hintColor),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(width: 1.0, color: Colors.grey),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(width: 1.0, color: Colors.grey),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(width: 1.5, color: AppTheme.primary),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        filled: true,
+                        fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: submitting
+                    ? null
+                    : () async {
+                  setState(() => submitting = true);
+                  final res = await api.submitReview(
+                    requestId: request.id,
+                    rating: rating,
+                    comment: controller.text.trim().isNotEmpty ? controller.text.trim() : null,
+                  );
+                  setState(() => submitting = false);
+                  if (res.success) {
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Review submitted!')),
+                    );
+                    context.read<RequestProvider>().loadMyRequests();
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(res.message ?? 'Failed to submit review')),
+                    );
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                ),
+                child: submitting
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Text('Submit'),
               ),
             ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                setState(() => submitting = true);
-                final res = await api.submitReview(
-                  requestId: request.id,
-                  rating: rating,
-                  comment: controller.text.trim().isNotEmpty ? controller.text.trim() : null,
-                );
-                setState(() => submitting = false);
-                if (res.success) {
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Review submitted!')),
-                  );
-                  context.read<RequestProvider>().loadMyRequests();
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(res.message ?? 'Failed to submit review')),
-                  );
-                }
-              },
-              child: submitting
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('Submit'),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -188,7 +268,6 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> {
     final provider = context.watch<RequestProvider>();
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
-
     final screenWidth = MediaQuery.of(context).size.width;
     final isTablet = screenWidth > 600;
     final horizontalPadding = isTablet ? 32.0 : 16.0;
@@ -223,12 +302,8 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> {
       ),
       body: Column(
         children: [
-          // ---- Filter Bar ----
           _buildFilterBar(context, theme, l10n, horizontalPadding),
-          // ---- Stats Row ----
-          if (provider.requests.isNotEmpty)
-            _buildStatsRow(context, provider, theme, horizontalPadding),
-          // ---- List ----
+          if (provider.requests.isNotEmpty) _buildStatsRow(context, provider, theme, horizontalPadding),
           Expanded(
             child: RefreshIndicator(
               onRefresh: provider.loadMyRequests,
@@ -392,224 +467,216 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> {
         final statusBg = _statusBackgroundColor(r.status);
 
         return Card(
-          margin: EdgeInsets.only(bottom: cardMargin + 8),
+          margin: EdgeInsets.only(bottom: cardMargin + 12),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          elevation: 2,
-          shadowColor: theme.shadowColor.withOpacity(0.06),
-          color: theme.cardColor,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ─── Very Small Bolder Line ───────────────────────────────
-              Container(
-                height: 3,
-                width: 40,
-                margin: const EdgeInsets.only(top: 6, left: 16),
-                decoration: BoxDecoration(
-                  color: AppTheme.primary.withOpacity(0.6),
-                  borderRadius: BorderRadius.circular(4),
+          elevation: 4,
+          shadowColor: theme.shadowColor.withOpacity(0.15),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  height: 3,
+                  width: 40,
+                  margin: const EdgeInsets.only(bottom: 10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withOpacity(0.6),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Row(
                   children: [
-                    // ---- Top row: service name + category + status ----
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                r.serviceName,
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 17,
-                                ),
-                              ),
-                              if (r.categoryName != null && r.categoryName!.isNotEmpty)
-                                Text(
-                                  '📂 ${r.categoryName}',
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: AppTheme.primary,
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                            ],
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            r.serviceName,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 17,
+                            ),
                           ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: statusBg,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(_statusIcon(r.status), size: 14, color: statusColor),
-                              const SizedBox(width: 4),
-                              Text(
-                                _getStatusLabel(r.status).toUpperCase(),
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: statusColor,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 10,
-                                  letterSpacing: 0.3,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    // ---- Description ----
-                    Text(
-                      r.description,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.hintColor,
-                        height: 1.4,
-                      ),
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 12),
-                    // ---- Meta info ----
-                    Row(
-                      children: [
-                        Icon(Icons.person_outline, size: 16, color: theme.hintColor),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            r.technicianName,
-                            style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
-                          ),
-                        ),
-                        Icon(Icons.schedule, size: 16, color: theme.hintColor),
-                        const SizedBox(width: 4),
-                        Text(
-                          _formatDate(r.createdAt),
-                          style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
-                        ),
-                      ],
-                    ),
-                    if (r.technicianArea != null && r.technicianArea!.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Row(
-                          children: [
-                            Icon(Icons.location_on, size: 14, color: theme.hintColor),
-                            const SizedBox(width: 4),
+                          if (r.categoryName != null && r.categoryName!.isNotEmpty)
                             Text(
-                              r.technicianArea!,
-                              style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor, fontSize: 12),
-                            ),
-                          ],
-                        ),
-                      ),
-                    // ---- Completed badge ----
-                    if (isCompleted) ...[
-                      const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppTheme.success.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppTheme.success.withOpacity(0.2)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.verified_rounded, size: 16, color: AppTheme.success),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Completed ✓',
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.success),
-                            ),
-                            if (r.technicianRating != null && r.technicianRating! > 0) ...[
-                              const SizedBox(width: 8),
-                              Icon(Icons.star_rounded, size: 14, color: Colors.amber.shade600),
-                              Text(
-                                r.technicianRating!.toStringAsFixed(1),
-                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.amber.shade700),
+                              '📂 ${r.categoryName}',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: AppTheme.primary,
+                                fontWeight: FontWeight.w500,
+                                fontSize: 12,
                               ),
-                            ],
-                          ],
-                        ),
+                            ),
+                        ],
                       ),
-                    ],
-                    // ---- Actions ----
-                    const SizedBox(height: 4),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        // Track button (if request is accepted, on_the_way, or arrived)
-                        if (r.isAccepted || r.isOnTheWay || r.isArrived)
-                          TextButton.icon(
-                            onPressed: () => Navigator.pushNamed(
-                              context,
-                              AppRoutes.tracking,
-                              arguments: r.id,
-                            ),
-                            icon: Icon(Icons.track_changes_rounded, size: 18, color: AppTheme.primary),
-                            label: Text(
-                              'Track',
-                              style: TextStyle(color: AppTheme.primary, fontSize: 13),
-                            ),
-                          ),
-                        // Cancel button (only for pending)
-                        if (isPending)
-                          TextButton.icon(
-                            onPressed: provider.isLoading
-                                ? null
-                                : () async {
-                              final confirmed = await showConfirmationDialog(
-                                context,
-                                l10n.cancelRequest,
-                                l10n.areYouSureCancel,
-                              );
-                              if (confirmed == true && context.mounted) {
-                                await context.read<RequestProvider>().cancelRequest(r.id);
-                              }
-                            },
-                            icon: Icon(Icons.cancel_outlined, size: 18, color: AppTheme.error),
-                            label: Text(
-                              l10n.cancelRequest,
-                              style: TextStyle(color: AppTheme.error, fontSize: 13),
-                            ),
-                            style: TextButton.styleFrom(foregroundColor: AppTheme.error),
-                          ),
-                        // Review button (if completed and not yet reviewed)
-                        if (isCompleted)
-                          TextButton.icon(
-                            onPressed: () => _showReviewDialog(context, r),
-                            icon: Icon(Icons.star_rate_rounded, size: 18, color: Colors.amber.shade700),
-                            label: Text(
-                              'Review',
-                              style: TextStyle(color: Colors.amber.shade700, fontSize: 13),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: statusBg,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(_statusIcon(r.status), size: 14, color: statusColor),
+                          const SizedBox(width: 4),
+                          Text(
+                            _getStatusLabel(r.status).toUpperCase(),
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: statusColor,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 10,
+                              letterSpacing: 0.3,
                             ),
                           ),
-                        // View Details always
-                        TextButton.icon(
-                          onPressed: () => _showRequestDetails(context, r),
-                          icon: Icon(Icons.visibility_outlined, size: 18, color: AppTheme.primary),
-                          label: Text(
-                            'View Details',
-                            style: TextStyle(color: AppTheme.primary, fontSize: 13),
-                          ),
-                          style: TextButton.styleFrom(foregroundColor: AppTheme.primary),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ],
                 ),
-              ),
-            ],
+                const SizedBox(height: 8),
+                Text(
+                  r.description,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.hintColor,
+                    height: 1.4,
+                  ),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Icon(Icons.person_outline, size: 16, color: theme.hintColor),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        r.technicianName,
+                        style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+                      ),
+                    ),
+                    Icon(Icons.schedule, size: 16, color: theme.hintColor),
+                    const SizedBox(width: 4),
+                    Text(
+                      _formatDate(r.createdAt),
+                      style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+                    ),
+                  ],
+                ),
+                if (r.technicianArea != null && r.technicianArea!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Row(
+                      children: [
+                        Icon(Icons.location_on, size: 14, color: theme.hintColor),
+                        const SizedBox(width: 4),
+                        Text(
+                          r.technicianArea!,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.hintColor,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (isCompleted) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppTheme.success.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppTheme.success.withOpacity(0.2)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.verified_rounded, size: 16, color: AppTheme.success),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Completed ✓',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.success),
+                        ),
+                        if (r.technicianRating != null && r.technicianRating! > 0) ...[
+                          const SizedBox(width: 8),
+                          Icon(Icons.star_rounded, size: 14, color: Colors.amber.shade600),
+                          Text(
+                            r.technicianRating!.toStringAsFixed(1),
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.amber.shade700),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    // Track button
+                    if (r.isAccepted || r.isOnTheWay || r.isArrived)
+                      TextButton.icon(
+                        onPressed: () => Navigator.pushNamed(
+                          context,
+                          AppRoutes.tracking,
+                          arguments: r.id,
+                        ),
+                        icon: Icon(Icons.track_changes_rounded, size: 18, color: AppTheme.primary),
+                        label: Text(
+                          'Track',
+                          style: TextStyle(color: AppTheme.primary, fontSize: 13),
+                        ),
+                      ),
+                    // Cancel button (only for pending)
+                    if (isPending)
+                      TextButton.icon(
+                        onPressed: provider.isLoading
+                            ? null
+                            : () async {
+                          final confirmed = await showConfirmationDialog(
+                            context,
+                            l10n.cancelRequest,
+                            l10n.areYouSureCancel,
+                          );
+                          if (confirmed == true && context.mounted) {
+                            await context.read<RequestProvider>().cancelRequest(r.id);
+                          }
+                        },
+                        icon: Icon(Icons.cancel_outlined, size: 18, color: AppTheme.error),
+                        label: Text(
+                          l10n.cancelRequest,
+                          style: TextStyle(color: AppTheme.error, fontSize: 13),
+                        ),
+                        style: TextButton.styleFrom(foregroundColor: AppTheme.error),
+                      ),
+                    // ─── REVIEW BUTTON ─────────────────────────────────────
+                    // Only show if completed AND NOT reviewed
+                    if (isCompleted && !r.hasReview)
+                      TextButton.icon(
+                        onPressed: () => _showReviewDialog(context, r),
+                        icon: Icon(Icons.star_rate_rounded, size: 18, color: Colors.amber.shade700),
+                        label: Text(
+                          'Review',
+                          style: TextStyle(color: Colors.amber.shade700, fontSize: 13),
+                        ),
+                      ),
+                    // ─── VIEW DETAILS ──────────────────────────────────────
+                    TextButton.icon(
+                      onPressed: () => _showRequestDetails(context, r),
+                      icon: Icon(Icons.visibility_outlined, size: 18, color: AppTheme.primary),
+                      label: Text(
+                        'View Details',
+                        style: TextStyle(color: AppTheme.primary, fontSize: 13),
+                      ),
+                      style: TextButton.styleFrom(foregroundColor: AppTheme.primary),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -620,27 +687,28 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> {
 // ─── REQUEST DETAIL MODAL ──────────────────────────────────────────────
 class _RequestDetailModal extends StatelessWidget {
   final ServiceRequest request;
-
   const _RequestDetailModal({required this.request});
 
-  String _formatDateFull(DateTime date) {
-    return '${date.day}/${date.month}/${date.year} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-  }
+  String _formatDateFull(DateTime date) => formatDateFull(date);
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final statusColor = _statusColor(request.status);
     final statusBg = _statusBackgroundColor(request.status);
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+
+    final dialogWidth = screenWidth > 480 ? 480.0 : screenWidth - 40.0;
 
     return Dialog(
       insetPadding: const EdgeInsets.all(20),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       backgroundColor: theme.cardColor,
       child: Container(
+        width: dialogWidth,
         constraints: BoxConstraints(
-          maxWidth: 480,
-          maxHeight: MediaQuery.of(context).size.height * 0.85,
+          maxHeight: screenHeight * 0.85,
         ),
         padding: const EdgeInsets.all(24),
         child: SingleChildScrollView(
@@ -648,7 +716,6 @@ class _RequestDetailModal extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ─── Header ────────────────────────────────────────────────
               Row(
                 children: [
                   Container(
@@ -676,8 +743,6 @@ class _RequestDetailModal extends StatelessWidget {
                 ],
               ),
               const Divider(height: 24, thickness: 1.2),
-
-              // ─── Service Name ──────────────────────────────────────────
               _buildDetailRow(
                 label: 'Service',
                 value: request.serviceName,
@@ -685,8 +750,6 @@ class _RequestDetailModal extends StatelessWidget {
                 theme: theme,
               ),
               const SizedBox(height: 12),
-
-              // ─── Category ──────────────────────────────────────────────
               if (request.categoryName != null && request.categoryName!.isNotEmpty)
                 _buildDetailRow(
                   label: 'Category',
@@ -695,13 +758,8 @@ class _RequestDetailModal extends StatelessWidget {
                   theme: theme,
                 ),
               if (request.categoryName != null) const SizedBox(height: 12),
-
-              // ─── Status ─────────────────────────────────────────────────
               _buildStatusRow(statusColor, statusBg, theme),
-
               const SizedBox(height: 12),
-
-              // ─── Description ────────────────────────────────────────────
               _buildDetailRow(
                 label: 'Description',
                 value: request.description,
@@ -710,8 +768,6 @@ class _RequestDetailModal extends StatelessWidget {
                 multiline: true,
               ),
               const SizedBox(height: 12),
-
-              // ─── Customer ──────────────────────────────────────────────
               _buildDetailRow(
                 label: 'Customer',
                 value: request.customerName ?? 'N/A',
@@ -719,8 +775,6 @@ class _RequestDetailModal extends StatelessWidget {
                 theme: theme,
               ),
               const SizedBox(height: 12),
-
-              // ─── Technician ─────────────────────────────────────────────
               _buildDetailRow(
                 label: 'Technician',
                 value: request.technicianName,
@@ -728,8 +782,6 @@ class _RequestDetailModal extends StatelessWidget {
                 theme: theme,
               ),
               const SizedBox(height: 12),
-
-              // ─── Area ───────────────────────────────────────────────────
               if (request.technicianArea != null && request.technicianArea!.isNotEmpty)
                 _buildDetailRow(
                   label: 'Area',
@@ -738,8 +790,6 @@ class _RequestDetailModal extends StatelessWidget {
                   theme: theme,
                 ),
               if (request.technicianArea != null) const SizedBox(height: 12),
-
-              // ─── Created At ─────────────────────────────────────────────
               _buildDetailRow(
                 label: 'Requested On',
                 value: _formatDateFull(request.createdAt),
@@ -747,8 +797,6 @@ class _RequestDetailModal extends StatelessWidget {
                 theme: theme,
               ),
               const SizedBox(height: 20),
-
-              // ─── Close Button ───────────────────────────────────────────
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -869,7 +917,6 @@ class _RequestDetailModal extends StatelessWidget {
     );
   }
 
-  // ---- Reuse status helpers ----
   Color _statusColor(String status) {
     switch (status) {
       case 'accepted':

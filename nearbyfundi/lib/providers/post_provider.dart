@@ -81,6 +81,7 @@ class PostProvider extends ChangeNotifier {
         commentsCount: post.commentsCount,
         technicianName: post.technicianName,
         technicianAvatar: post.technicianAvatar,
+        technicianId: post.technicianId,   // ← REQUIRED – fixed here
         createdAt: post.createdAt,
         likedByUser: !post.likedByUser,
         comments: post.comments,

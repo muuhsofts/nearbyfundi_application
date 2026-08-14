@@ -401,8 +401,8 @@ class _HomeScreenState extends State<HomeScreen> {
               elevation: 0,
               items: [
                 BottomNavigationBarItem(
-                  icon: const Icon(Icons.map_outlined),
-                  activeIcon: const Icon(Icons.map_rounded),
+                  icon: const Icon(Icons.home_outlined),
+                  activeIcon: const Icon(Icons.home_rounded),
                   label: l10n.nearby,
                 ),
                 BottomNavigationBarItem(

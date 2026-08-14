@@ -50,7 +50,6 @@ class SettingsScreen extends StatelessWidget {
                 if (val != null) {
                   await settings.updateLocale(val);
                   await auth.updateLocale(val);
-                  // Refresh services with new locale
                   await serviceProvider.fetchServices(locale: val);
                 }
               },
@@ -86,6 +85,16 @@ class SettingsScreen extends StatelessWidget {
             ListTile(
               title: Text(l10n.terms, style: theme.textTheme.titleMedium),
               onTap: () => Navigator.pushNamed(context, AppRoutes.terms),
+              trailing: Icon(Icons.arrow_forward_ios, size: 16, color: theme.hintColor),
+            ),
+
+            // ─── Privacy Policy ──────────────────────────────────────────
+            ListTile(
+              title: Text(
+                l10n.privacyPolicy, // ✅ now localized
+                style: theme.textTheme.titleMedium,
+              ),
+              onTap: () => Navigator.pushNamed(context, AppRoutes.privacyPolicy),
               trailing: Icon(Icons.arrow_forward_ios, size: 16, color: theme.hintColor),
             ),
 
@@ -151,7 +160,7 @@ class SettingsScreen extends StatelessWidget {
   }
 }
 
-// ─── LANGUAGE TOGGLE WIDGET ──────────────────────────────────────
+// ─── Language Toggle Widgets (unchanged) ──────────────────────────────
 class _LanguageToggle extends StatelessWidget {
   final String currentLocale;
   final ValueChanged<String?> onChanged;
@@ -209,7 +218,6 @@ class _LanguageToggle extends StatelessWidget {
   }
 }
 
-// ─── LANGUAGE OPTION ─────────────────────────────────────────────
 class _LanguageOption extends StatelessWidget {
   final String label;
   final bool isSelected;
@@ -265,7 +273,7 @@ class _LanguageOption extends StatelessWidget {
   }
 }
 
-// ─── THEME TOGGLE WIDGET ─────────────────────────────────────────
+// ─── Theme Toggle Widgets (unchanged) ──────────────────────────────────
 class _ThemeToggle extends StatelessWidget {
   final ThemeMode currentThemeMode;
   final ValueChanged<ThemeMode?> onChanged;
@@ -329,7 +337,6 @@ class _ThemeToggle extends StatelessWidget {
   }
 }
 
-// ─── THEME OPTION ────────────────────────────────────────────────
 class _ThemeOption extends StatelessWidget {
   final String label;
   final bool isSelected;

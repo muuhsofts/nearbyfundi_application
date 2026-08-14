@@ -33,6 +33,7 @@ class Post {
   int commentsCount;
   final String technicianName;
   final String? technicianAvatar;
+  final int technicianId;          // ← NEW
   final DateTime createdAt;
   bool likedByUser;
   List<Comment> comments;
@@ -48,6 +49,7 @@ class Post {
     required this.commentsCount,
     required this.technicianName,
     this.technicianAvatar,
+    required this.technicianId,    // ← NEW
     required this.createdAt,
     this.likedByUser = false,
     this.comments = const [],
@@ -58,24 +60,39 @@ class Post {
         .map((c) => Comment.fromJson(c))
         .toList();
 
+    // ─── Extract technician info ──────────────────────────────────
     String techName = 'Fundi';
-    if (json['technician'] != null) {
-      if (json['technician']['user'] != null) {
-        techName = json['technician']['user']['name'] ?? 'Fundi';
-      } else if (json['technician']['name'] != null) {
-        techName = json['technician']['name'];
+    String? techAvatar;
+    int techId = 0;
+
+    if (json['technician'] != null && json['technician'] is Map) {
+      final techMap = json['technician'] as Map;
+      // ID
+      if (techMap['id'] != null) {
+        techId = techMap['id'] as int;
       }
-    } else if (json['technician_name'] != null) {
-      techName = json['technician_name'];
+      // Name
+      if (techMap['user'] != null && techMap['user'] is Map) {
+        final userMap = techMap['user'] as Map;
+        techName = userMap['name']?.toString() ?? 'Fundi';
+        // Avatar might be on user too? Usually on technician.
+      } else if (techMap['name'] != null) {
+        techName = techMap['name'].toString();
+      }
+      // Avatar
+      techAvatar = techMap['profile_photo']?.toString();
     }
 
-    String? techAvatar;
-    if (json['technician'] != null) {
-      techAvatar = json['technician']['profile_photo'];
+    // Fallback if technician object missing but fields exist
+    if (json['technician_id'] != null) {
+      techId = json['technician_id'] as int;
+    }
+    if (json['technician_name'] != null) {
+      techName = json['technician_name'].toString();
     }
 
     return Post(
-      id: json['id'],
+      id: json['id'] ?? 0,
       title: json['title'] ?? '',
       content: json['content'] ?? '',
       image: json['image'],
@@ -85,6 +102,7 @@ class Post {
       commentsCount: json['comments_count'] ?? 0,
       technicianName: techName,
       technicianAvatar: techAvatar,
+      technicianId: techId,                          // ← NEW
       createdAt: DateTime.parse(json['created_at'] ?? DateTime.now().toIso8601String()),
       likedByUser: json['liked_by_user'] ?? false,
       comments: commentsList,

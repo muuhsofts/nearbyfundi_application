@@ -60,7 +60,7 @@ class StaticPageProvider extends ChangeNotifier {
   }
 
   // Load Privacy Policy
-  Future<void> loadPrivacyPolicy() async {
+  Future<void> loadPrivacyPolicy({required String locale}) async {
     _setLoading(true);
     final res = await _api.getPrivacyPolicy();
     if (res.success && res.data != null) {

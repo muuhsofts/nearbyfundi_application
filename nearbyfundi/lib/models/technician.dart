@@ -73,6 +73,44 @@ class PortfolioItem {
   }
 }
 
+// NEW: PriceRange
+class PriceRange {
+  final double min;
+  final double max;
+  PriceRange({required this.min, required this.max});
+
+  factory PriceRange.fromJson(Map<String, dynamic> json) => PriceRange(
+    min: (json['min'] as num?)?.toDouble() ?? 0,
+    max: (json['max'] as num?)?.toDouble() ?? 0,
+  );
+
+  Map<String, dynamic> toJson() => {'min': min, 'max': max};
+}
+
+// NEW: ServicePrice
+class ServicePrice {
+  final int id;
+  final String name;
+  final double minPrice;
+  final double maxPrice;
+
+  ServicePrice({required this.id, required this.name, required this.minPrice, required this.maxPrice});
+
+  factory ServicePrice.fromJson(Map<String, dynamic> json) => ServicePrice(
+    id: json['id'] ?? 0,
+    name: json['name'] ?? '',
+    minPrice: (json['min_price'] as num?)?.toDouble() ?? 0,
+    maxPrice: (json['max_price'] as num?)?.toDouble() ?? 0,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'min_price': minPrice,
+    'max_price': maxPrice,
+  };
+}
+
 class Technician {
   final int id;
   final int userId;
@@ -94,6 +132,11 @@ class Technician {
   final List<TechnicianService> serviceObjects;
   final List<PortfolioItem> portfolios;
 
+  // NEW FIELDS
+  final int completedJobsCount;
+  final PriceRange? priceRange;
+  final List<ServicePrice> servicePrices;
+
   Technician({
     required this.id,
     this.userId = 0,
@@ -114,6 +157,9 @@ class Technician {
     this.services = const [],
     this.serviceObjects = const [],
     this.portfolios = const [],
+    this.completedJobsCount = 0,
+    this.priceRange,
+    this.servicePrices = const [],
   });
 
   factory Technician.fromJson(Map<String, dynamic> json, {bool isDetail = false}) {
@@ -220,6 +266,30 @@ class Technician {
       }
     }
 
+    // ─── NEW: Parse price_range and service_prices ──────────────────
+    PriceRange? priceRange;
+    if (data['price_range'] != null && data['price_range'] is Map) {
+      final pr = data['price_range'] as Map<dynamic, dynamic>;
+      final min = (pr['min'] as num?)?.toDouble() ?? 0;
+      final max = (pr['max'] as num?)?.toDouble() ?? 0;
+      if (min > 0 || max > 0) {
+        priceRange = PriceRange(min: min, max: max);
+      }
+    }
+
+    List<ServicePrice> servicePrices = [];
+    if (data['service_prices'] != null && data['service_prices'] is List) {
+      final spList = data['service_prices'] as List;
+      servicePrices = spList.map((sp) => ServicePrice.fromJson(sp)).toList();
+    }
+
+    // ─── Parse completed_jobs_count ──────────────────────────────────
+    int completedJobs = 0;
+    if (data['completed_jobs_count'] != null) {
+      completedJobs = (data['completed_jobs_count'] as num).toInt();
+    }
+    // ────────────────────────────────────────────────────────────────
+
     double parseDouble(dynamic value) {
       if (value == null) return 0.0;
       if (value is num) return value.toDouble();
@@ -269,6 +339,9 @@ class Technician {
       services: serviceNames,
       serviceObjects: serviceObjs,
       portfolios: portfolios,
+      completedJobsCount: completedJobs,
+      priceRange: priceRange,
+      servicePrices: servicePrices,
     );
   }
 
@@ -292,5 +365,8 @@ class Technician {
     'services': services,
     'service_objects': serviceObjects.map((s) => s.toJson()).toList(),
     'portfolios': portfolios.map((p) => p.toJson()).toList(),
+    'completed_jobs_count': completedJobsCount,
+    'price_range': priceRange?.toJson(),
+    'service_prices': servicePrices.map((sp) => sp.toJson()).toList(),
   };
 }

@@ -688,4 +688,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get viewAll => 'View All';
+
+  @override
+  String get jobsCompleted => 'jobs completed';
+
+  @override
+  String get rating => 'Rating';
+
+  @override
+  String get privacyPolicy => 'Privacy Policy';
 }
