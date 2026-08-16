@@ -3,19 +3,22 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Carbon\Carbon;
 
 class Technician extends Model
 {
-    const ONLINE_THRESHOLD_MINUTES = 3;
-
     protected $fillable = [
         'user_id', 'profile_photo', 'bio', 'nida', 'experience', 'rating',
         'latitude', 'longitude', 'area', 'verified',
         'last_activity_at', 'is_online', 'hourly_rate',
         'location_updated_at',
-        // NEW FIELDS
-        'verification_status', 'id_document_type', 'id_document_image',
+        // FOR 4-STEP REGISTRATION
+        'verification_status',
+        'id_document_type',
+        'id_document_image',
         'completed_jobs_count',
+        'registration_step',
+        'registration_completed',
     ];
 
     protected $casts = [
@@ -26,16 +29,14 @@ class Technician extends Model
         'location_updated_at' => 'datetime',
         'hourly_rate'         => 'decimal:2',
         'completed_jobs_count'=> 'integer',
+        'registration_completed' => 'boolean',
     ];
 
     protected $hidden = [
-        'nida', // sensitive — don't expose in default JSON; admins access via dedicated field selection
+        'nida', // sensitive — hidden from public JSON
     ];
 
-    // ============================================================
-    // RELATIONSHIPS
-    // ============================================================
-
+    // ─── Relationships ──────────────────────────────────────────────
     public function user()
     {
         return $this->belongsTo(User::class);
@@ -81,18 +82,13 @@ class Technician extends Model
         return $this->hasMany(TechnicianLocationHistory::class);
     }
 
-    // ============================================================
-    // ONLINE STATUS
-    // ============================================================
-
-    public function getComputedOnlineAttribute(): bool
-    {
-        if (!$this->is_online || !$this->last_activity_at) {
-            return false;
-        }
-        return $this->last_activity_at->gt(now()->subMinutes(self::ONLINE_THRESHOLD_MINUTES));
-    }
-
+    // ─── Heartbeat (kept — used by nearby search / monitoring) ──────
+    // NOTE: getComputedOnlineAttribute() + ONLINE_THRESHOLD_MINUTES
+    // removed — they were never appended to JSON output, so nothing
+    // in the app was actually reading them. Raw `is_online` still
+    // drives the profile screen's badge (now removed client-side)
+    // and remains available for admin monitoring / nearby search,
+    // which likely depend on it directly.
     public function recordHeartbeat(?float $lat = null, ?float $lng = null): void
     {
         $this->is_online        = true;
@@ -107,13 +103,7 @@ class Technician extends Model
         $this->save();
     }
 
-    // ============================================================
-    // RATING RECALCULATION (NEW)
-    // ============================================================
-
-    /**
-     * Recalculate and update the average rating from all reviews.
-     */
+    // ─── Rating Recalculation ──────────────────────────────────────
     public function recalculateRating(): void
     {
         $avg = $this->reviews()->avg('rating') ?? 0.0;
@@ -121,29 +111,12 @@ class Technician extends Model
         $this->save();
     }
 
-    // ============================================================
-    // AGGREGATION HELPERS
-    // ============================================================
-
-    /**
-     * Increment the completed jobs counter (called after a review is added)
-     */
     public function incrementCompletedJobs(): void
     {
         $this->increment('completed_jobs_count');
     }
 
-    /**
-     * Get average rating from all reviews
-     */
-    public function getAverageRatingAttribute(): float
-    {
-        return $this->reviews()->avg('rating') ?? 0.0;
-    }
-
-    /**
-     * Get the technician's display name (user name)
-     */
+    // ─── Accessors ──────────────────────────────────────────────────
     public function getDisplayNameAttribute(): string
     {
         return $this->user->name ?? 'Unknown Technician';

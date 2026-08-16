@@ -143,7 +143,7 @@ Route::prefix('v4')->middleware(['auth:sanctum', 'active.session'])->group(funct
     Route::get('customer/requests', [RequestController::class, 'customerRequests']);
     Route::get('technician/requests', [RequestController::class, 'technicianRequests']);
 
-    // ✅ NEW: Request tracking endpoints
+    //  Request tracking endpoints
     Route::patch('requests/{id}/on-the-way', [RequestController::class, 'markOnTheWay']);
     Route::patch('requests/{id}/arrive', [RequestController::class, 'markArrived']);
     Route::get('requests/{id}/tracking', [RequestController::class, 'trackingData']);
@@ -162,7 +162,6 @@ Route::prefix('v4')->middleware(['auth:sanctum', 'active.session'])->group(funct
         Route::get('requests/{id}/logs', [MonitoringController::class, 'getRequestLogs']);
         Route::patch('requests/{id}/status', [MonitoringController::class, 'updateStatus']);
         Route::post('requests/{id}/complete', [MonitoringController::class, 'completeRequest']);
-        // ✅ NEW: Geofence arrival detection
         Route::post('requests/{id}/check-arrival', [MonitoringController::class, 'checkArrival']);
     });
 });
@@ -433,3 +432,37 @@ Route::prefix('v18')->group(function () {
         });
     });
 });
+
+// =============================================
+// V19 – TECHNICIAN 4-STEP REGISTRATION & PROFILE (New)
+// =============================================
+Route::prefix('v19')->group(function () {
+    // Public registration endpoints (no auth required, they create the user)
+    Route::post('technicians/register/step1', [TechnicianController::class, 'registerStep1']);
+    Route::post('technicians/register/step2', [TechnicianController::class, 'registerStep2']);
+    Route::post('technicians/register/step3', [TechnicianController::class, 'registerStep3']);
+    Route::post('technicians/register/step4', [TechnicianController::class, 'registerStep4']);
+    Route::post('technicians/register/submit', [TechnicianController::class, 'submitRegistration']);
+
+    // Admin approval endpoint (requires auth)
+    Route::post('admin/technicians/{id}/approve', [TechnicianController::class, 'approve'])
+        ->middleware(['auth:sanctum', 'active.session']);
+
+    // Technician Profile Management (requires auth)
+    Route::middleware(['auth:sanctum', 'active.session'])->group(function () {
+        Route::get('technicians/profile', [TechnicianController::class, 'getOwnProfile']);
+        Route::put('technicians/profile', [TechnicianController::class, 'updateProfile']);
+        Route::post('technicians/profile/photo', [TechnicianController::class, 'uploadProfilePhoto']);
+        Route::put('technicians/service-prices', [TechnicianController::class, 'updateServicePrices']);
+        
+        // Location & Online Status
+        Route::post('technicians/heartbeat', [TechnicianController::class, 'heartbeat']);
+        Route::patch('technicians/online-status', [TechnicianController::class, 'toggleOnline']);
+        Route::post('technicians/location', [TechnicianController::class, 'updateLocation']);
+    });
+});
+
+// =============================================
+// Public tracking endpoint 
+// =============================================
+Route::get('tracking/{requestId}', [TechnicianController::class, 'getTrackingData']);
