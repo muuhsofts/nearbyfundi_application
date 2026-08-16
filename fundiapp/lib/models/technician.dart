@@ -1,5 +1,30 @@
 // lib/models/technician.dart
+
 import 'package:netsaf_fund_app/models/portfolio.dart';
+
+/// Handles the pivot price data from backend
+class TechnicianServicePrice {
+  final int id;
+  final String name;
+  final double minPrice;
+  final double maxPrice;
+
+  TechnicianServicePrice({
+    required this.id,
+    required this.name,
+    required this.minPrice,
+    required this.maxPrice,
+  });
+
+  factory TechnicianServicePrice.fromJson(Map<String, dynamic> json) {
+    return TechnicianServicePrice(
+      id: json['id'] ?? 0,
+      name: json['name'] ?? '',
+      minPrice: double.tryParse(json['pivot']?['min_price']?.toString() ?? '0') ?? 0.0,
+      maxPrice: double.tryParse(json['pivot']?['max_price']?.toString() ?? '0') ?? 0.0,
+    );
+  }
+}
 
 class Technician {
   final int id;
@@ -7,14 +32,22 @@ class Technician {
   final String? phone;
   final String? profilePhoto;
   final String? nida;
+  final String? idDocumentType;
+  final String? idDocumentImage;
+  final bool verified;
+  final String? verificationStatus;
+  final int registrationStep;
+  final bool registrationCompleted;
   final String? bio;
   final int experience;
   final double rating;
   final double? hourlyRate;
   final String? area;
+  final double? latitude;   // ✅ ADDED
+  final double? longitude;  // ✅ ADDED
   final bool isOnline;
   final List<String> services;
-  final List<TechnicianService> serviceObjects;
+  final List<TechnicianServicePrice> servicePrices;
   final List<PortfolioItem> portfolios;
 
   Technician({
@@ -23,14 +56,22 @@ class Technician {
     this.phone,
     this.profilePhoto,
     this.nida,
+    this.idDocumentType,
+    this.idDocumentImage,
+    this.verified = false,
+    this.verificationStatus,
+    this.registrationStep = 0,
+    this.registrationCompleted = false,
     this.bio,
     this.experience = 0,
     this.rating = 0.0,
     this.hourlyRate,
     this.area,
+    this.latitude,          // ✅ ADDED
+    this.longitude,         // ✅ ADDED
     this.isOnline = false,
     this.services = const [],
-    this.serviceObjects = const [],
+    this.servicePrices = const [],
     this.portfolios = const [],
   });
 
@@ -46,7 +87,9 @@ class Technician {
     }
 
     String? profilePhoto = json['profile_photo'];
-    if (profilePhoto == null && json['user'] != null && json['user']['profile_photo'] != null) {
+    if (profilePhoto == null &&
+        json['user'] != null &&
+        json['user']['profile_photo'] != null) {
       profilePhoto = json['user']['profile_photo'];
     }
 
@@ -67,35 +110,31 @@ class Technician {
       return 0.0;
     }
 
-    List<String> serviceNames = [];
-    List<TechnicianService> serviceObjs = [];
-
-    if (json['services'] != null && json['services'] is List) {
-      final raw = json['services'] as List;
-      for (var item in raw) {
-        if (item is Map<String, dynamic>) {
-          final s = TechnicianService.fromJson(item);
-          serviceObjs.add(s);
-          serviceNames.add(s.name);
-        } else if (item is String) {
-          serviceNames.add(item);
-        }
-      }
-    }
-
-    if (json['service_objects'] != null && json['service_objects'] is List) {
-      serviceObjs = (json['service_objects'] as List)
-          .map((e) => TechnicianService.fromJson(e as Map<String, dynamic>))
-          .toList();
-      serviceNames = serviceObjs.map((s) => s.name).toList();
-    }
-
-    bool parseOnline(dynamic value) {
+    bool parseBool(dynamic value) {
       if (value == null) return false;
       if (value is bool) return value;
       if (value is int) return value == 1;
-      if (value is String) return value.toLowerCase() == 'true' || value == '1';
+      if (value is String) {
+        return value.toLowerCase() == 'true' || value == '1';
+      }
       return false;
+    }
+
+    List<String> serviceNames = [];
+    List<TechnicianServicePrice> servicePrices = [];
+
+    if (json['service_prices'] != null && json['service_prices'] is List) {
+      servicePrices = (json['service_prices'] as List)
+          .map((e) => TechnicianServicePrice.fromJson(e as Map<String, dynamic>))
+          .toList();
+      serviceNames = servicePrices.map((s) => s.name).toList();
+    } else if (json['services'] != null && json['services'] is List) {
+      final raw = json['services'] as List;
+      for (var item in raw) {
+        if (item is String) {
+          serviceNames.add(item);
+        }
+      }
     }
 
     return Technician(
@@ -104,14 +143,25 @@ class Technician {
       phone: phone,
       profilePhoto: profilePhoto,
       nida: nida,
+      idDocumentType: json['id_document_type'],
+      idDocumentImage: json['id_document_image'],
+      verified: parseBool(json['verified']),
+      verificationStatus: json['verification_status'],
+      registrationStep: parseExperience(json['registration_step']),
+      registrationCompleted: parseBool(json['registration_completed']),
       bio: json['bio'],
       experience: parseExperience(json['experience']),
       rating: parseDouble(json['rating']),
-      hourlyRate: json['hourly_rate'] != null ? parseDouble(json['hourly_rate']) : null,
+      hourlyRate: json['hourly_rate'] != null
+          ? parseDouble(json['hourly_rate'])
+          : null,
       area: json['area'],
-      isOnline: parseOnline(json['is_online']),
+      // ✅ ADDED – parse latitude & longitude
+      latitude: json['latitude'] != null ? parseDouble(json['latitude']) : null,
+      longitude: json['longitude'] != null ? parseDouble(json['longitude']) : null,
+      isOnline: parseBool(json['is_online']),
       services: serviceNames,
-      serviceObjects: serviceObjs,
+      servicePrices: servicePrices,
       portfolios: isDetail && json['portfolios'] != null
           ? (json['portfolios'] as List)
           .where((e) => e != null)
@@ -120,14 +170,4 @@ class Technician {
           : [],
     );
   }
-}
-
-class TechnicianService {
-  final int id;
-  final String name;
-  TechnicianService({required this.id, required this.name});
-  factory TechnicianService.fromJson(Map<String, dynamic> json) => TechnicianService(
-    id: json['id'] ?? 0,
-    name: json['name'] ?? '',
-  );
 }

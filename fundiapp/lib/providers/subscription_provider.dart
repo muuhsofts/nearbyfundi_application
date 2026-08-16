@@ -41,7 +41,17 @@ class SubscriptionProvider extends ChangeNotifier {
   Subscription? get currentSubscription => _currentSubscription;
   bool get isLoading => _isLoading;
 
+  /// ✅ FIXED: Always prioritizes the active subscription list over the cached status.
   bool get hasActiveSubscription {
+    // 1. PRIMARY SOURCE OF TRUTH: Check the actual subscription list.
+    try {
+      final activeSub = _subscriptions.firstWhere((s) => s.isActive);
+      return true;
+    } catch (_) {
+      // No active subscription found in the list.
+    }
+
+    // 2. SECONDARY: Fallback to the parsed status/expiry date.
     if (_subscriptionStatus == 'active') {
       if (_expiryDate == null) return true;
       return _expiryDate!.isAfter(DateTime.now());
@@ -201,16 +211,15 @@ class SubscriptionProvider extends ChangeNotifier {
             }
           }
 
+          // ✅ Fallback: Ensure if the list has an active sub, we mark it.
           if (!_hasActiveSubscription) {
             try {
               final activeSub = _subscriptions.firstWhere((s) => s.isActive);
-              if (activeSub.isActive) {
-                _hasActiveSubscription = true;
-                _subscriptionStatus = 'active';
-                _expiryDate = activeSub.expiryDate;
-              }
+              _hasActiveSubscription = true;
+              _subscriptionStatus = 'active';
+              _expiryDate = activeSub.expiryDate;
             } catch (e) {
-              // No active subscription found
+              // No active subscription found.
             }
           }
         } else if (data is List) {
@@ -383,16 +392,14 @@ class SubscriptionProvider extends ChangeNotifier {
   }
 
   // ============================================================
-  // ✅ Add downloaded invoice to list - FIXED
+  // ✅ Add downloaded invoice to list
   // ============================================================
   Future<void> _addDownloadedInvoice(Invoice invoice, String filePath) async {
-    // ✅ Get rate card name from invoice.rateCard
     String rateCardName = 'Subscription';
 
     if (invoice.rateCard != null) {
       rateCardName = invoice.rateCard!.name;
     } else {
-      // Try to get from subscription
       try {
         final sub = _subscriptions.firstWhere(
               (s) => s.invoice?.id == invoice.id,

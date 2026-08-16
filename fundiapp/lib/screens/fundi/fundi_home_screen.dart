@@ -1,3 +1,5 @@
+// lib/screens/fundi/fundi_home_screen.dart
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -33,6 +35,7 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
   int _currentIndex = 0;
   late final List<Widget> _screens;
   Timer? _refreshTimer;
+  bool _isRefreshing = false;
 
   @override
   void initState() {
@@ -78,7 +81,7 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
   }
 
   // ============================================================
-  // SUBSCRIPTION CHECK
+  // SUBSCRIPTION CHECK + AUTO REFRESH
   // ============================================================
   void _checkSubscriptionAndStartTimer() {
     final provider = context.read<SubscriptionProvider>();
@@ -87,26 +90,40 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
 
     final isPending = provider.isPending;
     _refreshTimer?.cancel();
+
+    // Only poll while pending
     if (isPending) {
       _refreshTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
         provider.checkSubscriptionStatus();
         provider.loadMySubscriptions();
-        if (!provider.isPending) {
+        if (!provider.isPending && mounted) {
           timer.cancel();
-          if (mounted) setState(() {});
+          setState(() {}); // unlock dashboard immediately
         }
       });
     }
   }
 
   Future<void> _manualRefresh() async {
+    if (_isRefreshing) return;
+    setState(() => _isRefreshing = true);
+
     final provider = context.read<SubscriptionProvider>();
-    await provider.checkSubscriptionStatus();
-    await provider.loadMySubscriptions();
+    await Future.wait([
+      provider.checkSubscriptionStatus(),
+      provider.loadMySubscriptions(),
+      context.read<TechnicianProvider>().fetchMyProfile(),
+      context.read<RequestProvider>().loadMyRequests(),
+      context.read<NotificationProvider>().loadNotifications(),
+    ]);
+
     if (!provider.isPending) {
       _refreshTimer?.cancel();
     }
-    if (mounted) setState(() {});
+
+    if (mounted) {
+      setState(() => _isRefreshing = false);
+    }
   }
 
   // ============================================================
@@ -141,7 +158,7 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
   }
 
   // ============================================================
-  // NOTIFICATIONS
+  // NOTIFICATIONS BOTTOM SHEET
   // ============================================================
   void _showNotifications(BuildContext context) {
     final provider = context.read<NotificationProvider>();
@@ -224,13 +241,13 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
                           controller: scrollController,
                           itemCount: notificationProvider.notifications.length,
                           itemBuilder: (context, index) {
-                            final notification = notificationProvider
-                                .notifications[index];
+                            final notification =
+                            notificationProvider.notifications[index];
                             return _NotificationTile(
                               notification: notification,
                               onTap: () {
-                                notificationProvider.markAsRead(
-                                    notification['id']);
+                                notificationProvider
+                                    .markAsRead(notification['id']);
                                 Navigator.pop(ctx);
                                 final type = notification['type'] ?? '';
                                 if (type == 'chat_message') {
@@ -288,7 +305,7 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
   }
 
   // ============================================================
-  // LOGOUT - ALWAYS ACCESSIBLE
+  // LOGOUT
   // ============================================================
   Future<void> _logoutWithConfirmation(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
@@ -320,12 +337,14 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
         ),
         title: Row(
           children: [
-            const Icon(Icons.lock_outline, color: Colors.orange, size: 32),
+            const Icon(Icons.lock_outline, color: Colors.orange, size: 28),
             const SizedBox(width: 12),
-            Text(
-              'Subscription Required',
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
+            Flexible(
+              child: Text(
+                'Subscription Required',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ],
@@ -412,13 +431,27 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
     final hasSubscription = subscription.hasActiveSubscription;
     final isPending = subscription.isPending;
 
+    // Profile is ALWAYS accessible
+    final bool isProfileTab = _currentIndex == 4;
+
     Widget body;
-    if (hasSubscription) {
+    if (isProfileTab) {
+      body = _screens[4];
+    } else if (hasSubscription) {
+      // ✅ Active subscription → open dashboard immediately
       body = _screens[_currentIndex];
     } else if (isPending) {
-      body = const _LockedDashboardOverlay(isPending: true);
+      body = _LockedDashboardOverlay(
+        isPending: true,
+        onRefresh: _manualRefresh,
+        isRefreshing: _isRefreshing,
+      );
     } else {
-      body = _buildLockedOverlay(context);
+      body = _LockedDashboardOverlay(
+        isPending: false,
+        onRefresh: _manualRefresh,
+        isRefreshing: _isRefreshing,
+      );
     }
 
     return Scaffold(
@@ -435,6 +468,21 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
         backgroundColor: theme.primaryColor,
         foregroundColor: Colors.white,
         actions: [
+          // Refresh button (always visible)
+          IconButton(
+            icon: _isRefreshing
+                ? const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+                : const Icon(Icons.refresh_rounded, color: Colors.white),
+            tooltip: 'Refresh',
+            onPressed: _isRefreshing ? null : _manualRefresh,
+          ),
           NotificationBellIcon(
             onTap: hasSubscription
                 ? () => _showNotifications(context)
@@ -443,7 +491,9 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
           IconButton(
             icon: Icon(
               Icons.smart_toy_rounded,
-              color: hasSubscription ? Colors.white : Colors.white.withOpacity(0.5),
+              color: hasSubscription
+                  ? Colors.white
+                  : Colors.white.withOpacity(0.5),
               size: 26,
             ),
             onPressed: hasSubscription
@@ -453,18 +503,20 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
                 ? '${l10n.aiAssistant} (${l10n.comingSoon})'
                 : '🔒 Subscription Required',
           ),
-          // Menu button - opens from top right
           PopupMenuButton<String>(
             icon: Icon(
               Icons.more_vert_rounded,
-              color: hasSubscription ? Colors.white : Colors.white.withOpacity(0.5),
+              color: hasSubscription
+                  ? Colors.white
+                  : Colors.white.withOpacity(0.5),
             ),
             offset: const Offset(0, 50),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
             elevation: 8,
-            itemBuilder: (context) => _buildMenuItems(context, hasSubscription),
+            itemBuilder: (context) =>
+                _buildMenuItems(context, hasSubscription),
           ),
         ],
       ),
@@ -488,102 +540,47 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
         child: Consumer<ChatProvider>(
           builder: (context, chatProvider, child) {
             return BottomNavigationBar(
-              currentIndex: hasSubscription ? _currentIndex : 0,
+              currentIndex: _currentIndex,
+              selectedItemColor: theme.primaryColor,
+              unselectedItemColor:
+              isDark ? Colors.grey.shade400 : Colors.grey.shade600,
               onTap: (i) {
-                if (!hasSubscription) {
+                // Only Profile is allowed without subscription
+                if (!hasSubscription && i != 4) {
                   _showSubscriptionRequiredDialog(context);
                   return;
                 }
                 setState(() => _currentIndex = i);
               },
               type: BottomNavigationBarType.fixed,
-              selectedItemColor: hasSubscription ? theme.primaryColor : Colors.grey,
-              unselectedItemColor:
-              isDark ? Colors.grey.shade400 : Colors.grey.shade600,
               backgroundColor: theme.cardColor,
               elevation: 0,
               items: [
                 BottomNavigationBarItem(
-                  icon: Icon(
-                    Icons.home_outlined,
-                    color: hasSubscription ? null : Colors.grey,
-                  ),
-                  activeIcon: Icon(
-                    Icons.home_rounded,
-                    color: hasSubscription ? null : Colors.grey,
-                  ),
+                  icon: const Icon(Icons.home_outlined),
+                  activeIcon: const Icon(Icons.home_rounded),
                   label: hasSubscription ? l10n.home : '🔒 Home',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(
-                    Icons.article_outlined,
-                    color: hasSubscription ? null : Colors.grey,
-                  ),
-                  activeIcon: Icon(
-                    Icons.article_rounded,
-                    color: hasSubscription ? null : Colors.grey,
-                  ),
+                  icon: const Icon(Icons.article_outlined),
+                  activeIcon: const Icon(Icons.article_rounded),
                   label: hasSubscription ? l10n.blog : '🔒 Blog',
                 ),
                 BottomNavigationBarItem(
                   icon: Stack(
                     alignment: Alignment.topRight,
                     children: [
-                      Icon(
-                        Icons.list_alt_outlined,
-                        color: hasSubscription ? null : Colors.grey,
-                      ),
+                      const Icon(Icons.list_alt_outlined),
                       if (hasSubscription && chatProvider.totalUnread > 0)
-                        Container(
-                          padding: const EdgeInsets.all(3),
-                          decoration: const BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
-                          ),
-                          constraints: const BoxConstraints(
-                            minWidth: 14,
-                            minHeight: 14,
-                          ),
-                          child: Text(
-                            chatProvider.totalUnread > 9 ? '9+' : '${chatProvider.totalUnread}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 8,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
+                        _buildBadge(chatProvider.totalUnread),
                     ],
                   ),
                   activeIcon: Stack(
                     alignment: Alignment.topRight,
                     children: [
-                      Icon(
-                        Icons.list_alt_rounded,
-                        color: hasSubscription ? null : Colors.grey,
-                      ),
+                      const Icon(Icons.list_alt_rounded),
                       if (hasSubscription && chatProvider.totalUnread > 0)
-                        Container(
-                          padding: const EdgeInsets.all(3),
-                          decoration: const BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
-                          ),
-                          constraints: const BoxConstraints(
-                            minWidth: 14,
-                            minHeight: 14,
-                          ),
-                          child: Text(
-                            chatProvider.totalUnread > 9 ? '9+' : '${chatProvider.totalUnread}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 8,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
+                        _buildBadge(chatProvider.totalUnread),
                     ],
                   ),
                   label: hasSubscription ? l10n.requests : '🔒 Requests',
@@ -592,75 +589,25 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
                   icon: Stack(
                     alignment: Alignment.topRight,
                     children: [
-                      Icon(
-                        Icons.chat_bubble_outline_rounded,
-                        color: hasSubscription ? null : Colors.grey,
-                      ),
+                      const Icon(Icons.chat_bubble_outline_rounded),
                       if (hasSubscription && chatProvider.totalUnread > 0)
-                        Container(
-                          padding: const EdgeInsets.all(3),
-                          decoration: const BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
-                          ),
-                          constraints: const BoxConstraints(
-                            minWidth: 14,
-                            minHeight: 14,
-                          ),
-                          child: Text(
-                            chatProvider.totalUnread > 9 ? '9+' : '${chatProvider.totalUnread}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 8,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
+                        _buildBadge(chatProvider.totalUnread),
                     ],
                   ),
                   activeIcon: Stack(
                     alignment: Alignment.topRight,
                     children: [
-                      Icon(
-                        Icons.chat_bubble_rounded,
-                        color: hasSubscription ? null : Colors.grey,
-                      ),
+                      const Icon(Icons.chat_bubble_rounded),
                       if (hasSubscription && chatProvider.totalUnread > 0)
-                        Container(
-                          padding: const EdgeInsets.all(3),
-                          decoration: const BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
-                          ),
-                          constraints: const BoxConstraints(
-                            minWidth: 14,
-                            minHeight: 14,
-                          ),
-                          child: Text(
-                            chatProvider.totalUnread > 9 ? '9+' : '${chatProvider.totalUnread}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 8,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
+                        _buildBadge(chatProvider.totalUnread),
                     ],
                   ),
                   label: hasSubscription ? l10n.chat : '🔒 Chat',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(
-                    Icons.person_outline,
-                    color: hasSubscription ? null : Colors.grey,
-                  ),
-                  activeIcon: Icon(
-                    Icons.person_rounded,
-                    color: hasSubscription ? null : Colors.grey,
-                  ),
-                  label: hasSubscription ? l10n.profile : '🔒 Profile',
+                  icon: const Icon(Icons.person_outline),
+                  activeIcon: const Icon(Icons.person_rounded),
+                  label: l10n.profile,
                 ),
               ],
             );
@@ -670,14 +617,34 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
     );
   }
 
+  Widget _buildBadge(int count) {
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: const BoxDecoration(
+        color: Colors.red,
+        shape: BoxShape.circle,
+      ),
+      constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+      child: Text(
+        count > 9 ? '9+' : '$count',
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 8,
+          fontWeight: FontWeight.bold,
+        ),
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
+
   // ============================================================
-  // BUILD MENU ITEMS - LOGOUT ALWAYS UNLOCKED
+  // MENU ITEMS
   // ============================================================
-  List<PopupMenuEntry<String>> _buildMenuItems(BuildContext context, bool hasSubscription) {
+  List<PopupMenuEntry<String>> _buildMenuItems(
+      BuildContext context, bool hasSubscription) {
     final l10n = AppLocalizations.of(context)!;
 
     return [
-      // Settings - Locked without subscription
       _buildPopupMenuItem(
         context,
         key: 'settings',
@@ -692,7 +659,6 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
           }
         },
       ),
-      // Portfolio - Locked without subscription
       _buildPopupMenuItem(
         context,
         key: 'portfolio',
@@ -707,7 +673,7 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
           }
         },
       ),
-      // Subscriptions - Always accessible (view only)
+      // Subscriptions always accessible
       _buildPopupMenuItem(
         context,
         key: 'subscriptions',
@@ -716,7 +682,6 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
         isLocked: false,
         onTap: () => Navigator.pushNamed(context, AppRoutes.subscriptions),
       ),
-      // Downloads - Locked without subscription
       _buildPopupMenuItem(
         context,
         key: 'downloads',
@@ -732,7 +697,6 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
         },
       ),
       const PopupMenuDivider(),
-      // About Us - Locked without subscription
       _buildPopupMenuItem(
         context,
         key: 'about',
@@ -747,7 +711,6 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
           }
         },
       ),
-      // Terms & Conditions - Locked without subscription
       _buildPopupMenuItem(
         context,
         key: 'terms',
@@ -762,7 +725,6 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
           }
         },
       ),
-      // FAQ - Locked without subscription
       _buildPopupMenuItem(
         context,
         key: 'faq',
@@ -777,7 +739,6 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
           }
         },
       ),
-      // Contact Us - Locked without subscription
       _buildPopupMenuItem(
         context,
         key: 'contact',
@@ -793,13 +754,13 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
         },
       ),
       const PopupMenuDivider(),
-      // ✅ LOGOUT - ALWAYS UNLOCKED (No subscription required)
+      // Logout always unlocked
       _buildPopupMenuItem(
         context,
         key: 'logout',
         icon: Icons.logout_rounded,
-        title: l10n.logout,  // Always shows "Logout" without lock icon
-        isLocked: false,     // ✅ Always accessible
+        title: l10n.logout,
+        isLocked: false,
         onTap: () => _logoutWithConfirmation(context),
         isDestructive: true,
       ),
@@ -821,12 +782,14 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
     return PopupMenuItem<String>(
       value: key,
       onTap: onTap,
-      enabled: true, // Always enabled - we handle locking in the onTap
+      enabled: true,
       child: Row(
         children: [
           Icon(
             icon,
-            color: isDestructive ? Colors.red : (isLocked ? Colors.grey : color),
+            color: isDestructive
+                ? Colors.red
+                : (isLocked ? Colors.grey : color),
             size: 22,
           ),
           const SizedBox(width: 12),
@@ -834,8 +797,11 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
             child: Text(
               title,
               style: theme.textTheme.titleMedium?.copyWith(
-                color: isDestructive ? Colors.red : (isLocked ? Colors.grey : null),
-                fontWeight: isDestructive ? FontWeight.w600 : FontWeight.normal,
+                color: isDestructive
+                    ? Colors.red
+                    : (isLocked ? Colors.grey : null),
+                fontWeight:
+                isDestructive ? FontWeight.w600 : FontWeight.normal,
               ),
             ),
           ),
@@ -845,97 +811,10 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
       ),
     );
   }
-
-  // ============================================================
-  // LOCKED OVERLAY
-  // ============================================================
-  Widget _buildLockedOverlay(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Stack(
-      children: [
-        Opacity(
-          opacity: 0.5,
-          child: IgnorePointer(
-            ignoring: true,
-            child: const _HomeDashboardContent(),
-          ),
-        ),
-        Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Card(
-              elevation: 8,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.lock_outline,
-                      size: 64,
-                      color: Colors.grey,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      '🔒 Dashboard Locked',
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey.shade700,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Subscribe to unlock all Fundi features and start managing your services.',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: Colors.grey.shade600,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 24),
-                    ElevatedButton(
-                      onPressed: () {
-                        Navigator.pushNamed(context, AppRoutes.rateCards);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: theme.primaryColor,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 48,
-                          vertical: 16,
-                        ),
-                      ),
-                      child: const Text(
-                        'Subscribe Now',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pushNamed(context, AppRoutes.subscriptions);
-                      },
-                      child: const Text('View My Subscriptions'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
 }
 
 // ================================================================
-// NOTIFICATION TILE WIDGET
+// NOTIFICATION TILE
 // ================================================================
 class _NotificationTile extends StatelessWidget {
   final Map<String, dynamic> notification;
@@ -985,7 +864,6 @@ class _NotificationTile extends StatelessWidget {
           shape: BoxShape.circle,
         ),
       ),
-      isThreeLine: false,
       dense: true,
     );
   }
@@ -1019,13 +897,17 @@ class _NotificationTile extends StatelessWidget {
 }
 
 // ================================================================
-// LOCKED DASHBOARD OVERLAY - FIXED OVERFLOW
+// LOCKED DASHBOARD OVERLAY (with pull-to-refresh + manual refresh)
 // ================================================================
 class _LockedDashboardOverlay extends StatelessWidget {
   final bool isPending;
+  final Future<void> Function() onRefresh;
+  final bool isRefreshing;
 
   const _LockedDashboardOverlay({
     required this.isPending,
+    required this.onRefresh,
+    required this.isRefreshing,
   });
 
   @override
@@ -1034,10 +916,7 @@ class _LockedDashboardOverlay extends StatelessWidget {
     final bottomPadding = MediaQuery.of(context).padding.bottom + 80.0;
 
     return RefreshIndicator(
-      onRefresh: () async {
-        await context.read<SubscriptionProvider>().checkSubscriptionStatus();
-        await context.read<SubscriptionProvider>().loadMySubscriptions();
-      },
+      onRefresh: onRefresh,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.only(
@@ -1052,12 +931,13 @@ class _LockedDashboardOverlay extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               const SizedBox(height: 20),
-              // Icon
               Container(
                 width: 100,
                 height: 100,
                 decoration: BoxDecoration(
-                  color: isPending ? Colors.orange.shade50 : Colors.grey.shade100,
+                  color: isPending
+                      ? Colors.orange.shade50
+                      : Colors.grey.shade100,
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
@@ -1069,15 +949,18 @@ class _LockedDashboardOverlay extends StatelessWidget {
                   ],
                 ),
                 child: Icon(
-                  isPending ? Icons.hourglass_top_rounded : Icons.lock_outline,
+                  isPending
+                      ? Icons.hourglass_top_rounded
+                      : Icons.lock_outline,
                   size: 50,
                   color: isPending ? Colors.orange : Colors.grey.shade600,
                 ),
               ),
               const SizedBox(height: 24),
-              // Title
               Text(
-                isPending ? '⏳ Subscription Pending' : '🔒 Dashboard Locked',
+                isPending
+                    ? '⏳ Subscription Pending'
+                    : '🔒 Dashboard Locked',
                 style: theme.textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: isPending ? Colors.orange : Colors.grey.shade700,
@@ -1085,7 +968,6 @@ class _LockedDashboardOverlay extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 12),
-              // Description
               Text(
                 isPending
                     ? 'Your subscription is pending approval.\nPlease wait for admin confirmation.'
@@ -1096,7 +978,7 @@ class _LockedDashboardOverlay extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 20),
-              // Contact Info (if pending)
+
               if (isPending) ...[
                 Container(
                   padding: const EdgeInsets.all(16),
@@ -1109,10 +991,7 @@ class _LockedDashboardOverlay extends StatelessWidget {
                     children: [
                       const Text(
                         'If approval takes more than 3-5 minutes,\nplease contact support:',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey,
-                        ),
+                        style: TextStyle(fontSize: 13, color: Colors.grey),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 8),
@@ -1124,7 +1003,7 @@ class _LockedDashboardOverlay extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
               ],
-              // Features (if not pending)
+
               if (!isPending) ...[
                 Container(
                   padding: const EdgeInsets.all(16),
@@ -1136,36 +1015,37 @@ class _LockedDashboardOverlay extends StatelessWidget {
                   child: Column(
                     children: [
                       _buildFeatureItem(
-                          Icons.verified_rounded,
-                          'Verified Technician Profile'),
+                          Icons.verified_rounded, 'Verified Technician Profile'),
                       const SizedBox(height: 8),
                       _buildFeatureItem(
-                          Icons.list_alt_rounded,
-                          'Manage Service Requests'),
+                          Icons.list_alt_rounded, 'Manage Service Requests'),
                       const SizedBox(height: 8),
                       _buildFeatureItem(
-                          Icons.chat_rounded,
-                          'Chat with Customers'),
+                          Icons.chat_rounded, 'Chat with Customers'),
                       const SizedBox(height: 8),
                       _buildFeatureItem(
-                          Icons.photo_library_rounded,
-                          'Showcase Your Portfolio'),
+                          Icons.photo_library_rounded, 'Showcase Your Portfolio'),
                     ],
                   ),
                 ),
                 const SizedBox(height: 20),
               ],
-              // Action Button
+
+              // Main action button
               ElevatedButton(
-                onPressed: () {
+                onPressed: isRefreshing
+                    ? null
+                    : () {
                   if (isPending) {
-                    Navigator.pushNamed(context, AppRoutes.subscriptions);
+                    Navigator.pushNamed(
+                        context, AppRoutes.subscriptions);
                   } else {
                     Navigator.pushNamed(context, AppRoutes.rateCards);
                   }
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: isPending ? Colors.orange : theme.primaryColor,
+                  backgroundColor:
+                  isPending ? Colors.orange : theme.primaryColor,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -1184,8 +1064,33 @@ class _LockedDashboardOverlay extends StatelessWidget {
                   ),
                 ),
               ),
+
+              const SizedBox(height: 12),
+
+              // Manual refresh button
+              OutlinedButton.icon(
+                onPressed: isRefreshing ? null : onRefresh,
+                icon: isRefreshing
+                    ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+                    : const Icon(Icons.refresh_rounded, size: 20),
+                label: Text(isRefreshing ? 'Refreshing...' : 'Refresh Status'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+
               if (!isPending) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 TextButton(
                   onPressed: () {
                     Navigator.pushNamed(context, AppRoutes.subscriptions);
@@ -1247,10 +1152,7 @@ class _LockedDashboardOverlay extends StatelessWidget {
         Expanded(
           child: Text(
             label,
-            style: const TextStyle(
-              fontSize: 14,
-              color: Colors.grey,
-            ),
+            style: const TextStyle(fontSize: 14, color: Colors.grey),
           ),
         ),
       ],
@@ -1259,7 +1161,7 @@ class _LockedDashboardOverlay extends StatelessWidget {
 }
 
 // ================================================================
-// HOME DASHBOARD CONTENT - REDESIGNED TO FIX OVERFLOW
+// HOME DASHBOARD CONTENT
 // ================================================================
 class _HomeDashboardContent extends StatelessWidget {
   const _HomeDashboardContent();
@@ -1273,17 +1175,21 @@ class _HomeDashboardContent extends StatelessWidget {
     final tech = context.watch<TechnicianProvider>().technician;
     final online = tech?.isOnline ?? false;
     final requests = context.watch<RequestProvider>().requests;
-    final pendingRequests = requests.where((r) => r.status == 'pending').length;
-    final completedRequests = requests.where((r) => r.status == 'completed')
-        .length;
+    final pendingRequests =
+        requests.where((r) => r.status == 'pending').length;
+    final completedRequests =
+        requests.where((r) => r.status == 'completed').length;
 
     final screenWidth = MediaQuery.of(context).size.width;
     final isTablet = screenWidth >= 600;
     final isLargeTablet = screenWidth >= 900;
 
     int gridColumns = 2;
-    if (isLargeTablet) gridColumns = 4;
-    else if (isTablet) gridColumns = 3;
+    if (isLargeTablet) {
+      gridColumns = 4;
+    } else if (isTablet) {
+      gridColumns = 3;
+    }
 
     final double padding = isTablet ? 24.0 : 16.0;
     final double cardPadding = isTablet ? 24.0 : 16.0;
@@ -1293,245 +1199,239 @@ class _HomeDashboardContent extends StatelessWidget {
       bottom: true,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          // Calculate available height
           final bottomPadding = MediaQuery.of(context).padding.bottom + 80.0;
-          final availableHeight = constraints.maxHeight - bottomPadding;
 
-          return SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: EdgeInsets.only(
-              left: padding,
-              right: padding,
-              top: padding,
-              bottom: bottomPadding,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // User Profile Card
-                Container(
-                  padding: EdgeInsets.all(cardPadding),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [theme.primaryColor,
-                        theme.primaryColorDark ?? theme.primaryColor],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: theme.primaryColor.withOpacity(0.3),
-                        blurRadius: 20,
-                        offset: const Offset(0, 8),
+          return RefreshIndicator(
+            onRefresh: () async {
+              await context.read<RequestProvider>().loadMyRequests();
+              await context.read<TechnicianProvider>().fetchMyProfile();
+              await context
+                  .read<SubscriptionProvider>()
+                  .checkSubscriptionStatus();
+            },
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.only(
+                left: padding,
+                right: padding,
+                top: padding,
+                bottom: bottomPadding,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // User Profile Card
+                  Container(
+                    padding: EdgeInsets.all(cardPadding),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          theme.primaryColor,
+                          theme.primaryColorDark ?? theme.primaryColor
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: isTablet ? 36.0 : 30.0,
-                        backgroundColor: Colors.white,
-                        child: Text(
-                          user?.name.isNotEmpty == true
-                              ? user!.name[0].toUpperCase()
-                              : 'F',
-                          style: TextStyle(
-                            color: theme.primaryColor,
-                            fontSize: isTablet ? 28.0 : 24.0,
-                            fontWeight: FontWeight.bold,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: theme.primaryColor.withOpacity(0.3),
+                          blurRadius: 20,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: isTablet ? 36.0 : 30.0,
+                          backgroundColor: Colors.white,
+                          child: Text(
+                            user?.name.isNotEmpty == true
+                                ? user!.name[0].toUpperCase()
+                                : 'F',
+                            style: TextStyle(
+                              color: theme.primaryColor,
+                              fontSize: isTablet ? 28.0 : 24.0,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${l10n.hello}, ${user?.name ?? 'Fundi'}! 👋',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${l10n.hello}, ${user?.name ?? 'Fundi'}! 👋',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                if (online) ...[
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 10.0, vertical: 2.0),
-                                    decoration: BoxDecoration(
-                                      color: Colors.green,
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Icon(Icons.wifi_rounded,
-                                            color: Colors.white, size: 14.0),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          l10n.online,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 12.0,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 4.0, vertical: 1.0),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white.withOpacity(0.3),
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          child: const Text(
-                                            'Auto',
-                                            style: TextStyle(
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  if (online) ...[
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10.0, vertical: 2.0),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green,
+                                        borderRadius:
+                                        BorderRadius.circular(12),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.wifi_rounded,
                                               color: Colors.white,
-                                              fontSize: 8.0,
-                                              fontWeight: FontWeight.w700,
+                                              size: 14.0),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            l10n.online,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 12.0,
+                                              fontWeight: FontWeight.w500,
                                             ),
                                           ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                ],
-                                if (pendingRequests > 0)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 10.0, vertical: 2.0),
-                                    decoration: BoxDecoration(
-                                      color: Colors.orange,
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Text(
-                                      '$pendingRequests ${l10n.pending}',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 12.0,
-                                        fontWeight: FontWeight.w500,
+                                        ],
                                       ),
                                     ),
-                                  ),
-                              ],
-                            ),
-                          ],
+                                    const SizedBox(width: 8),
+                                  ],
+                                  if (pendingRequests > 0)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10.0, vertical: 2.0),
+                                      decoration: BoxDecoration(
+                                        color: Colors.orange,
+                                        borderRadius:
+                                        BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        '$pendingRequests ${l10n.pending}',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 12.0,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(
+                          Icons.check_circle,
+                          color: Colors.white,
+                          size: 28.0,
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: gap + 4),
+
+                  // Stats Row
+                  Row(
+                    children: [
+                      Flexible(
+                        child: _buildStatCard(
+                          context,
+                          icon: Icons.list_alt_rounded,
+                          label: l10n.totalRequests,
+                          value: requests.length.toString(),
+                          color: Colors.blue,
+                          isTablet: isTablet,
+                          onTap: () => _navigateToTab(context, 2),
                         ),
                       ),
-                      const Icon(
-                        Icons.check_circle,
-                        color: Colors.white,
-                        size: 28.0,
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: _buildStatCard(
+                          context,
+                          icon: Icons.pending_rounded,
+                          label: l10n.pending,
+                          value: pendingRequests.toString(),
+                          color: Colors.orange,
+                          isTablet: isTablet,
+                          onTap: () => _navigateToTab(context, 2),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: _buildStatCard(
+                          context,
+                          icon: Icons.check_circle_rounded,
+                          label: l10n.completed,
+                          value: completedRequests.toString(),
+                          color: Colors.green,
+                          isTablet: isTablet,
+                          onTap: () => _navigateToTab(context, 2),
+                        ),
                       ),
                     ],
                   ),
-                ),
-                SizedBox(height: gap + 4),
+                  SizedBox(height: gap + 4),
 
-                // Stats Row - Using Flexible to prevent overflow
-                Row(
-                  children: [
-                    Flexible(
-                      child: _buildStatCard(
+                  // Quick Actions
+                  Text(
+                    l10n.quickActions,
+                    style: theme.textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 12),
+
+                  GridView.count(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisCount: gridColumns,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: isTablet ? 1.2 : 1.1,
+                    children: [
+                      _buildActionCard(
+                        context,
+                        icon: Icons.article_rounded,
+                        label: l10n.blog,
+                        color: Colors.blue.shade400,
+                        onTap: () => _navigateToTab(context, 1),
+                        isTablet: isTablet,
+                      ),
+                      _buildActionCard(
                         context,
                         icon: Icons.list_alt_rounded,
-                        label: l10n.totalRequests,
-                        value: requests.length.toString(),
-                        color: Colors.blue,
-                        isTablet: isTablet,
+                        label: l10n.requests,
+                        color: Colors.orange.shade400,
                         onTap: () => _navigateToTab(context, 2),
+                        isTablet: isTablet,
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: _buildStatCard(
+                      _buildActionCard(
                         context,
-                        icon: Icons.pending_rounded,
-                        label: l10n.pending,
-                        value: pendingRequests.toString(),
-                        color: Colors.orange,
+                        icon: Icons.chat_bubble_outline_rounded,
+                        label: l10n.chat,
+                        color: Colors.green.shade400,
+                        onTap: () => _navigateToTab(context, 3),
                         isTablet: isTablet,
-                        onTap: () => _navigateToTab(context, 2),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: _buildStatCard(
+                      _buildActionCard(
                         context,
-                        icon: Icons.check_circle_rounded,
-                        label: l10n.completed,
-                        value: completedRequests.toString(),
-                        color: Colors.green,
+                        icon: Icons.photo_library_rounded,
+                        label: l10n.portfolio,
+                        color: Colors.purple.shade400,
+                        onTap: () => Navigator.pushNamed(
+                            context, AppRoutes.portfolio),
                         isTablet: isTablet,
-                        onTap: () => _navigateToTab(context, 2),
                       ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: gap + 4),
-
-                // Quick Actions Title
-                Text(
-                  l10n.quickActions,
-                  style: theme.textTheme.titleLarge,
-                ),
-                const SizedBox(height: 12),
-
-                // Quick Action Cards - Using AspectRatio for consistent sizing
-                GridView.count(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisCount: gridColumns,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: isTablet ? 1.2 : 1.1,
-                  children: [
-                    _buildActionCard(
-                      context,
-                      icon: Icons.article_rounded,
-                      label: l10n.blog,
-                      color: Colors.blue.shade400,
-                      onTap: () => _navigateToTab(context, 1),
-                      isTablet: isTablet,
-                    ),
-                    _buildActionCard(
-                      context,
-                      icon: Icons.list_alt_rounded,
-                      label: l10n.requests,
-                      color: Colors.orange.shade400,
-                      onTap: () => _navigateToTab(context, 2),
-                      isTablet: isTablet,
-                    ),
-                    _buildActionCard(
-                      context,
-                      icon: Icons.chat_bubble_outline_rounded,
-                      label: l10n.chat,
-                      color: Colors.green.shade400,
-                      onTap: () => _navigateToTab(context, 3),
-                      isTablet: isTablet,
-                    ),
-                    _buildActionCard(
-                      context,
-                      icon: Icons.photo_library_rounded,
-                      label: l10n.portfolio,
-                      color: Colors.purple.shade400,
-                      onTap: () => Navigator.pushNamed(context, AppRoutes.portfolio),
-                      isTablet: isTablet,
-                    ),
-                  ],
-                ),
-                // Extra bottom space for safety
-                const SizedBox(height: 16),
-              ],
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ),
             ),
           );
         },
@@ -1540,7 +1440,8 @@ class _HomeDashboardContent extends StatelessWidget {
   }
 
   void _navigateToTab(BuildContext context, int index) {
-    final homeState = context.findAncestorStateOfType<_FundiHomeScreenState>();
+    final homeState =
+    context.findAncestorStateOfType<_FundiHomeScreenState>();
     homeState?._navigateToTab(index);
   }
 
@@ -1642,11 +1543,7 @@ class _HomeDashboardContent extends StatelessWidget {
                 color: color.withOpacity(0.15),
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                icon,
-                size: iconSize,
-                color: color,
-              ),
+              child: Icon(icon, size: iconSize, color: color),
             ),
             const SizedBox(height: 8),
             Text(

@@ -156,7 +156,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get resetPasswordButton => 'Reset Password';
 
   @override
-  String get myProfile => 'My Profile';
+  String get myProfile => ' Profile';
 
   @override
   String get editProfile => 'Edit Profile';
@@ -264,7 +264,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get completed => 'Completed';
 
   @override
-  String get myPosts => 'My Posts';
+  String get myPosts => ' Posts';
 
   @override
   String get noPosts => 'No posts yet.';
@@ -884,4 +884,25 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get openPdf => 'Open PDF';
+
+  @override
+  String get privacyPolicy => 'Privacy Policy';
+
+  @override
+  String get tapToChangePhoto => 'Tap camera to change photo';
+
+  @override
+  String get nidaNumber => 'NIDA Number';
+
+  @override
+  String get typeArea => 'Type area';
+
+  @override
+  String get pickOnMap => 'Pick on map';
+
+  @override
+  String get typeAreaOrPickOnMap => 'Type area or pick on map';
+
+  @override
+  String get oops => 'Oops!';
 }

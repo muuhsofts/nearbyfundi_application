@@ -1,12 +1,14 @@
-package com.example.fundiapp;
+package com.netsaf.fundapp;
 
 import android.content.ComponentName;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.os.Bundle;
+import android.view.WindowManager;
 import androidx.annotation.NonNull;
 import io.flutter.embedding.android.FlutterActivity;
 import io.flutter.embedding.engine.FlutterEngine;
@@ -14,14 +16,22 @@ import io.flutter.plugin.common.MethodChannel;
 
 public class MainActivity extends FlutterActivity {
     private static final String BADGE_CHANNEL = "com.fundiapp/badge";
+    private static final String SECURITY_CHANNEL = "com.netsaf.security";
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        enableSecureScreen();
+    }
 
     @Override
     public void configureFlutterEngine(@NonNull FlutterEngine flutterEngine) {
         super.configureFlutterEngine(flutterEngine);
 
+        // Badge Channel
         new MethodChannel(flutterEngine.getDartExecutor().getBinaryMessenger(), BADGE_CHANNEL)
                 .setMethodCallHandler((call, result) -> {
-                    if (call.method.equals("setBadgeCount")) {
+                    if ("setBadgeCount".equals(call.method)) {
                         Integer count = call.argument("count");
                         if (count == null) {
                             result.error("INVALID_ARGUMENT", "count is required", null);
@@ -33,7 +43,7 @@ public class MainActivity extends FlutterActivity {
                         } catch (Exception e) {
                             result.error("BADGE_ERROR", e.getMessage(), null);
                         }
-                    } else if (call.method.equals("removeBadge")) {
+                    } else if ("removeBadge".equals(call.method)) {
                         try {
                             setBadgeCount(0);
                             result.success(true);
@@ -44,15 +54,58 @@ public class MainActivity extends FlutterActivity {
                         result.notImplemented();
                     }
                 });
+
+        // Security Channel (Screenshot protection)
+        new MethodChannel(flutterEngine.getDartExecutor().getBinaryMessenger(), SECURITY_CHANNEL)
+                .setMethodCallHandler((call, result) -> {
+                    switch (call.method) {
+                        case "enableSecureScreen":
+                            enableSecureScreen();
+                            result.success(true);
+                            break;
+                        case "disableSecureScreen":
+                            disableSecureScreen();
+                            result.success(true);
+                            break;
+                        case "isSecureScreenEnabled":
+                            result.success(isSecureScreenEnabled());
+                            break;
+                        default:
+                            result.notImplemented();
+                            break;
+                    }
+                });
     }
 
-    /**
-     * Applies the badge count using the badge protocol that matches the
-     * device's current home-screen launcher. A single broadcast action does
-     * NOT work across OEMs — Samsung, Sony, HTC, Huawei, Nova/Apex, etc. each
-     * expect a different call. This detects the launcher and routes to the
-     * right one, falling back to the generic broadcast for anything unknown.
-     */
+    // ============================================================
+    // SECURITY METHODS
+    // ============================================================
+
+    private void enableSecureScreen() {
+        runOnUiThread(() -> getWindow().setFlags(
+                WindowManager.LayoutParams.FLAG_SECURE,
+                WindowManager.LayoutParams.FLAG_SECURE
+        ));
+    }
+
+    private void disableSecureScreen() {
+        runOnUiThread(() -> getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE));
+    }
+
+    private boolean isSecureScreenEnabled() {
+        return (getWindow().getAttributes().flags & WindowManager.LayoutParams.FLAG_SECURE) != 0;
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        enableSecureScreen();
+    }
+
+    // ============================================================
+    // BADGE METHODS
+    // ============================================================
+
     private void setBadgeCount(int count) {
         String launcherPackage = getDefaultLauncherPackage();
         if (launcherPackage == null) {
@@ -71,18 +124,16 @@ public class MainActivity extends FlutterActivity {
                 setSonyBadge(count);
             } else if (pkg.contains("huawei")) {
                 setHuaweiBadge(count);
-            } else if (pkg.contains("com.anddoes.launcher")) { // Apex
+            } else if (pkg.contains("com.anddoes.launcher")) {
                 setApexBadge(count);
             } else if (pkg.contains("teslacoilsw") || pkg.contains("nova")) {
                 setNovaBadge(count);
             } else if (pkg.contains("solidlauncher")) {
                 setSolidBadge(count);
             } else {
-                // LG, stock AOSP, and most others respond to this action.
                 sendGenericBroadcast(count);
             }
         } catch (Exception e) {
-            // Never crash the app over a badge — just fall back silently.
             sendGenericBroadcast(count);
         }
     }
@@ -91,8 +142,8 @@ public class MainActivity extends FlutterActivity {
         Intent intent = new Intent(Intent.ACTION_MAIN);
         intent.addCategory(Intent.CATEGORY_HOME);
         PackageManager pm = getPackageManager();
-        android.content.pm.ResolveInfo resolveInfo = pm.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY);
-        return resolveInfo != null && resolveInfo.activityInfo != null
+        ResolveInfo resolveInfo = pm.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY);
+        return (resolveInfo != null && resolveInfo.activityInfo != null)
                 ? resolveInfo.activityInfo.packageName
                 : null;
     }
@@ -112,13 +163,8 @@ public class MainActivity extends FlutterActivity {
         String launcherClassName = getLauncherClassName();
         if (launcherClassName == null) return;
 
-        Intent intent = new Intent("android.intent.action.BADGE_COUNT_UPDATE");
-        intent.putExtra("badge_count", count);
-        intent.putExtra("badge_count_package_name", getPackageName());
-        intent.putExtra("badge_count_class_name", launcherClassName);
-        getApplicationContext().sendBroadcast(intent);
+        sendGenericBroadcast(count);
 
-        // Newer Samsung launchers also read from this ContentProvider.
         try {
             ContentValues values = new ContentValues();
             values.put("class", launcherClassName);
@@ -130,9 +176,7 @@ public class MainActivity extends FlutterActivity {
                 values.put("_id", getPackageName());
                 resolver.insert(uri, values);
             }
-        } catch (Exception ignored) {
-            // ContentProvider not present on this Samsung build — the broadcast above still applies.
-        }
+        } catch (Exception ignored) {}
     }
 
     private void setHtcBadge(int count) {
@@ -169,12 +213,10 @@ public class MainActivity extends FlutterActivity {
             getContentResolver().call(
                     Uri.parse("content://com.huawei.android.launcher.settings/badge/"),
                     "change_badge",
-                    null,
+                    "",
                     bundle
             );
-        } catch (Exception ignored) {
-            // Not all Huawei/EMUI builds expose this provider.
-        }
+        } catch (Exception ignored) {}
     }
 
     private void setApexBadge(int count) {

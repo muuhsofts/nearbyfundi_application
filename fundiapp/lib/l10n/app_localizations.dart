@@ -392,7 +392,7 @@ abstract class AppLocalizations {
   /// No description provided for @myProfile.
   ///
   /// In en, this message translates to:
-  /// **'My Profile'**
+  /// **' Profile'**
   String get myProfile;
 
   /// No description provided for @editProfile.
@@ -608,7 +608,7 @@ abstract class AppLocalizations {
   /// No description provided for @myPosts.
   ///
   /// In en, this message translates to:
-  /// **'My Posts'**
+  /// **' Posts'**
   String get myPosts;
 
   /// No description provided for @noPosts.
@@ -1804,6 +1804,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Open PDF'**
   String get openPdf;
+
+  /// No description provided for @privacyPolicy.
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy Policy'**
+  String get privacyPolicy;
+
+  /// No description provided for @tapToChangePhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap camera to change photo'**
+  String get tapToChangePhoto;
+
+  /// No description provided for @nidaNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'NIDA Number'**
+  String get nidaNumber;
+
+  /// No description provided for @typeArea.
+  ///
+  /// In en, this message translates to:
+  /// **'Type area'**
+  String get typeArea;
+
+  /// No description provided for @pickOnMap.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick on map'**
+  String get pickOnMap;
+
+  /// No description provided for @typeAreaOrPickOnMap.
+  ///
+  /// In en, this message translates to:
+  /// **'Type area or pick on map'**
+  String get typeAreaOrPickOnMap;
+
+  /// No description provided for @oops.
+  ///
+  /// In en, this message translates to:
+  /// **'Oops!'**
+  String get oops;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

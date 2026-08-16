@@ -9,16 +9,6 @@ class Assets {
   static const $AssetsImagesGen images = $AssetsImagesGen();
 }
 
-class $AssetsImagesGen {
-  const $AssetsImagesGen();
-
-  final AssetGenImage backimg =
-      const AssetGenImage('assets/images/backimg.jpg');
-  final AssetGenImage home = const AssetGenImage('assets/images/home.jpg');
-  final AssetGenImage nearbyfundiImage =
-      const AssetGenImage('assets/images/nearbyfundi_image.jpg');
-}
-
 class $AssetsIconsGen {
   const $AssetsIconsGen();
 
@@ -30,6 +20,16 @@ class $AssetsIconsGen {
   final AssetGenImage nearbylogo =
       const AssetGenImage('assets/icons/nearbylogo.png');
   final AssetGenImage netsaf = const AssetGenImage('assets/icons/netsaf.png');
+}
+
+class $AssetsImagesGen {
+  const $AssetsImagesGen();
+
+  final AssetGenImage backimg =
+      const AssetGenImage('assets/images/backimg.jpg');
+  final AssetGenImage home = const AssetGenImage('assets/images/home.jpg');
+  final AssetGenImage nearbyfundiImage =
+      const AssetGenImage('assets/images/nearbyfundi_image.jpg');
 }
 
 class AssetGenImage {

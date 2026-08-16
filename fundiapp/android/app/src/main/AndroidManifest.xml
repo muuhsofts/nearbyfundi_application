@@ -1,4 +1,6 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    package="com.netsaf.fundapp">
 
     <!-- ============================================= -->
     <!-- NETWORK & INTERNET                            -->
@@ -32,7 +34,7 @@
     <!-- ============================================= -->
     <!-- STORAGE (Images, Files, Audio, Video)         -->
     <!-- ============================================= -->
-    <!-- For Android 12 and below (API <= 32) -->
+    <!-- Android 12 and below (API <= 32) -->
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
@@ -40,7 +42,7 @@
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="29" />
 
-    <!-- For Android 13+ (API 33+) -->
+    <!-- Android 13+ (API 33+) -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
@@ -60,7 +62,9 @@
         android:icon="@mipmap/ic_launcher"
         android:requestLegacyExternalStorage="true"
         android:usesCleartextTraffic="true"
-        android:hardwareAccelerated="true">
+        android:hardwareAccelerated="true"
+        android:allowBackup="true"
+        android:supportsRtl="true">
 
         <activity
             android:name=".MainActivity"
@@ -70,8 +74,11 @@
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="adjustResize"
+            android:excludeFromRecents="false">
 
+            <!-- Specifies an Android theme to apply to this Activity as soon as
+                 the Android process has started -->
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme" />
@@ -79,20 +86,6 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-
-            <!-- Deep linking & YouTube URL handling -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="www.youtube.com" />
-                <data android:scheme="https" android:host="youtu.be" />
-                <data android:scheme="https" android:host="m.youtube.com" />
-                <data android:scheme="http" android:host="www.youtube.com" />
-                <data android:scheme="http" android:host="youtu.be" />
-                <data android:scheme="http" android:host="m.youtube.com" />
-                <data android:scheme="vnd.youtube" />
             </intent-filter>
         </activity>
 
@@ -114,7 +107,7 @@
     <!-- PACKAGE VISIBILITY QUERIES (Android 11+ / API 30+) -->
     <!-- ============================================= -->
     <queries>
-        <!-- Custom URLs & Browser Launching -->
+        <!-- Custom Web Browsing URLs (url_launcher) -->
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="https" />
@@ -129,29 +122,16 @@
             <action android:name="android.intent.action.DIAL" />
             <data android:scheme="tel" />
         </intent>
+
         <intent>
             <action android:name="android.intent.action.SENDTO" />
             <data android:scheme="smsto" />
         </intent>
 
-        <!-- File, Image, Video & Audio Pickers -->
+        <!-- Image, Video, Audio & File Pickers -->
         <intent>
             <action android:name="android.intent.action.GET_CONTENT" />
-            <data android:mimeType="image/*" />
-        </intent>
-        <intent>
-            <action android:name="android.intent.action.GET_CONTENT" />
-            <data android:mimeType="video/*" />
-        </intent>
-        <intent>
-            <action android:name="android.intent.action.GET_CONTENT" />
-            <data android:mimeType="audio/*" />
-        </intent>
-
-        <!-- Dedicated YouTube Intent -->
-        <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <data android:scheme="https" android:host="www.youtube.com" />
+            <data android:mimeType="*/*" />
         </intent>
     </queries>
 

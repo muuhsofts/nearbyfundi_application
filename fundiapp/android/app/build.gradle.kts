@@ -1,5 +1,6 @@
 import java.util.Properties
 import java.io.FileInputStream
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 val keystorePropertiesFile = rootProject.file("key.properties")
 val keystoreProperties = Properties()
@@ -9,11 +10,12 @@ if (keystorePropertiesFile.exists()) {
 
 plugins {
     id("com.android.application")
+    id("kotlin-android")
     id("dev.flutter.flutter-gradle-plugin")
 }
 
 android {
-    namespace = "com.example.fundiapp"
+    namespace = "com.netsaf.fundapp"
     compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
@@ -24,7 +26,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.fundiapp"
+        applicationId = "com.netsaf.fundapp"
         minSdk = flutter.minSdkVersion
         targetSdk = 36
         versionCode = flutter.versionCode
@@ -36,14 +38,23 @@ android {
         create("release") {
             keyAlias = keystoreProperties["keyAlias"] as String?
             keyPassword = keystoreProperties["keyPassword"] as String?
-            storeFile = keystoreProperties["storeFile"]?.let { rootProject.file(it) }
+            storeFile = keystoreProperties["storeFile"]?.let { rootProject.file(it as String) }
             storePassword = keystoreProperties["storePassword"] as String?
         }
     }
 
     buildTypes {
-        release {
-            signingConfig = signingConfigs.getByName("release")
+        getByName("debug") {
+            isMinifyEnabled = false
+            isShrinkResources = false
+        }
+
+        getByName("release") {
+            signingConfig = if (keystorePropertiesFile.exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
 
             isMinifyEnabled = true
             isShrinkResources = true
@@ -55,9 +66,10 @@ android {
     }
 }
 
+// Modern Kotlin Compiler Options syntax replacing 'kotlinOptions'
 kotlin {
     compilerOptions {
-        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+        jvmTarget.set(JvmTarget.JVM_17)
     }
 }
 

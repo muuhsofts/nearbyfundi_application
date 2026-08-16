@@ -52,7 +52,7 @@
   "newPassword": "Nenosiri Jipya",
   "resetPasswordButton": "Weka upya Nenosiri",
 
-  "myProfile": "Profaili Yangu",
+  "myProfile": "Profaili ",
   "editProfile": "Hariri Profaili",
   "profileDetails": "Maelezo ya Profaili",
   "updateInfo": "Sasisha Taarifa Zako",
@@ -91,7 +91,7 @@
   "pending": "Inasubiri",
   "completed": "Imekamilika",
 
-  "myPosts": "Machapisho Yangu",
+  "myPosts": "Machapisho ",
   "noPosts": "Bado hakuna machapisho.",
   "createPost": "Unda chapisho lako la kwanza",
   "createPostTitle": "Unda Chapisho",
@@ -303,5 +303,13 @@
   "status": "Hali",
   "download": "Pakua",
   "share": "Shiriki",
-  "openPdf": "Fungua PDF"
+  "openPdf": "Fungua PDF",
+
+    "privacyPolicy": "Sera ya Faragha",
+    "tapToChangePhoto": "Gonga kamera kubadilisha picha",
+    "nidaNumber": "Namba ya NIDA",
+    "typeArea": "Andika eneo",
+    "pickOnMap": "Chagua kwenye ramani",
+    "typeAreaOrPickOnMap": "Andika eneo au chagua kwenye ramani",
+    "oops": "Samahani!"
 }

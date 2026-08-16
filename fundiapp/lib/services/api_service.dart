@@ -1,6 +1,5 @@
 // lib/services/api_service.dart
 
-import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -63,7 +62,7 @@ class ApiService {
   }
 
   // ============================================================
-  //  AUTH ENDPOINTS
+  // AUTH ENDPOINTS
   // ============================================================
 
   Future<ApiResponse> register(Map<String, dynamic> data) =>
@@ -76,7 +75,7 @@ class ApiService {
 
       data.forEach((key, value) {
         if (key == 'profile_photo') {
-          // skip – added as file below
+          // skip
         } else if (key == 'service_ids' && value is List) {
           for (var id in value) {
             formData.fields.add(MapEntry('service_ids[]', id.toString()));
@@ -145,59 +144,138 @@ class ApiService {
 
   Future<ApiResponse> deleteAccount() => _delete('/v1/auth/account');
 
+  Future<ApiResponse> resendOtp(String email) =>
+      _post('/v1/auth/resend-otp', data: {'email': email});
+
   // ============================================================
-  //  SERVICES
+  // SERVICES
   // ============================================================
 
   Future<ApiResponse> getServices() => _get('/v1/services');
 
   // ============================================================
-  //  FUNDI – PROFILE & SERVICES
+  // FUNDI – PROFILE & SERVICES (V19 – no subscription required)
   // ============================================================
 
   Future<ApiResponse> getMyTechnicianProfile() =>
-      _get('/v2/technicians/profile');
+      _get('/v19/technicians/profile');
 
   Future<ApiResponse> updateTechnicianProfile(Map<String, dynamic> data) =>
-      _put('/v2/technicians/profile', data: data);
+      _put('/v19/technicians/profile', data: data);
 
-  Future<ApiResponse> updateTechnicianServices(List<int> serviceIds) =>
-      _post('/v2/technicians/services', data: {'service_ids': serviceIds});
-
-  Future<ApiResponse> toggleOnlineStatus(bool online) =>
-      _patch('/v2/technicians/online-status', data: {'is_online': online});
-
-  // ============================================================
-  //  FUNDI – HEARTBEAT & LOCATION
-  // ============================================================
-
-  Future<ApiResponse> sendHeartbeat() => _post('/v2/technicians/heartbeat');
-
-  Future<ApiResponse> updateLocation({
-    required double latitude,
-    required double longitude,
-  }) =>
-      _post('/v2/technicians/location', data: {
-        'latitude': latitude,
-        'longitude': longitude,
-      });
-
-  Future<ApiResponse> resendOtp(String email) =>
-      _post('/v1/auth/resend-otp', data: {'email': email});
-
-  // ============================================================
-  //  FUNDI – PROFILE PHOTO
-  // ============================================================
+  Future<ApiResponse> updateServicePrices(List<Map<String, dynamic>> prices) =>
+      _put('/v19/technicians/service-prices', data: {'prices': prices});
 
   Future<ApiResponse> uploadProfilePhoto(File imageFile) async {
     final formData = FormData.fromMap({
       'profile_photo': await MultipartFile.fromFile(imageFile.path),
     });
-    return _post('/v2/technicians/profile/photo', data: formData);
+    return _post('/v19/technicians/profile/photo', data: formData);
   }
 
+  // Still only available on V2 (requires active subscription)
+  Future<ApiResponse> updateTechnicianServices(List<int> serviceIds) =>
+      _post('/v2/technicians/services', data: {'service_ids': serviceIds});
+
   // ============================================================
-  //  FUNDI – POSTS (WITH YOUTUBE SUPPORT)
+  // FUNDI – HEARTBEAT, LOCATION & ONLINE STATUS (V19)
+  // ============================================================
+
+  /// Send live GPS location (used by TechnicianHeartbeatService)
+  Future<ApiResponse> sendTechnicianHeartbeat({
+    required double latitude,
+    required double longitude,
+  }) =>
+      _post('/v19/technicians/heartbeat', data: {
+        'latitude': latitude,
+        'longitude': longitude,
+      });
+
+  Future<ApiResponse> updateLocation({
+    required double latitude,
+    required double longitude,
+  }) =>
+      _post('/v19/technicians/location', data: {
+        'latitude': latitude,
+        'longitude': longitude,
+      });
+
+  Future<ApiResponse> toggleOnlineStatus(bool online) =>
+      _patch('/v19/technicians/online-status', data: {'is_online': online});
+
+  // ============================================================
+  // V19 – 4-STEP TECHNICIAN REGISTRATION
+  // ============================================================
+
+  Future<ApiResponse> registerTechnicianStep1(Map<String, dynamic> data) async {
+    if (data.containsKey('profile_photo') && data['profile_photo'] is String) {
+      final file = File(data['profile_photo']);
+      final formData = FormData();
+
+      data.forEach((key, value) {
+        if (key == 'profile_photo') {
+          // skip
+        } else if (value != null) {
+          formData.fields.add(MapEntry(key, value.toString()));
+        }
+      });
+
+      formData.files.add(
+        MapEntry('profile_photo', await MultipartFile.fromFile(file.path)),
+      );
+
+      return _post('/v19/technicians/register/step1', data: formData);
+    }
+    return _post('/v19/technicians/register/step1', data: data);
+  }
+
+  Future<ApiResponse> registerTechnicianStep2({
+    required int technicianId,
+    required String nida,
+    required String idDocumentType,
+    required File idDocumentImage,
+  }) async {
+    final formData = FormData.fromMap({
+      'technician_id': technicianId,
+      'nida': nida,
+      'id_document_type': idDocumentType,
+      'id_document_image': await MultipartFile.fromFile(idDocumentImage.path),
+    });
+    return _post('/v19/technicians/register/step2', data: formData);
+  }
+
+  Future<ApiResponse> registerTechnicianStep3({
+    required int technicianId,
+    required String area,
+    double? latitude,
+    double? longitude,
+  }) =>
+      _post('/v19/technicians/register/step3', data: {
+        'technician_id': technicianId,
+        'area': area,
+        if (latitude != null) 'latitude': latitude,
+        if (longitude != null) 'longitude': longitude,
+      });
+
+  Future<ApiResponse> registerTechnicianStep4({
+    required int technicianId,
+    required List<Map<String, dynamic>> services,
+  }) =>
+      _post('/v19/technicians/register/step4', data: {
+        'technician_id': technicianId,
+        'services': services,
+      });
+
+  Future<ApiResponse> submitTechnicianRegistration(int technicianId) =>
+      _post('/v19/technicians/register/submit', data: {
+        'technician_id': technicianId,
+      });
+
+  Future<ApiResponse> approveTechnicianByAdmin(int technicianId) =>
+      _post('/v19/admin/technicians/$technicianId/approve');
+
+  // ============================================================
+  // FUNDI – POSTS (WITH YOUTUBE SUPPORT)
   // ============================================================
 
   Future<ApiResponse> getMyPosts() => _get('/v5/my-posts');
@@ -211,17 +289,15 @@ class ApiService {
       final file = File(data['image']);
       if (await file.exists()) {
         final formData = FormData();
-
-        // Add fields
         formData.fields.add(MapEntry('title', data['title'] ?? ''));
         formData.fields.add(MapEntry('content', data['content'] ?? ''));
 
-        // Add YouTube URL if present
-        if (data.containsKey('youtube_url') && data['youtube_url'] != null && data['youtube_url'].isNotEmpty) {
+        if (data.containsKey('youtube_url') &&
+            data['youtube_url'] != null &&
+            data['youtube_url'].isNotEmpty) {
           formData.fields.add(MapEntry('youtube_url', data['youtube_url']));
         }
 
-        // Add image file
         formData.files.add(
           MapEntry('image', await MultipartFile.fromFile(file.path)),
         );
@@ -230,13 +306,14 @@ class ApiService {
       }
     }
 
-    // No image - send as JSON
     final Map<String, dynamic> jsonData = {
       'title': data['title'] ?? '',
       'content': data['content'] ?? '',
     };
 
-    if (data.containsKey('youtube_url') && data['youtube_url'] != null && data['youtube_url'].isNotEmpty) {
+    if (data.containsKey('youtube_url') &&
+        data['youtube_url'] != null &&
+        data['youtube_url'].isNotEmpty) {
       jsonData['youtube_url'] = data['youtube_url'];
     }
 
@@ -252,11 +329,8 @@ class ApiService {
       final file = File(data['image']);
       if (await file.exists()) {
         final formData = FormData();
-
-        // Add _method for PUT
         formData.fields.add(MapEntry('_method', 'PUT'));
 
-        // Add fields
         if (data.containsKey('title')) {
           formData.fields.add(MapEntry('title', data['title'] ?? ''));
         }
@@ -264,16 +338,13 @@ class ApiService {
           formData.fields.add(MapEntry('content', data['content'] ?? ''));
         }
 
-        // Handle YouTube URL
         if (data.containsKey('youtube_url')) {
-          if (data['youtube_url'] == null || data['youtube_url'].toString().isEmpty) {
-            formData.fields.add(MapEntry('youtube_url', ''));
-          } else {
-            formData.fields.add(MapEntry('youtube_url', data['youtube_url']));
-          }
+          formData.fields.add(MapEntry(
+            'youtube_url',
+            data['youtube_url']?.toString() ?? '',
+          ));
         }
 
-        // Add image file
         formData.files.add(
           MapEntry('image', await MultipartFile.fromFile(file.path)),
         );
@@ -282,23 +353,11 @@ class ApiService {
       }
     }
 
-    // No image - send as JSON
     final Map<String, dynamic> jsonData = {};
-
-    if (data.containsKey('title')) {
-      jsonData['title'] = data['title'] ?? '';
-    }
-    if (data.containsKey('content')) {
-      jsonData['content'] = data['content'] ?? '';
-    }
-
-    // Handle YouTube URL
+    if (data.containsKey('title')) jsonData['title'] = data['title'] ?? '';
+    if (data.containsKey('content')) jsonData['content'] = data['content'] ?? '';
     if (data.containsKey('youtube_url')) {
-      if (data['youtube_url'] == null || data['youtube_url'].toString().isEmpty) {
-        jsonData['youtube_url'] = '';
-      } else {
-        jsonData['youtube_url'] = data['youtube_url'];
-      }
+      jsonData['youtube_url'] = data['youtube_url']?.toString() ?? '';
     }
 
     return _put('/v5/posts/$id', data: jsonData);
@@ -307,20 +366,20 @@ class ApiService {
   Future<ApiResponse> deletePost(int id) => _delete('/v5/posts/$id');
 
   // ============================================================
-  //  FUNDI – PORTFOLIO
+  // FUNDI – PORTFOLIO
   // ============================================================
 
   Future<ApiResponse> getMyPortfolios() => _get('/v3/portfolios/my');
 
   Future<ApiResponse> createPortfolio(Map<String, dynamic> data) async {
-    if (data.containsKey('image') && data['image'] is String && data['image'].isNotEmpty) {
+    if (data.containsKey('image') &&
+        data['image'] is String &&
+        data['image'].isNotEmpty) {
       final file = File(data['image']);
       if (await file.exists()) {
         final formData = FormData();
         data.forEach((key, value) {
-          if (key == 'image') {
-            // skip – added as file below
-          } else {
+          if (key != 'image') {
             formData.fields.add(MapEntry(key, value?.toString() ?? ''));
           }
         });
@@ -334,14 +393,14 @@ class ApiService {
   }
 
   Future<ApiResponse> updatePortfolio(int id, Map<String, dynamic> data) async {
-    if (data.containsKey('image') && data['image'] is String && data['image'].isNotEmpty) {
+    if (data.containsKey('image') &&
+        data['image'] is String &&
+        data['image'].isNotEmpty) {
       final file = File(data['image']);
       if (await file.exists()) {
         final formData = FormData();
         data.forEach((key, value) {
-          if (key == 'image') {
-            // skip – added as file below
-          } else {
+          if (key != 'image') {
             formData.fields.add(MapEntry(key, value?.toString() ?? ''));
           }
         });
@@ -357,7 +416,8 @@ class ApiService {
 
   Future<ApiResponse> deletePortfolio(int id) => _delete('/v3/portfolios/$id');
 
-  Future<ApiResponse> updatePortfolioSocialLinks(int id, Map<String, dynamic> socialLinks) =>
+  Future<ApiResponse> updatePortfolioSocialLinks(
+      int id, Map<String, dynamic> socialLinks) =>
       _put('/v3/portfolios/$id/social-links', data: socialLinks);
 
   Future<ApiResponse> getPortfolios({int? technicianId, int page = 1}) =>
@@ -370,7 +430,7 @@ class ApiService {
       _get('/v3/portfolios/technician/$technicianId');
 
   // ============================================================
-  //  REQUESTS
+  // REQUESTS
   // ============================================================
 
   Future<ApiResponse> createRequest(Map<String, dynamic> data) =>
@@ -385,7 +445,23 @@ class ApiService {
       _delete('/v4/requests/$id/cancel');
 
   // ============================================================
-  //  BLOG
+  // REQUEST TRACKING (Fundi side)
+  // ============================================================
+
+  /// Mark request as "On the Way"
+  Future<ApiResponse> markOnTheWay(int requestId) =>
+      _patch('/v4/requests/$requestId/on-the-way');
+
+  /// Mark that technician has arrived
+  Future<ApiResponse> markArrived(int requestId) =>
+      _patch('/v4/requests/$requestId/arrive');
+
+  /// Get live tracking data
+  Future<ApiResponse> getTrackingData(int requestId) =>
+      _get('/v4/requests/$requestId/tracking');
+
+  // ============================================================
+  // BLOG
   // ============================================================
 
   Future<ApiResponse> getPosts({int page = 1, int? technicianId}) =>
@@ -405,7 +481,7 @@ class ApiService {
   Future<ApiResponse> deleteComment(int id) => _delete('/v5/comments/$id');
 
   // ============================================================
-  //  STATIC PAGES
+  // STATIC PAGES
   // ============================================================
 
   Future<ApiResponse> getAbout() => _get('/v1/about');
@@ -413,14 +489,14 @@ class ApiService {
   Future<ApiResponse> getTerms() => _get('/v1/terms');
 
   // ============================================================
-  //  CONTACT
+  // CONTACT
   // ============================================================
 
   Future<ApiResponse> sendContactMessage(Map<String, dynamic> data) =>
       _post('/v1/contact', data: data);
 
   // ============================================================
-  //  CHAT ENDPOINTS (V14)
+  // CHAT ENDPOINTS (V14)
   // ============================================================
 
   Future<ApiResponse> getOrCreateConversation({
@@ -464,13 +540,13 @@ class ApiService {
         return _post('/v14/chat/send', data: formData);
       }
     }
-    final jsonData = {
+
+    return _post('/v14/chat/send', data: {
       'conversation_id': conversationId,
       'content': content ?? '',
       'message_type': messageType,
       if (voiceDuration != null) 'voice_duration': voiceDuration,
-    };
-    return _post('/v14/chat/send', data: jsonData);
+    });
   }
 
   Future<ApiResponse> markMessageAsRead(int messageId) =>
@@ -541,7 +617,7 @@ class ApiService {
       _delete('/v14/chat/conversations/$conversationId');
 
   // ============================================================
-  //  NOTIFICATION ENDPOINTS (V15)
+  // NOTIFICATION ENDPOINTS (V15)
   // ============================================================
 
   Future<ApiResponse> getNotifications() => _get('/v15/notifications');
@@ -562,7 +638,7 @@ class ApiService {
       _delete('/v15/notifications/clear');
 
   // ============================================================
-  //  SUBSCRIPTION ENDPOINTS (V16)
+  // SUBSCRIPTION ENDPOINTS (V16)
   // ============================================================
 
   Future<ApiResponse> getRateCards() => _get('/v16/rate-cards');
@@ -581,7 +657,8 @@ class ApiService {
       formData.fields.addAll([
         MapEntry('rate_card_id', rateCardId.toString()),
         MapEntry('payment_method_id', paymentMethodId.toString()),
-        if (paymentReference != null) MapEntry('payment_reference', paymentReference),
+        if (paymentReference != null)
+          MapEntry('payment_reference', paymentReference),
         if (notes != null) MapEntry('notes', notes),
       ]);
       formData.files.add(
@@ -589,6 +666,7 @@ class ApiService {
       );
       return _post('/v16/subscriptions', data: formData);
     }
+
     return _post('/v16/subscriptions', data: {
       'rate_card_id': rateCardId,
       'payment_method_id': paymentMethodId,
@@ -623,7 +701,16 @@ class ApiService {
   }
 
   // ============================================================
-  //  PRIVATE HELPERS
+  // PRIVACY POLICY (V18)
+  // ============================================================
+
+  Future<ApiResponse> getPrivacyPolicy() => _get('/v18/privacy-policy');
+
+  Future<ApiResponse> updatePrivacyPolicy(Map<String, dynamic> data) =>
+      _put('/v18/privacy-policy', data: data);
+
+  // ============================================================
+  // PRIVATE HELPERS
   // ============================================================
 
   Future<ApiResponse> _get(String path, {Map<String, dynamic>? query}) async {

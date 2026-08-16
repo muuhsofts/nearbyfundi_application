@@ -1,6 +1,9 @@
+// lib/screens/fundi/profile/edit_profile_screen.dart
+
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/technician_provider.dart';
@@ -8,6 +11,7 @@ import '../../../utils/image_utils.dart';
 import '../../../widgets/custom_button.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../config/app_theme.dart';
+import 'pick_map_location_screen.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -26,6 +30,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _areaController = TextEditingController();
 
   File? _selectedImage;
+  double? _latitude;
+  double? _longitude;
 
   @override
   void initState() {
@@ -40,6 +46,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _bioController.text = tech?.bio ?? '';
     _hourlyRateController.text = tech?.hourlyRate?.toString() ?? '';
     _areaController.text = tech?.area ?? '';
+    _latitude = tech?.latitude;
+    _longitude = tech?.longitude;
   }
 
   @override
@@ -55,9 +63,36 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, maxWidth: 512);
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 512,
+    );
     if (picked != null) {
       setState(() => _selectedImage = File(picked.path));
+    }
+  }
+
+  Future<void> _pickLocationOnMap() async {
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PickMapLocationScreen(
+          initialCenter: (_latitude != null && _longitude != null)
+              ? LatLng(_latitude!, _longitude!)
+              : null,
+          initialPlaceName: _areaController.text.trim().isNotEmpty
+              ? _areaController.text.trim()
+              : null,
+        ),
+      ),
+    );
+
+    if (result != null && mounted) {
+      setState(() {
+        _areaController.text = result['name'] as String? ?? '';
+        _latitude = result['lat'] as double?;
+        _longitude = result['lng'] as double?;
+      });
     }
   }
 
@@ -66,32 +101,40 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     final auth = context.read<AuthProvider>();
     final techProvider = context.read<TechnicianProvider>();
+
     auth.clearError();
 
+    // 1. Update user basic info
     final userData = {
       'name': _nameController.text.trim(),
       'phone': _phoneController.text.trim(),
     };
     bool userSuccess = await auth.updateProfile(userData);
 
-    final techData = {
+    // 2. Update technician profile (including lat/lng when available)
+    final techData = <String, dynamic>{
       'nida': _nidaController.text.trim(),
       'bio': _bioController.text.trim(),
       'hourly_rate': double.tryParse(_hourlyRateController.text.trim()),
       'area': _areaController.text.trim(),
+      if (_latitude != null) 'latitude': _latitude,
+      if (_longitude != null) 'longitude': _longitude,
     };
     techData.removeWhere((key, value) => value == null || value == '');
+
     bool techSuccess = true;
     if (techData.isNotEmpty) {
       techSuccess = await techProvider.updateProfile(techData);
     }
 
+    // 3. Upload photo if changed
     bool photoSuccess = true;
     if (_selectedImage != null) {
       photoSuccess = await techProvider.uploadProfilePhoto(_selectedImage!);
     }
 
     if (!mounted) return;
+
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
 
@@ -114,7 +157,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(auth.errorMessage ?? techProvider.error ?? l10n.updateFailed),
+          content: Text(
+            auth.errorMessage ?? techProvider.error ?? l10n.updateFailed,
+          ),
           backgroundColor: AppTheme.error,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -155,16 +200,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       height: 120,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        border: Border.all(color: theme.colorScheme.primary.withOpacity(0.2), width: 3),
+                        border: Border.all(
+                          color: theme.colorScheme.primary.withOpacity(0.2),
+                          width: 3,
+                        ),
                       ),
                       child: ClipOval(
                         child: _selectedImage != null
                             ? Image.file(_selectedImage!, fit: BoxFit.cover)
                             : (tech?.profilePhoto != null
                             ? Image.network(
-                          ImageUtils.getFullImageUrl(tech!.profilePhoto!),
+                          ImageUtils.getFullImageUrl(
+                              tech!.profilePhoto!),
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => _buildDefaultAvatar(theme),
+                          errorBuilder: (_, __, ___) =>
+                              _buildDefaultAvatar(theme),
                         )
                             : _buildDefaultAvatar(theme)),
                       ),
@@ -178,7 +228,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
-                              colors: [theme.colorScheme.primary, theme.colorScheme.primary.withOpacity(0.7)],
+                              colors: [
+                                theme.colorScheme.primary,
+                                theme.colorScheme.primary.withOpacity(0.7),
+                              ],
                             ),
                             shape: BoxShape.circle,
                             border: Border.all(color: Colors.white, width: 2),
@@ -190,7 +243,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               ),
                             ],
                           ),
-                          child: const Icon(Icons.camera_alt, size: 20, color: Colors.white),
+                          child: const Icon(
+                            Icons.camera_alt,
+                            size: 20,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ),
@@ -198,15 +255,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-              Text('Tap camera to change photo', style: theme.textTheme.bodySmall),
+              Text(
+                l10n.tapToChangePhoto,
+                style: theme.textTheme.bodySmall,
+              ),
               const SizedBox(height: 32),
 
-              // Form Fields – with solid border
+              // Form Fields
               Container(
                 decoration: BoxDecoration(
                   color: theme.colorScheme.surface,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: theme.dividerColor.withOpacity(0.5)),
+                  border: Border.all(
+                    color: theme.dividerColor.withOpacity(0.5),
+                  ),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(20),
@@ -216,7 +278,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         controller: _nameController,
                         label: l10n.name,
                         icon: Icons.person_outline,
-                        validator: (v) => (v != null && v.isNotEmpty) ? null : 'Name required',
+                        validator: (v) =>
+                        (v != null && v.isNotEmpty) ? null : 'Name required',
                       ),
                       const SizedBox(height: 16),
                       _buildTextField(
@@ -228,7 +291,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       const SizedBox(height: 16),
                       _buildTextField(
                         controller: _nidaController,
-                        label: 'NIDA Number',
+                        label: l10n.nidaNumber,
                         icon: Icons.badge_outlined,
                       ),
                       const SizedBox(height: 16),
@@ -243,21 +306,128 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         controller: _hourlyRateController,
                         label: l10n.hourlyRate,
                         icon: Icons.attach_money_rounded,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
                         prefixText: 'TZS ',
                       ),
                       const SizedBox(height: 16),
-                      _buildTextField(
-                        controller: _areaController,
-                        label: l10n.area,
-                        icon: Icons.location_on_outlined,
+
+                      // ========== AREA SECTION (Type OR Map) ==========
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            l10n.area,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          TextFormField(
+                            controller: _areaController,
+                            style: theme.textTheme.bodyMedium,
+                            decoration: InputDecoration(
+                              prefixIcon: Icon(
+                                Icons.location_on_outlined,
+                                color: theme.colorScheme.primary,
+                                size: 22,
+                              ),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  Icons.map_outlined,
+                                  color: theme.colorScheme.primary,
+                                ),
+                                tooltip: l10n.pickOnMap,
+                                onPressed: _pickLocationOnMap,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: theme.dividerColor,
+                                  width: 1.0,
+                                ),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: theme.dividerColor,
+                                  width: 1.0,
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: theme.colorScheme.primary,
+                                  width: 2.0,
+                                ),
+                              ),
+                              filled: true,
+                              fillColor: theme.colorScheme.surface,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
+                              ),
+                              hintText: l10n.typeAreaOrPickOnMap,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          // Two clear action buttons
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: () {
+                                    FocusScope.of(context)
+                                        .requestFocus(FocusNode());
+                                  },
+                                  icon: const Icon(Icons.edit_outlined, size: 18),
+                                  label: Text(l10n.typeArea),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: _pickLocationOnMap,
+                                  icon: const Icon(Icons.map_outlined, size: 18),
+                                  label: Text(l10n.pickOnMap),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: theme.colorScheme.primary,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (_latitude != null && _longitude != null) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              '📍 ${_latitude!.toStringAsFixed(5)}, ${_longitude!.toStringAsFixed(5)}',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
+                      // =================================================
                     ],
                   ),
                 ),
               ),
               const SizedBox(height: 28),
-
               CustomButton(
                 text: l10n.saveChanges,
                 onPressed: isLoading ? null : _save,
@@ -277,7 +447,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       child: Center(
         child: Text(
           context.read<AuthProvider>().user?.name[0].toUpperCase() ?? 'F',
-          style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
+          style: TextStyle(
+            fontSize: 48,
+            fontWeight: FontWeight.bold,
+            color: theme.colorScheme.primary,
+          ),
         ),
       ),
     );
@@ -296,7 +470,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600, letterSpacing: 0.3)),
+        Text(
+          label,
+          style: theme.textTheme.bodySmall?.copyWith(
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.3,
+          ),
+        ),
         const SizedBox(height: 6),
         TextFormField(
           controller: controller,
@@ -307,8 +487,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           decoration: InputDecoration(
             prefixIcon: Icon(icon, color: theme.colorScheme.primary, size: 22),
             prefixText: prefixText,
-            prefixStyle: const TextStyle(color: Colors.grey, fontWeight: FontWeight.w500),
-            // Solid border
+            prefixStyle: const TextStyle(
+              color: Colors.grey,
+              fontWeight: FontWeight.w500,
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(color: theme.dividerColor, width: 1.0),
@@ -319,7 +501,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: theme.colorScheme.primary, width: 2.0),
+              borderSide: BorderSide(
+                color: theme.colorScheme.primary,
+                width: 2.0,
+              ),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -331,7 +516,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
             filled: true,
             fillColor: theme.colorScheme.surface,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
           ),
         ),
       ],

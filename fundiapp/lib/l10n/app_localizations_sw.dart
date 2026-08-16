@@ -156,7 +156,7 @@ class AppLocalizationsSw extends AppLocalizations {
   String get resetPasswordButton => 'Weka upya Nenosiri';
 
   @override
-  String get myProfile => 'Profaili Yangu';
+  String get myProfile => 'Profaili ';
 
   @override
   String get editProfile => 'Hariri Profaili';
@@ -264,7 +264,7 @@ class AppLocalizationsSw extends AppLocalizations {
   String get completed => 'Imekamilika';
 
   @override
-  String get myPosts => 'Machapisho Yangu';
+  String get myPosts => 'Machapisho ';
 
   @override
   String get noPosts => 'Bado hakuna machapisho.';
@@ -884,4 +884,25 @@ class AppLocalizationsSw extends AppLocalizations {
 
   @override
   String get openPdf => 'Fungua PDF';
+
+  @override
+  String get privacyPolicy => 'Sera ya Faragha';
+
+  @override
+  String get tapToChangePhoto => 'Gonga kamera kubadilisha picha';
+
+  @override
+  String get nidaNumber => 'Namba ya NIDA';
+
+  @override
+  String get typeArea => 'Andika eneo';
+
+  @override
+  String get pickOnMap => 'Chagua kwenye ramani';
+
+  @override
+  String get typeAreaOrPickOnMap => 'Andika eneo au chagua kwenye ramani';
+
+  @override
+  String get oops => 'Samahani!';
 }

@@ -1,3 +1,5 @@
+// lib/screens/fundi/fundi_requests_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/request.dart';
@@ -40,15 +42,18 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
     var filtered = requests;
 
     if (_selectedStatusFilter != null) {
-      filtered = filtered.where((r) => r.status == _selectedStatusFilter).toList();
+      filtered =
+          filtered.where((r) => r.status == _selectedStatusFilter).toList();
     }
 
     if (_filterQuery.isNotEmpty) {
       final query = _filterQuery.toLowerCase();
-      filtered = filtered.where((r) =>
+      filtered = filtered
+          .where((r) =>
       r.customerName.toLowerCase().contains(query) ||
           r.serviceName.toLowerCase().contains(query) ||
-          r.description.toLowerCase().contains(query)).toList();
+          r.description.toLowerCase().contains(query))
+          .toList();
     }
 
     return filtered;
@@ -59,6 +64,10 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
       case 'accepted':
       case 'in_progress':
         return AppTheme.primary;
+      case 'on_the_way':
+        return Colors.green;
+      case 'arrived':
+        return Colors.teal;
       case 'completed':
         return AppTheme.success;
       case 'rejected':
@@ -76,6 +85,10 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
       case 'accepted':
       case 'in_progress':
         return Icons.check_circle_outline_rounded;
+      case 'on_the_way':
+        return Icons.directions_car_rounded;
+      case 'arrived':
+        return Icons.location_on_rounded;
       case 'completed':
         return Icons.verified_rounded;
       case 'rejected':
@@ -93,14 +106,18 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
         return 'Pending';
       case 'accepted':
         return 'Accepted';
+      case 'on_the_way':
+        return 'On The Way';
+      case 'arrived':
+        return 'Arrived';
+      case 'in_progress':
+        return 'In Progress';
       case 'completed':
         return 'Completed';
       case 'rejected':
         return 'Rejected';
       case 'cancelled':
         return 'Cancelled';
-      case 'in_progress':
-        return 'Accepted';
       default:
         return status.toUpperCase();
     }
@@ -141,7 +158,8 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
         backgroundColor: theme.colorScheme.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(l10n.completeRequest, style: theme.textTheme.titleMedium),
-        content: Text(l10n.completeConfirmation, style: theme.textTheme.bodyMedium),
+        content:
+        Text(l10n.completeConfirmation, style: theme.textTheme.bodyMedium),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -151,7 +169,8 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.success,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
             ),
             child: Text(l10n.completeRequest),
           ),
@@ -162,6 +181,7 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
     if (confirmed == true) {
       final provider = context.read<RequestProvider>();
       final success = await provider.completeRequest(requestId);
+
       if (context.mounted) {
         _showSnack(
           context,
@@ -172,7 +192,8 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
     }
   }
 
-  void _showSnack(BuildContext context, String message, {bool isError = false}) {
+  void _showSnack(BuildContext context, String message,
+      {bool isError = false}) {
     final theme = Theme.of(context);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -201,7 +222,8 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-          onPressed: () => Navigator.pushReplacementNamed(context, AppRoutes.home),
+          onPressed: () =>
+              Navigator.pushReplacementNamed(context, AppRoutes.home),
         ),
         actions: [
           IconButton(
@@ -239,6 +261,7 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
   Widget _buildSearchAndFilter(
       BuildContext context, RequestProvider provider, ThemeData theme) {
     final l10n = AppLocalizations.of(context)!;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Column(
@@ -255,7 +278,8 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
               decoration: InputDecoration(
                 hintText: l10n.filterByCustomerService,
                 hintStyle: theme.textTheme.bodySmall,
-                prefixIcon: Icon(Icons.search_rounded, color: AppTheme.primary),
+                prefixIcon:
+                Icon(Icons.search_rounded, color: AppTheme.primary),
                 suffixIcon: _filterQuery.isNotEmpty
                     ? IconButton(
                   icon: Icon(Icons.clear_rounded,
@@ -267,7 +291,8 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
                 )
                     : null,
                 border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                contentPadding:
+                const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
               ),
               onChanged: (value) => setState(() => _filterQuery = value),
             ),
@@ -283,6 +308,8 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
                 const SizedBox(width: 8),
                 _buildFilterChip('Accepted', 'accepted', theme),
                 const SizedBox(width: 8),
+                _buildFilterChip('On The Way', 'on_the_way', theme),
+                const SizedBox(width: 8),
                 _buildFilterChip('Completed', 'completed', theme),
                 const SizedBox(width: 8),
                 _buildFilterChip('Rejected', 'rejected', theme),
@@ -297,7 +324,8 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
   Widget _buildFilterChip(String label, String? value, ThemeData theme) {
     final isSelected = _selectedStatusFilter == value;
     return GestureDetector(
-      onTap: () => setState(() => _selectedStatusFilter = isSelected ? null : value),
+      onTap: () =>
+          setState(() => _selectedStatusFilter = isSelected ? null : value),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
@@ -328,14 +356,14 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
           _buildStatChip('Total', provider.totalCount,
               theme.colorScheme.onSurface, theme, Colors.grey.shade200),
           const SizedBox(width: 8),
-          _buildStatChip('Pending', provider.pendingCount,
-              AppTheme.warning, theme, AppTheme.warning.withOpacity(0.12)),
+          _buildStatChip('Pending', provider.pendingCount, AppTheme.warning,
+              theme, AppTheme.warning.withOpacity(0.12)),
           const SizedBox(width: 8),
-          _buildStatChip('Accepted', provider.acceptedCount,
-              AppTheme.primary, theme, AppTheme.primary.withOpacity(0.12)),
+          _buildStatChip('Accepted', provider.acceptedCount, AppTheme.primary,
+              theme, AppTheme.primary.withOpacity(0.12)),
           const SizedBox(width: 8),
-          _buildStatChip('Done', provider.completedCount,
-              AppTheme.success, theme, AppTheme.success.withOpacity(0.12)),
+          _buildStatChip('Done', provider.completedCount, AppTheme.success,
+              theme, AppTheme.success.withOpacity(0.12)),
         ],
       ),
     );
@@ -374,8 +402,12 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
   }
 
   // ─── REQUEST LIST ──────────────────────────────────────────────────────
-  Widget _buildRequestList(BuildContext context, RequestProvider provider,
-      List<ServiceRequest> requests, AppLocalizations l10n, ThemeData theme) {
+  Widget _buildRequestList(
+      BuildContext context,
+      RequestProvider provider,
+      List<ServiceRequest> requests,
+      AppLocalizations l10n,
+      ThemeData theme) {
     if (provider.requests.isEmpty) {
       return _buildEmptyState(
           icon: Icons.inbox_outlined, text: l10n.noRequests, theme: theme);
@@ -393,13 +425,16 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
       child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
         itemCount: requests.length,
-        itemBuilder: (ctx, i) => _buildRequestCard(context, requests[i], l10n, theme),
+        itemBuilder: (ctx, i) =>
+            _buildRequestCard(context, requests[i], l10n, theme),
       ),
     );
   }
 
   Widget _buildEmptyState(
-      {required IconData icon, required String text, required ThemeData theme}) {
+      {required IconData icon,
+        required String text,
+        required ThemeData theme}) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -411,8 +446,8 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
               shape: BoxShape.circle,
               border: Border.all(color: theme.dividerColor),
             ),
-            child: Icon(icon, size: 44,
-                color: theme.colorScheme.onSurface.withOpacity(0.5)),
+            child: Icon(icon,
+                size: 44, color: theme.colorScheme.onSurface.withOpacity(0.5)),
           ),
           const SizedBox(height: 16),
           Text(
@@ -428,7 +463,10 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
   Widget _buildRequestCard(BuildContext context, ServiceRequest request,
       AppLocalizations l10n, ThemeData theme) {
     final isPending = request.isPending;
-    final isActioned = request.isAccepted || request.isInProgress;
+    final isActioned = request.isAccepted ||
+        request.isOnTheWay ||
+        request.isArrived ||
+        request.isInProgress;
     final isCompleted = request.isCompleted;
     final isRejectedOrCancelled = request.isRejected || request.isCancelled;
 
@@ -437,7 +475,9 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
         color: theme.cardTheme.color,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: isCompleted ? AppTheme.success.withOpacity(0.3) : theme.dividerColor,
+          color: isCompleted
+              ? AppTheme.success.withOpacity(0.3)
+              : theme.dividerColor,
         ),
         boxShadow: [
           BoxShadow(
@@ -465,7 +505,8 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
                     color: _statusBgColor(request.status),
                     borderRadius: BorderRadius.circular(20),
@@ -493,7 +534,8 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
             const SizedBox(height: 10),
             Row(
               children: [
-                Icon(Icons.person_outline_rounded, size: 14,
+                Icon(Icons.person_outline_rounded,
+                    size: 14,
                     color: theme.colorScheme.onSurface.withOpacity(0.5)),
                 const SizedBox(width: 6),
                 Expanded(
@@ -514,10 +556,14 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
               overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 14),
-            if (isPending) _buildPendingActions(context, request, l10n, theme),
-            if (isActioned) _buildActionedActions(context, request, l10n, theme),
-            if (isCompleted) _buildCompletedActions(request, l10n, theme),
-            if (isRejectedOrCancelled) _buildRejectedActions(request, theme),
+            if (isPending)
+              _buildPendingActions(context, request, l10n, theme),
+            if (isActioned)
+              _buildActionedActions(context, request, l10n, theme),
+            if (isCompleted)
+              _buildCompletedActions(request, l10n, theme),
+            if (isRejectedOrCancelled)
+              _buildRejectedActions(request, theme),
           ],
         ),
       ),
@@ -537,7 +583,8 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
               final provider = context.read<RequestProvider>();
               final success = await provider.acceptRequest(request.id);
               if (context.mounted) {
-                _showSnack(context,
+                _showSnack(
+                    context,
                     success ? l10n.requestAccepted : 'Failed to accept',
                     isError: !success);
               }
@@ -554,7 +601,8 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
               final provider = context.read<RequestProvider>();
               final success = await provider.rejectRequest(request.id);
               if (context.mounted) {
-                _showSnack(context,
+                _showSnack(
+                    context,
                     success ? l10n.requestRejected : 'Failed to reject',
                     isError: !success);
               }
@@ -569,6 +617,7 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
       AppLocalizations l10n, ThemeData theme) {
     return Column(
       children: [
+        // Chat button
         SizedBox(
           width: double.infinity,
           child: _PrimaryButton(
@@ -579,6 +628,61 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
           ),
         ),
         const SizedBox(height: 8),
+
+        // I'm On The Way (only when accepted)
+        if (request.isAccepted)
+          SizedBox(
+            width: double.infinity,
+            child: _PrimaryButton(
+              label: "I'm On The Way",
+              color: Colors.green,
+              icon: Icons.directions_car_rounded,
+              onPressed: () async {
+                final success = await context
+                    .read<RequestProvider>()
+                    .markOnTheWay(request.id);
+                if (context.mounted) {
+                  _showSnack(
+                    context,
+                    success
+                        ? 'You are now sharing your live location with the customer'
+                        : 'Failed to update status',
+                    isError: !success,
+                  );
+                }
+              },
+            ),
+          ),
+
+        // I Have Arrived (only when on_the_way)
+        if (request.isOnTheWay)
+          SizedBox(
+            width: double.infinity,
+            child: _PrimaryButton(
+              label: 'I Have Arrived',
+              color: Colors.teal,
+              icon: Icons.location_on_rounded,
+              onPressed: () async {
+                final success = await context
+                    .read<RequestProvider>()
+                    .markArrived(request.id);
+                if (context.mounted) {
+                  _showSnack(
+                    context,
+                    success
+                        ? 'Marked as arrived'
+                        : 'Failed to update status',
+                    isError: !success,
+                  );
+                }
+              },
+            ),
+          ),
+
+        if (request.isAccepted || request.isOnTheWay)
+          const SizedBox(height: 8),
+
+        // Mark Complete
         SizedBox(
           width: double.infinity,
           child: _PrimaryButton(
@@ -631,7 +735,8 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
                         const SizedBox(width: 4),
                         Text(
                           request.technicianRating!.toStringAsFixed(1),
-                          style: const TextStyle(fontSize: 12,
+                          style: const TextStyle(
+                              fontSize: 12,
                               color: Colors.amber,
                               fontWeight: FontWeight.w600),
                         ),
@@ -682,7 +787,6 @@ class _PrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final child = icon == null
         ? Text(label)
         : Row(
@@ -699,7 +803,8 @@ class _PrimaryButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(10),
     );
     final padding = const EdgeInsets.symmetric(vertical: 12);
-    final textStyle = const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5);
+    final textStyle =
+    const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5);
 
     if (outlined) {
       return OutlinedButton(

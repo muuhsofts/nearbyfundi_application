@@ -232,6 +232,14 @@ class FundiSettingsScreen extends StatelessWidget {
                       onTap: () => Navigator.pushNamed(context, AppRoutes.terms),
                     ),
                     _buildDivider(context),
+                    // ✅ UPDATED: Now uses l10n.privacyPolicy to support Swahili
+                    _buildSettingsTile(
+                      context,
+                      icon: Icons.privacy_tip_rounded,
+                      title: l10n.privacyPolicy,
+                      onTap: () => Navigator.pushNamed(context, AppRoutes.privacy),
+                    ),
+                    _buildDivider(context),
                     _buildSettingsTile(
                       context,
                       icon: Icons.contact_mail_outlined,

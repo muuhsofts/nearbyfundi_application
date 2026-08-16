@@ -12,11 +12,15 @@ class AuthProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
 
+  // ---- Public getters ----
   User? get user => _user;
   String? get token => _token;
   bool get isLoggedIn => _token != null;
   bool get isLoading => _isLoading;
   String? get errorMessage => _error;
+
+  // ✅ NEW: Expose the API service for registration steps
+  ApiService get api => _api;
 
   AuthProvider({GlobalKey<NavigatorState>? navigatorKey}) {
     _api.onSessionExpired = () async {
@@ -54,7 +58,7 @@ class AuthProvider extends ChangeNotifier {
     return false;
   }
 
-  // ---- Register Fundi ----
+  // ---- Register Fundi (legacy) ----
   Future<bool> registerFundi(Map<String, dynamic> data) async {
     _setLoading(true);
     final res = await _api.registerFundi(data);

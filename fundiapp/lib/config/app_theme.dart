@@ -95,8 +95,8 @@ class AppTheme {
       onBackground: Colors.black87,
     ),
     dividerColor: dividerColor,
-    fontFamily: GoogleFonts.poppins().fontFamily,
-    textTheme: GoogleFonts.poppinsTextTheme().copyWith(
+    fontFamily: GoogleFonts.nunito().fontFamily, // ✅ Changed to Nunito
+    textTheme: GoogleFonts.nunitoTextTheme().copyWith( // ✅ Changed to Nunito
       displayLarge: const TextStyle(
         fontSize: 32,
         fontWeight: FontWeight.w800,
@@ -229,7 +229,6 @@ class AppTheme {
         borderRadius: BorderRadius.circular(20),
       ),
     ),
-    // ✅ Fixed: Use DialogThemeData (not DialogTheme)
     dialogTheme: const DialogThemeData(
       backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(
@@ -261,8 +260,8 @@ class AppTheme {
       onBackground: darkTextPrimary,
     ),
     dividerColor: darkBorder,
-    fontFamily: GoogleFonts.poppins().fontFamily,
-    textTheme: GoogleFonts.poppinsTextTheme().copyWith(
+    fontFamily: GoogleFonts.nunito().fontFamily, // ✅ Changed to Nunito
+    textTheme: GoogleFonts.nunitoTextTheme().copyWith( // ✅ Changed to Nunito
       displayLarge: const TextStyle(
         fontSize: 32,
         fontWeight: FontWeight.w800,
@@ -398,7 +397,6 @@ class AppTheme {
         borderRadius: BorderRadius.circular(20),
       ),
     ),
-    // ✅ Fixed: Use DialogThemeData (not DialogTheme)
     dialogTheme: DialogThemeData(
       backgroundColor: darkSurface,
       shape: RoundedRectangleBorder(

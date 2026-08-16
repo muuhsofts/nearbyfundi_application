@@ -10,7 +10,15 @@ import '../../l10n/app_localizations.dart';
 
 class OtpVerificationScreen extends StatefulWidget {
   final String email;
-  const OtpVerificationScreen({super.key, required this.email});
+  final bool redirectToStep2;
+  final int? technicianId;
+
+  const OtpVerificationScreen({
+    super.key,
+    required this.email,
+    this.redirectToStep2 = false,
+    this.technicianId,
+  });
 
   @override
   State<OtpVerificationScreen> createState() => _OtpVerificationScreenState();
@@ -69,11 +77,23 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     final auth = context.read<AuthProvider>();
     auth.clearError();
     final success = await auth.verifyOtp(widget.email, _otp);
+
     if (!mounted) return;
+
     if (success) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) Navigator.pushReplacementNamed(context, AppRoutes.home);
-      });
+      // ✅ NEW LOGIC: Redirect to Step 2 if this came from registration
+      if (widget.redirectToStep2 && widget.technicianId != null) {
+        Navigator.pushReplacementNamed(
+          context,
+          AppRoutes.registerStep2,
+          arguments: widget.technicianId,
+        );
+      } else {
+        // Normal login flow
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) Navigator.pushReplacementNamed(context, AppRoutes.home);
+        });
+      }
     } else if (auth.errorMessage != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

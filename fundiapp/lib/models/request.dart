@@ -1,4 +1,4 @@
-// lib/models/service_request.dart
+// lib/models/request.dart  (or service_request.dart)
 
 class ServiceRequest {
   final int id;
@@ -32,14 +32,17 @@ class ServiceRequest {
   // Status helpers
   bool get isPending => status == 'pending';
   bool get isAccepted => status == 'accepted';
+  bool get isOnTheWay => status == 'on_the_way';
+  bool get isArrived => status == 'arrived';
+  bool get isInProgress => status == 'in_progress';
   bool get isCompleted => status == 'completed';
   bool get isRejected => status == 'rejected';
   bool get isCancelled => status == 'cancelled';
-  bool get isInProgress => status == 'in_progress';
-  bool get isActive => isPending || isAccepted || isInProgress;
+
+  bool get isActive =>
+      isPending || isAccepted || isOnTheWay || isArrived || isInProgress;
 
   factory ServiceRequest.fromJson(Map<String, dynamic> json) {
-    // Extract technician data
     String techName = 'Unknown';
     String? techArea;
     String? techPhone;
@@ -58,7 +61,6 @@ class ServiceRequest {
       }
     }
 
-    // Fallback to direct fields
     if (techName == 'Unknown' && json['technician_name'] != null) {
       techName = json['technician_name'].toString();
     }
@@ -73,7 +75,8 @@ class ServiceRequest {
           ? DateTime.parse(json['created_at'])
           : DateTime.now(),
       technicianName: techName,
-      serviceName: json['service']?['name'] ?? json['service_name'] ?? 'Service',
+      serviceName:
+      json['service']?['name'] ?? json['service_name'] ?? 'Service',
       customerName: json['customer']?['name'] ?? 'Customer',
       technicianArea: techArea,
       technicianPhone: techPhone,

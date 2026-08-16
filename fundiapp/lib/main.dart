@@ -1,16 +1,25 @@
+// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/services.dart';
 
 // Screens
 import 'screens/splash_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/auth/login_screen.dart';
-import 'screens/auth/register_screen.dart';
 import 'screens/auth/otp_verification_screen.dart';
 import 'screens/auth/forgot_password_screen.dart';
 import 'screens/auth/reset_password_screen.dart';
+
+// ✅ NEW REGISTRATION FLOW SCREENS
+import 'screens/auth/register_flow/register_step1_screen.dart';
+import 'screens/auth/register_flow/register_step2_screen.dart';
+import 'screens/auth/register_flow/register_step3_screen.dart';
+import 'screens/auth/register_flow/register_step4_screen.dart';
+import 'screens/auth/register_flow/register_review_screen.dart';
+
 import 'screens/fundi/fundi_home_screen.dart';
 import 'screens/fundi/fundi_posts_screen.dart';
 import 'screens/fundi/fundi_portfolio_screen.dart';
@@ -22,6 +31,7 @@ import 'screens/static/about_screen.dart';
 import 'screens/static/terms_screen.dart';
 import 'screens/static/faq_screen.dart';
 import 'screens/static/contact_us_screen.dart';
+import 'screens/static/privacy_policy_screen.dart'; // ✅ Added Privacy Policy Screen
 import 'screens/chat/chat_list_screen.dart';
 import 'screens/chat/chat_screen.dart';
 import 'screens/chat/voice_call_screen.dart';
@@ -52,6 +62,7 @@ import 'providers/subscription_provider.dart';
 
 // Services
 import 'services/fcm_service.dart';
+import 'services/security_service.dart';
 
 // Models
 import 'models/chat_conversation.dart';
@@ -67,11 +78,22 @@ void main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await FcmService.init();
 
+  // ✅ Enable secure screen globally
+  await SecurityService.enableSecureScreen();
+
   // Create auth provider first
   final authProvider = AuthProvider(navigatorKey: navigatorKey);
 
   // Register it globally for other providers to access
   ProviderRegistry.registerAuthProvider(authProvider);
+
+  // ✅ Set system UI overlay style
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.dark,
+    systemNavigationBarColor: Colors.transparent,
+    systemNavigationBarIconBrightness: Brightness.light,
+  ));
 
   runApp(
     MultiProvider(
@@ -126,6 +148,17 @@ class MyApp extends StatelessWidget {
 
               initialRoute: AppRoutes.splash,
               onGenerateRoute: _generateRoute,
+              builder: (context, child) {
+                return AnnotatedRegion<SystemUiOverlayStyle>(
+                  value: const SystemUiOverlayStyle(
+                    statusBarColor: Colors.transparent,
+                    statusBarIconBrightness: Brightness.dark,
+                    systemNavigationBarColor: Colors.transparent,
+                    systemNavigationBarIconBrightness: Brightness.light,
+                  ),
+                  child: child ?? const SizedBox.shrink(),
+                );
+              },
             );
           },
         );
@@ -149,14 +182,46 @@ class MyApp extends StatelessWidget {
       case AppRoutes.login:
         return MaterialPageRoute(builder: (_) => const LoginScreen());
 
-      case AppRoutes.register:
-        return MaterialPageRoute(builder: (_) => const RegisterScreen());
+    // ✅ NEW 4-STEP REGISTRATION FLOW ROUTES
+      case AppRoutes.registerStep1:
+        return MaterialPageRoute(builder: (_) => const RegisterStep1Screen());
+
+      case AppRoutes.registerStep2:
+        final technicianId = args as int;
+        return MaterialPageRoute(
+          builder: (_) => RegisterStep2Screen(technicianId: technicianId),
+        );
+
+      case AppRoutes.registerStep3:
+        final technicianId = args as int;
+        return MaterialPageRoute(
+          builder: (_) => RegisterStep3Screen(technicianId: technicianId),
+        );
+
+      case AppRoutes.registerStep4:
+        final technicianId = args as int;
+        return MaterialPageRoute(
+          builder: (_) => RegisterStep4Screen(technicianId: technicianId),
+        );
+
+      case AppRoutes.registerReview:
+        final data = args as Map<String, dynamic>;
+        return MaterialPageRoute(
+          builder: (_) => RegisterReviewScreen(registrationData: data),
+        );
 
       case AppRoutes.otp:
+        if (args is Map<String, dynamic>) {
+          return MaterialPageRoute(
+            builder: (_) => OtpVerificationScreen(
+              email: args['email'] ?? '',
+              redirectToStep2: args['redirectToStep2'] ?? false,
+              technicianId: args['technicianId'],
+            ),
+          );
+        }
         return MaterialPageRoute(
-          builder: (_) => OtpVerificationScreen(
-            email: args as String? ?? '',
-          ),
+          builder: (_) => OtpVerificationScreen(email: args as String? ?? ''),
         );
 
       case AppRoutes.forgot:
@@ -164,9 +229,7 @@ class MyApp extends StatelessWidget {
 
       case AppRoutes.reset:
         return MaterialPageRoute(
-          builder: (_) => ResetPasswordScreen(
-            email: args as String? ?? '',
-          ),
+          builder: (_) => ResetPasswordScreen(email: args as String? ?? ''),
         );
 
     // ============================================================
@@ -247,6 +310,10 @@ class MyApp extends StatelessWidget {
       case AppRoutes.contactUs:
         return MaterialPageRoute(builder: (_) => const ContactUsScreen());
 
+    // ✅ Added Privacy Policy Route
+      case AppRoutes.privacy:
+        return MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen());
+
     // ============================================================
     // SUBSCRIPTION ROUTES
     // ============================================================
@@ -266,7 +333,7 @@ class MyApp extends StatelessWidget {
         return MaterialPageRoute(builder: (_) => const RateCardsScreen());
 
     // ============================================================
-    // 🆕 DOWNLOADS ROUTE
+    // DOWNLOADS ROUTE
     // ============================================================
       case AppRoutes.downloads:
         return MaterialPageRoute(builder: (_) => const DownloadsScreen());
@@ -278,4 +345,15 @@ class MyApp extends StatelessWidget {
         return MaterialPageRoute(builder: (_) => const SplashScreen());
     }
   }
+}
+
+// ProviderRegistry
+class ProviderRegistry {
+  static AuthProvider? _authProvider;
+
+  static void registerAuthProvider(AuthProvider provider) {
+    _authProvider = provider;
+  }
+
+  static AuthProvider? get authProvider => _authProvider;
 }

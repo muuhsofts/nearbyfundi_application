@@ -52,7 +52,7 @@
   "newPassword": "New Password",
   "resetPasswordButton": "Reset Password",
 
-  "myProfile": "My Profile",
+  "myProfile": " Profile",
   "editProfile": "Edit Profile",
   "profileDetails": "Profile Details",
   "updateInfo": "Update Your Info",
@@ -91,7 +91,7 @@
   "pending": "Pending",
   "completed": "Completed",
 
-  "myPosts": "My Posts",
+  "myPosts": " Posts",
   "noPosts": "No posts yet.",
   "createPost": "Create your first post",
   "createPostTitle": "Create Post",
@@ -303,5 +303,13 @@
   "status": "Status",
   "download": "Download",
   "share": "Share",
-  "openPdf": "Open PDF"
+  "openPdf": "Open PDF",
+
+  "privacyPolicy": "Privacy Policy",
+    "tapToChangePhoto": "Tap camera to change photo",
+    "nidaNumber": "NIDA Number",
+    "typeArea": "Type area",
+    "pickOnMap": "Pick on map",
+    "typeAreaOrPickOnMap": "Type area or pick on map",
+    "oops": "Oops!"
 }

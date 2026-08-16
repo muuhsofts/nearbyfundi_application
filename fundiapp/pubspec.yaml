@@ -1,5 +1,6 @@
 name: netsaf_fund_app
 description: "NETSAF FUND APP – connect with trusted technicians, manage services, posts, portfolio and requests."
+publish_to: 'none'
 version: 1.0.0+1
 
 environment:
@@ -14,61 +15,69 @@ dependencies:
   # UI & Styling
   cupertino_icons: ^1.0.8
   google_fonts: ^6.2.1
-  flutter_spinkit: ^5.2.0
-  toastification: ^2.1.0
-  font_awesome_flutter: ^11.0.0
+  flutter_spinkit: ^5.2.1
+  toastification: ^2.3.0
+
+  # Point directly to Git master branch to bypass broken pub.dev cache
+  font_awesome_flutter:
+    git:
+      url: https://github.com/fluttercommunity/font_awesome_flutter.git
+      ref: master
 
   # Media & Files
   image_picker: ^1.1.2
   cached_network_image: ^3.4.1
-  record: ^7.1.1
-  audioplayers: ^6.8.1
-  emoji_picker_flutter: ^4.4.0
-  file_picker: ^8.1.4
-  open_file: ^4.0.0
-  path_provider: ^2.1.6
-  gallery_saver_plus: ^3.2.9
-  pdf: ^3.10.7
-  printing: ^5.11.0
-  share_plus: ^11.0.0
+  record: ^5.1.2
+  audioplayers: ^6.0.0
+  emoji_picker_flutter: ^3.0.0
+  file_picker: ^8.1.2
+  open_file: ^3.3.2
+  path_provider: ^2.1.4
+  gallery_saver_plus: ^3.0.0
+  pdf: ^3.10.8
+  printing: ^5.13.1
+  share_plus: ^10.0.0
 
-  # YouTube (thumbnail + open externally)
-  youtube_player_flutter: ^9.1.1
+  # YouTube & Browser Integration
+  youtube_player_flutter: ^9.0.1
   url_launcher: ^6.3.0
 
-  # State & Network
-  provider: ^6.0.5
+  # State Management & Network
+  provider: ^6.1.2
   dio: ^5.7.0
-  shared_preferences: ^2.3.5
+  http: ^1.2.2
+  shared_preferences: ^2.3.2
   intl: ^0.20.2
   flutter_cache_manager: ^3.4.1
 
   # Firebase & Notifications
-  firebase_core: ^4.10.0
-  firebase_messaging: ^16.3.0
-  flutter_local_notifications: ^19.4.1
+  firebase_core: ^3.6.0
+  firebase_messaging: ^15.1.3
+  flutter_local_notifications: ^18.0.0
 
-  # Device Features
-  geolocator: ^13.0.2
-  permission_handler: ^12.0.3
-  connectivity_plus: ^7.2.0
+  # Device Features & Permissions
+  geolocator: ^13.0.1
+  permission_handler: ^11.3.1
+  connectivity_plus: ^6.0.5
+
+  # Map & Location Logic
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^6.0.0
-  flutter_launcher_icons: ^0.14.3
+  flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.13.1
+
+dependency_overrides:
+  record_linux: ^1.2.0
+  record_platform_interface: ^1.2.0
 
 flutter:
   generate: true
   uses-material-design: true
-  assets:
-    - assets/images/
-    - assets/icons/
 
-flutter_launcher_icons:
-  android: true
-  ios: false
-  image_path: "assets/icons/netsaf.png"
-  adaptive_icon_background: "#006B5E"
-  adaptive_icon_foreground: "assets/icons/netsaf.png"
+  assets:
+    - assets/icons/
+    - assets/images/

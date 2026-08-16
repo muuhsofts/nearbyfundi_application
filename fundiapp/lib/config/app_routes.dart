@@ -35,6 +35,7 @@ class AppRoutes {
   static const String terms = '/terms';
   static const String faq = '/faq';
   static const String contactUs = '/contact-us';
+  static const String privacy = '/privacy';
 
   // =============================================
   // 🆕 SUBSCRIPTION ROUTES
@@ -50,6 +51,15 @@ class AppRoutes {
   // 🆕 DOWNLOADS ROUTE
   // =============================================
   static const String downloads = '/downloads';
+
+  // =============================================
+  // 🆕 REGISTRATION STEPS ROUTE
+  // =============================================
+  static const String registerStep1 = '/register-step1';
+  static const String registerStep2 = '/register-step2';
+  static const String registerStep3 = '/register-step3';
+  static const String registerStep4 = '/register-step4';
+  static const String registerReview = '/register-review';
 
   // ===== NAVIGATION HELPERS =====
   static String getChatRoute(int conversationId) => '/chat/$conversationId';

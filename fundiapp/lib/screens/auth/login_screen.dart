@@ -418,7 +418,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // ---- Sign Up ----
+                  // ---- Sign Up (UPDATED) ----
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -429,7 +429,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       TextButton(
-                        onPressed: () => Navigator.pushNamed(context, AppRoutes.register),
+                        // ✅ UPDATED: Now routes to the new 4-step flow
+                        onPressed: () => Navigator.pushNamed(context, AppRoutes.registerStep1),
                         style: TextButton.styleFrom(
                           padding: const EdgeInsets.symmetric(horizontal: 4),
                           minimumSize: const Size(0, 30),
