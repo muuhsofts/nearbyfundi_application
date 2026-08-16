@@ -1,14 +1,16 @@
 // lib/services/fcm_service.dart
-
 import 'dart:convert';
+
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
+
 import '../config/app_routes.dart';
 import 'fcm_event_bus.dart';
 
 class FcmService {
-  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+  static final GlobalKey<NavigatorState> navigatorKey =
+  GlobalKey<NavigatorState>();
 
   static final FirebaseMessaging _fcm = FirebaseMessaging.instance;
   static final FlutterLocalNotificationsPlugin _notifications =
@@ -55,10 +57,10 @@ class FcmService {
         playSound: true,
       );
 
-      await _notifications.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>()?.createNotificationChannel(
-        channel,
-      );
+      await _notifications
+          .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(channel);
 
       // Set foreground presentation options for iOS
       await _fcm.setForegroundNotificationPresentationOptions(
@@ -74,7 +76,8 @@ class FcmService {
         _handleNotificationTapFromRemote(initialMessage);
       }
 
-      FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTapFromRemote);
+      FirebaseMessaging.onMessageOpenedApp
+          .listen(_handleNotificationTapFromRemote);
 
       print('✅ FCM initialized');
     } catch (e) {
@@ -85,7 +88,8 @@ class FcmService {
   static void _showForegroundNotification(RemoteMessage message) {
     try {
       final title = message.notification?.title ?? 'FundiApp';
-      final body = message.notification?.body ?? 'You have a new notification';
+      final body =
+          message.notification?.body ?? 'You have a new notification';
 
       final context = navigatorKey.currentContext;
       if (context != null) {
@@ -110,24 +114,26 @@ class FcmService {
         'FundiApp Notifications',
         importance: Importance.high,
         priority: Priority.high,
-        icon: '@mipmap/ic_launcher',   // ✅ required for Android
+        icon: '@mipmap/ic_launcher',
+        channelShowBadge: true,
         showWhen: true,
         playSound: true,
         enableVibration: true,
       );
-      const NotificationDetails platform = NotificationDetails(android: android);
+
+      const NotificationDetails platform =
+      NotificationDetails(android: android);
 
       _notifications.show(
         DateTime.now().millisecondsSinceEpoch ~/ 1000,
         title,
         body,
         platform,
-        payload: message.data.isNotEmpty ? json.encode(message.data) : null,
+        payload:
+        message.data.isNotEmpty ? json.encode(message.data) : null,
       );
 
-      // 🔴 NEW: push this event live onto the bus so any listening
-      // Provider (NotificationProvider) can update in-app state — and
-      // the header bell — instantly, instead of on next manual refresh.
+      // Live event bus so NotificationProvider can update the bell instantly
       FcmEventBus.instance.emit({
         'title': title,
         'body': body,
@@ -142,6 +148,7 @@ class FcmService {
 
   static void _handleNotificationTapFromLocal(NotificationResponse response) {
     if (response.payload == null) return;
+
     try {
       final data = Map<String, dynamic>.from(
         json.decode(response.payload!) as Map<String, dynamic>,
@@ -163,7 +170,6 @@ class FcmService {
   static void _navigateBasedOnType(Map<String, dynamic> data) {
     final type = data['type'] ?? '';
     final conversationId = data['conversation_id'];
-    final requestId = data['request_id'];
 
     switch (type) {
       case 'chat_message':
@@ -202,7 +208,6 @@ class FcmService {
   }
 
   static void _navigateToBlog() {
-    // blog is the same as posts – we defined it in AppRoutes
     navigatorKey.currentState?.pushNamed(AppRoutes.blog);
   }
 

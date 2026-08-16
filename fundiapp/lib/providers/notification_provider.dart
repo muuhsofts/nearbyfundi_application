@@ -1,38 +1,30 @@
 // lib/providers/notification_provider.dart
-
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
 import '../services/fcm_service.dart';
 import '../services/fcm_event_bus.dart';
-import '../services/badge_service.dart';
 import '../services/api_service.dart';
 import '../config/app_routes.dart';
-
-// Import the correct notification package
-import 'package:flutter_local_notifications/flutter_local_notifications.dart'
-as flutter_local_notifications;
 
 class NotificationProvider extends ChangeNotifier {
   // ============================================
   // DEPENDENCIES
   // ============================================
-
-  final flutter_local_notifications.FlutterLocalNotificationsPlugin
-  _localNotifications =
-  flutter_local_notifications.FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _localNotifications =
+  FlutterLocalNotificationsPlugin();
   final ApiService _apiService = ApiService();
 
   // ============================================
   // STATE
   // ============================================
-
   List<Map<String, dynamic>> _notifications = [];
   bool _isLoading = false;
   bool _isInitialized = false;
   String? _error;
-
   StreamSubscription? _fcmSub;
 
   /// True for one frame after a live FCM push bumps the unread count.
@@ -43,7 +35,6 @@ class NotificationProvider extends ChangeNotifier {
   // ============================================
   // GETTERS
   // ============================================
-
   List<Map<String, dynamic>> get notifications => _notifications;
   bool get isLoading => _isLoading;
   bool get isInitialized => _isInitialized;
@@ -60,7 +51,6 @@ class NotificationProvider extends ChangeNotifier {
   // ============================================
   // INITIALIZATION
   // ============================================
-
   NotificationProvider() {
     _init();
   }
@@ -69,8 +59,7 @@ class NotificationProvider extends ChangeNotifier {
     try {
       const AndroidInitializationSettings android =
       AndroidInitializationSettings('@mipmap/ic_launcher');
-      const DarwinInitializationSettings ios =
-      DarwinInitializationSettings();
+      const DarwinInitializationSettings ios = DarwinInitializationSettings();
       const InitializationSettings settings =
       InitializationSettings(android: android, iOS: ios);
 
@@ -80,7 +69,6 @@ class NotificationProvider extends ChangeNotifier {
       );
 
       _isInitialized = true;
-
       await loadNotifications();
 
       // Live updates: whenever FcmService receives a foreground push,
@@ -107,11 +95,7 @@ class NotificationProvider extends ChangeNotifier {
     _pulseBadge = true;
     notifyListeners();
 
-    BadgeService.setBadgeCount(unreadCount);
-
-    // Reconcile with the server shortly after — the backend has already
-    // persisted the real Notification row by the time the push lands,
-    // so this replaces our local placeholder with the canonical data.
+    // Reconcile with the server shortly after
     Future.delayed(const Duration(seconds: 2), loadNotifications);
   }
 
@@ -124,7 +108,6 @@ class NotificationProvider extends ChangeNotifier {
   // ============================================
   // NOTIFICATION TAP HANDLER
   // ============================================
-
   void _onNotificationTap(NotificationResponse response) {
     final payload = response.payload;
     if (payload == null) return;
@@ -146,7 +129,6 @@ class NotificationProvider extends ChangeNotifier {
   void _handleNavigation(BuildContext context, Map<String, dynamic> data) {
     final type = data['type'] ?? '';
     final conversationId = data['conversation_id'];
-    final requestId = data['request_id'];
 
     switch (type) {
       case 'chat_message':
@@ -157,22 +139,18 @@ class NotificationProvider extends ChangeNotifier {
           );
         }
         break;
-
       case 'new_request':
       case 'request_accepted':
       case 'request_rejected':
         FcmService.navigatorKey.currentState?.pushNamed(AppRoutes.requests);
         break;
-
       case 'post_comment':
       case 'post_like':
         FcmService.navigatorKey.currentState?.pushNamed(AppRoutes.blog);
         break;
-
       case 'profile_update':
         FcmService.navigatorKey.currentState?.pushNamed(AppRoutes.profile);
         break;
-
       default:
         FcmService.navigatorKey.currentState?.pushNamed(AppRoutes.home);
     }
@@ -181,7 +159,6 @@ class NotificationProvider extends ChangeNotifier {
   // ============================================
   // LOCAL NOTIFICATIONS
   // ============================================
-
   Future<void> showLocalNotification({
     required String title,
     required String body,
@@ -201,6 +178,7 @@ class NotificationProvider extends ChangeNotifier {
         channelDescription: 'Notifications from FundiApp',
         importance: Importance.high,
         priority: Priority.high,
+        channelShowBadge: true,
         showWhen: true,
         playSound: true,
         enableVibration: true,
@@ -250,7 +228,6 @@ class NotificationProvider extends ChangeNotifier {
   // ============================================
   // FCM
   // ============================================
-
   Future<void> initFcm() async {
     try {
       await FcmService.init();
@@ -273,7 +250,6 @@ class NotificationProvider extends ChangeNotifier {
   // ============================================
   // API OPERATIONS
   // ============================================
-
   Future<void> loadNotifications() async {
     if (_isLoading) return;
 
@@ -297,7 +273,6 @@ class NotificationProvider extends ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
-      BadgeService.setBadgeCount(unreadCount);
     }
   }
 
@@ -310,11 +285,11 @@ class NotificationProvider extends ChangeNotifier {
       final response = await _apiService.markNotificationAsRead(notificationId);
 
       if (response.success) {
-        final index = _notifications.indexWhere((n) => n['id'] == notificationId);
+        final index =
+        _notifications.indexWhere((n) => n['id'] == notificationId);
         if (index != -1) {
           _notifications[index]['is_read'] = true;
           notifyListeners();
-          BadgeService.setBadgeCount(unreadCount);
           return true;
         }
       }
@@ -334,7 +309,6 @@ class NotificationProvider extends ChangeNotifier {
           notification['is_read'] = true;
         }
         notifyListeners();
-        BadgeService.setBadgeCount(unreadCount);
         return true;
       }
       return false;
@@ -351,7 +325,6 @@ class NotificationProvider extends ChangeNotifier {
       if (response.success) {
         _notifications.clear();
         notifyListeners();
-        BadgeService.setBadgeCount(unreadCount);
         return true;
       }
       return false;
@@ -368,7 +341,6 @@ class NotificationProvider extends ChangeNotifier {
       if (response.success) {
         _notifications.removeWhere((n) => n['id'] == notificationId);
         notifyListeners();
-        BadgeService.setBadgeCount(unreadCount);
         return true;
       }
       return false;
@@ -381,7 +353,6 @@ class NotificationProvider extends ChangeNotifier {
   // ============================================
   // LOCAL OPERATIONS
   // ============================================
-
   void addLocalNotification(Map<String, dynamic> notification) {
     final exists = _notifications.any((n) => n['id'] == notification['id']);
     if (!exists) {
@@ -412,7 +383,6 @@ class NotificationProvider extends ChangeNotifier {
   // ============================================
   // UTILITY
   // ============================================
-
   void clearError() {
     _error = null;
     notifyListeners();
@@ -486,7 +456,6 @@ class NotificationProvider extends ChangeNotifier {
   // ============================================
   // CLEANUP
   // ============================================
-
   @override
   void dispose() {
     _fcmSub?.cancel();
