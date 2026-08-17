@@ -2,6 +2,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 import '../../../config/app_theme.dart';
 import '../../../providers/auth_provider.dart';
@@ -19,16 +20,45 @@ class RegisterStep2Screen extends StatefulWidget {
 
 class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
   final _formKey = GlobalKey<FormState>();
-  final _nidaController = TextEditingController();
-  String _idType = 'nida'; // 'nida', 'drivers_license', 'voter_id'
+  final _idController = TextEditingController();
+  String _idType = 'nida';
   File? _idImage;
   final ImagePicker _picker = ImagePicker();
+  bool _isScanning = false;
+  bool _isLoadingCheck = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkStepAccess();
+  }
+
+  // ============================================================
+  // 🔥 FIXED: Allow access if Step 1 is done (step >= 1)
+  // ============================================================
+  Future<void> _checkStepAccess() async {
+    final auth = context.read<AuthProvider>();
+    final step = await auth.getRegistrationStep(widget.technicianId);
+    if (!mounted) return;
+    if (step == null) {
+      Navigator.pushReplacementNamed(context, AppRoutes.login);
+      return;
+    }
+    // If Step 1 is NOT completed, go back to Step 1
+    if (step < 1) {
+      Navigator.pushReplacementNamed(context, AppRoutes.registerStep1);
+    }
+    // Otherwise stay (even if step >= 2, they can edit)
+    // No automatic forward redirection – let the user use the "Next" button.
+  }
 
   @override
   void dispose() {
-    _nidaController.dispose();
+    _idController.dispose();
     super.dispose();
   }
+
+  bool get _isFormValid => _formKey.currentState?.validate() ?? false;
 
   Future<void> _pickIdImage() async {
     showModalBottomSheet(
@@ -77,11 +107,56 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
     );
   }
 
+  Future<void> _startScan() async {
+    setState(() => _isScanning = true);
+    final result = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const _ScannerScreen()),
+    );
+    setState(() => _isScanning = false);
+    if (result != null) {
+      final digits = result.replaceAll(RegExp(r'\D'), '');
+      _idController.text = digits;
+      _formKey.currentState?.validate();
+    }
+  }
+
+  String? _validateId(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Please enter the ID number';
+    }
+    final digits = value.replaceAll(RegExp(r'\D'), '');
+    if (digits.isEmpty) {
+      return 'ID must contain digits only';
+    }
+    switch (_idType) {
+      case 'nida':
+        if (digits.length != 20) {
+          return 'NIDA must be exactly 20 digits';
+        }
+        break;
+      case 'voter_id':
+        if (digits.length != 12) {
+          return 'Voter ID must be exactly 12 digits';
+        }
+        break;
+      case 'drivers_license':
+        if (digits.length < 10) {
+          return 'Driver\'s License must be at least 10 digits';
+        }
+        break;
+    }
+    return null;
+  }
+
   Future<void> _nextStep() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_isFormValid) return;
     if (_idImage == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please upload your ID document'), backgroundColor: AppTheme.warning),
+        const SnackBar(
+          content: Text('Please upload your ID document'),
+          backgroundColor: AppTheme.warning,
+        ),
       );
       return;
     }
@@ -89,22 +164,36 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
     final auth = context.read<AuthProvider>();
     auth.clearError();
 
-    final res = await auth.api.registerTechnicianStep2(
+    // ✅ Use provider method – sets isLoading = true
+    final success = await auth.registerTechnicianStep2(
       technicianId: widget.technicianId,
-      nida: _nidaController.text.trim(),
+      nida: _idController.text.trim(),
       idDocumentType: _idType,
       idDocumentImage: _idImage!,
     );
 
     if (!mounted) return;
 
-    if (res.success) {
-      Navigator.pushNamed(context, AppRoutes.registerStep3, arguments: widget.technicianId);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(res.message), backgroundColor: AppTheme.error),
+    if (success) {
+      Navigator.pushReplacementNamed(
+        context,
+        AppRoutes.registerStep3,
+        arguments: widget.technicianId,
       );
+    } else {
+      if (auth.errorMessage != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(auth.errorMessage!),
+            backgroundColor: AppTheme.error,
+          ),
+        );
+      }
     }
+  }
+
+  void _goBack() {
+    Navigator.pushReplacementNamed(context, AppRoutes.registerStep1);
   }
 
   @override
@@ -114,17 +203,35 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(title: const Text('Step 2: Identification'), centerTitle: true, elevation: 0),
+      appBar: AppBar(
+        title: const Text('Step 2: Identification'),
+        centerTitle: true,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: auth.isLoading ? null : _goBack,
+          tooltip: 'Back to Step 1',
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.arrow_forward),
+            onPressed: (auth.isLoading || _isLoadingCheck || !_isFormValid || _idImage == null)
+                ? null
+                : _nextStep,
+            tooltip: 'Next',
+          ),
+        ],
+      ),
       body: LoadingOverlay(
-        isLoading: auth.isLoading,
+        isLoading: auth.isLoading || _isLoadingCheck,
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Form(
             key: _formKey,
+            onChanged: () => setState(() {}),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // ID Document Image with Camera/Gallery options
                 Center(
                   child: Stack(
                     children: [
@@ -154,7 +261,11 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
                               color: theme.colorScheme.primary,
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(Icons.camera_alt, size: 18, color: Colors.white),
+                            child: const Icon(
+                              Icons.camera_alt,
+                              size: 18,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ),
@@ -163,32 +274,46 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
                 ),
                 const SizedBox(height: 24),
 
-                // NIDA with character counter
-                TextFormField(
-                  controller: _nidaController,
-                  maxLength: 20, // ✅ Shows counter (e.g., 5/20)
-                  decoration: InputDecoration(
-                    hintText: 'NIDA Number (20 digits)',
-                    prefixIcon: const Icon(Icons.badge_outlined),
-                  ),
-                  validator: (v) => v != null && v.length == 20 ? null : 'NIDA must be 20 digits',
-                  keyboardType: TextInputType.number,
-                ),
-                const SizedBox(height: 16),
-
-                // ID Type Dropdown
                 DropdownButtonFormField<String>(
                   value: _idType,
                   items: const [
                     DropdownMenuItem(value: 'nida', child: Text('NIDA')),
-                    DropdownMenuItem(value: 'drivers_license', child: Text('Driver\'s License')),
-                    DropdownMenuItem(value: 'voter_id', child: Text('Voter\'s ID (KURA)')),
+                    DropdownMenuItem(
+                      value: 'drivers_license',
+                      child: Text('Driver\'s License'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'voter_id',
+                      child: Text('Voter\'s ID (KURA)'),
+                    ),
                   ],
-                  onChanged: (val) => setState(() => _idType = val!),
+                  onChanged: (val) {
+                    setState(() {
+                      _idType = val!;
+                      _formKey.currentState?.validate();
+                    });
+                  },
                   decoration: const InputDecoration(
                     hintText: 'Select ID Type',
                     prefixIcon: Icon(Icons.assignment_ind_outlined),
                   ),
+                ),
+                const SizedBox(height: 16),
+
+                TextFormField(
+                  controller: _idController,
+                  decoration: InputDecoration(
+                    hintText: _getHintText(),
+                    prefixIcon: const Icon(Icons.badge_outlined),
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.qr_code_scanner),
+                      onPressed: _isScanning ? null : _startScan,
+                      tooltip: 'Scan barcode / QR code',
+                    ),
+                  ),
+                  validator: _validateId,
+                  keyboardType: TextInputType.text,
+                  onChanged: (_) => setState(() {}),
                 ),
                 const SizedBox(height: 32),
 
@@ -196,11 +321,103 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
                   text: 'Next →',
                   onPressed: _nextStep,
                   isLoading: auth.isLoading,
+                  isDisabled: !_isFormValid || _idImage == null || auth.isLoading,
                 ),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  String _getHintText() {
+    switch (_idType) {
+      case 'nida':
+        return 'NIDA Number (20 digits)';
+      case 'voter_id':
+        return 'Voter ID (12 digits)';
+      case 'drivers_license':
+        return 'Driver\'s License (min 10 digits)';
+      default:
+        return 'Enter ID number';
+    }
+  }
+}
+
+class _ScannerScreen extends StatefulWidget {
+  const _ScannerScreen({super.key});
+
+  @override
+  State<_ScannerScreen> createState() => _ScannerScreenState();
+}
+
+class _ScannerScreenState extends State<_ScannerScreen> {
+  final MobileScannerController _controller = MobileScannerController(
+    formats: [BarcodeFormat.qrCode, BarcodeFormat.code128, BarcodeFormat.code39],
+  );
+  bool _isDetecting = false;
+  bool _isPopped = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Scan ID'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.flash_on),
+            onPressed: () => _controller.toggleTorch(),
+          ),
+          IconButton(
+            icon: const Icon(Icons.cameraswitch),
+            onPressed: () => _controller.switchCamera(),
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          MobileScanner(
+            controller: _controller,
+            onDetect: (capture) {
+              if (_isDetecting || _isPopped) return;
+              _isDetecting = true;
+              final barcodes = capture.barcodes;
+              for (final barcode in barcodes) {
+                final rawValue = barcode.rawValue;
+                if (rawValue != null) {
+                  _isPopped = true;
+                  Navigator.pop(context, rawValue);
+                  _isDetecting = false;
+                  return;
+                }
+              }
+              _isDetecting = false;
+            },
+          ),
+          Center(
+            child: Container(
+              width: 250,
+              height: 100,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.white, width: 3),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Center(
+                child: Text(
+                  'Align barcode/QR here',
+                  style: TextStyle(color: Colors.white, fontSize: 16),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

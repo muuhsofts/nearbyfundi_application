@@ -173,7 +173,6 @@ class ApiService {
     return _post('/v19/technicians/profile/photo', data: formData);
   }
 
-  // Still only available on V2 (requires active subscription)
   Future<ApiResponse> updateTechnicianServices(List<int> serviceIds) =>
       _post('/v2/technicians/services', data: {'service_ids': serviceIds});
 
@@ -181,7 +180,6 @@ class ApiService {
   // FUNDI – HEARTBEAT, LOCATION & ONLINE STATUS (V19)
   // ============================================================
 
-  /// Send live GPS location (used by TechnicianHeartbeatService)
   Future<ApiResponse> sendTechnicianHeartbeat({
     required double latitude,
     required double longitude,
@@ -273,6 +271,12 @@ class ApiService {
 
   Future<ApiResponse> approveTechnicianByAdmin(int technicianId) =>
       _post('/v19/admin/technicians/$technicianId/approve');
+
+  // ============================================================
+  // ✅ NEW: Registration Status (public, no auth)
+  // ============================================================
+  Future<ApiResponse> getRegistrationStatus(int technicianId) =>
+      _get('/technicians/registration-status/$technicianId');
 
   // ============================================================
   // FUNDI – POSTS (WITH YOUTUBE SUPPORT)
@@ -448,15 +452,12 @@ class ApiService {
   // REQUEST TRACKING (Fundi side)
   // ============================================================
 
-  /// Mark request as "On the Way"
   Future<ApiResponse> markOnTheWay(int requestId) =>
       _patch('/v4/requests/$requestId/on-the-way');
 
-  /// Mark that technician has arrived
   Future<ApiResponse> markArrived(int requestId) =>
       _patch('/v4/requests/$requestId/arrive');
 
-  /// Get live tracking data
   Future<ApiResponse> getTrackingData(int requestId) =>
       _get('/v4/requests/$requestId/tracking');
 

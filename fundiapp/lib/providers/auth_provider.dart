@@ -1,4 +1,6 @@
+// lib/providers/auth_provider.dart
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../services/storage_service.dart';
@@ -19,7 +21,7 @@ class AuthProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _error;
 
-  // ✅ NEW: Expose the API service for registration steps
+  // Expose the API service for registration steps (legacy usage)
   ApiService get api => _api;
 
   AuthProvider({GlobalKey<NavigatorState>? navigatorKey}) {
@@ -203,7 +205,125 @@ class AuthProvider extends ChangeNotifier {
     await _clearSession();
   }
 
-  // ==================== PRIVATE HELPERS ====================
+  // ============================================================
+  // GET REGISTRATION STEP (for resume logic)
+  // ============================================================
+  Future<int?> getRegistrationStep(int technicianId) async {
+    final res = await _api.getRegistrationStatus(technicianId);
+    if (res.success && res.data != null) {
+      final data = res.data as Map<String, dynamic>;
+      if (data['registration_completed'] == true) {
+        return null; // already completed, user should login
+      }
+      return data['registration_step'] as int?;
+    }
+    return null;
+  }
+
+  // ============================================================
+  // 4-STEP REGISTRATION METHODS (with loading support)
+  // ============================================================
+
+  /// Step 1: Personal Information
+  /// Returns technicianId on success, null on failure.
+  Future<int?> registerTechnicianStep1(Map<String, dynamic> data) async {
+    _setLoading(true);
+    final res = await _api.registerTechnicianStep1(data);
+    _setLoading(false);
+    if (res.success) {
+      return res.data['technician_id'] as int?;
+    } else {
+      _error = res.message;
+      notifyListeners();
+      return null;
+    }
+  }
+
+  /// Step 2: Identification (NIDA / Driver's License / Voter ID)
+  Future<bool> registerTechnicianStep2({
+    required int technicianId,
+    required String nida,
+    required String idDocumentType,
+    required File idDocumentImage,
+  }) async {
+    _setLoading(true);
+    final res = await _api.registerTechnicianStep2(
+      technicianId: technicianId,
+      nida: nida,
+      idDocumentType: idDocumentType,
+      idDocumentImage: idDocumentImage,
+    );
+    _setLoading(false);
+    if (res.success) {
+      return true;
+    } else {
+      _error = res.message;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Step 3: Working Area
+  Future<bool> registerTechnicianStep3({
+    required int technicianId,
+    required String area,
+    double? latitude,
+    double? longitude,
+  }) async {
+    _setLoading(true);
+    final res = await _api.registerTechnicianStep3(
+      technicianId: technicianId,
+      area: area,
+      latitude: latitude,
+      longitude: longitude,
+    );
+    _setLoading(false);
+    if (res.success) {
+      return true;
+    } else {
+      _error = res.message;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Step 4: Services & Pricing
+  Future<bool> registerTechnicianStep4({
+    required int technicianId,
+    required List<Map<String, dynamic>> services,
+  }) async {
+    _setLoading(true);
+    final res = await _api.registerTechnicianStep4(
+      technicianId: technicianId,
+      services: services,
+    );
+    _setLoading(false);
+    if (res.success) {
+      return true;
+    } else {
+      _error = res.message;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Submit final registration
+  Future<bool> submitTechnicianRegistration(int technicianId) async {
+    _setLoading(true);
+    final res = await _api.submitTechnicianRegistration(technicianId);
+    _setLoading(false);
+    if (res.success) {
+      return true;
+    } else {
+      _error = res.message;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // ============================================================
+  // PRIVATE HELPERS
+  // ============================================================
 
   Future<void> _loadStoredSession() async {
     final storedToken = await StorageService.getToken();

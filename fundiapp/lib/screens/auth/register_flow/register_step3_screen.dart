@@ -21,13 +21,46 @@ class _RegisterStep3ScreenState extends State<RegisterStep3Screen> {
   final _areaController = TextEditingController();
   double? _lat;
   double? _lng;
+  bool _isLoadingCheck = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkStepAccess();
+  }
+
+  Future<void> _checkStepAccess() async {
+    final auth = context.read<AuthProvider>();
+    final step = await auth.getRegistrationStep(widget.technicianId);
+    if (!mounted) return;
+    if (step == null) {
+      Navigator.pushReplacementNamed(context, AppRoutes.login);
+      return;
+    }
+    // Allow if Step 2 is completed (step >= 2)
+    if (step < 2) {
+      Navigator.pushReplacementNamed(
+        context,
+        AppRoutes.registerStep2,
+        arguments: widget.technicianId,
+      );
+    }
+    // Otherwise stay
+  }
+
+  @override
+  void dispose() {
+    _areaController.dispose();
+    super.dispose();
+  }
+
+  bool get _isFormValid => _formKey.currentState?.validate() ?? false;
 
   Future<void> _openMapPicker() async {
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(builder: (_) => const MapLocationPickerScreen()),
     );
-
     if (result != null && mounted) {
       setState(() {
         _areaController.text = result['name'] as String;
@@ -38,27 +71,37 @@ class _RegisterStep3ScreenState extends State<RegisterStep3Screen> {
   }
 
   Future<void> _nextStep() async {
-    if (!_formKey.currentState!.validate()) return;
-
+    if (!_isFormValid) return;
     final auth = context.read<AuthProvider>();
     auth.clearError();
-
-    final res = await auth.api.registerTechnicianStep3(
+    final success = await auth.registerTechnicianStep3(
       technicianId: widget.technicianId,
       area: _areaController.text.trim(),
       latitude: _lat,
       longitude: _lng,
     );
-
     if (!mounted) return;
-
-    if (res.success) {
-      Navigator.pushNamed(context, AppRoutes.registerStep4, arguments: widget.technicianId);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(res.message), backgroundColor: AppTheme.error),
+    if (success) {
+      Navigator.pushReplacementNamed(
+        context,
+        AppRoutes.registerStep4,
+        arguments: widget.technicianId,
       );
+    } else {
+      if (auth.errorMessage != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(auth.errorMessage!), backgroundColor: AppTheme.error),
+        );
+      }
     }
+  }
+
+  void _goBack() {
+    Navigator.pushReplacementNamed(
+      context,
+      AppRoutes.registerStep2,
+      arguments: widget.technicianId,
+    );
   }
 
   @override
@@ -68,13 +111,30 @@ class _RegisterStep3ScreenState extends State<RegisterStep3Screen> {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(title: const Text('Step 3: Working Area'), centerTitle: true, elevation: 0),
+      appBar: AppBar(
+        title: const Text('Step 3: Working Area'),
+        centerTitle: true,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: auth.isLoading ? null : _goBack,
+          tooltip: 'Back to Step 2',
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.arrow_forward),
+            onPressed: (auth.isLoading || _isLoadingCheck || !_isFormValid) ? null : _nextStep,
+            tooltip: 'Next',
+          ),
+        ],
+      ),
       body: LoadingOverlay(
-        isLoading: auth.isLoading,
+        isLoading: auth.isLoading || _isLoadingCheck,
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Form(
             key: _formKey,
+            onChanged: () => setState(() {}),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -90,6 +150,7 @@ class _RegisterStep3ScreenState extends State<RegisterStep3Screen> {
                     ),
                   ),
                   validator: (v) => v != null && v.trim().isNotEmpty ? null : 'Area is required',
+                  onChanged: (_) => setState(() {}),
                 ),
                 const SizedBox(height: 8),
                 if (_lat != null && _lng != null)
@@ -102,7 +163,8 @@ class _RegisterStep3ScreenState extends State<RegisterStep3Screen> {
                 CustomButton(
                   text: 'Next →',
                   onPressed: _nextStep,
-                  isLoading: auth.isLoading, // ✅ Button shows spinner
+                  isLoading: auth.isLoading,
+                  isDisabled: !_isFormValid || auth.isLoading,
                 ),
               ],
             ),

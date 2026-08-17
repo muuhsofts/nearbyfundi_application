@@ -1,3 +1,4 @@
+// lib/screens/auth/forgot_password_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/app_theme.dart';
@@ -38,8 +39,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           behavior: SnackBarBehavior.floating,
         ),
       );
-      Navigator.pushNamed(context, AppRoutes.reset,
-          arguments: _emailController.text.trim());
+      Navigator.pushNamed(context, AppRoutes.reset, arguments: _emailController.text.trim());
     } else if (auth.errorMessage != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -79,18 +79,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       ),
                       borderRadius: BorderRadius.circular(24),
                     ),
-                    child: const Icon(
-                      Icons.lock_reset_rounded,
-                      size: 40,
-                      color: Colors.white,
-                    ),
+                    child: const Icon(Icons.lock_reset_rounded, size: 40, color: Colors.white),
                   ),
                   const SizedBox(height: 24),
                   Text(
                     l10n.resetPassword,
-                    style: theme.textTheme.displayMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                    style: theme.textTheme.displayMedium?.copyWith(fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -111,14 +105,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                             prefixIcon: const Icon(Icons.email_outlined),
                           ),
                           validator: (v) =>
-                          v != null && v.contains('@')
-                              ? null
-                              : 'Enter a valid email',
+                          v != null && v.contains('@') ? null : 'Enter a valid email',
                         ),
                         const SizedBox(height: 32),
                         CustomButton(
                           text: l10n.sendResetCode,
                           onPressed: _handleSend,
+                          isLoading: auth.isLoading,
                         ),
                         const SizedBox(height: 24),
                         TextButton(

@@ -1,3 +1,4 @@
+// lib/screens/auth/login_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:provider/provider.dart';
@@ -10,6 +11,7 @@ import '../../l10n/app_localizations.dart';
 import '../../models/country.dart';
 import '../../config/country_codes.dart';
 import '../../widgets/country_picker.dart';
+import '../../services/storage_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -29,14 +31,13 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _rememberMe = false;
   bool _isEmailLogin = true;
 
-  // Country picker – using static config
   late final List<Country> _countries;
   late Country _selectedCountry;
 
   @override
   void initState() {
     super.initState();
-    _countries = CountryCodes.all; // no cast needed
+    _countries = CountryCodes.all;
     _selectedCountry = _countries.firstWhere(
           (c) => c.dialCode == '+255',
       orElse: () => _countries.first,
@@ -57,10 +58,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_termsAccepted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Please accept the Terms & Conditions to continue',
-            style: const TextStyle(color: Colors.white),
-          ),
+          content: const Text('Please accept the Terms & Conditions to continue'),
           backgroundColor: Colors.orange.shade700,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -74,7 +72,6 @@ class _LoginScreenState extends State<LoginScreen> {
       identifier = _emailController.text.trim();
     } else {
       final digits = _phoneController.text.trim().replaceAll(RegExp(r'[^0-9]'), '');
-      // ✅ Strip '+' from the dial code to match database format
       final dialCode = _selectedCountry.dialCode.replaceAll('+', '');
       identifier = '$dialCode$digits';
     }
@@ -111,11 +108,7 @@ class _LoginScreenState extends State<LoginScreen> {
       appBar: AppBar(
         title: const Text(
           'NETSAF FUNDI APP',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-            color: Colors.white,
-          ),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white),
         ),
         centerTitle: true,
         elevation: 0,
@@ -133,7 +126,6 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // ---- NETSAF Logo (Plain Card, No Shadow) ----
                   Center(
                     child: Container(
                       width: 120,
@@ -154,8 +146,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 24),
-
-                  // ---- Welcome Text ----
                   Text(
                     l10n.welcomeBack,
                     style: theme.textTheme.headlineMedium?.copyWith(
@@ -167,14 +157,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 8),
                   Text(
                     l10n.signInManage,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.hintColor,
-                    ),
+                    style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 40),
 
-                  // ---- Toggle: Email / Phone ----
                   SegmentedButton<String>(
                     segments: const [
                       ButtonSegment(value: 'email', label: Text('Email')),
@@ -200,7 +187,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // ---- Conditional field ----
                   if (_isEmailLogin)
                     _buildField(
                       context,
@@ -213,9 +199,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           hintText: 'you@example.com',
                           prefixIcon: Icons.email_outlined,
                         ),
-                        validator: (v) => v != null && v.contains('@')
-                            ? null
-                            : 'Enter a valid email address',
+                        validator: (v) =>
+                        v != null && v.contains('@') ? null : 'Enter a valid email address',
                       ),
                     )
                   else
@@ -228,9 +213,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           children: [
                             CountryPicker(
                               selectedCountry: _selectedCountry,
-                              onChanged: (country) {
-                                setState(() => _selectedCountry = country);
-                              },
+                              onChanged: (country) => setState(() => _selectedCountry = country),
                               countries: _countries,
                             ),
                             const SizedBox(width: 8),
@@ -261,7 +244,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   const SizedBox(height: 20),
 
-                  // ---- Password ----
                   _buildFieldLabel(l10n.password),
                   const SizedBox(height: 6),
                   TextFormField(
@@ -273,22 +255,18 @@ class _LoginScreenState extends State<LoginScreen> {
                       prefixIcon: Icons.lock_outline_rounded,
                       suffixIcon: IconButton(
                         icon: Icon(
-                          _obscurePassword
-                              ? Icons.visibility_off_rounded
-                              : Icons.visibility_rounded,
+                          _obscurePassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
                           color: theme.hintColor,
                           size: 20,
                         ),
                         onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                       ),
                     ),
-                    validator: (v) => v != null && v.length >= 6
-                        ? null
-                        : 'Password must be at least 6 characters',
+                    validator: (v) =>
+                    v != null && v.length >= 6 ? null : 'Password must be at least 6 characters',
                   ),
                   const SizedBox(height: 8),
 
-                  // ---- Remember me & Forgot ----
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -299,13 +277,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             height: 20,
                             child: Checkbox(
                               value: _rememberMe,
-                              onChanged: (value) {
-                                setState(() => _rememberMe = value ?? false);
-                              },
+                              onChanged: (value) => setState(() => _rememberMe = value ?? false),
                               activeColor: theme.primaryColor,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(4),
-                              ),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
                           ),
@@ -339,7 +313,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // ---- Terms ----
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -348,13 +321,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         height: 22,
                         child: Checkbox(
                           value: _termsAccepted,
-                          onChanged: (value) {
-                            setState(() => _termsAccepted = value ?? false);
-                          },
+                          onChanged: (value) => setState(() => _termsAccepted = value ?? false),
                           activeColor: theme.primaryColor,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(4),
-                          ),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
                       ),
@@ -377,9 +346,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   decorationColor: theme.primaryColor.withOpacity(0.4),
                                 ),
                                 recognizer: TapGestureRecognizer()
-                                  ..onTap = () {
-                                    Navigator.pushNamed(context, AppRoutes.terms);
-                                  },
+                                  ..onTap = () => Navigator.pushNamed(context, AppRoutes.terms),
                               ),
                               const TextSpan(text: ' and '),
                               TextSpan(
@@ -411,31 +378,53 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 28),
 
-                  // ---- Sign In ----
                   CustomButton(
                     text: l10n.signIn,
                     onPressed: _handleLogin,
+                    isLoading: auth.isLoading,
                   ),
                   const SizedBox(height: 20),
 
-                  // ---- Sign Up (UPDATED) ----
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
                         l10n.dontHaveAccount,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.hintColor,
-                        ),
+                        style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
                       ),
                       TextButton(
-                        // ✅ UPDATED: Now routes to the new 4-step flow
-                        onPressed: () => Navigator.pushNamed(context, AppRoutes.registerStep1),
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          minimumSize: const Size(0, 30),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
+                        // ✅ Resume logic
+                        onPressed: () async {
+                          final storedId = await StorageService.getTechnicianId();
+                          if (storedId != null) {
+                            final auth = context.read<AuthProvider>();
+                            final step = await auth.getRegistrationStep(storedId);
+                            if (step != null) {
+                              switch (step) {
+                                case 1:
+                                  Navigator.pushNamed(context, AppRoutes.registerStep1);
+                                  break;
+                                case 2:
+                                  Navigator.pushNamed(context, AppRoutes.registerStep2, arguments: storedId);
+                                  break;
+                                case 3:
+                                  Navigator.pushNamed(context, AppRoutes.registerStep3, arguments: storedId);
+                                  break;
+                                case 4:
+                                  Navigator.pushNamed(context, AppRoutes.registerStep4, arguments: storedId);
+                                  break;
+                                default:
+                                  Navigator.pushNamed(context, AppRoutes.registerStep1);
+                              }
+                              return;
+                            } else {
+                              // Completed or invalid – clear and start fresh
+                              await StorageService.clearTechnicianData();
+                            }
+                          }
+                          // No pending registration – start fresh
+                          Navigator.pushNamed(context, AppRoutes.registerStep1);
+                        },
                         child: Text(
                           l10n.signUp,
                           style: TextStyle(
@@ -480,7 +469,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-// ---- Shared input decoration ----
 InputDecoration _inputDecoration(
     BuildContext context, {
       required String hintText,

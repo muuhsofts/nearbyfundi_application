@@ -12,6 +12,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../models/country.dart';
 import '../../../config/country_codes.dart';
 import '../../../widgets/country_picker.dart';
+import '../../../services/storage_service.dart';
 
 class RegisterStep1Screen extends StatefulWidget {
   const RegisterStep1Screen({super.key});
@@ -37,16 +38,35 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
   late Country _selectedCountry;
 
   int _passwordStrength = 0;
+  bool _isLoadingCheck = false;
 
   @override
   void initState() {
     super.initState();
+    _checkStepAccess();
     _countries = CountryCodes.all;
     _selectedCountry = _countries.firstWhere(
           (c) => c.dialCode == '+255',
       orElse: () => _countries.first,
     );
     _passwordController.addListener(_updatePasswordStrength);
+  }
+
+  // ✅ If step is already >=1, redirect to Step 2
+  Future<void> _checkStepAccess() async {
+    final storedId = await StorageService.getTechnicianId();
+    if (storedId == null) return; // no pending registration
+    final auth = context.read<AuthProvider>();
+    final step = await auth.getRegistrationStep(storedId);
+    if (!mounted) return;
+    if (step != null && step >= 1) {
+      // Already completed Step 1, go to Step 2
+      Navigator.pushReplacementNamed(
+        context,
+        AppRoutes.registerStep2,
+        arguments: storedId,
+      );
+    }
   }
 
   @override
@@ -125,11 +145,27 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
     );
   }
 
+  bool get _isFormValid {
+    if (_nameController.text.trim().isEmpty) return false;
+    if (!_emailController.text.contains('@')) return false;
+    if (_phoneController.text.trim().isEmpty) return false;
+    if (_passwordController.text.length < 8) return false;
+    if (_confirmController.text != _passwordController.text) return false;
+    if (_profilePhoto == null) return false;
+    return true;
+  }
+
   Future<void> _nextStep() async {
+    // Clear old technician data before creating a new registration
+    await StorageService.clearTechnicianData();
+
     if (!_formKey.currentState!.validate()) return;
     if (_profilePhoto == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a profile photo'), backgroundColor: AppTheme.warning),
+        const SnackBar(
+          content: Text('Please select a profile photo'),
+          backgroundColor: AppTheme.warning,
+        ),
       );
       return;
     }
@@ -150,12 +186,11 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
       'profile_photo': _profilePhoto!.path,
     };
 
-    final res = await auth.api.registerTechnicianStep1(data);
+    final technicianId = await auth.registerTechnicianStep1(data);
 
     if (!mounted) return;
 
-    if (res.success) {
-      final technicianId = res.data['technician_id'] as int;
+    if (technicianId != null) {
       Navigator.pushNamed(
         context,
         AppRoutes.otp,
@@ -166,16 +201,20 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
         },
       );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(res.message), backgroundColor: AppTheme.error),
-      );
+      if (auth.errorMessage != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(auth.errorMessage!),
+            backgroundColor: AppTheme.error,
+          ),
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -187,15 +226,15 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
         backgroundColor: theme.scaffoldBackgroundColor,
       ),
       body: LoadingOverlay(
-        isLoading: auth.isLoading, // ✅ Full-screen loading indicator
+        isLoading: auth.isLoading || _isLoadingCheck,
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Form(
             key: _formKey,
+            onChanged: () => setState(() {}),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Profile Photo
                 Center(
                   child: Stack(
                     children: [
@@ -204,7 +243,11 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
                         backgroundColor: theme.colorScheme.surface,
                         child: _profilePhoto != null
                             ? ClipOval(child: Image.file(_profilePhoto!, width: 120, height: 120, fit: BoxFit.cover))
-                            : Icon(Icons.person_add_alt_rounded, size: 60, color: theme.colorScheme.onSurface.withOpacity(0.5)),
+                            : Icon(
+                          Icons.person_add_alt_rounded,
+                          size: 60,
+                          color: theme.colorScheme.onSurface.withOpacity(0.5),
+                        ),
                       ),
                       Positioned(
                         bottom: 0,
@@ -227,26 +270,25 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
                 ),
                 const SizedBox(height: 24),
 
-                // Name
                 _buildField(
                   controller: _nameController,
                   hint: 'Full Name',
                   icon: Icons.person_outline,
+                  onChanged: (_) => setState(() {}),
                   validator: (v) => v != null && v.trim().isNotEmpty ? null : 'Name required',
                 ),
                 const SizedBox(height: 16),
 
-                // Email
                 _buildField(
                   controller: _emailController,
                   hint: 'Email',
                   icon: Icons.email_outlined,
                   keyboardType: TextInputType.emailAddress,
+                  onChanged: (_) => setState(() {}),
                   validator: (v) => v != null && v.contains('@') ? null : 'Enter valid email',
                 ),
                 const SizedBox(height: 16),
 
-                // Phone
                 Row(
                   children: [
                     CountryPicker(
@@ -260,6 +302,7 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
                         controller: _phoneController,
                         keyboardType: TextInputType.phone,
                         style: theme.textTheme.bodyMedium,
+                        onChanged: (_) => setState(() {}),
                         decoration: InputDecoration(
                           hintText: 'Phone number',
                           prefixIcon: const Icon(Icons.phone_outlined),
@@ -276,7 +319,6 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Password with strength
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -285,6 +327,7 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
                       hint: 'Password (min 8 chars)',
                       icon: Icons.lock_outline,
                       obscureText: _obscurePass,
+                      onChanged: (_) => setState(() {}),
                       suffixIcon: IconButton(
                         icon: Icon(_obscurePass ? Icons.visibility_off : Icons.visibility),
                         onPressed: () => setState(() => _obscurePass = !_obscurePass),
@@ -336,12 +379,12 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
                   ],
                 ),
 
-                // Confirm Password
                 _buildField(
                   controller: _confirmController,
                   hint: 'Confirm Password',
                   icon: Icons.lock_outline,
                   obscureText: _obscureConfirm,
+                  onChanged: (_) => setState(() {}),
                   suffixIcon: IconButton(
                     icon: Icon(_obscureConfirm ? Icons.visibility_off : Icons.visibility),
                     onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
@@ -353,7 +396,8 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
                 CustomButton(
                   text: 'Next →',
                   onPressed: _nextStep,
-                  isLoading: auth.isLoading, // ✅ Button shows spinner inside it
+                  isLoading: auth.isLoading,
+                  isDisabled: !_isFormValid || auth.isLoading,
                 ),
               ],
             ),
@@ -371,12 +415,14 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
     Widget? suffixIcon,
     TextInputType? keyboardType,
     String? Function(String?)? validator,
+    void Function(String)? onChanged,
   }) {
     final theme = Theme.of(context);
     return TextFormField(
       controller: controller,
       obscureText: obscureText,
       keyboardType: keyboardType,
+      onChanged: onChanged,
       style: theme.textTheme.bodyMedium,
       decoration: InputDecoration(
         hintText: hint,

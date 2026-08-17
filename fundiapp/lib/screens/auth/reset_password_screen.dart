@@ -1,3 +1,4 @@
+// lib/screens/auth/reset_password_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/app_theme.dart';
@@ -89,18 +90,12 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                       ),
                       borderRadius: BorderRadius.circular(24),
                     ),
-                    child: const Icon(
-                      Icons.lock_reset_rounded,
-                      size: 40,
-                      color: Colors.white,
-                    ),
+                    child: const Icon(Icons.lock_reset_rounded, size: 40, color: Colors.white),
                   ),
                   const SizedBox(height: 24),
                   Text(
                     l10n.resetPassword,
-                    style: theme.textTheme.displayMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                    style: theme.textTheme.displayMedium?.copyWith(fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -118,25 +113,14 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                           keyboardType: TextInputType.number,
                           maxLength: 6,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 8,
-                          ),
+                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, letterSpacing: 8),
                           decoration: InputDecoration(
                             hintText: '------',
-                            hintStyle: const TextStyle(
-                              letterSpacing: 8,
-                              fontSize: 20,
-                            ),
+                            hintStyle: const TextStyle(letterSpacing: 8, fontSize: 20),
                             counterText: '',
-                            prefixIcon: Icon(Icons.pin_rounded,
-                                color: theme.colorScheme.primary),
+                            prefixIcon: Icon(Icons.pin_rounded, color: theme.colorScheme.primary),
                           ),
-                          validator: (v) =>
-                          v != null && v.length == 6
-                              ? null
-                              : 'Enter 6-digit OTP',
+                          validator: (v) => v != null && v.length == 6 ? null : 'Enter 6-digit OTP',
                         ),
                         const SizedBox(height: 20),
                         TextFormField(
@@ -144,22 +128,14 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                           obscureText: _obscurePass,
                           decoration: InputDecoration(
                             hintText: l10n.newPassword,
-                            prefixIcon: Icon(Icons.lock_outline_rounded,
-                                color: theme.colorScheme.primary),
+                            prefixIcon: Icon(Icons.lock_outline_rounded, color: theme.colorScheme.primary),
                             suffixIcon: IconButton(
-                              icon: Icon(
-                                _obscurePass
-                                    ? Icons.visibility_off
-                                    : Icons.visibility,
-                              ),
-                              onPressed: () =>
-                                  setState(() => _obscurePass = !_obscurePass),
+                              icon: Icon(_obscurePass ? Icons.visibility_off : Icons.visibility),
+                              onPressed: () => setState(() => _obscurePass = !_obscurePass),
                             ),
                           ),
                           validator: (v) =>
-                          v != null && v.length >= 8
-                              ? null
-                              : 'Password must be at least 8 characters',
+                          v != null && v.length >= 8 ? null : 'Password must be at least 8 characters',
                         ),
                         const SizedBox(height: 20),
                         TextFormField(
@@ -167,27 +143,20 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                           obscureText: _obscureConfirm,
                           decoration: InputDecoration(
                             hintText: l10n.confirmPassword,
-                            prefixIcon: Icon(Icons.lock_outline_rounded,
-                                color: theme.colorScheme.primary),
+                            prefixIcon: Icon(Icons.lock_outline_rounded, color: theme.colorScheme.primary),
                             suffixIcon: IconButton(
-                              icon: Icon(
-                                _obscureConfirm
-                                    ? Icons.visibility_off
-                                    : Icons.visibility,
-                              ),
-                              onPressed: () =>
-                                  setState(() => _obscureConfirm = !_obscureConfirm),
+                              icon: Icon(_obscureConfirm ? Icons.visibility_off : Icons.visibility),
+                              onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
                             ),
                           ),
                           validator: (v) =>
-                          v == _passwordController.text
-                              ? null
-                              : 'Passwords do not match',
+                          v == _passwordController.text ? null : 'Passwords do not match',
                         ),
                         const SizedBox(height: 32),
                         CustomButton(
                           text: l10n.resetPasswordButton,
                           onPressed: _handleReset,
+                          isLoading: auth.isLoading,
                         ),
                         const SizedBox(height: 20),
                         TextButton(

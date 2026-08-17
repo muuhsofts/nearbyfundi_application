@@ -1,3 +1,4 @@
+// lib/screens/auth/otp_verification_screen.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -7,6 +8,7 @@ import '../../config/app_routes.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/loading_overlay.dart';
 import '../../l10n/app_localizations.dart';
+import '../../services/storage_service.dart';
 
 class OtpVerificationScreen extends StatefulWidget {
   final String email;
@@ -81,8 +83,10 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     if (!mounted) return;
 
     if (success) {
-      // ✅ NEW LOGIC: Redirect to Step 2 if this came from registration
+      // ✅ Save technician data if this is part of registration
       if (widget.redirectToStep2 && widget.technicianId != null) {
+        await StorageService.saveTechnicianId(widget.technicianId!);
+        await StorageService.saveTechnicianEmail(widget.email);
         Navigator.pushReplacementNamed(
           context,
           AppRoutes.registerStep2,
@@ -166,18 +170,12 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                       ),
                       borderRadius: BorderRadius.circular(24),
                     ),
-                    child: const Icon(
-                      Icons.verified_rounded,
-                      size: 40,
-                      color: Colors.white,
-                    ),
+                    child: const Icon(Icons.verified_rounded, size: 40, color: Colors.white),
                   ),
                   const SizedBox(height: 24),
                   Text(
                     l10n.verificationCode,
-                    style: theme.textTheme.displayMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                    style: theme.textTheme.displayMedium?.copyWith(fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -186,7 +184,6 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                     style: theme.textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 40),
-                  // OTP fields
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: List.generate(
@@ -199,14 +196,10 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                           textAlign: TextAlign.center,
                           keyboardType: TextInputType.number,
                           maxLength: 1,
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w700,
-                          ),
+                          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
                           decoration: InputDecoration(
                             counterText: '',
-                            contentPadding:
-                            const EdgeInsets.symmetric(vertical: 14),
+                            contentPadding: const EdgeInsets.symmetric(vertical: 14),
                           ),
                           onChanged: (val) {
                             if (val.isNotEmpty && i < 5) {
@@ -231,9 +224,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                       ),
                       const SizedBox(width: 8),
                       GestureDetector(
-                        onTap: _resendCountdown > 0 || _isResending
-                            ? null
-                            : _resendOtp,
+                        onTap: _resendCountdown > 0 || _isResending ? null : _resendOtp,
                         child: Text(
                           _isResending
                               ? 'Sending...'
@@ -254,6 +245,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                   CustomButton(
                     text: l10n.verifyOtp,
                     onPressed: _handleVerify,
+                    isLoading: auth.isLoading,
                   ),
                   const SizedBox(height: 20),
                   TextButton(

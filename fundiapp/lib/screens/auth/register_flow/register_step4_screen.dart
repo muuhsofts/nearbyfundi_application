@@ -19,14 +19,34 @@ class RegisterStep4Screen extends StatefulWidget {
 class _RegisterStep4ScreenState extends State<RegisterStep4Screen> {
   final Map<int, Map<String, TextEditingController>> _priceControllers = {};
   final Set<int> _selectedServiceIds = {};
+  bool _isLoadingCheck = false;
 
   @override
   void initState() {
     super.initState();
-    // ✅ Fetch services as soon as the screen loads (matching the old RegisterScreen)
+    _checkStepAccess();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ServiceProvider>().fetchServices();
     });
+  }
+
+  Future<void> _checkStepAccess() async {
+    final auth = context.read<AuthProvider>();
+    final step = await auth.getRegistrationStep(widget.technicianId);
+    if (!mounted) return;
+    if (step == null) {
+      Navigator.pushReplacementNamed(context, AppRoutes.login);
+      return;
+    }
+    // Allow if Step 3 is completed (step >= 3)
+    if (step < 3) {
+      Navigator.pushReplacementNamed(
+        context,
+        AppRoutes.registerStep3,
+        arguments: widget.technicianId,
+      );
+    }
+    // Otherwise stay
   }
 
   @override
@@ -36,6 +56,18 @@ class _RegisterStep4ScreenState extends State<RegisterStep4Screen> {
       controllers['max']?.dispose();
     }
     super.dispose();
+  }
+
+  bool get _isFormValid {
+    if (_selectedServiceIds.isEmpty) return false;
+    for (var id in _selectedServiceIds) {
+      final min = double.tryParse(_priceControllers[id]!['min']!.text.trim());
+      final max = double.tryParse(_priceControllers[id]!['max']!.text.trim());
+      if (min == null || max == null || min < 0 || max < 0 || max < min) {
+        return false;
+      }
+    }
+    return true;
   }
 
   void _toggleService(int id, bool selected) {
@@ -55,25 +87,7 @@ class _RegisterStep4ScreenState extends State<RegisterStep4Screen> {
   }
 
   Future<void> _nextStep() async {
-    if (_selectedServiceIds.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select at least one service'), backgroundColor: AppTheme.warning),
-      );
-      return;
-    }
-
-    // Validate prices
-    for (var id in _selectedServiceIds) {
-      final min = double.tryParse(_priceControllers[id]!['min']!.text.trim());
-      final max = double.tryParse(_priceControllers[id]!['max']!.text.trim());
-      if (min == null || max == null || min < 0 || max < 0 || max < min) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Invalid price range for a selected service'), backgroundColor: AppTheme.error),
-        );
-        return;
-      }
-    }
-
+    if (!_isFormValid) return;
     final auth = context.read<AuthProvider>();
     auth.clearError();
 
@@ -86,24 +100,36 @@ class _RegisterStep4ScreenState extends State<RegisterStep4Screen> {
       });
     }
 
-    final res = await auth.api.registerTechnicianStep4(
+    final success = await auth.registerTechnicianStep4(
       technicianId: widget.technicianId,
       services: services,
     );
-
     if (!mounted) return;
-
-    if (res.success) {
+    if (success) {
       final Map<String, dynamic> reviewData = {
         'technicianId': widget.technicianId,
         'services': services,
       };
-      Navigator.pushNamed(context, AppRoutes.registerReview, arguments: reviewData);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(res.message), backgroundColor: AppTheme.error),
+      Navigator.pushReplacementNamed(
+        context,
+        AppRoutes.registerReview,
+        arguments: reviewData,
       );
+    } else {
+      if (auth.errorMessage != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(auth.errorMessage!), backgroundColor: AppTheme.error),
+        );
+      }
     }
+  }
+
+  void _goBack() {
+    Navigator.pushReplacementNamed(
+      context,
+      AppRoutes.registerStep3,
+      arguments: widget.technicianId,
+    );
   }
 
   @override
@@ -114,9 +140,27 @@ class _RegisterStep4ScreenState extends State<RegisterStep4Screen> {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(title: const Text('Step 4: Services & Pricing'), centerTitle: true, elevation: 0),
+      appBar: AppBar(
+        title: const Text('Step 4: Services & Pricing'),
+        centerTitle: true,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: auth.isLoading ? null : _goBack,
+          tooltip: 'Back to Step 3',
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.arrow_forward),
+            onPressed: (auth.isLoading || serviceProvider.isLoading || _isLoadingCheck || !_isFormValid)
+                ? null
+                : _nextStep,
+            tooltip: 'Next',
+          ),
+        ],
+      ),
       body: LoadingOverlay(
-        isLoading: auth.isLoading || serviceProvider.isLoading,
+        isLoading: auth.isLoading || serviceProvider.isLoading || _isLoadingCheck,
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -148,7 +192,6 @@ class _RegisterStep4ScreenState extends State<RegisterStep4Screen> {
                   }).toList(),
                 ),
 
-              // Show price inputs for selected services
               if (_selectedServiceIds.isNotEmpty) ...[
                 const SizedBox(height: 24),
                 const Text('Set price ranges for selected services:', style: TextStyle(fontWeight: FontWeight.w600)),
@@ -179,6 +222,7 @@ class _RegisterStep4ScreenState extends State<RegisterStep4Screen> {
                                   prefixText: 'TZS ',
                                   border: OutlineInputBorder(),
                                 ),
+                                onChanged: (_) => setState(() {}),
                               ),
                             ),
                             const SizedBox(width: 12),
@@ -191,6 +235,7 @@ class _RegisterStep4ScreenState extends State<RegisterStep4Screen> {
                                   prefixText: 'TZS ',
                                   border: OutlineInputBorder(),
                                 ),
+                                onChanged: (_) => setState(() {}),
                               ),
                             ),
                           ],
@@ -207,6 +252,7 @@ class _RegisterStep4ScreenState extends State<RegisterStep4Screen> {
                 text: 'Review & Submit',
                 onPressed: _nextStep,
                 isLoading: auth.isLoading || serviceProvider.isLoading,
+                isDisabled: !_isFormValid || auth.isLoading,
               ),
             ],
           ),

@@ -6,6 +6,7 @@ import '../../../providers/auth_provider.dart';
 import '../../../config/app_routes.dart';
 import '../../../widgets/custom_button.dart';
 import '../../../widgets/loading_overlay.dart';
+import '../../../services/storage_service.dart';
 
 class RegisterReviewScreen extends StatefulWidget {
   final Map<String, dynamic> registrationData;
@@ -16,17 +17,45 @@ class RegisterReviewScreen extends StatefulWidget {
 }
 
 class _RegisterReviewScreenState extends State<RegisterReviewScreen> {
+  bool _isLoadingCheck = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkStepAccess();
+  }
+
+  Future<void> _checkStepAccess() async {
+    final auth = context.read<AuthProvider>();
+    final technicianId = widget.registrationData['technicianId'] as int;
+    final step = await auth.getRegistrationStep(technicianId);
+    if (!mounted) return;
+    if (step == null) {
+      Navigator.pushReplacementNamed(context, AppRoutes.login);
+      return;
+    }
+    // Allow if Step 4 is completed (step >= 4)
+    if (step < 4) {
+      Navigator.pushReplacementNamed(
+        context,
+        AppRoutes.registerStep4,
+        arguments: technicianId,
+      );
+    }
+    // Otherwise stay
+  }
+
   Future<void> _submitRegistration() async {
     final auth = context.read<AuthProvider>();
     auth.clearError();
 
-    final res = await auth.api.submitTechnicianRegistration(
+    final success = await auth.submitTechnicianRegistration(
       widget.registrationData['technicianId'] as int,
     );
-
     if (!mounted) return;
 
-    if (res.success) {
+    if (success) {
+      await StorageService.clearTechnicianData();
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -46,10 +75,20 @@ class _RegisterReviewScreenState extends State<RegisterReviewScreen> {
         ),
       );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(res.message), backgroundColor: AppTheme.error),
-      );
+      if (auth.errorMessage != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(auth.errorMessage!), backgroundColor: AppTheme.error),
+        );
+      }
     }
+  }
+
+  void _goBack() {
+    Navigator.pushReplacementNamed(
+      context,
+      AppRoutes.registerStep4,
+      arguments: widget.registrationData['technicianId'],
+    );
   }
 
   @override
@@ -60,9 +99,25 @@ class _RegisterReviewScreenState extends State<RegisterReviewScreen> {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(title: const Text('Review & Submit'), centerTitle: true, elevation: 0),
+      appBar: AppBar(
+        title: const Text('Review & Submit'),
+        centerTitle: true,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: auth.isLoading ? null : _goBack,
+          tooltip: 'Back to Step 4',
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.arrow_forward),
+            onPressed: auth.isLoading ? null : _submitRegistration,
+            tooltip: 'Submit',
+          ),
+        ],
+      ),
       body: LoadingOverlay(
-        isLoading: auth.isLoading,
+        isLoading: auth.isLoading || _isLoadingCheck,
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -71,7 +126,6 @@ class _RegisterReviewScreenState extends State<RegisterReviewScreen> {
               const Text('Please review your registration details', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 24),
 
-              // Services summary
               const Text('Selected Services & Prices:', style: TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: 12),
               ...(data['services'] as List<Map<String, dynamic>>).map((s) {
@@ -98,11 +152,13 @@ class _RegisterReviewScreenState extends State<RegisterReviewScreen> {
               CustomButton(
                 text: 'Submit Registration',
                 onPressed: _submitRegistration,
+                isLoading: auth.isLoading,
+                isDisabled: auth.isLoading,
               ),
               const SizedBox(height: 16),
               OutlinedButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Back to Edit'),
+                onPressed: _goBack,
+                child: const Text('Back to Step 4'),
               ),
             ],
           ),
