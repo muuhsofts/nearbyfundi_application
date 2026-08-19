@@ -123,6 +123,22 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
     }
   }
 
+  // ─── EAST AFRICA TIME (EAT) HELPER ────────────────────────────────
+  DateTime _toEAT(DateTime dateTime) {
+    // Assume server time is UTC, convert to UTC+3 (East Africa Time)
+    return dateTime.toUtc().add(const Duration(hours: 3));
+  }
+
+  String _formatRequestDate(DateTime dateTime) {
+    final eat = _toEAT(dateTime);
+    final day = eat.day.toString().padLeft(2, '0');
+    final month = eat.month.toString().padLeft(2, '0');
+    final year = eat.year.toString();
+    final hour = eat.hour.toString().padLeft(2, '0');
+    final minute = eat.minute.toString().padLeft(2, '0');
+    return '$day/$month/$year • $hour:$minute';
+  }
+
   Future<void> _startChat(BuildContext context, ServiceRequest request) async {
     try {
       final chatProvider = context.read<ChatProvider>();
@@ -470,6 +486,11 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
     final isCompleted = request.isCompleted;
     final isRejectedOrCancelled = request.isRejected || request.isCancelled;
 
+    // Format created date in EAT
+    final createdDate = request.createdAt != null
+        ? _formatRequestDate(request.createdAt!)
+        : '';
+
     return Container(
       decoration: BoxDecoration(
         color: theme.cardTheme.color,
@@ -555,6 +576,27 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
+            // ─── DATE/TIME ROW (EAT) ────────────────────────────────────
+            if (createdDate.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Icon(
+                    Icons.access_time_rounded,
+                    size: 13,
+                    color: theme.hintColor,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    createdDate,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.hintColor,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 14),
             if (isPending)
               _buildPendingActions(context, request, l10n, theme),
