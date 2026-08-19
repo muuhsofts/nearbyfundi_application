@@ -397,8 +397,9 @@ class ApiService {
       _patch('/v4/requests/$requestId/arrive');
 
   /// Get live tracking data (customer can view)
+  /// Uses the dedicated tracking endpoint: /tracking/{requestId}
   Future<ApiResponse> getTrackingData(int requestId) =>
-      _get('/v4/requests/$requestId/tracking');
+      _get('/tracking/$requestId');  // ✅ NEW ROUTE
 
   // ═══════════════════════════════════════════════════════════════════════
   //  BLOG (Posts, Comments, Likes) - V1 & V5

@@ -48,7 +48,6 @@ class _NearbyScreenState extends State<NearbyScreen> {
   final MapController _mapController = MapController();
   final GlobalKey _mapKey = GlobalKey();
 
-  // --- NEW: Toggle for Header Visibility ---
   bool _isHeaderVisible = true;
 
   int? _selectedServiceId;
@@ -88,16 +87,12 @@ class _NearbyScreenState extends State<NearbyScreen> {
     super.dispose();
   }
 
-  // --- NEW: Toggle logic ---
   void _toggleHeaderVisibility() {
     setState(() {
       _isHeaderVisible = !_isHeaderVisible;
     });
   }
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // SEARCH HISTORY
-  // ═══════════════════════════════════════════════════════════════════════
   Future<void> _loadSearchHistory() async {
     final prefs = await SharedPreferences.getInstance();
     if (mounted) {
@@ -124,9 +119,6 @@ class _NearbyScreenState extends State<NearbyScreen> {
     if (mounted) setState(() => _searchHistory = []);
   }
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // PLACE SUGGESTIONS (Nominatim)
-  // ═══════════════════════════════════════════════════════════════════════
   Future<void> _fetchPlaceSuggestions(String query) async {
     if (query.trim().length < 2) {
       setState(() {
@@ -174,9 +166,6 @@ class _NearbyScreenState extends State<NearbyScreen> {
     if (mounted) setState(() => _isLoadingSuggestions = false);
   }
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // PICK LOCATION ON MAP
-  // ═══════════════════════════════════════════════════════════════════════
   Future<void> _openMapPicker() async {
     final techProvider = context.read<TechnicianProvider>();
     final result = await Navigator.push<Map<String, dynamic>>(
@@ -234,9 +223,6 @@ class _NearbyScreenState extends State<NearbyScreen> {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // MAIN SEARCH
-  // ═══════════════════════════════════════════════════════════════════════
   Future<void> _performSearch() async {
     final place = _locationController.text.trim();
     final l10n = AppLocalizations.of(context)!;
@@ -715,34 +701,34 @@ class _NearbyScreenState extends State<NearbyScreen> {
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text(l10n.findFundi, style: theme.appBarTheme.titleTextStyle),
+        title: Text(
+            l10n.findFundi,
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)
+        ),
         elevation: 0,
-        backgroundColor: theme.colorScheme.surface,
-        foregroundColor: theme.colorScheme.onSurface,
+        backgroundColor: const Color(0xFF006B5E),
+        foregroundColor: Colors.white,
+        iconTheme: const IconThemeData(color: Colors.white),
         centerTitle: true,
         actions: [
-          // --- NEW: Toggle Button to Hide/Show Search Header ---
           IconButton(
             icon: Icon(
               _isHeaderVisible
                   ? Icons.keyboard_arrow_up_rounded
                   : Icons.keyboard_arrow_down_rounded,
-              color: theme.colorScheme.onSurface,
             ),
             onPressed: _toggleHeaderVisibility,
             tooltip: _isHeaderVisible ? 'Hide search' : 'Show search',
           ),
-          // --- End of Toggle Button ---
-
           if (techProvider.technicians.isNotEmpty)
             IconButton(
-              icon: Icon(Icons.list_rounded, color: theme.colorScheme.onSurface),
+              icon: const Icon(Icons.list_rounded),
               onPressed: () => _showTechniciansList(context, techProvider.technicians),
               tooltip: 'View list',
             ),
           if (techProvider.technicians.isNotEmpty)
             IconButton(
-              icon: Icon(Icons.fullscreen_rounded, color: theme.colorScheme.onSurface),
+              icon: const Icon(Icons.fullscreen_rounded),
               onPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const NearbyMapScreen()),
@@ -751,18 +737,18 @@ class _NearbyScreenState extends State<NearbyScreen> {
             ),
           if (_locationController.text.isNotEmpty || _selectedServiceId != null)
             IconButton(
-              icon: Icon(Icons.clear_all_rounded, color: theme.colorScheme.onSurface),
+              icon: const Icon(Icons.clear_all_rounded),
               onPressed: _clearAllFilters,
               tooltip: l10n.clearFilters,
             ),
           IconButton(
             icon: techProvider.isLoading
-                ? SizedBox(
+                ? const SizedBox(
               width: 22,
               height: 22,
-              child: CircularProgressIndicator(strokeWidth: 2, color: theme.primaryColor),
+              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
             )
-                : Icon(Icons.refresh_rounded, color: theme.colorScheme.onSurface),
+                : const Icon(Icons.refresh_rounded),
             onPressed: techProvider.isLoading ? null : _performSearch,
             tooltip: l10n.refresh,
           ),
@@ -770,8 +756,6 @@ class _NearbyScreenState extends State<NearbyScreen> {
       ),
       body: Column(
         children: [
-          // ─── Search Header ───────────────────────────────────────────
-          // --- NEW: AnimatedSwitcher wrap + conditional logic ---
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 300),
             child: _isHeaderVisible
@@ -790,15 +774,21 @@ class _NearbyScreenState extends State<NearbyScreen> {
               ),
               child: Column(
                 children: [
-                  // Location search field + suggestions
                   Container(
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(16),
+                      color: theme.colorScheme.surface,
+                      borderRadius: BorderRadius.circular(24),
                       border: Border.all(
                         color: theme.dividerColor.withOpacity(0.3),
-                        width: 1,
+                        width: 1.2,
                       ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.04),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
                     child: Column(
                       children: [
@@ -819,7 +809,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
                                   ),
                                   prefixIcon: Icon(
                                     Icons.search_rounded,
-                                    color: theme.primaryColor,
+                                    color: const Color(0xFF006B5E),
                                     size: 24,
                                   ),
                                   suffixIcon: Row(
@@ -836,10 +826,26 @@ class _NearbyScreenState extends State<NearbyScreen> {
                                             });
                                           },
                                         ),
-                                      IconButton(
-                                        icon: Icon(Icons.map_rounded, color: theme.primaryColor),
-                                        tooltip: 'Pick on map',
-                                        onPressed: _openMapPicker,
+                                      // ─── MAP ICON: MOUSE HOVER = TOAST, CLICK = NAVIGATE ───
+                                      MouseRegion(
+                                        onEnter: (_) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(
+                                              content: Text('Choose location/place on map'),
+                                              behavior: SnackBarBehavior.floating,
+                                              duration: Duration(seconds: 2),
+                                            ),
+                                          );
+                                        },
+                                        child: Tooltip(
+                                          message: 'Choose location/place on map',
+                                          waitDuration: Duration.zero, // Instant hover
+                                          showDuration: const Duration(seconds: 3),
+                                          child: IconButton(
+                                            icon: const Icon(Icons.map_rounded, color: Color(0xFF006B5E)),
+                                            onPressed: _openMapPicker,
+                                          ),
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -869,14 +875,17 @@ class _NearbyScreenState extends State<NearbyScreen> {
                             ),
                             Container(
                               margin: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
+                              decoration: const BoxDecoration(
                                 gradient: LinearGradient(
                                   colors: [
-                                    theme.primaryColor,
-                                    theme.primaryColorDark ?? theme.primaryColor,
+                                    Color(0xFF006B5E),
+                                    Color(0xFF008C7A),
                                   ],
                                 ),
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.only(
+                                  topRight: Radius.circular(24),
+                                  bottomRight: Radius.circular(24),
+                                ),
                               ),
                               child: Material(
                                 color: Colors.transparent,
@@ -887,7 +896,10 @@ class _NearbyScreenState extends State<NearbyScreen> {
                                     setState(() => _showSuggestions = false);
                                     _performSearch();
                                   },
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: const BorderRadius.only(
+                                    topRight: Radius.circular(24),
+                                    bottomRight: Radius.circular(24),
+                                  ),
                                   child: Container(
                                     padding: EdgeInsets.symmetric(
                                       horizontal: isSmallScreen ? 12 : 16,
@@ -923,15 +935,13 @@ class _NearbyScreenState extends State<NearbyScreen> {
                             ),
                           ],
                         ),
-
-                        // ─── Suggestions / History dropdown ─────────────
                         if (_showSuggestions)
                           Container(
                             constraints: const BoxConstraints(maxHeight: 280),
                             decoration: BoxDecoration(
                               color: theme.colorScheme.surface,
                               borderRadius: const BorderRadius.vertical(
-                                bottom: Radius.circular(16),
+                                bottom: Radius.circular(24),
                               ),
                             ),
                             child: ListView(
@@ -963,7 +973,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
                                             'Clear',
                                             style: TextStyle(
                                               fontSize: 12,
-                                              color: theme.primaryColor,
+                                              color: const Color(0xFF006B5E),
                                             ),
                                           ),
                                         ),
@@ -985,7 +995,6 @@ class _NearbyScreenState extends State<NearbyScreen> {
                                     ),
                                   ),
                                 ],
-
                                 if (_isLoadingSuggestions)
                                   const Padding(
                                     padding: EdgeInsets.all(16),
@@ -997,12 +1006,11 @@ class _NearbyScreenState extends State<NearbyScreen> {
                                       ),
                                     ),
                                   ),
-
                                 ..._placeSuggestions.map(
                                       (s) => ListTile(
                                     dense: true,
                                     leading: Icon(Icons.place_outlined,
-                                        size: 20, color: theme.primaryColor),
+                                        size: 20, color: const Color(0xFF006B5E)),
                                     title: Text(s['name'],
                                         maxLines: 1, overflow: TextOverflow.ellipsis),
                                     subtitle: Text(
@@ -1034,10 +1042,10 @@ class _NearbyScreenState extends State<NearbyScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: theme.primaryColor.withOpacity(0.08),
+                        color: const Color(0xFF006B5E).withOpacity(0.08),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: theme.primaryColor.withOpacity(0.2),
+                          color: const Color(0xFF006B5E).withOpacity(0.2),
                           width: 1,
                         ),
                       ),
@@ -1045,7 +1053,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(Icons.location_on_rounded,
-                              size: 16, color: theme.primaryColor),
+                              size: 16, color: const Color(0xFF006B5E)),
                           const SizedBox(width: 6),
                           Flexible(
                             child: Text(
@@ -1053,7 +1061,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
                               style: TextStyle(
                                 fontSize: isSmallScreen ? 12 : 13,
                                 fontWeight: FontWeight.w600,
-                                color: theme.primaryColor,
+                                color: const Color(0xFF006B5E),
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -1062,7 +1070,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
-                              color: theme.primaryColor,
+                              color: const Color(0xFF006B5E),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
@@ -1085,11 +1093,11 @@ class _NearbyScreenState extends State<NearbyScreen> {
                     style: theme.textTheme.bodyMedium,
                     decoration: InputDecoration(
                       hintText: 'Filter by service...',
-                      prefixIcon: Icon(Icons.build_rounded, color: theme.hintColor),
+                      prefixIcon: const Icon(Icons.build_rounded, color: Color(0xFF006B5E)),
                       filled: true,
                       fillColor: theme.colorScheme.surfaceContainerHighest,
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(24),
                         borderSide: BorderSide.none,
                       ),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -1173,9 +1181,6 @@ class _NearbyScreenState extends State<NearbyScreen> {
             )
                 : const SizedBox.shrink(key: ValueKey('header-hidden')),
           ),
-          // --- End of AnimatedSwitcher ---
-
-          // ─── Map ─────────────────────────────────────────────────────
           Expanded(
             child: Stack(
               children: [
@@ -1314,7 +1319,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
           Polyline(
             points: route.points,
             strokeWidth: isSmall ? 6.0 : 7.5,
-            color: theme.primaryColor,
+            color: const Color(0xFF006B5E),
             borderColor: Colors.white.withOpacity(0.4),
             borderStrokeWidth: 2.0,
           ),
@@ -1391,7 +1396,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: theme.primaryColor, width: 1.2),
+                    border: Border.all(color: const Color(0xFF006B5E), width: 1.2),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withOpacity(0.13),
@@ -1410,7 +1415,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
                           style: TextStyle(
                             fontSize: badgeFontSize,
                             fontWeight: FontWeight.bold,
-                            color: theme.primaryColor,
+                            color: const Color(0xFF006B5E),
                           ),
                         ),
                         if (durationMin != null) ...[
@@ -1419,14 +1424,14 @@ class _NearbyScreenState extends State<NearbyScreen> {
                             '•',
                             style: TextStyle(
                               fontSize: badgeFontSize,
-                              color: theme.primaryColor.withOpacity(0.5),
+                              color: const Color(0xFF006B5E).withOpacity(0.5),
                             ),
                           ),
                           const SizedBox(width: 1.5),
                           Icon(
                             Icons.access_time_rounded,
                             size: badgeFontSize + 0.8,
-                            color: theme.primaryColor,
+                            color: const Color(0xFF006B5E),
                           ),
                           const SizedBox(width: 1),
                           Text(
@@ -1434,7 +1439,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
                             style: TextStyle(
                               fontSize: badgeFontSize - 0.3,
                               fontWeight: FontWeight.bold,
-                              color: theme.primaryColor,
+                              color: const Color(0xFF006B5E),
                             ),
                           ),
                         ],
@@ -1502,7 +1507,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
                 color: theme.colorScheme.surface,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: theme.primaryColor.withOpacity(0.45),
+                  color: const Color(0xFF006B5E).withOpacity(0.45),
                   width: 1.2,
                 ),
                 boxShadow: [
@@ -1523,7 +1528,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
                       style: TextStyle(
                         fontSize: badgeFontSize,
                         fontWeight: FontWeight.bold,
-                        color: theme.primaryColor,
+                        color: const Color(0xFF006B5E),
                       ),
                     ),
                     if (duration != null) ...[
@@ -1532,14 +1537,14 @@ class _NearbyScreenState extends State<NearbyScreen> {
                         '•',
                         style: TextStyle(
                           fontSize: badgeFontSize,
-                          color: theme.primaryColor.withOpacity(0.5),
+                          color: const Color(0xFF006B5E).withOpacity(0.5),
                         ),
                       ),
                       const SizedBox(width: 1.5),
                       Icon(
                         Icons.access_time_rounded,
                         size: badgeFontSize + 0.8,
-                        color: theme.primaryColor,
+                        color: const Color(0xFF006B5E),
                       ),
                       const SizedBox(width: 1),
                       Text(
@@ -1547,7 +1552,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
                         style: TextStyle(
                           fontSize: badgeFontSize - 0.3,
                           fontWeight: FontWeight.bold,
-                          color: theme.primaryColor,
+                          color: const Color(0xFF006B5E),
                         ),
                       ),
                     ],
@@ -1734,7 +1739,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
                         '${distance.toStringAsFixed(1)} km',
                         style: theme.textTheme.bodyLarge?.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: theme.primaryColor,
+                          color: const Color(0xFF006B5E),
                         ),
                       ),
                     ],
@@ -1760,10 +1765,10 @@ class _NearbyScreenState extends State<NearbyScreen> {
                         style: theme.textTheme.bodySmall?.copyWith(
                           fontSize: isSmall ? 12 : 13,
                           fontWeight: FontWeight.w500,
-                          color: theme.primaryColor,
+                          color: const Color(0xFF006B5E),
                         ),
                       ),
-                      backgroundColor: theme.primaryColor.withOpacity(0.08),
+                      backgroundColor: const Color(0xFF006B5E).withOpacity(0.08),
                       side: BorderSide.none,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12)),
@@ -1788,7 +1793,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
                         );
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: theme.primaryColor,
+                        backgroundColor: const Color(0xFF006B5E),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)),
@@ -1892,18 +1897,18 @@ class _NearbyScreenState extends State<NearbyScreen> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
           color: isSelected
-              ? theme.primaryColor
+              ? const Color(0xFF006B5E)
               : theme.colorScheme.surfaceContainerHighest,
           border: Border.all(
             color: isSelected
-                ? theme.primaryColor
+                ? const Color(0xFF006B5E)
                 : theme.dividerColor.withOpacity(0.3),
             width: 1,
           ),
           boxShadow: isSelected
               ? [
             BoxShadow(
-              color: theme.primaryColor.withOpacity(0.25),
+              color: const Color(0xFF006B5E).withOpacity(0.25),
               blurRadius: 6,
               offset: const Offset(0, 2),
             )
@@ -1950,11 +1955,11 @@ class _NearbyScreenState extends State<NearbyScreen> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(14),
           color: isSelected
-              ? theme.primaryColor.withOpacity(0.12)
+              ? const Color(0xFF006B5E).withOpacity(0.12)
               : Colors.transparent,
           border: Border.all(
             color: isSelected
-                ? theme.primaryColor
+                ? const Color(0xFF006B5E)
                 : theme.dividerColor.withOpacity(0.2),
             width: isSelected ? 1.5 : 0.5,
           ),
@@ -1964,14 +1969,14 @@ class _NearbyScreenState extends State<NearbyScreen> {
           children: [
             if (isSelected)
               Icon(Icons.check_circle_rounded,
-                  size: isSmallScreen ? 10 : 12, color: theme.primaryColor),
+                  size: isSmallScreen ? 10 : 12, color: const Color(0xFF006B5E)),
             if (isSelected) const SizedBox(width: 4),
             Text(
               label,
               style: TextStyle(
                 fontSize: isSmallScreen ? 10 : 11,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                color: isSelected ? theme.primaryColor : theme.colorScheme.onSurface,
+                color: isSelected ? const Color(0xFF006B5E) : theme.colorScheme.onSurface,
               ),
             ),
           ],
@@ -1999,9 +2004,9 @@ class _MapControlButton extends StatelessWidget {
     return Material(
       color: theme.colorScheme.surface,
       shape: const CircleBorder(),
-      elevation: 3,
+      elevation: 4,
       child: IconButton(
-        icon: Icon(icon, color: theme.primaryColor, size: 20),
+        icon: Icon(icon, color: const Color(0xFF006B5E), size: 22),
         tooltip: tooltip,
         onPressed: onPressed,
       ),

@@ -684,7 +684,7 @@ class _MyRequestsScreenState extends State<MyRequestsScreen> {
   }
 }
 
-// ─── REQUEST DETAIL MODAL ──────────────────────────────────────────────
+// ─── REQUEST DETAIL MODAL (IMPROVED UI + FULL DESCRIPTION) ──────────────
 class _RequestDetailModal extends StatelessWidget {
   final ServiceRequest request;
   const _RequestDetailModal({required this.request});
@@ -703,220 +703,292 @@ class _RequestDetailModal extends StatelessWidget {
 
     return Dialog(
       insetPadding: const EdgeInsets.all(20),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       backgroundColor: theme.cardColor,
+      elevation: 12,
       child: Container(
         width: dialogWidth,
         constraints: BoxConstraints(
-          maxHeight: screenHeight * 0.85,
+          maxHeight: screenHeight * 0.88,
         ),
-        padding: const EdgeInsets.all(24),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(Icons.request_page_rounded, color: AppTheme.primary, size: 24),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Request Details',
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 20,
+                  child: Icon(Icons.request_page_rounded, color: AppTheme.primary, size: 28),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    'Request Details',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 22,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.close_rounded, size: 28, color: theme.hintColor),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            const Divider(height: 28, thickness: 1.2),
+
+            // Scrollable content
+            Expanded(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Service & Category
+                    _buildInfoCard(
+                      context,
+                      icon: Icons.construction_rounded,
+                      label: 'Service',
+                      value: request.serviceName,
+                    ),
+                    const SizedBox(height: 12),
+                    if (request.categoryName != null && request.categoryName!.isNotEmpty)
+                      _buildInfoCard(
+                        context,
+                        icon: Icons.category_rounded,
+                        label: 'Category',
+                        value: request.categoryName!,
+                      ),
+                    if (request.categoryName != null) const SizedBox(height: 12),
+
+                    // Status card
+                    _buildStatusCard(context, statusColor, statusBg),
+
+                    const SizedBox(height: 12),
+
+                    // Description (FULL, no truncation)
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: theme.dividerColor.withOpacity(0.3)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.description_outlined, size: 20, color: AppTheme.primary),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Description',
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: theme.hintColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            request.description,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              height: 1.6,
+                              color: theme.colorScheme.onSurface,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.close_rounded, size: 24, color: theme.hintColor),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-              const Divider(height: 24, thickness: 1.2),
-              _buildDetailRow(
-                label: 'Service',
-                value: request.serviceName,
-                icon: Icons.construction_rounded,
-                theme: theme,
-              ),
-              const SizedBox(height: 12),
-              if (request.categoryName != null && request.categoryName!.isNotEmpty)
-                _buildDetailRow(
-                  label: 'Category',
-                  value: request.categoryName!,
-                  icon: Icons.category_rounded,
-                  theme: theme,
-                ),
-              if (request.categoryName != null) const SizedBox(height: 12),
-              _buildStatusRow(statusColor, statusBg, theme),
-              const SizedBox(height: 12),
-              _buildDetailRow(
-                label: 'Description',
-                value: request.description,
-                icon: Icons.description_outlined,
-                theme: theme,
-                multiline: true,
-              ),
-              const SizedBox(height: 12),
-              _buildDetailRow(
-                label: 'Customer',
-                value: request.customerName ?? 'N/A',
-                icon: Icons.person_outline,
-                theme: theme,
-              ),
-              const SizedBox(height: 12),
-              _buildDetailRow(
-                label: 'Technician',
-                value: request.technicianName,
-                icon: Icons.handyman_rounded,
-                theme: theme,
-              ),
-              const SizedBox(height: 12),
-              if (request.technicianArea != null && request.technicianArea!.isNotEmpty)
-                _buildDetailRow(
-                  label: 'Area',
-                  value: request.technicianArea!,
-                  icon: Icons.location_on_outlined,
-                  theme: theme,
-                ),
-              if (request.technicianArea != null) const SizedBox(height: 12),
-              _buildDetailRow(
-                label: 'Requested On',
-                value: _formatDateFull(request.createdAt),
-                icon: Icons.calendar_today_outlined,
-                theme: theme,
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  child: const Text(
-                    'Close',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
+
+                    const SizedBox(height: 16),
+
+                    // Customer, Technician, Area, Date
+                    _buildInfoCard(
+                      context,
+                      icon: Icons.person_outline_rounded,
+                      label: 'Customer',
+                      value: request.customerName ?? 'N/A',
+                    ),
+                    const SizedBox(height: 12),
+                    _buildInfoCard(
+                      context,
+                      icon: Icons.handyman_rounded,
+                      label: 'Technician',
+                      value: request.technicianName,
+                    ),
+                    const SizedBox(height: 12),
+                    if (request.technicianArea != null && request.technicianArea!.isNotEmpty)
+                      _buildInfoCard(
+                        context,
+                        icon: Icons.location_on_outlined,
+                        label: 'Area',
+                        value: request.technicianArea!,
+                      ),
+                    if (request.technicianArea != null) const SizedBox(height: 12),
+                    _buildInfoCard(
+                      context,
+                      icon: Icons.calendar_today_outlined,
+                      label: 'Requested On',
+                      value: _formatDateFull(request.createdAt),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
                 ),
               ),
-              const SizedBox(height: 4),
-            ],
-          ),
+            ),
+
+            // Close button
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  elevation: 2,
+                ),
+                child: const Text(
+                  'Close',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildDetailRow({
-    required String label,
-    required String value,
-    required IconData icon,
-    required ThemeData theme,
-    bool multiline = false,
-  }) {
-    return Row(
-      crossAxisAlignment: multiline ? CrossAxisAlignment.start : CrossAxisAlignment.center,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: AppTheme.primary.withOpacity(0.06),
-            borderRadius: BorderRadius.circular(10),
+  // ---- Info card (icon + label + value) ----
+  Widget _buildInfoCard(
+      BuildContext context, {
+        required IconData icon,
+        required String label,
+        required String value,
+      }) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.4),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, size: 20, color: AppTheme.primary),
           ),
-          child: Icon(icon, size: 18, color: AppTheme.primary),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.hintColor,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurface,
-                  fontWeight: FontWeight.w500,
-                  height: multiline ? 1.4 : 1.2,
-                ),
-                maxLines: multiline ? 4 : 1,
-                overflow: multiline ? TextOverflow.ellipsis : TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatusRow(Color statusColor, Color statusBg, ThemeData theme) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: statusBg,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(_statusIcon(request.status), size: 18, color: statusColor),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Status',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.hintColor,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                decoration: BoxDecoration(
-                  color: statusBg,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  _getStatusLabel(request.status).toUpperCase(),
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: statusColor,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: theme.hintColor,
+                    fontWeight: FontWeight.w500,
                     letterSpacing: 0.3,
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w500,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
+  // ---- Status card ----
+  Widget _buildStatusCard(BuildContext context, Color statusColor, Color statusBg) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: statusBg.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: statusColor.withOpacity(0.2)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: statusBg,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(_statusIcon(request.status), size: 22, color: statusColor),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Status',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: theme.hintColor,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusBg,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    _getStatusLabel(request.status).toUpperCase(),
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: statusColor,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---- Helper functions (copied from main state) ----
   Color _statusColor(String status) {
     switch (status) {
       case 'accepted':

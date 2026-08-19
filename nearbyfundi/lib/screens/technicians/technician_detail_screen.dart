@@ -14,6 +14,7 @@ import '../../models/technician.dart';
 import '../../l10n/app_localizations.dart';
 import '../../config/app_theme.dart';
 import '../../config/app_routes.dart';
+import '../../widgets/request_dialog.dart';
 
 // ──────────────────────────────────────────────────────────────────────────
 // MAIN SCREEN
@@ -206,7 +207,7 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
               ? _buildAlreadySentWidget(l10n, theme)
               : ElevatedButton.icon(
             onPressed: () => _showRequestModal(tech),
-            icon: Icon(Icons.handyman_rounded, color: Colors.white, size: 20),
+            icon: const Icon(Icons.handyman_rounded, color: Colors.white, size: 20),
             label: Text(
               l10n.requestThisFundi,
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
@@ -320,7 +321,7 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.location_on_rounded, size: 16, color: Colors.white70),
+                const Icon(Icons.location_on_rounded, size: 16, color: Colors.white70),
                 const SizedBox(width: 4),
                 Text(
                   tech.area!,
@@ -356,9 +357,9 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: Colors.white54, width: 0.5),
               ),
-              child: Row(
+              child: const Row(
                 mainAxisSize: MainAxisSize.min,
-                children: const [
+                children: [
                   Icon(Icons.verified_rounded, color: Colors.white, size: 14),
                   SizedBox(width: 4),
                   Text('Verified', style: TextStyle(color: Colors.white, fontSize: 12)),
@@ -380,7 +381,7 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
         ),
         Text(
           label,
-          style: TextStyle(color: Colors.white70, fontSize: 10),
+          style: const TextStyle(color: Colors.white70, fontSize: 10),
         ),
       ],
     );
@@ -660,7 +661,7 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// PORTFOLIO GRID CARD – FIXED HEIGHT (prevents layout errors)
+// PORTFOLIO GRID CARD – FIXED HEIGHT
 // ──────────────────────────────────────────────────────────────────────────
 class PortfolioGridCard extends StatefulWidget {
   final PortfolioItem item;
@@ -740,15 +741,15 @@ class _PortfolioGridCardState extends State<PortfolioGridCard> {
                             runSpacing: 6,
                             children: [
                               if (item.instagram != null)
-                                _socialIcon(FontAwesomeIcons.instagram, Colors.pink, item.instagram!),
+                                _socialIcon(FontAwesomeIcons.instagram as IconData, Colors.pink, item.instagram!),
                               if (item.facebook != null)
-                                _socialIcon(FontAwesomeIcons.facebook, Colors.blue.shade700, item.facebook!),
+                                _socialIcon(FontAwesomeIcons.facebook as IconData, Colors.blue.shade700, item.facebook!),
                               if (item.tiktok != null)
-                                _socialIcon(FontAwesomeIcons.tiktok, Colors.white, item.tiktok!),
+                                _socialIcon(FontAwesomeIcons.tiktok as IconData, Colors.white, item.tiktok!),
                               if (item.twitter != null)
-                                _socialIcon(FontAwesomeIcons.twitter, Colors.blue.shade400, item.twitter!),
+                                _socialIcon(FontAwesomeIcons.xTwitter as IconData, Colors.blue.shade400, item.twitter!),
                               if (item.telegram != null)
-                                _socialIcon(FontAwesomeIcons.telegram, Colors.lightBlue, item.telegram!),
+                                _socialIcon(FontAwesomeIcons.telegram as IconData, Colors.lightBlue, item.telegram!),
                             ],
                           ),
                         ),
@@ -820,7 +821,7 @@ class _PortfolioGridCardState extends State<PortfolioGridCard> {
     );
   }
 
-  Widget _socialIcon(FaIconData icon, Color color, String url) {
+  Widget _socialIcon(IconData icon, Color color, String url) {
     return GestureDetector(
       onTap: () async {
         final uri = Uri.parse(url);
@@ -841,7 +842,7 @@ class _PortfolioGridCardState extends State<PortfolioGridCard> {
             ),
           ],
         ),
-        child: FaIcon(icon, size: 14, color: color),
+        child: FaIcon(icon as FaIconData?, size: 14, color: color),
       ),
     );
   }
@@ -897,669 +898,63 @@ class _PortfolioModalState extends State<PortfolioModal> {
       ),
       child: Column(
         children: [
+          // Header Bar
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                IconButton(
-                  icon: Icon(Icons.close_rounded, color: Colors.white, size: 28),
-                  onPressed: () => Navigator.pop(context),
-                ),
-                const Spacer(),
                 Text(
                   '${_currentIndex + 1} / $totalItems',
-                  style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500),
+                  style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                 ),
-                const Spacer(),
                 IconButton(
-                  icon: const Icon(Icons.download_rounded, color: Colors.white, size: 24),
-                  onPressed: () {},
+                  icon: const Icon(Icons.close_rounded, color: Colors.white),
+                  onPressed: () => Navigator.pop(context),
                 ),
               ],
             ),
           ),
+          // Page View
           Expanded(
             child: PageView.builder(
               controller: _pageController,
               onPageChanged: _onPageChanged,
-              itemCount: widget.items.length,
+              itemCount: totalItems,
               itemBuilder: (ctx, index) {
                 final item = widget.items[index];
-                return InteractiveViewer(
-                  minScale: 0.5,
-                  maxScale: 4.0,
-                  child: Hero(
-                    tag: 'portfolio_${item.id}',
-                    child: Image.network(
-                      ImageUtils.getFullImageUrl(item.image),
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => Container(
-                        color: Colors.grey.shade900,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.broken_image, size: 64, color: Colors.grey.shade600),
-                            const SizedBox(height: 8),
-                            Text('Failed to load image', style: TextStyle(color: Colors.grey.shade500)),
-                          ],
+                return Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: InteractiveViewer(
+                          child: Image.network(
+                            ImageUtils.getFullImageUrl(item.image),
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) => const Center(
+                              child: Icon(Icons.broken_image, size: 64, color: Colors.white54),
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                    if (item.description != null && item.description!.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Text(
+                          item.description!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.white, fontSize: 14),
+                        ),
+                      ),
+                  ],
                 );
               },
             ),
           ),
-          if (currentItem.description != null || currentItem.hasSocialLinks) ...[
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade900,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (currentItem.description != null) ...[
-                    Text(
-                      'Description',
-                      style: TextStyle(color: Colors.grey.shade400, fontSize: 12, fontWeight: FontWeight.w500),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      currentItem.description!,
-                      style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.5),
-                    ),
-                  ],
-                  if (currentItem.hasSocialLinks) ...[
-                    if (currentItem.description != null) const SizedBox(height: 12),
-                    Text(
-                      'Social Links',
-                      style: TextStyle(color: Colors.grey.shade400, fontSize: 12, fontWeight: FontWeight.w500),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 8,
-                      children: [
-                        if (currentItem.instagram != null)
-                          _modalSocialIcon(FontAwesomeIcons.instagram, currentItem.instagram!, Colors.pink),
-                        if (currentItem.facebook != null)
-                          _modalSocialIcon(FontAwesomeIcons.facebook, currentItem.facebook!, Colors.blue.shade700),
-                        if (currentItem.tiktok != null)
-                          _modalSocialIcon(FontAwesomeIcons.tiktok, currentItem.tiktok!, Colors.white),
-                        if (currentItem.twitter != null)
-                          _modalSocialIcon(FontAwesomeIcons.twitter, currentItem.twitter!, Colors.blue.shade400),
-                        if (currentItem.telegram != null)
-                          _modalSocialIcon(FontAwesomeIcons.telegram, currentItem.telegram!, Colors.lightBlue),
-                      ],
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-          if (totalItems > 1)
-            Container(
-              height: 70,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-              color: Colors.grey.shade900,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: widget.items.length,
-                itemBuilder: (ctx, index) {
-                  final isSelected = index == _currentIndex;
-                  final item = widget.items[index];
-                  return GestureDetector(
-                    onTap: () => _pageController.animateToPage(
-                      index,
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                    ),
-                    child: Container(
-                      width: 60,
-                      height: 60,
-                      margin: const EdgeInsets.symmetric(horizontal: 4),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: isSelected ? Colors.white : Colors.transparent, width: 2),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.network(
-                          ImageUtils.getFullImageUrl(item.image),
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(color: Colors.grey.shade700),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
         ],
-      ),
-    );
-  }
-
-  Widget _modalSocialIcon(FaIconData icon, String url, Color color) {
-    return GestureDetector(
-      onTap: () async {
-        final uri = Uri.parse(url);
-        if (await canLaunchUrl(uri)) {
-          launchUrl(uri, mode: LaunchMode.externalApplication);
-        }
-      },
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.2),
-          shape: BoxShape.circle,
-          border: Border.all(color: color.withOpacity(0.4), width: 1),
-        ),
-        child: FaIcon(icon, size: 20, color: color),
-      ),
-    );
-  }
-}
-
-// ──────────────────────────────────────────────────────────────────────────
-// REQUEST DIALOG – with auto‑category selection
-// ──────────────────────────────────────────────────────────────────────────
-class RequestDialog extends StatefulWidget {
-  final Technician technician;
-
-  const RequestDialog({super.key, required this.technician});
-
-  @override
-  State<RequestDialog> createState() => _RequestDialogState();
-}
-
-class _RequestDialogState extends State<RequestDialog> {
-  final TextEditingController _descController = TextEditingController();
-  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-  int? _selectedServiceId;
-  int? _selectedCategoryId;
-  bool _isSubmitting = false;
-  bool _isSuccess = false;
-  String? _errorMessage;
-  List<ServiceCategory> _availableCategories = [];
-  bool _isInitialized = false;
-  String _locale = 'en';
-
-  List<TechnicianService> get _serviceList {
-    if (widget.technician.servicePrices.isNotEmpty) {
-      return widget.technician.servicePrices
-          .map((sp) => TechnicianService(id: sp.id, name: sp.name))
-          .toList();
-    }
-    if (widget.technician.serviceObjects.isNotEmpty) {
-      return widget.technician.serviceObjects;
-    }
-    return widget.technician.services
-        .map((name) => TechnicianService(id: DateTime.now().millisecondsSinceEpoch + name.hashCode, name: name))
-        .toList();
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && !_isInitialized) {
-        _loadData();
-      }
-    });
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (!_isInitialized) {
-      _locale = Localizations.localeOf(context).languageCode;
-      _isInitialized = true;
-    }
-  }
-
-  void _loadData() {
-    if (mounted) {
-      context.read<ServiceProvider>().fetchServices(locale: _locale);
-    }
-  }
-
-  @override
-  void dispose() {
-    _descController.dispose();
-    super.dispose();
-  }
-
-  void _updateCategories(int? serviceId) {
-    if (serviceId == null) {
-      setState(() {
-        _availableCategories = [];
-        _selectedCategoryId = null;
-      });
-      return;
-    }
-
-    final serviceProvider = context.read<ServiceProvider>();
-    final categories = serviceProvider.getCategoriesForService(serviceId);
-    setState(() {
-      _availableCategories = categories;
-      if (categories.length == 1) {
-        _selectedCategoryId = categories.first.id;
-      } else {
-        _selectedCategoryId = null;
-      }
-    });
-  }
-
-  Future<void> _submitRequest() async {
-    final l10n = AppLocalizations.of(context)!;
-    if (!_formKey.currentState!.validate()) return;
-    if (_selectedServiceId == null) {
-      setState(() => _errorMessage = l10n.pleaseSelectService);
-      return;
-    }
-
-    setState(() {
-      _isSubmitting = true;
-      _errorMessage = null;
-    });
-
-    final locProvider = context.read<LocationProvider>();
-    final position = locProvider.position;
-    double? lat, lng;
-    if (position != null) {
-      lat = position.latitude;
-      lng = position.longitude;
-    }
-
-    final success = await context.read<RequestProvider>().createRequest(
-      technicianId: widget.technician.id,
-      serviceId: _selectedServiceId!,
-      description: _descController.text.trim(),
-      categoryId: _selectedCategoryId,
-      latitude: lat,
-      longitude: lng,
-    );
-
-    if (!mounted) return;
-    if (success) {
-      setState(() {
-        _isSuccess = true;
-        _isSubmitting = false;
-      });
-      await Future.delayed(const Duration(milliseconds: 500));
-      if (mounted) context.read<RequestProvider>().loadMyRequests();
-    } else {
-      final err = context.read<RequestProvider>().error ?? l10n.failed;
-      setState(() {
-        _isSubmitting = false;
-        _errorMessage = err;
-      });
-    }
-  }
-
-  void _closeDialog() => Navigator.of(context).pop();
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-    final services = _serviceList;
-    final hasServices = services.isNotEmpty;
-    final showCategoryDropdown = _availableCategories.length > 1;
-
-    return Dialog(
-      insetPadding: const EdgeInsets.all(20),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      backgroundColor: theme.cardColor,
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        constraints: const BoxConstraints(maxWidth: 420, maxHeight: 600),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(Icons.handyman_rounded, color: AppTheme.primary, size: 22),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      l10n.requestThisFundi,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 17,
-                      ),
-                    ),
-                  ),
-                  if (!_isSubmitting && !_isSuccess)
-                    IconButton(
-                      icon: Icon(Icons.close_rounded, color: theme.hintColor, size: 22),
-                      onPressed: _closeDialog,
-                    ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              if (!_isSubmitting && !_isSuccess) ...[
-                Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        l10n.selectService,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      if (!hasServices)
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.orange.withOpacity(0.2)),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 18),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  l10n.noServicesSelected,
-                                  style: theme.textTheme.bodySmall?.copyWith(fontSize: 13),
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      else
-                        DropdownButtonFormField<int>(
-                          value: _selectedServiceId,
-                          isExpanded: true,
-                          decoration: InputDecoration(
-                            hintText: l10n.selectService,
-                            hintStyle: TextStyle(color: theme.hintColor, fontSize: 14),
-                            prefixIcon: Icon(Icons.construction_rounded, color: AppTheme.primary, size: 20),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: theme.dividerColor),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: AppTheme.primary, width: 2),
-                            ),
-                            filled: true,
-                            fillColor: theme.colorScheme.surfaceContainerHighest,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          ),
-                          items: [
-                            const DropdownMenuItem<int>(
-                              value: null,
-                              child: Text('Select a service'),
-                            ),
-                            ...services.map((service) => DropdownMenuItem<int>(
-                              value: service.id,
-                              child: Text(service.name),
-                            )),
-                          ],
-                          onChanged: (value) {
-                            setState(() {
-                              _selectedServiceId = value;
-                              _errorMessage = null;
-                              _updateCategories(value);
-                            });
-                          },
-                          validator: (value) => value == null ? l10n.pleaseSelectService : null,
-                        ),
-
-                      if (_errorMessage != null && _errorMessage!.contains('service'))
-                        Padding(
-                          padding: const EdgeInsets.only(top: 6),
-                          child: Text(
-                            _errorMessage!,
-                            style: TextStyle(color: AppTheme.error, fontSize: 12),
-                          ),
-                        ),
-                      const SizedBox(height: 16),
-
-                      if (showCategoryDropdown) ...[
-                        Text(
-                          l10n.category,
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: theme.dividerColor),
-                          ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<int>(
-                              value: _selectedCategoryId,
-                              isExpanded: true,
-                              hint: Text(
-                                l10n.selectService,
-                                style: TextStyle(color: theme.hintColor, fontSize: 14),
-                              ),
-                              items: [
-                                DropdownMenuItem<int>(
-                                  value: null,
-                                  child: Text(l10n.all),
-                                ),
-                                ..._availableCategories.map((category) {
-                                  return DropdownMenuItem<int>(
-                                    value: category.id,
-                                    child: Text(category.getDisplayName(_locale)),
-                                  );
-                                }),
-                              ],
-                              onChanged: (value) {
-                                setState(() {
-                                  _selectedCategoryId = value;
-                                  _errorMessage = null;
-                                });
-                              },
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-
-                      TextFormField(
-                        controller: _descController,
-                        maxLines: 4,
-                        decoration: InputDecoration(
-                          labelText: l10n.describeIssue,
-                          hintText: l10n.describeHint,
-                          hintStyle: TextStyle(color: theme.hintColor, fontSize: 13),
-                          alignLabelWithHint: true,
-                          prefixIcon: Icon(Icons.description_outlined, color: AppTheme.primary, size: 20),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: theme.dividerColor),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: AppTheme.primary, width: 2),
-                          ),
-                          filled: true,
-                          fillColor: theme.colorScheme.surfaceContainerHighest,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                          labelStyle: theme.textTheme.bodyMedium?.copyWith(fontSize: 14),
-                        ),
-                        validator: (v) {
-                          if (v == null || v.trim().length < 5) {
-                            return l10n.describeIssue;
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 20),
-
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: _submitRequest,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.primary,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                            elevation: 2,
-                          ),
-                          child: Text(
-                            l10n.submitRequest,
-                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-
-              if (_isSubmitting) ...[
-                const SizedBox(height: 24),
-                const Center(child: CircularProgressIndicator()),
-                const SizedBox(height: 12),
-                Center(
-                  child: Text(
-                    l10n.sendingToTechnician,
-                    style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
-                  ),
-                ),
-              ],
-
-              if (_isSuccess) ...[
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.06),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.green.withOpacity(0.2)),
-                  ),
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.12),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.check_circle_rounded, color: Colors.green, size: 48),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        l10n.requestSent,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        l10n.awaitingResponse,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.hintColor,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 46,
-                        child: ElevatedButton(
-                          onPressed: _closeDialog,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.primary,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          ),
-                          child: Text(
-                            l10n.done,
-                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-
-              if (!_isSubmitting && !_isSuccess &&
-                  _errorMessage != null &&
-                  !_errorMessage!.contains('service')) ...[
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppTheme.error.withOpacity(0.06),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppTheme.error.withOpacity(0.2)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.error_outline_rounded, color: AppTheme.error, size: 20),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          _errorMessage!,
-                          style: TextStyle(color: AppTheme.error, fontSize: 14),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  height: 44,
-                  child: OutlinedButton(
-                    onPressed: () => setState(() {
-                      _errorMessage = null;
-                      _isSubmitting = false;
-                    }),
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: theme.hintColor.withOpacity(0.5)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: Text(
-                      l10n.retry,
-                      style: TextStyle(color: theme.colorScheme.onSurface),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
       ),
     );
   }

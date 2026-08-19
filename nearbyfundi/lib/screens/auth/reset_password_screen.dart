@@ -65,296 +65,235 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      body: Consumer<AuthProvider>(
-        builder: (context, auth, _) => LoadingOverlay(
-          isLoading: auth.isLoading,
-          child: Column(
-            children: [
-              Expanded(
-                flex: 42,
-                child: Stack(
-                  children: [
-                    Container(
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: isDark
-                              ? [
-                            theme.colorScheme.primary,
-                            theme.colorScheme.secondary,
-                            theme.colorScheme.tertiary ?? theme.colorScheme.primary,
-                          ]
-                              : [
-                            const Color(0xFF1A1150),
-                            AppTheme.primaryColor,
-                            AppTheme.secondaryColor,
-                          ],
-                          stops: const [0.0, 0.55, 1.0],
-                        ),
-                      ),
-                    ),
-                    Positioned(top: -30, right: -30, child: _buildDecorCircle(140, 0.07, theme)),
-                    Positioned(bottom: 30, left: -20, child: _buildDecorCircle(90, 0.05, theme)),
-                    Positioned(
-                      top: MediaQuery.of(context).padding.top + 8,
-                      left: 12,
-                      child: IconButton(
-                        icon: Icon(Icons.arrow_back_ios_new_rounded, color: theme.colorScheme.onPrimary, size: 20),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ),
-                    Positioned.fill(
-                      child: SafeArea(
-                        bottom: false,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              width: 72,
-                              height: 72,
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.onPrimary.withOpacity(0.15),
-                                border: Border.all(color: theme.colorScheme.onPrimary.withOpacity(0.3)),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Icon(Icons.lock_reset_rounded, size: 38, color: theme.colorScheme.onPrimary),
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              l10n.resetPassword,
-                              style: TextStyle(
-                                fontSize: 26,
-                                fontWeight: FontWeight.w800,
-                                color: theme.colorScheme.onPrimary,
-                                letterSpacing: -0.5,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              l10n.setNewPassword,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: theme.colorScheme.onPrimary.withOpacity(0.75),
-                                height: 1.5,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: -1,
-                      left: 0,
-                      right: 0,
-                      child: CustomPaint(
-                        size: const Size(double.infinity, 36),
-                        painter: _WavePainter(color: theme.colorScheme.surface),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                flex: 58,
+      backgroundColor: const Color(0xFFF5F7FA),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+            child: Consumer<AuthProvider>(
+              builder: (context, auth, _) => LoadingOverlay(
+                isLoading: auth.isLoading,
                 child: Container(
-                  color: theme.colorScheme.surface,
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            l10n.setNewPassword,
-                            style: theme.textTheme.headlineMedium?.copyWith(
+                  width: double.infinity,
+                  constraints: const BoxConstraints(maxWidth: 480),
+                  padding: const EdgeInsets.all(32),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(28),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 40,
+                        offset: const Offset(0, 12),
+                      ),
+                    ],
+                  ),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // --- Modern Brand Icon ---
+                        Center(
+                          child: Container(
+                            width: 72,
+                            height: 72,
+                            decoration: BoxDecoration(
+                              color: theme.primaryColor.withOpacity(0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.lock_reset_rounded,
+                              size: 36,
+                              color: theme.primaryColor,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        // --- Headings ---
+                        Center(
+                          child: Text(
+                            'NearbyFundi',
+                            style: theme.textTheme.headlineSmall?.copyWith(
                               fontWeight: FontWeight.w800,
                               color: theme.colorScheme.onSurface,
+                              letterSpacing: -0.5,
                             ),
                           ),
-                          const SizedBox(height: 6),
-                          Text(
-                            '${l10n.otpSentTo} ${widget.email}',
-                            style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
-                          ),
-                          const SizedBox(height: 32),
-                          _FieldLabel(label: l10n.otpCode),
-                          const SizedBox(height: 6),
-                          TextFormField(
-                            controller: _otpController,
-                            keyboardType: TextInputType.number,
-                            maxLength: 6,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, letterSpacing: 8),
-                            decoration: InputDecoration(
-                              hintText: '------',
-                              hintStyle: const TextStyle(letterSpacing: 8, fontSize: 20),
-                              counterText: '',
-                              prefixIcon: Icon(Icons.pin_rounded, size: 20, color: theme.primaryColor),
-                              filled: true,
-                              fillColor: theme.colorScheme.surface,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: theme.hintColor.withOpacity(0.3), width: 0.5),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: theme.hintColor.withOpacity(0.3), width: 0.5),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: theme.primaryColor, width: 1.5),
-                              ),
+                        ),
+                        const SizedBox(height: 4),
+                        Center(
+                          child: Text(
+                            l10n.resetPassword,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              color: theme.colorScheme.onSurface,
+                              fontWeight: FontWeight.w700,
                             ),
-                            validator: (v) => v != null && v.length == 6 ? null : 'Enter 6-digit OTP',
                           ),
-                          const SizedBox(height: 20),
-                          _FieldLabel(label: l10n.newPassword),
-                          const SizedBox(height: 6),
-                          TextFormField(
-                            controller: _passwordController,
-                            obscureText: _obscurePass,
-                            decoration: InputDecoration(
-                              hintText: 'Minimum 8 characters',
-                              prefixIcon: Icon(Icons.lock_outline_rounded, size: 20, color: theme.primaryColor),
-                              suffixIcon: IconButton(
-                                icon: Icon(
-                                  _obscurePass ? Icons.visibility_off : Icons.visibility,
-                                  color: theme.hintColor,
-                                ),
-                                onPressed: () => setState(() => _obscurePass = !_obscurePass),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '${l10n.otpSentTo} ${widget.email}',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.hintColor,
+                          ),
+                        ),
+                        const SizedBox(height: 36),
+
+                        // --- OTP Code Field ---
+                        _buildFieldLabel(l10n.otpCode),
+                        const SizedBox(height: 6),
+                        TextFormField(
+                          controller: _otpController,
+                          keyboardType: TextInputType.number,
+                          maxLength: 6,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, letterSpacing: 8),
+                          decoration: _inputDecoration(
+                            context,
+                            hintText: '------',
+                            prefixIcon: Icons.pin_rounded,
+                          ),
+                          validator: (v) => v != null && v.length == 6 ? null : 'Enter 6-digit OTP',
+                        ),
+                        const SizedBox(height: 24),
+
+                        // --- New Password Field ---
+                        _buildFieldLabel(l10n.newPassword),
+                        const SizedBox(height: 6),
+                        TextFormField(
+                          controller: _passwordController,
+                          obscureText: _obscurePass,
+                          decoration: _inputDecoration(
+                            context,
+                            hintText: 'Minimum 8 characters',
+                            prefixIcon: Icons.lock_outline_rounded,
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePass ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                                color: theme.hintColor,
                               ),
-                              filled: true,
-                              fillColor: theme.colorScheme.surface,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: theme.hintColor.withOpacity(0.3), width: 0.5),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: theme.hintColor.withOpacity(0.3), width: 0.5),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: theme.primaryColor, width: 1.5),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                              labelStyle: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
+                              onPressed: () => setState(() => _obscurePass = !_obscurePass),
                             ),
-                            validator: (v) => v != null && v.length >= 8 ? null : 'Password must be at least 8 characters',
                           ),
-                          const SizedBox(height: 20),
-                          _FieldLabel(label: l10n.confirmPassword),
-                          const SizedBox(height: 6),
-                          TextFormField(
-                            controller: _confirmController,
-                            obscureText: _obscureConfirm,
-                            decoration: InputDecoration(
-                              hintText: 'Repeat your password',
-                              prefixIcon: Icon(Icons.lock_outline_rounded, size: 20, color: theme.primaryColor),
-                              suffixIcon: IconButton(
-                                icon: Icon(
-                                  _obscureConfirm ? Icons.visibility_off : Icons.visibility,
-                                  color: theme.hintColor,
-                                ),
-                                onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                          validator: (v) => v != null && v.length >= 8 ? null : 'Password must be at least 8 characters',
+                        ),
+                        const SizedBox(height: 24),
+
+                        // --- Confirm Password Field ---
+                        _buildFieldLabel(l10n.confirmPassword),
+                        const SizedBox(height: 6),
+                        TextFormField(
+                          controller: _confirmController,
+                          obscureText: _obscureConfirm,
+                          decoration: _inputDecoration(
+                            context,
+                            hintText: 'Repeat your password',
+                            prefixIcon: Icons.lock_outline_rounded,
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscureConfirm ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                                color: theme.hintColor,
                               ),
-                              filled: true,
-                              fillColor: theme.colorScheme.surface,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: theme.hintColor.withOpacity(0.3), width: 0.5),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: theme.hintColor.withOpacity(0.3), width: 0.5),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: theme.primaryColor, width: 1.5),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                              labelStyle: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
+                              onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
                             ),
-                            validator: (v) => v == _passwordController.text ? null : 'Passwords do not match',
                           ),
-                          const SizedBox(height: 32),
-                          CustomButton(
+                          validator: (v) => v == _passwordController.text ? null : 'Passwords do not match',
+                        ),
+                        const SizedBox(height: 36),
+
+                        // --- Reset Button ---
+                        SizedBox(
+                          width: double.infinity,
+                          height: 56,
+                          child: CustomButton(
                             text: l10n.resetPasswordButton,
                             onPressed: _handleReset,
                           ),
-                          const SizedBox(height: 20),
-                          TextButton(
+                        ),
+                        const SizedBox(height: 16),
+
+                        // --- Back Link ---
+                        Center(
+                          child: TextButton(
                             onPressed: () => Navigator.pop(context),
                             child: Text(
                               l10n.backToSignIn,
-                              style: TextStyle(color: theme.primaryColor),
+                              style: TextStyle(
+                                color: theme.primaryColor,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildDecorCircle(double size, double opacity, ThemeData theme) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: theme.colorScheme.onPrimary.withOpacity(opacity),
-      ),
-    );
-  }
-}
-
-class _FieldLabel extends StatelessWidget {
-  final String label;
-  const _FieldLabel({required this.label});
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildFieldLabel(String label) {
     return Text(
       label.toUpperCase(),
       style: TextStyle(
-        fontSize: 10,
-        fontWeight: FontWeight.w600,
-        color: Theme.of(context).colorScheme.onSurface,
-        letterSpacing: 0.6,
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+        letterSpacing: 0.8,
       ),
     );
   }
 }
 
-class _WavePainter extends CustomPainter {
-  final Color color;
-  const _WavePainter({required this.color});
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = color;
-    final path = Path();
-    path.moveTo(0, size.height * 0.5);
-    path.quadraticBezierTo(size.width * 0.25, 0, size.width * 0.5, size.height * 0.5);
-    path.quadraticBezierTo(size.width * 0.75, size.height, size.width, size.height * 0.5);
-    path.lineTo(size.width, size.height);
-    path.lineTo(0, size.height);
-    path.close();
-    canvas.drawPath(path, paint);
-  }
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+// --- Reusable Input Decoration Helper ---
+InputDecoration _inputDecoration(
+    BuildContext context, {
+      required String hintText,
+      required IconData prefixIcon,
+      Widget? suffixIcon,
+    }) {
+  final theme = Theme.of(context);
+  return InputDecoration(
+    hintText: hintText,
+    hintStyle: theme.textTheme.bodyMedium?.copyWith(
+      color: Colors.grey[500],
+      fontWeight: FontWeight.w400,
+    ),
+    prefixIcon: Icon(prefixIcon, color: theme.hintColor, size: 20),
+    suffixIcon: suffixIcon,
+    counterText: '',
+    filled: true,
+    fillColor: const Color(0xFFF2F4F8),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16),
+      borderSide: BorderSide.none,
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16),
+      borderSide: BorderSide.none,
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16),
+      borderSide: BorderSide(color: theme.primaryColor, width: 2),
+    ),
+    errorBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16),
+      borderSide: const BorderSide(color: Colors.red, width: 1.5),
+    ),
+    focusedErrorBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16),
+      borderSide: const BorderSide(color: Colors.red, width: 2),
+    ),
+  );
 }

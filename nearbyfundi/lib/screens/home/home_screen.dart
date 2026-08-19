@@ -39,8 +39,6 @@ class _HomeScreenState extends State<HomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final settings = context.read<SettingsProvider>();
       _currentLocale = settings.locale;
-
-      // Refresh services with current locale
       context.read<ServiceProvider>().fetchServices(locale: _currentLocale);
     });
 
@@ -87,33 +85,26 @@ class _HomeScreenState extends State<HomeScreen> {
     final l10n = AppLocalizations.of(context)!;
 
     try {
-      // Refresh based on current index
       switch (_currentIndex) {
-        case 0: // Nearby
+        case 0:
           await context.read<TechnicianProvider>().refreshLastSearch();
           break;
-
-        case 1: // Blogs
+        case 1:
           await context.read<PostProvider>().fetchPosts(refresh: true);
           break;
-
-        case 2: // My Requests
+        case 2:
           await context.read<RequestProvider>().loadMyRequests();
           break;
-
-        case 3: // Chat
+        case 3:
           await context.read<ChatProvider>().refreshConversations();
           break;
-
-        case 4: // Profile
+        case 4:
           await context.read<AuthProvider>().loadUser();
           break;
       }
 
-      // Always refresh notifications and services
       await context.read<NotificationProvider>().loadNotifications();
 
-      // Refresh services if locale changed
       final settings = context.read<SettingsProvider>();
       if (_currentLocale != settings.locale) {
         _currentLocale = settings.locale;
@@ -141,6 +132,32 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       }
     }
+  }
+
+  void _showPartnershipsComingSoon() {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.handshake_rounded, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Partnerships Coming Soon! 🚀',
+                style: const TextStyle(fontWeight: FontWeight.w500),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: theme.primaryColor,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   void _showNotifications(BuildContext context) {
@@ -197,9 +214,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Consumer<NotificationProvider>(
                       builder: (context, provider, child) {
                         if (provider.isLoading) {
-                          return const Center(
-                            child: CircularProgressIndicator(),
-                          );
+                          return const Center(child: CircularProgressIndicator());
                         }
 
                         if (provider.notifications.isEmpty) {
@@ -266,31 +281,110 @@ class _HomeScreenState extends State<HomeScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    // Update locale when settings change
     final settings = context.watch<SettingsProvider>();
     if (_currentLocale != settings.locale) {
       _currentLocale = settings.locale;
-      // Refresh services with new locale
       WidgetsBinding.instance.addPostFrameCallback((_) {
         context.read<ServiceProvider>().fetchServices(locale: _currentLocale);
       });
     }
 
     return Scaffold(
+      // ─── DRAWER: White, Top-Left aligned, removed Settings, added Others ──
+      drawer: Drawer(
+        backgroundColor: Colors.white,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.only(
+            topRight: Radius.circular(24),
+            bottomRight: Radius.circular(24),
+          ),
+        ),
+        child: ListView(
+          padding: EdgeInsets.zero, // Starts from the absolute top left
+          children: [
+            // Custom Drawer Header with White Text and Icon
+            Container(
+              padding: const EdgeInsets.only(left: 24, top: 48, bottom: 24),
+              decoration: const BoxDecoration(
+                color: Color(0xFF006B5E), // Match AppBar header
+                borderRadius: BorderRadius.only(
+                  bottomRight: Radius.circular(24),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.handyman_rounded, color: Colors.white),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text(
+                    'Menu',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // Menu Item: Partnerships
+            ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+              leading: const Icon(Icons.handshake_rounded, color: Color(0xFF006B5E)),
+              title: const Text(
+                'Partnerships',
+                style: TextStyle(fontWeight: FontWeight.w500, fontSize: 16),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _showPartnershipsComingSoon();
+              },
+            ),
+
+            // Menu Item: Others
+            ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+              leading: const Icon(Icons.more_horiz, color: Colors.grey),
+              title: const Text(
+                'Others',
+                style: TextStyle(fontWeight: FontWeight.w500, fontSize: 16),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                // Future actions like "Help", "About", etc. can go here
+              },
+            ),
+          ],
+        ),
+      ),
       appBar: AppBar(
+        // ─── NEW: Set specific primary color ──────────────────────────
+        backgroundColor: const Color(0xFF006B5E),
+        // ─── NEW: Force icons & text to be white ──────────────────────
+        iconTheme: const IconThemeData(color: Colors.white),
+        foregroundColor: Colors.white,
         title: Row(
           children: [
             Container(
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: theme.colorScheme.onPrimary,
+                color: Colors.white.withOpacity(0.2),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Center(
+              child: const Center(
                 child: Icon(
                   Icons.handyman_rounded,
-                  color: theme.primaryColor,
+                  color: Colors.white,
                   size: 22,
                 ),
               ),
@@ -298,24 +392,19 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(width: 10),
             Text(
               l10n.appTitle,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface,
+                color: Colors.white, // Make title white
               ),
             ),
           ],
         ),
         elevation: 0,
-        backgroundColor: theme.colorScheme.surface,
-        foregroundColor: theme.colorScheme.onSurface,
         actions: [
           // Refresh button
           IconButton(
-            icon: Icon(
-              Icons.refresh_rounded,
-              color: theme.colorScheme.onSurface,
-            ),
+            icon: const Icon(Icons.refresh_rounded, size: 26),
             onPressed: _refreshCurrentScreen,
             tooltip: l10n.refresh,
           ),
@@ -326,11 +415,7 @@ class _HomeScreenState extends State<HomeScreen> {
               return IconButton(
                 icon: Stack(
                   children: [
-                    Icon(
-                      Icons.notifications_outlined,
-                      color: theme.colorScheme.onSurface,
-                      size: 26,
-                    ),
+                    const Icon(Icons.notifications_outlined, size: 26),
                     if (unreadCount > 0)
                       Positioned(
                         right: 0,
@@ -359,6 +444,21 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
                 onPressed: () => _showNotifications(context),
+              );
+            },
+          ),
+          // ─── Kebab Icon Button (Now opens LEFT Drawer) ──────────
+          Builder(
+            builder: (BuildContext ctx) {
+              return IconButton(
+                icon: const Icon(
+                  Icons.more_vert, // Vertical three-dot icon
+                  size: 26,
+                ),
+                onPressed: () {
+                  Scaffold.of(ctx).openDrawer(); // Opens from the LEFT
+                },
+                tooltip: 'More Options',
               );
             },
           ),
@@ -491,7 +591,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // ================================================================
-// Notification Tile with language support
+// Notification Tile (unchanged)
 // ================================================================
 class _NotificationTile extends StatelessWidget {
   final Map<String, dynamic> notification;

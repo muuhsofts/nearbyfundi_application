@@ -63,217 +63,160 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      body: Consumer<AuthProvider>(
-        builder: (context, auth, _) => LoadingOverlay(
-          isLoading: auth.isLoading,
-          child: Column(
-            children: [
-              Expanded(
-                flex: 42,
-                child: Stack(
-                  children: [
-                    Container(
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: isDark
-                              ? [
-                            theme.colorScheme.primary,
-                            theme.colorScheme.secondary,
-                            theme.colorScheme.tertiary ?? theme.colorScheme.primary,
-                          ]
-                              : [
-                            AppTheme.dark,
-                            AppTheme.primary,
-                            AppTheme.secondaryColor,
-                          ],
-                          stops: const [0.0, 0.55, 1.0],
-                        ),
-                      ),
-                    ),
-                    Positioned(top: -30, right: -30, child: _buildDecorCircle(140, 0.07, theme)),
-                    Positioned(bottom: 30, left: -20, child: _buildDecorCircle(90, 0.05, theme)),
-                    Positioned(
-                      top: MediaQuery.of(context).padding.top + 8,
-                      left: 12,
-                      child: IconButton(
-                        icon: Icon(Icons.arrow_back_ios_new_rounded, color: theme.colorScheme.onPrimary, size: 20),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ),
-                    Positioned.fill(
-                      child: SafeArea(
-                        bottom: false,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              width: 72,
-                              height: 72,
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.onPrimary.withOpacity(0.15),
-                                border: Border.all(color: theme.colorScheme.onPrimary.withOpacity(0.3)),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Icon(Icons.verified_rounded, size: 38, color: theme.colorScheme.onPrimary),
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              l10n.verificationCode,
-                              style: TextStyle(
-                                fontSize: 26,
-                                fontWeight: FontWeight.w800,
-                                color: theme.colorScheme.onPrimary,
-                                letterSpacing: -0.5,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              '${l10n.enterCodeSent}\n${widget.email}',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: theme.colorScheme.onPrimary.withOpacity(0.75),
-                                height: 1.5,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: -1,
-                      left: 0,
-                      right: 0,
-                      child: CustomPaint(
-                        size: const Size(double.infinity, 36),
-                        painter: _WavePainter(color: theme.colorScheme.surface),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                flex: 58,
+      backgroundColor: const Color(0xFFF5F7FA),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+            child: Consumer<AuthProvider>(
+              builder: (context, auth, _) => LoadingOverlay(
+                isLoading: auth.isLoading,
                 child: Container(
-                  color: theme.colorScheme.surface,
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(24, 40, 24, 40),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          l10n.enterOtp,
-                          style: theme.textTheme.headlineMedium?.copyWith(
+                  width: double.infinity,
+                  constraints: const BoxConstraints(maxWidth: 480),
+                  padding: const EdgeInsets.all(32),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(28),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 40,
+                        offset: const Offset(0, 12),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // --- Modern Brand Icon ---
+                      Center(
+                        child: Container(
+                          width: 72,
+                          height: 72,
+                          decoration: BoxDecoration(
+                            color: theme.primaryColor.withOpacity(0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.verified_rounded,
+                            size: 36,
+                            color: theme.primaryColor,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // --- Headings ---
+                      Center(
+                        child: Text(
+                          'NearbyFundi',
+                          style: theme.textTheme.headlineSmall?.copyWith(
                             fontWeight: FontWeight.w800,
                             color: theme.colorScheme.onSurface,
+                            letterSpacing: -0.5,
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          l10n.otpSent,
-                          style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
-                          textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 4),
+                      Center(
+                        child: Text(
+                          l10n.verificationCode,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: theme.colorScheme.onSurface,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                        const SizedBox(height: 40),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: List.generate(
-                            6,
-                                (i) => SizedBox(
-                              width: 48,
-                              child: TextFormField(
-                                controller: _otpControllers[i],
-                                focusNode: _focusNodes[i],
-                                textAlign: TextAlign.center,
-                                keyboardType: TextInputType.number,
-                                maxLength: 1,
-                                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
-                                decoration: InputDecoration(
-                                  counterText: '',
-                                  contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: BorderSide(color: theme.primaryColor, width: 2),
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                  fillColor: theme.colorScheme.surface,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${l10n.enterCodeSent}\n${widget.email}',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.hintColor,
+                        ),
+                      ),
+                      const SizedBox(height: 36),
+
+                      // --- OTP Inputs ---
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: List.generate(
+                          6,
+                              (i) => SizedBox(
+                            width: 48,
+                            child: TextFormField(
+                              controller: _otpControllers[i],
+                              focusNode: _focusNodes[i],
+                              textAlign: TextAlign.center,
+                              keyboardType: TextInputType.number,
+                              maxLength: 1,
+                              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+                              decoration: InputDecoration(
+                                counterText: '',
+                                contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                                filled: true,
+                                fillColor: const Color(0xFFF2F4F8),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide.none,
                                 ),
-                                onChanged: (val) {
-                                  if (val.isNotEmpty && i < 5) {
-                                    _focusNodes[i + 1].requestFocus();
-                                  } else if (val.isEmpty && i > 0) {
-                                    _focusNodes[i - 1].requestFocus();
-                                  }
-                                },
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide(color: theme.primaryColor, width: 2),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide.none,
+                                ),
                               ),
+                              onChanged: (val) {
+                                if (val.isNotEmpty && i < 5) {
+                                  _focusNodes[i + 1].requestFocus();
+                                } else if (val.isEmpty && i > 0) {
+                                  _focusNodes[i - 1].requestFocus();
+                                }
+                              },
                             ),
                           ),
                         ),
-                        const SizedBox(height: 48),
-                        CustomButton(
+                      ),
+                      const SizedBox(height: 40),
+
+                      // --- Verify Button ---
+                      SizedBox(
+                        width: double.infinity,
+                        height: 56,
+                        child: CustomButton(
                           text: l10n.verifyOtp,
                           onPressed: _handleVerify,
                         ),
-                        const SizedBox(height: 20),
-                        TextButton(
+                      ),
+                      const SizedBox(height: 16),
+
+                      // --- Back Link ---
+                      Center(
+                        child: TextButton(
                           onPressed: () => Navigator.pop(context),
                           child: Text(
                             l10n.backToSignIn,
-                            style: TextStyle(color: theme.primaryColor),
+                            style: TextStyle(
+                              color: theme.primaryColor,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
-
-  Widget _buildDecorCircle(double size, double opacity, ThemeData theme) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: theme.colorScheme.onPrimary.withOpacity(opacity),
-      ),
-    );
-  }
-}
-
-class _WavePainter extends CustomPainter {
-  final Color color;
-  const _WavePainter({required this.color});
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = color;
-    final path = Path();
-    path.moveTo(0, size.height * 0.5);
-    path.quadraticBezierTo(size.width * 0.25, 0, size.width * 0.5, size.height * 0.5);
-    path.quadraticBezierTo(size.width * 0.75, size.height, size.width, size.height * 0.5);
-    path.lineTo(size.width, size.height);
-    path.lineTo(0, size.height);
-    path.close();
-    canvas.drawPath(path, paint);
-  }
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

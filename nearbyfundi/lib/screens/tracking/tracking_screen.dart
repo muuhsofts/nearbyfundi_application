@@ -71,6 +71,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
     setState(() => _isLoading = true);
 
     final api = ApiService();
+    // ✅ Uses the new dedicated tracking endpoint
     final response = await api.getTrackingData(widget.requestId);
     if (response.success && response.data != null) {
       final data = response.data as Map<String, dynamic>;

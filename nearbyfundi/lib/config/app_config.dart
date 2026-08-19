@@ -1,12 +1,12 @@
 // lib/config/app_config.dart
 
 class AppConfig {
-  static const String baseUrl = 'http://192.168.100.84:8000/api';  // Update with your current IP
+  static const String baseUrl = 'http://192.168.43.44:8000/api';  // Update with your current IP
   static const String appName = 'NearbyFundi';
   static const String appVersion = '0.0.1';
 
   // 👇 Use Pusher Cloud (works on any network)
   static const String webSocketUrl = 'https://mt1.pusher.com';
 
-  static const String storageBaseUrl = 'http://192.168.100.84:8000/storage';
+  static const String storageBaseUrl = 'http://192.168.43.44:8000/storage';
 }

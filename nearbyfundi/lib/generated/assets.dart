@@ -8,13 +8,8 @@ class Assets {
 
   static const SvgGenImage audioIcon =
       SvgGenImage('assets/icons/chat/audio_icon.svg');
-  static const AssetGenImage backimg =
-      AssetGenImage('assets/images/backimg.jpg');
   static const SvgGenImage chatIcon =
       SvgGenImage('assets/icons/chat/chat_icon.svg');
-  static const AssetGenImage home = AssetGenImage('assets/images/home.jpg');
-  static const AssetGenImage nearbyfundiImage =
-      AssetGenImage('assets/images/nearbyfundi_image.jpg');
   static const AssetGenImage nearbylogo =
       AssetGenImage('assets/icons/nearbylogo.png');
   static const AssetGenImage netsaf = AssetGenImage('assets/icons/netsaf.png');
@@ -32,10 +27,11 @@ class $AssetsImagesGen {
 
   final AssetGenImage backimg =
       const AssetGenImage('assets/images/backimg.jpg');
+  final AssetGenImage googleLogo =
+      const AssetGenImage('assets/images/google_logo.png');
   final AssetGenImage home = const AssetGenImage('assets/images/home.jpg');
   final AssetGenImage nearbyfundiImage =
       const AssetGenImage('assets/images/nearbyfundi_image.jpg');
-  final AssetGenImage search = const AssetGenImage('assets/images/google_logo.png');
 }
 
 class AssetGenImage {

@@ -21,7 +21,6 @@ dependencies:
   flutter_svg: ^2.0.9
   font_awesome_flutter: ^11.0.0
 
-
   # ============================================================
   # Maps & Location
   # ============================================================
@@ -94,23 +93,18 @@ flutter:
   uses-material-design: true
 
   assets:
-    # Images
-    - assets/images/backimg.jpg
-    - assets/images/home.jpg
-    - assets/images/nearbyfundi_image.jpg
+    # Directories
     - assets/images/
+    - assets/audio/
 
-    # Icons
+    # Specific Icons
     - assets/icons/nearbylogo.png
     - assets/icons/netsaf.png
     - assets/icons/chat/chat_icon.svg
     - assets/icons/chat/audio_icon.svg
 
-    # Audio
-    - assets/audio/
-
 # ============================================================
-# LAUNCHER ICON CONFIGURATION - LARGER ICON
+# LAUNCHER ICON CONFIGURATION
 # ============================================================
 flutter_launcher_icons:
   android: true
@@ -122,11 +116,8 @@ flutter_launcher_icons:
   adaptive_icon_foreground: "assets/icons/netsaf.png"
   min_sdk_android: 21
 
-  # ⭐ KEY SETTINGS FOR LARGER ICON ⭐
-  # Lower inset = larger icon (0 = maximum size)
-  adaptive_icon_foreground_inset: 10  # Changed from 20 to 10
-
-  # Remove any padding
+  # Larger Icon Settings
+  adaptive_icon_foreground_inset: 10
   adaptive_icon_padding: false
 
   # iOS settings
