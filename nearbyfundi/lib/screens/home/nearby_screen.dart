@@ -1,5 +1,10 @@
-// screens/home/nearby_screen.dart
+// ================================================================
+// FILE: lib/screens/home/nearby_screen.dart
+// Nearby Fundi - Refined UI/UX
+// ================================================================
+
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -19,6 +24,10 @@ import '../../utils/image_utils.dart';
 import 'nearby_map_screen.dart';
 import 'map_location_picker_screen.dart';
 
+// ================================================================
+// ROUTE DATA
+// ================================================================
+
 class TechnicianRouteData {
   final List<LatLng> points;
   final double distanceKm;
@@ -31,6 +40,10 @@ class TechnicianRouteData {
   });
 }
 
+// ================================================================
+// SCREEN
+// ================================================================
+
 class NearbyScreen extends StatefulWidget {
   const NearbyScreen({super.key});
 
@@ -38,95 +51,199 @@ class NearbyScreen extends StatefulWidget {
   State<NearbyScreen> createState() => _NearbyScreenState();
 }
 
-class _NearbyScreenState extends State<NearbyScreen> {
-  final TextEditingController _locationController = TextEditingController();
-  final TextEditingController _serviceSearchController = TextEditingController();
+class _NearbyScreenState extends State<NearbyScreen>
+    with SingleTickerProviderStateMixin {
+  // --------------------------------------------------------------
+  // Controllers
+  // --------------------------------------------------------------
+
+  final TextEditingController _locationController =
+  TextEditingController();
+
+  final TextEditingController _serviceSearchController =
+  TextEditingController();
+
   final FocusNode _locationFocus = FocusNode();
-  final ScrollController _serviceChipScrollController = ScrollController();
-  final ScrollController _categoryChipScrollController = ScrollController();
+
+  final ScrollController _serviceChipScrollController =
+  ScrollController();
+
+  final ScrollController _categoryChipScrollController =
+  ScrollController();
 
   final MapController _mapController = MapController();
-  final GlobalKey _mapKey = GlobalKey();
+
+  // --------------------------------------------------------------
+  // Animation
+  // --------------------------------------------------------------
+
+  late AnimationController _pulseController;
+
+  // --------------------------------------------------------------
+  // State
+  // --------------------------------------------------------------
 
   bool _isHeaderVisible = true;
+  bool _isSearching = false;
+  bool _isFetchingRoutes = false;
 
   int? _selectedServiceId;
   int? _selectedCategoryId;
-  bool _isSearching = false;
+  int? _selectedTechnicianId;
+
   String _serviceSearchQuery = '';
   String _currentLocale = 'en';
   String _searchedArea = '';
 
+  // --------------------------------------------------------------
+  // Data
+  // --------------------------------------------------------------
+
   final Map<int, TechnicianRouteData> _routesData = {};
-  bool _isFetchingRoutes = false;
 
   List<String> _searchHistory = [];
+
   List<Map<String, dynamic>> _placeSuggestions = [];
+
   bool _showSuggestions = false;
   bool _isLoadingSuggestions = false;
+
+  // ==============================================================
+  // COLORS
+  // ==============================================================
+
+  static const Color primaryGreen = Color(0xFF006B5E);
+  static const Color lightGreen = Color(0xFF008C7A);
+
+  // Selected/highlight color.
+  static const Color selectedColor = Color(0xFF1565C0);
+
+  // User/address marker.
+  static const Color locationRed = Color(0xFFD32F2F);
+
+  // Technician marker.
+  static const Color technicianGreen = Color(0xFF00897B);
+
+  // Distance/time.
+  static const Color distanceGreen = Color(0xFF2E7D32);
+
+  // ==============================================================
+  // INIT
+  // ==============================================================
 
   @override
   void initState() {
     super.initState();
+
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat();
+
     _loadSearchHistory();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
       final settings = context.read<SettingsProvider>();
+
       _currentLocale = settings.locale;
-      context.read<ServiceProvider>().fetchServices(locale: _currentLocale);
+
+      context.read<ServiceProvider>().fetchServices(
+        locale: _currentLocale,
+      );
     });
   }
+
+  // ==============================================================
+  // DISPOSE
+  // ==============================================================
 
   @override
   void dispose() {
+    _pulseController.dispose();
+
     _locationController.dispose();
     _serviceSearchController.dispose();
     _locationFocus.dispose();
+
     _serviceChipScrollController.dispose();
     _categoryChipScrollController.dispose();
-    _mapController.dispose();
+
     super.dispose();
   }
 
-  void _toggleHeaderVisibility() {
-    setState(() {
-      _isHeaderVisible = !_isHeaderVisible;
-    });
-  }
+  // ==============================================================
+  // SEARCH HISTORY
+  // ==============================================================
 
   Future<void> _loadSearchHistory() async {
     final prefs = await SharedPreferences.getInstance();
-    if (mounted) {
-      setState(() {
-        _searchHistory = prefs.getStringList('location_search_history') ?? [];
-      });
-    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _searchHistory =
+          prefs.getStringList('location_search_history') ?? [];
+    });
   }
 
   Future<void> _saveToHistory(String place) async {
     if (place.trim().isEmpty) return;
+
     final prefs = await SharedPreferences.getInstance();
-    final history = prefs.getStringList('location_search_history') ?? [];
+
+    final history =
+        prefs.getStringList('location_search_history') ?? [];
+
     history.remove(place);
     history.insert(0, place);
-    if (history.length > 10) history.removeLast();
-    await prefs.setStringList('location_search_history', history);
-    if (mounted) setState(() => _searchHistory = history);
+
+    if (history.length > 10) {
+      history.removeLast();
+    }
+
+    await prefs.setStringList(
+      'location_search_history',
+      history,
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _searchHistory = history;
+    });
   }
 
   Future<void> _clearHistory() async {
     final prefs = await SharedPreferences.getInstance();
+
     await prefs.remove('location_search_history');
-    if (mounted) setState(() => _searchHistory = []);
+
+    if (!mounted) return;
+
+    setState(() {
+      _searchHistory = [];
+    });
   }
+
+  // ==============================================================
+  // PLACE SUGGESTIONS
+  // ==============================================================
 
   Future<void> _fetchPlaceSuggestions(String query) async {
     if (query.trim().length < 2) {
+      if (!mounted) return;
+
       setState(() {
         _placeSuggestions = [];
         _showSuggestions = _searchHistory.isNotEmpty;
       });
+
       return;
     }
+
+    if (!mounted) return;
 
     setState(() {
       _isLoadingSuggestions = true;
@@ -137,94 +254,149 @@ class _NearbyScreenState extends State<NearbyScreen> {
       final url = Uri.parse(
         'https://nominatim.openstreetmap.org/search'
             '?q=${Uri.encodeComponent(query)}'
-            '&format=json&addressdetails=1&limit=8'
+            '&format=json'
+            '&addressdetails=1'
+            '&limit=8'
             '&countrycodes=tz',
       );
-      final response = await http
-          .get(url, headers: {'User-Agent': 'NearbyFundi/1.0'})
-          .timeout(const Duration(seconds: 6));
+
+      final response = await http.get(
+        url,
+        headers: {
+          'User-Agent': 'NearbyFundi/1.0',
+        },
+      ).timeout(
+        const Duration(seconds: 6),
+      );
 
       if (response.statusCode == 200) {
-        final List data = jsonDecode(response.body);
-        if (mounted) {
-          setState(() {
-            _placeSuggestions = data.map((e) {
-              final display = e['display_name'] as String? ?? '';
-              final short = display.split(',').take(3).join(',').trim();
-              return {
-                'name': short,
-                'full': display,
-                'lat': double.tryParse(e['lat']?.toString() ?? '') ?? 0.0,
-                'lng': double.tryParse(e['lon']?.toString() ?? '') ?? 0.0,
-              };
-            }).toList();
-          });
-        }
-      }
-    } catch (_) {}
+        final List<dynamic> data =
+        jsonDecode(response.body) as List<dynamic>;
 
-    if (mounted) setState(() => _isLoadingSuggestions = false);
+        if (!mounted) return;
+
+        setState(() {
+          _placeSuggestions = data.map((dynamic item) {
+            final Map<String, dynamic> value =
+            item as Map<String, dynamic>;
+
+            final display =
+                value['display_name']?.toString() ?? '';
+
+            final short =
+            display.split(',').take(3).join(',').trim();
+
+            return {
+              'name': short,
+              'full': display,
+              'lat': double.tryParse(
+                value['lat']?.toString() ?? '',
+              ) ??
+                  0.0,
+              'lng': double.tryParse(
+                value['lon']?.toString() ?? '',
+              ) ??
+                  0.0,
+            };
+          }).toList();
+        });
+      }
+    } catch (e) {
+      debugPrint('Place suggestion error: $e');
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _isLoadingSuggestions = false;
+    });
   }
+
+  // ==============================================================
+  // MAP LOCATION PICKER
+  // ==============================================================
 
   Future<void> _openMapPicker() async {
     final techProvider = context.read<TechnicianProvider>();
+
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(
         builder: (_) => MapLocationPickerScreen(
           initialCenter: techProvider.hasSearchOrigin
-              ? LatLng(techProvider.searchLat!, techProvider.searchLng!)
+              ? LatLng(
+            techProvider.searchLat!,
+            techProvider.searchLng!,
+          )
               : null,
         ),
       ),
     );
 
-    if (result != null && mounted) {
-      final name = result['name'] as String;
-      final lat = result['lat'] as double;
-      final lng = result['lng'] as double;
+    if (result == null || !mounted) return;
 
-      _locationController.text = name;
-      await _saveToHistory(name);
+    final name = result['name']?.toString() ?? '';
 
-      setState(() {
-        _isSearching = true;
-        _searchedArea = name;
-        _routesData.clear();
-        _showSuggestions = false;
-      });
-      techProvider.clearTechnicians();
+    final lat = result['lat'] as double;
+    final lng = result['lng'] as double;
 
-      try {
-        await techProvider.searchByCoordinates(
-          lat: lat,
-          lng: lng,
-          serviceId: _selectedServiceId,
-          categoryId: _selectedCategoryId,
-          radius: 20,
-          search: _serviceSearchQuery.isNotEmpty ? _serviceSearchQuery : null,
-          locale: _currentLocale,
-        );
-      } catch (_) {
-        await techProvider.searchByPlace(
-          place: name,
-          serviceId: _selectedServiceId,
-          categoryId: _selectedCategoryId,
-          radius: 20,
-          search: _serviceSearchQuery.isNotEmpty ? _serviceSearchQuery : null,
-          locale: _currentLocale,
-        );
-      }
+    _locationController.text = name;
 
-      if (mounted) {
-        setState(() => _isSearching = false);
-        _fetchRoutesForTechnicians();
-      }
+    await _saveToHistory(name);
+
+    setState(() {
+      _isSearching = true;
+      _searchedArea = name;
+      _routesData.clear();
+      _selectedTechnicianId = null;
+      _showSuggestions = false;
+    });
+
+    techProvider.clearTechnicians();
+
+    try {
+      await techProvider.searchByCoordinates(
+        lat: lat,
+        lng: lng,
+        serviceId: _selectedServiceId,
+        categoryId: _selectedCategoryId,
+        radius: 20,
+        search: _serviceSearchQuery.isNotEmpty
+            ? _serviceSearchQuery
+            : null,
+        locale: _currentLocale,
+      );
+    } catch (e) {
+      debugPrint('Coordinate search failed: $e');
+
+      await techProvider.searchByPlace(
+        place: name,
+        serviceId: _selectedServiceId,
+        categoryId: _selectedCategoryId,
+        radius: 20,
+        search: _serviceSearchQuery.isNotEmpty
+            ? _serviceSearchQuery
+            : null,
+        locale: _currentLocale,
+      );
     }
+
+    if (!mounted) return;
+
+    setState(() {
+      _isSearching = false;
+    });
+
+    await _fetchRoutesForTechnicians();
   }
+
+  // ==============================================================
+  // SEARCH
+  // ==============================================================
 
   Future<void> _performSearch() async {
     final place = _locationController.text.trim();
+
     final l10n = AppLocalizations.of(context)!;
 
     if (place.isEmpty) {
@@ -235,65 +407,117 @@ class _NearbyScreenState extends State<NearbyScreen> {
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
+
       return;
     }
 
-    setState(() => _showSuggestions = false);
+    setState(() {
+      _showSuggestions = false;
+      _isSearching = true;
+      _routesData.clear();
+      _selectedTechnicianId = null;
+      _searchedArea = place;
+    });
+
     await _saveToHistory(place);
 
     final techProvider = context.read<TechnicianProvider>();
-    setState(() {
-      _isSearching = true;
-      _routesData.clear();
-      _searchedArea = place;
-    });
+
     techProvider.clearTechnicians();
 
-    await techProvider.searchByPlace(
-      place: place,
-      serviceId: _selectedServiceId,
-      categoryId: _selectedCategoryId,
-      radius: 20,
-      search: _serviceSearchQuery.isNotEmpty ? _serviceSearchQuery : null,
-      locale: _currentLocale,
-    );
+    try {
+      await techProvider.searchByPlace(
+        place: place,
+        serviceId: _selectedServiceId,
+        categoryId: _selectedCategoryId,
+        radius: 20,
+        search: _serviceSearchQuery.isNotEmpty
+            ? _serviceSearchQuery
+            : null,
+        locale: _currentLocale,
+      );
+    } catch (e) {
+      debugPrint('Search error: $e');
+    }
 
-    if (mounted) setState(() => _isSearching = false);
+    if (!mounted) return;
+
+    setState(() {
+      _isSearching = false;
+    });
+
     _locationFocus.unfocus();
-    _fetchRoutesForTechnicians();
+
+    await _fetchRoutesForTechnicians();
   }
+
+  // ==============================================================
+  // ROUTES
+  // ==============================================================
 
   Future<void> _fetchRoutesForTechnicians() async {
     final techProvider = context.read<TechnicianProvider>();
-    if (!techProvider.hasSearchOrigin) return;
 
-    final origin = LatLng(techProvider.searchLat!, techProvider.searchLng!);
-    final techPoints = techProvider.technicians
-        .where((t) => t.latitude != null && t.longitude != null)
+    if (!techProvider.hasSearchOrigin) {
+      return;
+    }
+
+    final origin = LatLng(
+      techProvider.searchLat!,
+      techProvider.searchLng!,
+    );
+
+    final technicians = techProvider.technicians
+        .where(
+          (t) =>
+      t.latitude != null &&
+          t.longitude != null,
+    )
         .toList();
 
-    if (techPoints.isEmpty) return;
+    if (technicians.isEmpty) {
+      return;
+    }
 
-    setState(() => _isFetchingRoutes = true);
+    if (!mounted) return;
+
+    setState(() {
+      _isFetchingRoutes = true;
+    });
 
     final Map<int, TechnicianRouteData> fetched = {};
-    final targets = techPoints.take(10);
 
-    await Future.wait(targets.map((tech) async {
-      final dest = LatLng(tech.latitude!, tech.longitude!);
-      final routeData = await _getOsrmRouteData(origin, dest, tech.distanceKm);
-      if (routeData != null) {
-        fetched[tech.id] = routeData;
-      }
-    }));
+    final targets = technicians.take(10).toList();
 
-    if (mounted) {
-      setState(() {
-        _routesData.addAll(fetched);
-        _isFetchingRoutes = false;
-        _updateMapBounds();
-      });
-    }
+    await Future.wait(
+      targets.map(
+            (tech) async {
+          final destination = LatLng(
+            tech.latitude!,
+            tech.longitude!,
+          );
+
+          final route = await _getOsrmRouteData(
+            origin,
+            destination,
+            tech.distanceKm,
+          );
+
+          if (route != null) {
+            fetched[tech.id] = route;
+          }
+        },
+      ),
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _routesData.addAll(fetched);
+      _isFetchingRoutes = false;
+    });
+
+    _updateMapBounds();
   }
 
   Future<TechnicianRouteData?> _getOsrmRouteData(
@@ -309,35 +533,59 @@ class _NearbyScreenState extends State<NearbyScreen> {
             '?overview=full&geometries=geojson',
       );
 
-      final response = await http.get(url).timeout(const Duration(seconds: 8));
+      final response = await http.get(url).timeout(
+        const Duration(seconds: 8),
+      );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['routes'] != null && (data['routes'] as List).isNotEmpty) {
-          final route = data['routes'][0];
-          final geometry = route['geometry']['coordinates'] as List;
+        final Map<String, dynamic> data =
+        jsonDecode(response.body) as Map<String, dynamic>;
 
-          final points = geometry
-              .map<LatLng>((coord) => LatLng(coord[1].toDouble(), coord[0].toDouble()))
-              .toList();
+        final routes = data['routes'];
 
-          final distanceMeters = (route['distance'] as num).toDouble();
-          final durationSeconds = (route['duration'] as num).toDouble();
+        if (routes is List && routes.isNotEmpty) {
+          final route =
+          routes.first as Map<String, dynamic>;
+
+          final geometry =
+          route['geometry'] as Map<String, dynamic>;
+
+          final coordinates =
+          geometry['coordinates'] as List<dynamic>;
+
+          final points = coordinates.map<LatLng>((coord) {
+            final values = coord as List<dynamic>;
+
+            return LatLng(
+              (values[1] as num).toDouble(),
+              (values[0] as num).toDouble(),
+            );
+          }).toList();
+
+          final distanceMeters =
+          (route['distance'] as num).toDouble();
+
+          final durationSeconds =
+          (route['duration'] as num).toDouble();
 
           return TechnicianRouteData(
             points: points,
-            distanceKm: distanceMeters / 1000.0,
-            durationMin: durationSeconds / 60.0,
+            distanceKm: distanceMeters / 1000,
+            durationMin: durationSeconds / 60,
           );
         }
       }
     } catch (e) {
-      debugPrint('Error fetching OSRM route: $e');
+      debugPrint('OSRM error: $e');
     }
 
     final straightKm = fallbackKm > 0
         ? fallbackKm
-        : const Distance().as(LengthUnit.Kilometer, origin, destination);
+        : const Distance().as(
+      LengthUnit.Kilometer,
+      origin,
+      destination,
+    );
 
     return TechnicianRouteData(
       points: [origin, destination],
@@ -346,31 +594,61 @@ class _NearbyScreenState extends State<NearbyScreen> {
     );
   }
 
+  // ==============================================================
+  // CLEAR
+  // ==============================================================
+
   void _clearAllFilters() {
     _locationController.clear();
     _serviceSearchController.clear();
+
     setState(() {
       _selectedServiceId = null;
       _selectedCategoryId = null;
+      _selectedTechnicianId = null;
       _serviceSearchQuery = '';
       _routesData.clear();
       _searchedArea = '';
       _showSuggestions = false;
       _placeSuggestions = [];
     });
+
     context.read<TechnicianProvider>().clearTechnicians();
+
     _locationFocus.unfocus();
-    _mapController.move(const LatLng(-6.7924, 39.2083), 11);
+
+    _mapController.move(
+      const LatLng(-6.7924, 39.2083),
+      11,
+    );
   }
+
+  // ==============================================================
+  // MAP BOUNDS
+  // ==============================================================
 
   void _updateMapBounds() {
     final techProvider = context.read<TechnicianProvider>();
+
     if (!techProvider.hasSearchOrigin) return;
 
-    final origin = LatLng(techProvider.searchLat!, techProvider.searchLng!);
+    final origin = LatLng(
+      techProvider.searchLat!,
+      techProvider.searchLng!,
+    );
+
     final techPoints = techProvider.technicians
-        .where((t) => t.latitude != null && t.longitude != null)
-        .map((t) => LatLng(t.latitude!, t.longitude!))
+        .where(
+          (t) =>
+      t.latitude != null &&
+          t.longitude != null,
+    )
+        .map(
+          (t) => LatLng(
+        t.latitude!,
+        t.longitude!,
+      ),
+    )
         .toList();
 
     if (techPoints.isEmpty) {
@@ -378,91 +656,284 @@ class _NearbyScreenState extends State<NearbyScreen> {
       return;
     }
 
-    final all = <LatLng>[origin, ...techPoints];
-    if (all.length == 1) {
-      _mapController.move(origin, 13);
-      return;
-    }
+    final all = <LatLng>[
+      origin,
+      ...techPoints,
+    ];
 
     final bounds = LatLngBounds.fromPoints(all);
+
     _mapController.fitCamera(
       CameraFit.bounds(
         bounds: bounds,
-        padding: const EdgeInsets.all(50),
+        padding: const EdgeInsets.all(70),
       ),
     );
   }
 
-  List<Service> _getFilteredServices(List<Service> allServices) {
-    if (_serviceSearchQuery.isEmpty) return allServices;
-    final lowerQuery = _serviceSearchQuery.toLowerCase().trim();
-    return allServices
-        .where((service) => service.matchesSearch(lowerQuery, _currentLocale))
+  // ==============================================================
+  // FILTER SERVICES
+  // ==============================================================
+
+  List<Service> _getFilteredServices(
+      List<Service> services,
+      ) {
+    if (_serviceSearchQuery.trim().isEmpty) {
+      return services;
+    }
+
+    final query =
+    _serviceSearchQuery.toLowerCase().trim();
+
+    return services
+        .where(
+          (service) => service.matchesSearch(
+        query,
+        _currentLocale,
+      ),
+    )
         .toList();
   }
 
-  List<ServiceCategory> _getCategoriesForSelectedService(ServiceProvider provider) {
-    if (_selectedServiceId == null) return [];
-    return provider.getCategoriesForService(_selectedServiceId!);
+  List<ServiceCategory> _getCategoriesForSelectedService(
+      ServiceProvider provider,
+      ) {
+    if (_selectedServiceId == null) {
+      return [];
+    }
+
+    return provider.getCategoriesForService(
+      _selectedServiceId!,
+    );
   }
 
-  void _showTechniciansList(BuildContext context, List<Technician> technicians) {
-    final l10n = AppLocalizations.of(context)!;
+  // ==============================================================
+  // RECOMMENDED TECHNICIANS
+  // ==============================================================
+
+  List<Technician> _getRecommendedTechnicians(
+      List<Technician> technicians,
+      ) {
+    final valid = technicians
+        .where(
+          (t) =>
+      t.latitude != null &&
+          t.longitude != null,
+    )
+        .toList();
+
+    valid.sort(
+          (a, b) => a.distanceKm.compareTo(b.distanceKm),
+    );
+
+    return valid.take(2).toList();
+  }
+
+  bool _isRecommended(Technician tech) {
+    final provider = context.read<TechnicianProvider>();
+
+    final recommended =
+    _getRecommendedTechnicians(provider.technicians);
+
+    return recommended.any(
+          (item) => item.id == tech.id,
+    );
+  }
+
+  // ==============================================================
+  // AVATAR
+  // ==============================================================
+
+  Widget _buildAvatar(
+      Technician tech, {
+        double size = 56,
+        double iconSize = 28,
+      }) {
+    return Container(
+      width: size,
+      height: size,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.white,
+        border: Border.all(
+          color: Colors.white,
+          width: 2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.20),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: ClipOval(
+        child: tech.profilePhoto != null
+            ? Image.network(
+          ImageUtils.getFullImageUrl(
+            tech.profilePhoto!,
+          ),
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) {
+            return Icon(
+              Icons.build_rounded,
+              size: iconSize,
+              color: Colors.grey.shade600,
+            );
+          },
+        )
+            : Icon(
+          Icons.build_rounded,
+          size: iconSize,
+          color: Colors.grey.shade600,
+        ),
+      ),
+    );
+  }
+
+  // ==============================================================
+  // RECOMMENDED PULSE
+  // ==============================================================
+
+  Widget _buildRecommendationPulse(
+      Technician tech,
+      double size,
+      ) {
+    return AnimatedBuilder(
+      animation: _pulseController,
+      builder: (context, child) {
+        final value = _pulseController.value;
+
+        final scale = 0.8 + (value * 0.45);
+
+        final opacity = 0.40 * (1 - value);
+
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            Transform.scale(
+              scale: scale,
+              child: Container(
+                width: size + 22,
+                height: size + 22,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: primaryGreen.withOpacity(
+                      opacity.clamp(0.0, 1.0),
+                    ),
+                    width: 3,
+                  ),
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: primaryGreen,
+                boxShadow: [
+                  BoxShadow(
+                    color: primaryGreen.withOpacity(0.35),
+                    blurRadius: 14,
+                    spreadRadius: 3,
+                  ),
+                ],
+              ),
+              child: _buildAvatar(
+                tech,
+                size: size,
+                iconSize: size * 0.48,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ==============================================================
+  // TECHNICIAN LIST
+  // ==============================================================
+
+  void _showTechniciansList(
+      BuildContext context,
+      List<Technician> technicians,
+      ) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
       backgroundColor: theme.colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(26),
+        ),
+      ),
       builder: (_) {
         return DraggableScrollableSheet(
-          initialChildSize: 0.8,
-          minChildSize: 0.5,
+          initialChildSize: 0.78,
+          minChildSize: 0.45,
           maxChildSize: 0.95,
           expand: false,
-          builder: (context, scrollController) {
+          builder: (context, controller) {
             return Column(
               children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    margin: const EdgeInsets.only(top: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
+                const SizedBox(height: 10),
+
+                Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade400,
+                    borderRadius: BorderRadius.circular(4),
                   ),
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    const SizedBox(width: 20),
-                    Text(
-                      '${technicians.length} ${l10n.fundisFound}',
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
+
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    18,
+                    16,
+                    10,
+                    12,
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${technicians.length} ${l10n.fundisFound}',
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                       ),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
+                      IconButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                        },
+                        icon: const Icon(
+                          Icons.close_rounded,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
+
                 const Divider(height: 1),
+
                 Expanded(
                   child: ListView.builder(
-                    controller: scrollController,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    controller: controller,
+                    padding: const EdgeInsets.all(16),
                     itemCount: technicians.length,
-                    itemBuilder: (ctx, index) {
-                      final tech = technicians[index];
-                      return _buildListTile(context, tech);
+                    itemBuilder: (_, index) {
+                      return _buildListTile(
+                        context,
+                        technicians[index],
+                      );
                     },
                   ),
                 ),
@@ -474,202 +945,258 @@ class _NearbyScreenState extends State<NearbyScreen> {
     );
   }
 
-  Widget _buildAvatar(
-      Technician tech, {
-        double size = 56,
-        double iconSize = 28,
-      }) {
-    return Container(
-      width: size,
-      height: size,
-      padding: const EdgeInsets.all(3.5),
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: Colors.white,
-        border: Border.all(color: Colors.white, width: 2.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.25),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: ClipOval(
-        child: tech.profilePhoto != null
-            ? Image.network(
-          ImageUtils.getFullImageUrl(tech.profilePhoto!),
-          fit: BoxFit.cover,
-          width: size,
-          height: size,
-          errorBuilder: (_, __, ___) => Icon(
-            Icons.build_rounded,
-            color: Colors.grey.shade600,
-            size: iconSize,
-          ),
-        )
-            : Icon(
-          Icons.build_rounded,
-          color: Colors.grey.shade600,
-          size: iconSize,
-        ),
-      ),
-    );
-  }
+  // ==============================================================
+  // LIST TILE
+  // ==============================================================
 
-  Widget _buildListTile(BuildContext context, Technician tech) {
+  Widget _buildListTile(
+      BuildContext context,
+      Technician tech,
+      ) {
     final theme = Theme.of(context);
-    final routeData = _routesData[tech.id];
-    final distance = routeData?.distanceKm ?? tech.distanceKm;
-    final durationMin = routeData?.durationMin;
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isSmall = screenWidth < 400;
+
+    final route = _routesData[tech.id];
+
+    final distance =
+        route?.distanceKm ?? tech.distanceKm;
+
+    final duration =
+        route?.durationMin;
+
+    final recommended =
+    _isRecommended(tech);
+
+    final selected =
+        _selectedTechnicianId == tech.id;
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      elevation: 1,
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: selected ? 5 : 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(
+          color: selected
+              ? selectedColor
+              : recommended
+              ? primaryGreen.withOpacity(0.35)
+              : Colors.transparent,
+          width: selected ? 1.5 : 1,
+        ),
+      ),
       child: InkWell(
+        borderRadius: BorderRadius.circular(18),
         onTap: () {
+          setState(() {
+            _selectedTechnicianId = tech.id;
+          });
+
           Navigator.pop(context);
-          Navigator.pushNamed(context, AppRoutes.technicianDetail, arguments: tech.id);
+
+          Navigator.pushNamed(
+            context,
+            AppRoutes.technicianDetail,
+            arguments: tech.id,
+          );
         },
-        borderRadius: BorderRadius.circular(14),
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment:
+            CrossAxisAlignment.start,
             children: [
-              Container(
-                margin: const EdgeInsets.only(right: 12, top: 2),
-                child: _buildAvatar(tech, size: isSmall ? 52 : 62, iconSize: isSmall ? 26 : 32),
+              _buildAvatar(
+                tech,
+                size: 58,
+                iconSize: 28,
               ),
+
+              const SizedBox(width: 12),
+
               Expanded(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment:
+                  CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
-                        Flexible(
+                        Expanded(
                           child: Text(
                             tech.name,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              fontSize: isSmall ? 14.5 : 16,
-                            ),
                             maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                            overflow:
+                            TextOverflow.ellipsis,
+                            style: theme
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(
+                              fontWeight:
+                              FontWeight.w800,
+                            ),
                           ),
                         ),
+
                         if (tech.verified)
-                          Container(
-                            margin: const EdgeInsets.only(left: 4),
-                            padding: const EdgeInsets.all(3),
-                            decoration: const BoxDecoration(
-                              color: Colors.blue,
-                              shape: BoxShape.circle,
+                          const Padding(
+                            padding:
+                            EdgeInsets.only(left: 5),
+                            child: Icon(
+                              Icons.verified_rounded,
+                              color: Color(0xFF1976D2),
+                              size: 18,
                             ),
-                            child: const Icon(Icons.check_rounded, size: 12, color: Colors.white),
                           ),
                       ],
                     ),
+
+                    if (recommended)
+                      Padding(
+                        padding:
+                        const EdgeInsets.only(
+                          top: 4,
+                        ),
+                        child: Text(
+                          'Recommended • Near you',
+                          style: TextStyle(
+                            color: primaryGreen,
+                            fontSize: 11.5,
+                            fontWeight:
+                            FontWeight.w700,
+                          ),
+                        ),
+                      ),
+
                     if (tech.area != null)
                       Padding(
-                        padding: const EdgeInsets.only(top: 3),
+                        padding:
+                        const EdgeInsets.only(
+                          top: 5,
+                        ),
                         child: Row(
                           children: [
-                            Icon(
+                            const Icon(
                               Icons.location_on_rounded,
-                              size: isSmall ? 16 : 18,
-                              color: Colors.grey.shade600,
+                              size: 16,
+                              color: locationRed,
                             ),
-                            const SizedBox(width: 3),
-                            Flexible(
+                            const SizedBox(width: 4),
+                            Expanded(
                               child: Text(
                                 tech.area!,
-                                style: TextStyle(
-                                  fontSize: isSmall ? 12 : 13.5,
-                                  color: Colors.grey.shade600,
-                                ),
                                 maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                                overflow:
+                                TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color:
+                                  theme.hintColor,
+                                  fontSize: 12.5,
+                                ),
                               ),
                             ),
                           ],
                         ),
                       ),
-                    const SizedBox(height: 5),
+
+                    const SizedBox(height: 7),
+
                     Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      runSpacing: 5,
                       children: [
-                        if (tech.rating > 0) ...[
-                          const Icon(Icons.star_rounded, size: 16, color: Colors.amber),
-                          Text(
-                            tech.rating.toStringAsFixed(1),
-                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
+                        if (tech.rating > 0)
+                          Row(
+                            mainAxisSize:
+                            MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.star_rounded,
+                                color: Colors.amber,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 3),
+                              Text(
+                                tech.rating
+                                    .toStringAsFixed(1),
+                                style: const TextStyle(
+                                  fontWeight:
+                                  FontWeight.w700,
+                                ),
+                              ),
+                            ],
                           ),
-                          Container(width: 1, height: 12, color: Colors.grey.shade300),
-                        ],
-                        Icon(Icons.directions_car_rounded, size: 15, color: Colors.grey.shade500),
-                        Text(
+
+                        _infoBadge(
+                          Icons.directions_car_rounded,
                           '${distance.toStringAsFixed(1)} km',
-                          style: TextStyle(
-                            fontSize: isSmall ? 12 : 13,
-                            color: Colors.grey.shade700,
-                            fontWeight: FontWeight.w600,
-                          ),
                         ),
-                        if (durationMin != null) ...[
-                          Text('•', style: TextStyle(color: Colors.grey.shade400)),
-                          Icon(Icons.access_time_rounded, size: 14, color: Colors.grey.shade600),
-                          Text(
-                            '~${durationMin.toStringAsFixed(0)}m',
-                            style: TextStyle(
-                              fontSize: isSmall ? 12 : 13,
-                              color: Colors.grey.shade700,
-                              fontWeight: FontWeight.w600,
-                            ),
+
+                        if (duration != null)
+                          _infoBadge(
+                            Icons.access_time_rounded,
+                            '~${duration.toStringAsFixed(0)}m',
                           ),
-                        ],
                       ],
                     ),
-                    const SizedBox(height: 6),
+
                     if (tech.services.isNotEmpty)
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 4,
-                        children: tech.services.take(3).map((service) {
-                          return Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3.5),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(10),
-                              color: theme.primaryColor.withOpacity(0.1),
-                              border: Border.all(
-                                color: theme.primaryColor.withOpacity(0.15),
-                                width: 0.5,
-                              ),
-                            ),
-                            child: Text(
-                              service,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: theme.primaryColor,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          );
-                        }).toList(),
+                      Padding(
+                        padding:
+                        const EdgeInsets.only(
+                          top: 8,
+                        ),
+                        child: Wrap(
+                          spacing: 5,
+                          runSpacing: 5,
+                          children: tech.services
+                              .take(3)
+                              .map(
+                                (service) {
+                              return Container(
+                                padding:
+                                const EdgeInsets
+                                    .symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration:
+                                BoxDecoration(
+                                  color: primaryGreen
+                                      .withOpacity(
+                                    0.08,
+                                  ),
+                                  borderRadius:
+                                  BorderRadius
+                                      .circular(
+                                    10,
+                                  ),
+                                ),
+                                child: Text(
+                                  service,
+                                  style:
+                                  const TextStyle(
+                                    color:
+                                    primaryGreen,
+                                    fontSize: 10.5,
+                                    fontWeight:
+                                    FontWeight.w600,
+                                  ),
+                                ),
+                              );
+                            },
+                          )
+                              .toList(),
+                        ),
                       ),
                   ],
                 ),
               ),
+
+              const SizedBox(width: 4),
+
               Icon(
-                Icons.arrow_forward_ios_rounded,
-                size: 15,
-                color: Colors.grey.shade400,
+                Icons.chevron_right_rounded,
+                color: selected
+                    ? selectedColor
+                    : Colors.grey.shade400,
               ),
             ],
           ),
@@ -678,535 +1205,272 @@ class _NearbyScreenState extends State<NearbyScreen> {
     );
   }
 
+  Widget _infoBadge(
+      IconData icon,
+      String text,
+      ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 7,
+        vertical: 4,
+      ),
+      decoration: BoxDecoration(
+        color: distanceGreen.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 14,
+            color: distanceGreen,
+          ),
+          const SizedBox(width: 3),
+          Text(
+            text,
+            style: const TextStyle(
+              color: distanceGreen,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==============================================================
+  // BUILD
+  // ==============================================================
+
   @override
   Widget build(BuildContext context) {
-    final techProvider = context.watch<TechnicianProvider>();
-    final serviceProvider = context.watch<ServiceProvider>();
-    final settings = context.watch<SettingsProvider>();
-    final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isSmallScreen = screenWidth < 400;
+    final techProvider =
+    context.watch<TechnicianProvider>();
+
+    final serviceProvider =
+    context.watch<ServiceProvider>();
+
+    final settings =
+    context.watch<SettingsProvider>();
+
+    final l10n =
+    AppLocalizations.of(context)!;
+
+    final theme =
+    Theme.of(context);
+
+    final width =
+        MediaQuery.of(context).size.width;
+
+    final small =
+        width < 400;
 
     if (_currentLocale != settings.locale) {
       _currentLocale = settings.locale;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        context.read<ServiceProvider>().fetchServices(locale: _currentLocale);
-      });
+
+      WidgetsBinding.instance.addPostFrameCallback(
+            (_) {
+          if (!mounted) return;
+
+          context
+              .read<ServiceProvider>()
+              .fetchServices(
+            locale: _currentLocale,
+          );
+        },
+      );
     }
 
-    final filteredServices = _getFilteredServices(serviceProvider.localizedServices);
-    final categories = _getCategoriesForSelectedService(serviceProvider);
+    final services =
+    _getFilteredServices(
+      serviceProvider.localizedServices,
+    );
+
+    final categories =
+    _getCategoriesForSelectedService(
+      serviceProvider,
+    );
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
+      backgroundColor:
+      theme.scaffoldBackgroundColor,
+
+      // ==========================================================
+      // APP BAR
+      // ==========================================================
+
       appBar: AppBar(
-        title: Text(
-            l10n.findFundi,
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)
-        ),
-        elevation: 0,
-        backgroundColor: const Color(0xFF006B5E),
+        backgroundColor: primaryGreen,
         foregroundColor: Colors.white,
-        iconTheme: const IconThemeData(color: Colors.white),
+        elevation: 0,
+
         centerTitle: true,
+
+        title: Text(
+          l10n.findFundi,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+
+        iconTheme: const IconThemeData(
+          color: Colors.white,
+        ),
+
+        actionsIconTheme:
+        const IconThemeData(
+          color: Colors.white,
+        ),
+
         actions: [
           IconButton(
+            color: Colors.white,
             icon: Icon(
               _isHeaderVisible
                   ? Icons.keyboard_arrow_up_rounded
                   : Icons.keyboard_arrow_down_rounded,
+              color: Colors.white,
             ),
-            onPressed: _toggleHeaderVisibility,
-            tooltip: _isHeaderVisible ? 'Hide search' : 'Show search',
+            onPressed: () {
+              setState(() {
+                _isHeaderVisible =
+                !_isHeaderVisible;
+              });
+            },
           ),
+
           if (techProvider.technicians.isNotEmpty)
             IconButton(
-              icon: const Icon(Icons.list_rounded),
-              onPressed: () => _showTechniciansList(context, techProvider.technicians),
-              tooltip: 'View list',
-            ),
-          if (techProvider.technicians.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.fullscreen_rounded),
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const NearbyMapScreen()),
+              color: Colors.white,
+              icon: const Icon(
+                Icons.list_rounded,
+                color: Colors.white,
               ),
-              tooltip: l10n.viewOnMap,
+              onPressed: () {
+                _showTechniciansList(
+                  context,
+                  techProvider.technicians,
+                );
+              },
             ),
-          if (_locationController.text.isNotEmpty || _selectedServiceId != null)
+
+          if (techProvider.technicians.isNotEmpty)
             IconButton(
-              icon: const Icon(Icons.clear_all_rounded),
-              onPressed: _clearAllFilters,
-              tooltip: l10n.clearFilters,
+              color: Colors.white,
+              icon: const Icon(
+                Icons.fullscreen_rounded,
+                color: Colors.white,
+              ),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                    const NearbyMapScreen(),
+                  ),
+                );
+              },
             ),
+
+          if (_locationController.text.isNotEmpty ||
+              _selectedServiceId != null)
+            IconButton(
+              color: Colors.white,
+              icon: const Icon(
+                Icons.clear_all_rounded,
+                color: Colors.white,
+              ),
+              onPressed: _clearAllFilters,
+            ),
+
           IconButton(
+            color: Colors.white,
             icon: techProvider.isLoading
                 ? const SizedBox(
-              width: 22,
-              height: 22,
-              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              width: 20,
+              height: 20,
+              child:
+              CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
             )
-                : const Icon(Icons.refresh_rounded),
-            onPressed: techProvider.isLoading ? null : _performSearch,
-            tooltip: l10n.refresh,
+                : const Icon(
+              Icons.refresh_rounded,
+              color: Colors.white,
+            ),
+            onPressed:
+            techProvider.isLoading
+                ? null
+                : _performSearch,
           ),
         ],
       ),
+
+      // ==========================================================
+      // BODY
+      // ==========================================================
+
       body: Column(
         children: [
           AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
+            duration:
+            const Duration(milliseconds: 250),
+
             child: _isHeaderVisible
-                ? Container(
-              key: const ValueKey('header-visible'),
-              padding: EdgeInsets.fromLTRB(16, 8, 16, isSmallScreen ? 8 : 12),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surface,
-                boxShadow: [
-                  BoxShadow(
-                    color: theme.shadowColor.withOpacity(0.04),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surface,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: theme.dividerColor.withOpacity(0.3),
-                        width: 1.2,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: _locationController,
-                                focusNode: _locationFocus,
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  fontSize: isSmallScreen ? 14 : 16,
-                                ),
-                                decoration: InputDecoration(
-                                  hintText: l10n.searchLocation,
-                                  hintStyle: TextStyle(
-                                    fontSize: isSmallScreen ? 13 : 15,
-                                    color: theme.hintColor.withOpacity(0.7),
-                                  ),
-                                  prefixIcon: Icon(
-                                    Icons.search_rounded,
-                                    color: const Color(0xFF006B5E),
-                                    size: 24,
-                                  ),
-                                  suffixIcon: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      if (_locationController.text.isNotEmpty)
-                                        IconButton(
-                                          icon: Icon(Icons.clear_rounded, color: theme.hintColor),
-                                          onPressed: () {
-                                            _locationController.clear();
-                                            setState(() {
-                                              _placeSuggestions = [];
-                                              _showSuggestions = _searchHistory.isNotEmpty;
-                                            });
-                                          },
-                                        ),
-                                      // ─── MAP ICON: MOUSE HOVER = TOAST, CLICK = NAVIGATE ───
-                                      MouseRegion(
-                                        onEnter: (_) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(
-                                              content: Text('Choose location/place on map'),
-                                              behavior: SnackBarBehavior.floating,
-                                              duration: Duration(seconds: 2),
-                                            ),
-                                          );
-                                        },
-                                        child: Tooltip(
-                                          message: 'Choose location/place on map',
-                                          waitDuration: Duration.zero, // Instant hover
-                                          showDuration: const Duration(seconds: 3),
-                                          child: IconButton(
-                                            icon: const Icon(Icons.map_rounded, color: Color(0xFF006B5E)),
-                                            onPressed: _openMapPicker,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  border: InputBorder.none,
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 14,
-                                  ),
-                                ),
-                                onChanged: (value) {
-                                  setState(() {});
-                                  _fetchPlaceSuggestions(value);
-                                },
-                                onTap: () {
-                                  setState(() {
-                                    _showSuggestions = true;
-                                    if (_locationController.text.trim().length < 2) {
-                                      _placeSuggestions = [];
-                                    }
-                                  });
-                                },
-                                onSubmitted: (_) {
-                                  setState(() => _showSuggestions = false);
-                                  _performSearch();
-                                },
-                              ),
-                            ),
-                            Container(
-                              margin: const EdgeInsets.all(4),
-                              decoration: const BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Color(0xFF006B5E),
-                                    Color(0xFF008C7A),
-                                  ],
-                                ),
-                                borderRadius: BorderRadius.only(
-                                  topRight: Radius.circular(24),
-                                  bottomRight: Radius.circular(24),
-                                ),
-                              ),
-                              child: Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  onTap: _isSearching
-                                      ? null
-                                      : () {
-                                    setState(() => _showSuggestions = false);
-                                    _performSearch();
-                                  },
-                                  borderRadius: const BorderRadius.only(
-                                    topRight: Radius.circular(24),
-                                    bottomRight: Radius.circular(24),
-                                  ),
-                                  child: Container(
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: isSmallScreen ? 12 : 16,
-                                      vertical: isSmallScreen ? 10 : 12,
-                                    ),
-                                    child: _isSearching
-                                        ? const SizedBox(
-                                      width: 24,
-                                      height: 24,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2.5,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                        : Row(
-                                      children: [
-                                        const Icon(Icons.search_rounded,
-                                            color: Colors.white, size: 20),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          l10n.search,
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: isSmallScreen ? 12 : 14,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (_showSuggestions)
-                          Container(
-                            constraints: const BoxConstraints(maxHeight: 280),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.surface,
-                              borderRadius: const BorderRadius.vertical(
-                                bottom: Radius.circular(24),
-                              ),
-                            ),
-                            child: ListView(
-                              shrinkWrap: true,
-                              padding: EdgeInsets.zero,
-                              children: [
-                                if (_searchHistory.isNotEmpty && _placeSuggestions.isEmpty) ...[
-                                  Padding(
-                                    padding: const EdgeInsets.fromLTRB(16, 10, 8, 4),
-                                    child: Row(
-                                      children: [
-                                        Text(
-                                          'Recent searches',
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600,
-                                            color: theme.hintColor,
-                                          ),
-                                        ),
-                                        const Spacer(),
-                                        TextButton(
-                                          onPressed: _clearHistory,
-                                          style: TextButton.styleFrom(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                                            minimumSize: Size.zero,
-                                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                          ),
-                                          child: Text(
-                                            'Clear',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: const Color(0xFF006B5E),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  ..._searchHistory.map(
-                                        (place) => ListTile(
-                                      dense: true,
-                                      leading: Icon(Icons.history,
-                                          size: 20, color: theme.hintColor),
-                                      title: Text(place,
-                                          maxLines: 1, overflow: TextOverflow.ellipsis),
-                                      onTap: () {
-                                        _locationController.text = place;
-                                        setState(() => _showSuggestions = false);
-                                        _performSearch();
-                                      },
-                                    ),
-                                  ),
-                                ],
-                                if (_isLoadingSuggestions)
-                                  const Padding(
-                                    padding: EdgeInsets.all(16),
-                                    child: Center(
-                                      child: SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(strokeWidth: 2),
-                                      ),
-                                    ),
-                                  ),
-                                ..._placeSuggestions.map(
-                                      (s) => ListTile(
-                                    dense: true,
-                                    leading: Icon(Icons.place_outlined,
-                                        size: 20, color: const Color(0xFF006B5E)),
-                                    title: Text(s['name'],
-                                        maxLines: 1, overflow: TextOverflow.ellipsis),
-                                    subtitle: Text(
-                                      s['full'],
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: theme.hintColor,
-                                      ),
-                                    ),
-                                    onTap: () async {
-                                      _locationController.text = s['name'];
-                                      setState(() => _showSuggestions = false);
-                                      await _saveToHistory(s['name']);
-                                      _performSearch();
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-
-                  if (_searchedArea.isNotEmpty && techProvider.technicians.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF006B5E).withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: const Color(0xFF006B5E).withOpacity(0.2),
-                          width: 1,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.location_on_rounded,
-                              size: 16, color: const Color(0xFF006B5E)),
-                          const SizedBox(width: 6),
-                          Flexible(
-                            child: Text(
-                              'Searching in: $_searchedArea',
-                              style: TextStyle(
-                                fontSize: isSmallScreen ? 12 : 13,
-                                fontWeight: FontWeight.w600,
-                                color: const Color(0xFF006B5E),
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF006B5E),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              '${techProvider.technicians.length} fundis',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: _serviceSearchController,
-                    style: theme.textTheme.bodyMedium,
-                    decoration: InputDecoration(
-                      hintText: 'Filter by service...',
-                      prefixIcon: const Icon(Icons.build_rounded, color: Color(0xFF006B5E)),
-                      filled: true,
-                      fillColor: theme.colorScheme.surfaceContainerHighest,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    ),
-                    onChanged: (v) {
-                      setState(() => _serviceSearchQuery = v);
-                    },
-                  ),
-
-                  if (filteredServices.isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      height: 36,
-                      child: ListView(
-                        controller: _serviceChipScrollController,
-                        scrollDirection: Axis.horizontal,
-                        children: [
-                          _buildServiceChip(
-                            label: 'All',
-                            icon: Icons.apps_rounded,
-                            isSelected: _selectedServiceId == null,
-                            onTap: () {
-                              setState(() {
-                                _selectedServiceId = null;
-                                _selectedCategoryId = null;
-                              });
-                            },
-                            isSmallScreen: isSmallScreen,
-                          ),
-                          const SizedBox(width: 8),
-                          ...filteredServices.map((s) {
-                            final selected = _selectedServiceId == s.id;
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: _buildServiceChip(
-                                label: s.name,
-                                isSelected: selected,
-                                onTap: () {
-                                  setState(() {
-                                    _selectedServiceId = selected ? null : s.id;
-                                    _selectedCategoryId = null;
-                                  });
-                                },
-                                isSmallScreen: isSmallScreen,
-                              ),
-                            );
-                          }),
-                        ],
-                      ),
-                    ),
-                  ],
-
-                  if (categories.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      height: 32,
-                      child: ListView(
-                        controller: _categoryChipScrollController,
-                        scrollDirection: Axis.horizontal,
-                        children: categories.map((c) {
-                          final selected = _selectedCategoryId == c.id;
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: _buildCategoryChip(
-                              label: c.name,
-                              isSelected: selected,
-                              onTap: () {
-                                setState(() {
-                                  _selectedCategoryId = selected ? null : c.id;
-                                });
-                              },
-                              isSmallScreen: isSmallScreen,
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
+                ? _buildSearchPanel(
+              context,
+              theme,
+              l10n,
+              services,
+              categories,
+              techProvider,
+              small,
             )
-                : const SizedBox.shrink(key: ValueKey('header-hidden')),
+                : const SizedBox(
+              key: ValueKey(
+                'hidden-search',
+              ),
+            ),
           ),
+
           Expanded(
             child: Stack(
               children: [
-                _buildMapView(theme, techProvider),
+                _buildMapView(
+                  theme,
+                  techProvider,
+                ),
 
                 Positioned(
                   right: 12,
-                  bottom: 24,
+                  bottom: 20,
                   child: Column(
                     children: [
                       _MapControlButton(
                         icon: Icons.add,
                         tooltip: 'Zoom in',
-                        onPressed: () => _zoomBy(1),
+                        onPressed: () {
+                          _zoomBy(1);
+                        },
                       ),
                       const SizedBox(height: 8),
                       _MapControlButton(
                         icon: Icons.remove,
                         tooltip: 'Zoom out',
-                        onPressed: () => _zoomBy(-1),
+                        onPressed: () {
+                          _zoomBy(-1);
+                        },
                       ),
                       const SizedBox(height: 8),
                       _MapControlButton(
-                        icon: Icons.my_location,
-                        tooltip: 'Fit all markers',
-                        onPressed: () => _updateMapBounds(),
+                        icon: Icons.my_location_rounded,
+                        tooltip: 'Fit technicians',
+                        onPressed:
+                        _updateMapBounds,
                       ),
                     ],
                   ),
@@ -1214,33 +1478,9 @@ class _NearbyScreenState extends State<NearbyScreen> {
 
                 if (_isFetchingRoutes)
                   Positioned(
-                    top: 8,
-                    left: 16,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.black87,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          ),
-                          SizedBox(width: 8),
-                          Text(
-                            'Loading routes...',
-                            style: TextStyle(color: Colors.white, fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ),
+                    top: 12,
+                    left: 12,
+                    child: _routeLoadingBadge(),
                   ),
               ],
             ),
@@ -1250,235 +1490,1176 @@ class _NearbyScreenState extends State<NearbyScreen> {
     );
   }
 
-  void _zoomBy(double delta) {
-    final camera = _mapController.camera;
-    final newZoom = (camera.zoom + delta).clamp(4.0, 18.0);
-    _mapController.move(camera.center, newZoom);
+  // ==============================================================
+  // SEARCH PANEL
+  // ==============================================================
+
+  Widget _buildSearchPanel(
+      BuildContext context,
+      ThemeData theme,
+      AppLocalizations l10n,
+      List<Service> services,
+      List<ServiceCategory> categories,
+      TechnicianProvider techProvider,
+      bool small,
+      ) {
+    return Container(
+      key: const ValueKey(
+        'visible-search',
+      ),
+      padding: EdgeInsets.fromLTRB(
+        14,
+        8,
+        14,
+        small ? 8 : 12,
+      ),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // --------------------------------------------------------
+          // LOCATION SEARCH
+          // --------------------------------------------------------
+
+          Container(
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              borderRadius:
+              BorderRadius.circular(18),
+              border: Border.all(
+                color: theme.dividerColor
+                    .withOpacity(0.35),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color:
+                  Colors.black.withOpacity(0.04),
+                  blurRadius: 8,
+                  offset:
+                  const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller:
+                    _locationController,
+                    focusNode:
+                    _locationFocus,
+
+                    style: TextStyle(
+                      fontSize:
+                      small ? 14 : 15,
+                    ),
+
+                    decoration:
+                    InputDecoration(
+                      hintText:
+                      l10n.searchLocation,
+                      hintStyle: TextStyle(
+                        color: theme.hintColor,
+                      ),
+                      prefixIcon:
+                      const Icon(
+                        Icons.search_rounded,
+                        color: primaryGreen,
+                      ),
+
+                      suffixIcon: Row(
+                        mainAxisSize:
+                        MainAxisSize.min,
+                        children: [
+                          if (_locationController
+                              .text
+                              .isNotEmpty)
+                            IconButton(
+                              icon:
+                              const Icon(
+                                Icons.clear_rounded,
+                              ),
+                              onPressed: () {
+                                _locationController
+                                    .clear();
+
+                                setState(() {
+                                  _placeSuggestions =
+                                  [];
+                                  _showSuggestions =
+                                      _searchHistory
+                                          .isNotEmpty;
+                                });
+                              },
+                            ),
+
+                          Tooltip(
+                            message:
+                            'Choose location on map',
+                            child: IconButton(
+                              icon:
+                              const Icon(
+                                Icons.map_rounded,
+                                color:
+                                primaryGreen,
+                              ),
+                              onPressed:
+                              _openMapPicker,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      border:
+                      InputBorder.none,
+
+                      contentPadding:
+                      const EdgeInsets
+                          .symmetric(
+                        vertical: 13,
+                      ),
+                    ),
+
+                    onChanged: (value) {
+                      setState(() {});
+                      _fetchPlaceSuggestions(
+                        value,
+                      );
+                    },
+
+                    onTap: () {
+                      setState(() {
+                        _showSuggestions =
+                        true;
+                      });
+                    },
+
+                    onSubmitted: (_) {
+                      _performSearch();
+                    },
+                  ),
+                ),
+
+                // --------------------------------------------------
+                // SEARCH BUTTON
+                // --------------------------------------------------
+
+                Container(
+                  margin:
+                  const EdgeInsets.all(4),
+                  decoration:
+                  BoxDecoration(
+                    gradient:
+                    const LinearGradient(
+                      colors: [
+                        primaryGreen,
+                        lightGreen,
+                      ],
+                    ),
+                    borderRadius:
+                    BorderRadius.circular(
+                      14,
+                    ),
+                  ),
+                  child: Material(
+                    color:
+                    Colors.transparent,
+                    child: InkWell(
+                      borderRadius:
+                      BorderRadius.circular(
+                        14,
+                      ),
+                      onTap: _isSearching
+                          ? null
+                          : _performSearch,
+                      child: Padding(
+                        padding:
+                        EdgeInsets.symmetric(
+                          horizontal:
+                          small ? 12 : 15,
+                          vertical:
+                          small ? 11 : 12,
+                        ),
+                        child: _isSearching
+                            ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child:
+                          CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color:
+                            Colors.white,
+                          ),
+                        )
+                            : Row(
+                          mainAxisSize:
+                          MainAxisSize
+                              .min,
+                          children: [
+                            const Icon(
+                              Icons
+                                  .search_rounded,
+                              color:
+                              Colors.white,
+                              size: 19,
+                            ),
+                            if (!small) ...[
+                              const SizedBox(
+                                width: 4,
+                              ),
+                              Text(
+                                l10n.search,
+                                style:
+                                const TextStyle(
+                                  color:
+                                  Colors
+                                      .white,
+                                  fontWeight:
+                                  FontWeight
+                                      .w700,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // --------------------------------------------------------
+          // SUGGESTIONS
+          // --------------------------------------------------------
+
+          if (_showSuggestions)
+            _buildSuggestions(
+              context,
+              theme,
+            ),
+
+          // --------------------------------------------------------
+          // SEARCH RESULT SUMMARY
+          // --------------------------------------------------------
+
+          if (_searchedArea.isNotEmpty &&
+              techProvider.technicians.isNotEmpty)
+            Padding(
+              padding:
+              const EdgeInsets.only(top: 9),
+              child: Container(
+                padding:
+                const EdgeInsets.symmetric(
+                  horizontal: 11,
+                  vertical: 7,
+                ),
+                decoration:
+                BoxDecoration(
+                  color: primaryGreen
+                      .withOpacity(0.07),
+                  borderRadius:
+                  BorderRadius.circular(
+                    14,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.location_on_rounded,
+                      color: locationRed,
+                      size: 17,
+                    ),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        _searchedArea,
+                        maxLines: 1,
+                        overflow:
+                        TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: primaryGreen,
+                          fontWeight:
+                          FontWeight.w700,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding:
+                      const EdgeInsets
+                          .symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration:
+                      BoxDecoration(
+                        color: primaryGreen,
+                        borderRadius:
+                        BorderRadius.circular(
+                          10,
+                        ),
+                      ),
+                      child: Text(
+                        '${techProvider.technicians.length}',
+                        style:
+                        const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight:
+                          FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          const SizedBox(height: 9),
+
+          // --------------------------------------------------------
+          // SERVICE SEARCH
+          // --------------------------------------------------------
+
+          TextField(
+            controller:
+            _serviceSearchController,
+            decoration: InputDecoration(
+              hintText:
+              'Filter by service...',
+              prefixIcon:
+              const Icon(
+                Icons.build_rounded,
+                color: primaryGreen,
+              ),
+              filled: true,
+              fillColor: theme
+                  .colorScheme
+                  .surfaceContainerHighest,
+              border:
+              OutlineInputBorder(
+                borderRadius:
+                BorderRadius.circular(
+                  16,
+                ),
+                borderSide:
+                BorderSide.none,
+              ),
+              contentPadding:
+              const EdgeInsets
+                  .symmetric(
+                vertical: 11,
+              ),
+            ),
+            onChanged: (value) {
+              setState(() {
+                _serviceSearchQuery =
+                    value;
+              });
+            },
+          ),
+
+          // --------------------------------------------------------
+          // SERVICES
+          // --------------------------------------------------------
+
+          if (services.isNotEmpty)
+            Padding(
+              padding:
+              const EdgeInsets.only(top: 9),
+              child: SizedBox(
+                height: 36,
+                child: ListView(
+                  controller:
+                  _serviceChipScrollController,
+                  scrollDirection:
+                  Axis.horizontal,
+                  children: [
+                    _buildServiceChip(
+                      label: 'All',
+                      icon: Icons.apps_rounded,
+                      isSelected:
+                      _selectedServiceId ==
+                          null,
+                      onTap: () {
+                        setState(() {
+                          _selectedServiceId =
+                          null;
+                          _selectedCategoryId =
+                          null;
+                        });
+                      },
+                      isSmallScreen: small,
+                    ),
+
+                    const SizedBox(width: 7),
+
+                    ...services.map(
+                          (service) {
+                        final selected =
+                            _selectedServiceId ==
+                                service.id;
+
+                        return Padding(
+                          padding:
+                          const EdgeInsets.only(
+                            right: 7,
+                          ),
+                          child:
+                          _buildServiceChip(
+                            label:
+                            service.name,
+                            isSelected:
+                            selected,
+                            onTap: () {
+                              setState(() {
+                                _selectedServiceId =
+                                selected
+                                    ? null
+                                    : service
+                                    .id;
+
+                                _selectedCategoryId =
+                                null;
+                              });
+                            },
+                            isSmallScreen:
+                            small,
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          // --------------------------------------------------------
+          // CATEGORIES
+          // --------------------------------------------------------
+
+          if (categories.isNotEmpty)
+            Padding(
+              padding:
+              const EdgeInsets.only(top: 7),
+              child: SizedBox(
+                height: 32,
+                child: ListView(
+                  controller:
+                  _categoryChipScrollController,
+                  scrollDirection:
+                  Axis.horizontal,
+                  children:
+                  categories.map(
+                        (category) {
+                      final selected =
+                          _selectedCategoryId ==
+                              category.id;
+
+                      return Padding(
+                        padding:
+                        const EdgeInsets.only(
+                          right: 7,
+                        ),
+                        child:
+                        _buildCategoryChip(
+                          label:
+                          category.name,
+                          isSelected:
+                          selected,
+                          onTap: () {
+                            setState(() {
+                              _selectedCategoryId =
+                              selected
+                                  ? null
+                                  : category.id;
+                            });
+                          },
+                          isSmallScreen:
+                          small,
+                        ),
+                      );
+                    },
+                  ).toList(),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
-  Widget _buildMapView(ThemeData theme, TechnicianProvider techProvider) {
-    if (!techProvider.hasSearchOrigin) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.map_outlined, size: 48, color: theme.hintColor),
-            const SizedBox(height: 12),
-            Text(
-              'Search for technicians',
-              style: TextStyle(color: theme.hintColor, fontSize: 16),
-            ),
-          ],
+  // ==============================================================
+  // SUGGESTIONS
+  // ==============================================================
+
+  Widget _buildSuggestions(
+      BuildContext context,
+      ThemeData theme,
+      ) {
+    return Container(
+      constraints:
+      const BoxConstraints(
+        maxHeight: 250,
+      ),
+      margin:
+      const EdgeInsets.only(top: 2),
+      decoration: BoxDecoration(
+        color:
+        theme.colorScheme.surface,
+        borderRadius:
+        BorderRadius.circular(16),
+        border: Border.all(
+          color: theme.dividerColor
+              .withOpacity(0.25),
         ),
-      );
-    }
-
-    final origin = LatLng(techProvider.searchLat!, techProvider.searchLng!);
-    final techPoints = techProvider.technicians
-        .where((t) => t.latitude != null && t.longitude != null)
-        .toList();
-
-    if (techPoints.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.map_outlined, size: 48, color: theme.hintColor),
-            const SizedBox(height: 12),
-            Text(
-              'No technicians on map',
-              style: TextStyle(color: theme.hintColor, fontSize: 16),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isSmall = screenWidth < 400;
-
-    final pinSize = isSmall ? 58.0 : 74.0;
-    final avatarSize = isSmall ? 46.0 : 60.0;
-    final avatarIconSize = isSmall ? 24.0 : 30.0;
-    final badgeFontSize = isSmall ? 7.8 : 9.2;
-    final markerHeight = isSmall ? 148.0 : 172.0;
-    final markerWidth = isSmall ? 108.0 : 128.0;
-
-    final polylines = <Polyline>[];
-    for (final tech in techPoints) {
-      final route = _routesData[tech.id];
-      if (route != null && route.points.length > 1) {
-        polylines.add(
-          Polyline(
-            points: route.points,
-            strokeWidth: isSmall ? 9.0 : 11.0,
-            color: Colors.black.withOpacity(0.22),
-          ),
-        );
-        polylines.add(
-          Polyline(
-            points: route.points,
-            strokeWidth: isSmall ? 6.0 : 7.5,
-            color: const Color(0xFF006B5E),
-            borderColor: Colors.white.withOpacity(0.4),
-            borderStrokeWidth: 2.0,
-          ),
-        );
-      }
-    }
-
-    final techMarkers = techPoints.map((tech) {
-      final route = _routesData[tech.id];
-      final distance = route?.distanceKm ?? tech.distanceKm;
-      final durationMin = route?.durationMin;
-
-      String label = tech.area ?? '';
-      if (label.length > 15) label = '${label.substring(0, 15)}…';
-
-      return Marker(
-        point: LatLng(tech.latitude!, tech.longitude!),
-        width: markerWidth,
-        height: markerHeight,
-        child: GestureDetector(
-          onTap: () => _showTechnicianModal(context, tech, origin),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Stack(
-                alignment: Alignment.center,
+      ),
+      child: ListView(
+        shrinkWrap: true,
+        padding: EdgeInsets.zero,
+        children: [
+          if (_searchHistory.isNotEmpty &&
+              _placeSuggestions.isEmpty)
+            Padding(
+              padding:
+              const EdgeInsets.fromLTRB(
+                14,
+                9,
+                8,
+                4,
+              ),
+              child: Row(
                 children: [
-                  Icon(
-                    Icons.location_pin,
-                    color: Colors.red.shade700,
-                    size: pinSize,
+                  Text(
+                    'Recent searches',
+                    style: TextStyle(
+                      color: theme.hintColor,
+                      fontWeight:
+                      FontWeight.w700,
+                      fontSize: 12,
+                    ),
                   ),
-                  Padding(
-                    padding: EdgeInsets.only(bottom: pinSize * 0.32),
-                    child: _buildAvatar(tech, size: avatarSize, iconSize: avatarIconSize),
+                  const Spacer(),
+                  TextButton(
+                    onPressed:
+                    _clearHistory,
+                    child: const Text(
+                      'Clear',
+                      style: TextStyle(
+                        color:
+                        primaryGreen,
+                        fontSize: 12,
+                      ),
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 2),
-              if (label.isNotEmpty) ...[
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                  decoration: BoxDecoration(
-                    color: Colors.black87,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.white, width: 0.6),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.location_on_rounded, size: 9, color: Colors.white70),
-                      const SizedBox(width: 2),
-                      Flexible(
-                        child: Text(
-                          label,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: isSmall ? 8 : 10,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
+            ),
+
+          ..._searchHistory.map(
+                (place) => ListTile(
+              dense: true,
+              leading: Icon(
+                Icons.history_rounded,
+                color: theme.hintColor,
+              ),
+              title: Text(
+                place,
+                maxLines: 1,
+                overflow:
+                TextOverflow.ellipsis,
+              ),
+              onTap: () {
+                _locationController.text =
+                    place;
+
+                setState(() {
+                  _showSuggestions =
+                  false;
+                });
+
+                _performSearch();
+              },
+            ),
+          ),
+
+          if (_isLoadingSuggestions)
+            const Padding(
+              padding:
+              EdgeInsets.all(15),
+              child: Center(
+                child:
+                CircularProgressIndicator(
+                  strokeWidth: 2,
                 ),
-                const SizedBox(height: 2),
-              ],
-              if (distance > 0)
-                Container(
-                  margin: const EdgeInsets.only(top: 1),
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFF006B5E), width: 1.2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.13),
-                        blurRadius: 3,
-                        offset: const Offset(0, 1),
+              ),
+            ),
+
+          ..._placeSuggestions.map(
+                (suggestion) {
+              return ListTile(
+                dense: true,
+                leading: const Icon(
+                  Icons.location_on_rounded,
+                  color: locationRed,
+                ),
+                title: Text(
+                  suggestion['name']
+                      .toString(),
+                  maxLines: 1,
+                  overflow:
+                  TextOverflow.ellipsis,
+                ),
+                subtitle: Text(
+                  suggestion['full']
+                      .toString(),
+                  maxLines: 1,
+                  overflow:
+                  TextOverflow.ellipsis,
+                ),
+                onTap: () async {
+                  final name =
+                  suggestion['name']
+                      .toString();
+
+                  _locationController.text =
+                      name;
+
+                  setState(() {
+                    _showSuggestions =
+                    false;
+                  });
+
+                  await _saveToHistory(
+                    name,
+                  );
+
+                  _performSearch();
+                },
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==============================================================
+  // MAP
+  // ==============================================================
+
+  Widget _buildMapView(
+      ThemeData theme,
+      TechnicianProvider techProvider,
+      ) {
+    if (!techProvider.hasSearchOrigin) {
+      return _emptyMapState(
+        theme,
+        Icons.map_outlined,
+        'Search for technicians',
+      );
+    }
+
+    final origin = LatLng(
+      techProvider.searchLat!,
+      techProvider.searchLng!,
+    );
+
+    final technicians =
+    techProvider.technicians
+        .where(
+          (t) =>
+      t.latitude != null &&
+          t.longitude != null,
+    )
+        .toList();
+
+    if (technicians.isEmpty) {
+      return _emptyMapState(
+        theme,
+        Icons.person_search_rounded,
+        'No technicians found nearby',
+      );
+    }
+
+    final screenWidth =
+        MediaQuery.of(context).size.width;
+
+    final small =
+        screenWidth < 400;
+
+    // ------------------------------------------------------------
+    // Recommended technicians
+    // ------------------------------------------------------------
+
+    final recommended =
+    _getRecommendedTechnicians(
+      technicians,
+    );
+
+    // ------------------------------------------------------------
+    // ROAD COLORS
+    // ------------------------------------------------------------
+
+    final List<Polyline> polylines = [];
+
+    for (final tech in technicians) {
+      final route =
+      _routesData[tech.id];
+
+      if (route == null ||
+          route.points.length < 2) {
+        continue;
+      }
+
+      final selected =
+          _selectedTechnicianId ==
+              tech.id;
+
+      // Outer road border.
+      polylines.add(
+        Polyline(
+          points: route.points,
+          strokeWidth:
+          selected ? 10 : 8,
+          color: Colors.white.withOpacity(
+            0.85,
+          ),
+        ),
+      );
+
+      // Main road.
+      //
+      // Default = green.
+      // Selected = blue.
+      polylines.add(
+        Polyline(
+          points: route.points,
+          strokeWidth:
+          selected ? 6.5 : 5.0,
+          color: selected
+              ? selectedColor
+              : technicianGreen,
+        ),
+      );
+    }
+
+    // ------------------------------------------------------------
+    // TECHNICIAN MARKERS
+    // ------------------------------------------------------------
+
+    final markers =
+    technicians.map(
+          (tech) {
+        final route =
+        _routesData[tech.id];
+
+        final distance =
+            route?.distanceKm ??
+                tech.distanceKm;
+
+        final duration =
+            route?.durationMin;
+
+        final selected =
+            _selectedTechnicianId ==
+                tech.id;
+
+        final isRecommended =
+        recommended.any(
+              (item) =>
+          item.id == tech.id,
+        );
+
+        return Marker(
+          point: LatLng(
+            tech.latitude!,
+            tech.longitude!,
+          ),
+          width: small ? 126 : 142,
+          height: isRecommended
+              ? small
+              ? 156
+              : 175
+              : small
+              ? 132
+              : 150,
+          child: GestureDetector(
+            behavior:
+            HitTestBehavior.opaque,
+            onTap: () {
+              setState(() {
+                _selectedTechnicianId =
+                selected
+                    ? null
+                    : tech.id;
+              });
+
+              _showTechnicianModal(
+                context,
+                tech,
+                origin,
+              );
+            },
+            child: Column(
+              mainAxisSize:
+              MainAxisSize.min,
+              children: [
+                // ------------------------------------------------
+                // RECOMMENDED PULSE
+                // ------------------------------------------------
+
+                if (isRecommended)
+                  _buildRecommendationPulse(
+                    tech,
+                    small ? 46 : 55,
+                  )
+                else
+                  Container(
+                    decoration:
+                    BoxDecoration(
+                      shape:
+                      BoxShape.circle,
+                      border: Border.all(
+                        color: selected
+                            ? selectedColor
+                            : Colors.white,
+                        width: 3,
                       ),
-                    ],
+                    ),
+                    child:
+                    _buildAvatar(
+                      tech,
+                      size:
+                      small ? 46 : 55,
+                      iconSize:
+                      small ? 23 : 28,
+                    ),
                   ),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
+
+                const SizedBox(height: 4),
+
+                // ------------------------------------------------
+                // RECOMMENDATION LABEL
+                // ------------------------------------------------
+
+                if (isRecommended)
+                  Container(
+                    constraints:
+                    const BoxConstraints(
+                      maxWidth: 125,
+                    ),
+                    padding:
+                    const EdgeInsets
+                        .symmetric(
+                      horizontal: 7,
+                      vertical: 4,
+                    ),
+                    decoration:
+                    BoxDecoration(
+                      color: primaryGreen,
+                      borderRadius:
+                      BorderRadius
+                          .circular(
+                        10,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black
+                              .withOpacity(
+                            0.18,
+                          ),
+                          blurRadius: 5,
+                        ),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisSize:
+                      MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons
+                              .near_me_rounded,
+                          color:
+                          Colors.white,
+                          size: 12,
+                        ),
+                        SizedBox(width: 3),
+                        Flexible(
+                          child: Text(
+                            'Recommended • Near you',
+                            maxLines: 1,
+                            overflow:
+                            TextOverflow
+                                .ellipsis,
+                            style:
+                            TextStyle(
+                              color:
+                              Colors.white,
+                              fontSize: 9.5,
+                              fontWeight:
+                              FontWeight
+                                  .w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                if (isRecommended)
+                  const SizedBox(height: 3),
+
+                // ------------------------------------------------
+                // ADDRESS
+                // ------------------------------------------------
+
+                if (tech.area != null &&
+                    tech.area!
+                        .trim()
+                        .isNotEmpty)
+                  Container(
+                    constraints:
+                    const BoxConstraints(
+                      maxWidth: 125,
+                    ),
+                    padding:
+                    const EdgeInsets
+                        .symmetric(
+                      horizontal: 6,
+                      vertical: 3,
+                    ),
+                    decoration:
+                    BoxDecoration(
+                      color: Colors.white,
+                      borderRadius:
+                      BorderRadius
+                          .circular(
+                        9,
+                      ),
+                      border: Border.all(
+                        color:
+                        locationRed,
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black
+                              .withOpacity(
+                            0.12,
+                          ),
+                          blurRadius: 4,
+                        ),
+                      ],
+                    ),
                     child: Row(
-                      mainAxisSize: MainAxisSize.min,
+                      mainAxisSize:
+                      MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons
+                              .location_on_rounded,
+                          size: 11,
+                          color:
+                          locationRed,
+                        ),
+                        const SizedBox(
+                          width: 3,
+                        ),
+                        Flexible(
+                          child: Text(
+                            tech.area!,
+                            maxLines: 1,
+                            overflow:
+                            TextOverflow
+                                .ellipsis,
+                            style:
+                            const TextStyle(
+                              color:
+                              locationRed,
+                              fontSize: 9,
+                              fontWeight:
+                              FontWeight
+                                  .w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                const SizedBox(height: 3),
+
+                // ------------------------------------------------
+                // DISTANCE / TIME
+                // ------------------------------------------------
+
+                if (distance > 0)
+                  Container(
+                    padding:
+                    const EdgeInsets
+                        .symmetric(
+                      horizontal: 7,
+                      vertical: 4,
+                    ),
+                    decoration:
+                    BoxDecoration(
+                      color: Colors.white,
+                      borderRadius:
+                      BorderRadius
+                          .circular(
+                        12,
+                      ),
+                      border: Border.all(
+                        color:
+                        distanceGreen,
+                        width: 1.2,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black
+                              .withOpacity(
+                            0.12,
+                          ),
+                          blurRadius: 4,
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize:
+                      MainAxisSize.min,
                       children: [
                         Text(
                           '${distance.toStringAsFixed(1)} km',
-                          style: TextStyle(
-                            fontSize: badgeFontSize,
-                            fontWeight: FontWeight.bold,
-                            color: const Color(0xFF006B5E),
+                          style:
+                          const TextStyle(
+                            color:
+                            distanceGreen,
+                            fontSize: 9.5,
+                            fontWeight:
+                            FontWeight
+                                .w800,
                           ),
                         ),
-                        if (durationMin != null) ...[
-                          const SizedBox(width: 1.5),
-                          Text(
+                        if (duration !=
+                            null) ...[
+                          const SizedBox(
+                            width: 4,
+                          ),
+                          const Text(
                             '•',
-                            style: TextStyle(
-                              fontSize: badgeFontSize,
-                              color: const Color(0xFF006B5E).withOpacity(0.5),
+                            style:
+                            TextStyle(
+                              color:
+                              distanceGreen,
                             ),
                           ),
-                          const SizedBox(width: 1.5),
-                          Icon(
-                            Icons.access_time_rounded,
-                            size: badgeFontSize + 0.8,
-                            color: const Color(0xFF006B5E),
+                          const SizedBox(
+                            width: 3,
                           ),
-                          const SizedBox(width: 1),
+                          const Icon(
+                            Icons
+                                .access_time_rounded,
+                            color:
+                            distanceGreen,
+                            size: 11,
+                          ),
+                          const SizedBox(
+                            width: 2,
+                          ),
                           Text(
-                            '~${durationMin.toStringAsFixed(0)}m',
-                            style: TextStyle(
-                              fontSize: badgeFontSize - 0.3,
-                              fontWeight: FontWeight.bold,
-                              color: const Color(0xFF006B5E),
+                            '~${duration.toStringAsFixed(0)}m',
+                            style:
+                            const TextStyle(
+                              color:
+                              distanceGreen,
+                              fontSize: 9,
+                              fontWeight:
+                              FontWeight
+                                  .w800,
                             ),
                           ),
                         ],
                       ],
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
-        ),
-      );
-    }).toList();
+        );
+      },
+    ).toList();
+
+    // ------------------------------------------------------------
+    // USER MARKER
+    // ------------------------------------------------------------
 
     final originMarker = Marker(
       point: origin,
-      width: isSmall ? 80 : 100,
-      height: isSmall ? 80 : 100,
+      width: small ? 86 : 100,
+      height: small ? 88 : 100,
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisSize:
+        MainAxisSize.min,
         children: [
-          Icon(
-            Icons.location_pin,
-            color: Colors.red.shade800,
-            size: isSmall ? 48 : 62,
-          ),
-          const SizedBox(height: 2),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: Colors.black87,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.white, width: 1),
+            decoration:
+            BoxDecoration(
+              shape:
+              BoxShape.circle,
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: locationRed
+                      .withOpacity(
+                    0.35,
+                  ),
+                  blurRadius: 12,
+                  spreadRadius: 3,
+                ),
+              ],
             ),
-            child: Text(
+            child: Icon(
+              Icons
+                  .location_on_rounded,
+              color: locationRed,
+              size:
+              small ? 45 : 55,
+            ),
+          ),
+          const SizedBox(height: 1),
+          Container(
+            padding:
+            const EdgeInsets
+                .symmetric(
+              horizontal: 7,
+              vertical: 3,
+            ),
+            decoration:
+            BoxDecoration(
+              color: locationRed,
+              borderRadius:
+              BorderRadius.circular(
+                9,
+              ),
+            ),
+            child: const Text(
               'You',
               style: TextStyle(
                 color: Colors.white,
-                fontSize: isSmall ? 10 : 12,
-                fontWeight: FontWeight.bold,
+                fontSize: 10,
+                fontWeight:
+                FontWeight.w800,
               ),
             ),
           ),
@@ -1486,120 +2667,74 @@ class _NearbyScreenState extends State<NearbyScreen> {
       ),
     );
 
-    final distanceMarkers = <Marker>[];
-    for (final tech in techPoints) {
-      final route = _routesData[tech.id];
-      if (route != null && route.points.isNotEmpty) {
-        final midIndex = route.points.length ~/ 2;
-        final midPoint = route.points[midIndex];
-        final distance = route.distanceKm;
-        final duration = route.durationMin;
-
-        distanceMarkers.add(
-          Marker(
-            point: midPoint,
-            width: isSmall ? 86 : 100,
-            height: isSmall ? 26 : 30,
-            child: Container(
-              alignment: Alignment.center,
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: const Color(0xFF006B5E).withOpacity(0.45),
-                  width: 1.2,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.13),
-                    blurRadius: 3,
-                    offset: const Offset(0, 1),
-                  ),
-                ],
-              ),
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '${distance.toStringAsFixed(1)} km',
-                      style: TextStyle(
-                        fontSize: badgeFontSize,
-                        fontWeight: FontWeight.bold,
-                        color: const Color(0xFF006B5E),
-                      ),
-                    ),
-                    if (duration != null) ...[
-                      const SizedBox(width: 1.5),
-                      Text(
-                        '•',
-                        style: TextStyle(
-                          fontSize: badgeFontSize,
-                          color: const Color(0xFF006B5E).withOpacity(0.5),
-                        ),
-                      ),
-                      const SizedBox(width: 1.5),
-                      Icon(
-                        Icons.access_time_rounded,
-                        size: badgeFontSize + 0.8,
-                        color: const Color(0xFF006B5E),
-                      ),
-                      const SizedBox(width: 1),
-                      Text(
-                        '~${duration.toStringAsFixed(0)}m',
-                        style: TextStyle(
-                          fontSize: badgeFontSize - 0.3,
-                          fontWeight: FontWeight.bold,
-                          color: const Color(0xFF006B5E),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      }
-    }
-
-    final allMarkers = [
-      originMarker,
-      ...techMarkers,
-      ...distanceMarkers,
-    ];
+    // ------------------------------------------------------------
+    // MAP
+    // ------------------------------------------------------------
 
     return FlutterMap(
-      key: _mapKey,
-      mapController: _mapController,
+      mapController:
+      _mapController,
+
       options: MapOptions(
-        initialCenter: origin,
+        initialCenter:
+        origin,
         initialZoom: 13,
         minZoom: 4,
         maxZoom: 18,
+
         onTap: (_, __) {
+          if (_selectedTechnicianId !=
+              null) {
+            setState(() {
+              _selectedTechnicianId =
+              null;
+            });
+          }
+
           if (_showSuggestions) {
-            setState(() => _showSuggestions = false);
+            setState(() {
+              _showSuggestions =
+              false;
+            });
+
             _locationFocus.unfocus();
           }
         },
       ),
+
       children: [
         TileLayer(
-          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          userAgentPackageName: 'com.example.nearbyfundi',
+          urlTemplate:
+          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          userAgentPackageName:
+          'com.example.nearbyfundi',
         ),
-        PolylineLayer(polylines: polylines),
-        MarkerLayer(markers: allMarkers),
+
+        // Roads.
+        PolylineLayer(
+          polylines:
+          polylines,
+        ),
+
+        // Markers.
+        MarkerLayer(
+          markers: [
+            originMarker,
+            ...markers,
+          ],
+        ),
+
         RichAttributionWidget(
           attributions: [
             TextSourceAttribution(
               '© OpenStreetMap contributors',
-              onTap: () => launchUrl(
-                Uri.parse('https://www.openstreetmap.org/copyright'),
-              ),
+              onTap: () {
+                launchUrl(
+                  Uri.parse(
+                    'https://www.openstreetmap.org/copyright',
+                  ),
+                );
+              },
             ),
           ],
         ),
@@ -1607,252 +2742,641 @@ class _NearbyScreenState extends State<NearbyScreen> {
     );
   }
 
-  void _showTechnicianModal(BuildContext context, Technician tech, LatLng origin) {
-    final theme = Theme.of(context);
-    final l10n = AppLocalizations.of(context)!;
-    final isDark = theme.brightness == Brightness.dark;
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isSmall = screenWidth < 400;
+  // ==============================================================
+  // EMPTY MAP
+  // ==============================================================
 
-    final route = _routesData[tech.id];
-    final distance = route?.distanceKm ?? tech.distanceKm;
-    final duration = route?.durationMin;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      backgroundColor: theme.colorScheme.surface,
-      builder: (sheetContext) => SingleChildScrollView(
-        child: Padding(
-          padding: EdgeInsets.all(isSmall ? 16 : 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded),
-                    onPressed: () => Navigator.pop(sheetContext),
-                    tooltip: 'Close',
-                  ),
-                ],
+  Widget _emptyMapState(
+      ThemeData theme,
+      IconData icon,
+      String message,
+      ) {
+    return Container(
+      color: theme
+          .colorScheme
+          .surfaceContainerLowest,
+      alignment:
+      Alignment.center,
+      child: Column(
+        mainAxisSize:
+        MainAxisSize.min,
+        children: [
+          Container(
+            width: 76,
+            height: 76,
+            decoration:
+            BoxDecoration(
+              shape:
+              BoxShape.circle,
+              color: primaryGreen
+                  .withOpacity(
+                0.08,
               ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  _buildAvatar(tech, size: isSmall ? 52 : 60, iconSize: isSmall ? 26 : 30),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                tech.name,
-                                style: theme.textTheme.titleLarge?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: isSmall ? 17 : 19,
-                                  color: theme.colorScheme.onSurface,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            if (tech.verified)
-                              Container(
-                                margin: const EdgeInsets.only(left: 5),
-                                padding: const EdgeInsets.all(2),
-                                decoration: const BoxDecoration(
-                                  color: Colors.blue,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(Icons.check_rounded,
-                                    size: 13, color: Colors.white),
-                              ),
-                          ],
-                        ),
-                        if (tech.area != null)
-                          Row(
-                            children: [
-                              Icon(Icons.location_on_rounded,
-                                  size: 15, color: theme.hintColor),
-                              const SizedBox(width: 3),
-                              Flexible(
-                                child: Text(
-                                  tech.area!,
-                                  style: theme.textTheme.bodyMedium?.copyWith(
-                                    fontSize: isSmall ? 13 : 14,
-                                    color: theme.hintColor,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 12,
-                runSpacing: 6,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  if (tech.rating > 0)
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.star_rounded, color: Colors.amber, size: 17),
-                        const SizedBox(width: 3),
-                        Text(
-                          tech.rating.toStringAsFixed(1),
-                          style: theme.textTheme.bodyLarge
-                              ?.copyWith(fontWeight: FontWeight.w600),
-                        ),
-                      ],
-                    ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.directions_car_rounded,
-                          size: 17, color: theme.hintColor),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${distance.toStringAsFixed(1)} km',
-                        style: theme.textTheme.bodyLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: const Color(0xFF006B5E),
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (duration != null)
-                    Text(
-                      '• ~${duration.toStringAsFixed(0)}m',
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: theme.hintColor),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              if (tech.services.isNotEmpty) ...[
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: tech.services
-                      .map(
-                        (s) => Chip(
-                      label: Text(
-                        s,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          fontSize: isSmall ? 12 : 13,
-                          fontWeight: FontWeight.w500,
-                          color: const Color(0xFF006B5E),
-                        ),
-                      ),
-                      backgroundColor: const Color(0xFF006B5E).withOpacity(0.08),
-                      side: BorderSide.none,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                  )
-                      .toList(),
-                ),
-                const SizedBox(height: 16),
-              ],
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.pop(sheetContext);
-                        Navigator.pushNamed(
-                          context,
-                          AppRoutes.technicianDetail,
-                          arguments: tech.id,
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF006B5E),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                      child: Text(
-                        l10n.viewProfile,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: isSmall ? 14 : 16,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  if (tech.latitude != null && tech.longitude != null)
-                    Container(
-                      height: 56,
-                      width: isSmall ? 50 : 60,
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.green.withOpacity(0.15)
-                            : Colors.green.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isDark
-                              ? Colors.green.withOpacity(0.3)
-                              : Colors.green.shade200,
-                          width: 1.5,
-                        ),
-                      ),
-                      child: IconButton(
-                        icon: Icon(
-                          Icons.directions_rounded,
-                          color: isDark
-                              ? Colors.green.shade300
-                              : Colors.green.shade700,
-                          size: isSmall ? 24 : 30,
-                        ),
-                        onPressed: () => _openDirectionsInGoogleMaps(
-                          context,
-                          origin: origin,
-                          destination: LatLng(tech.latitude!, tech.longitude!),
-                        ),
-                        tooltip: l10n.directions,
-                        padding: EdgeInsets.zero,
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 8),
-            ],
+            ),
+            child: Icon(
+              icon,
+              size: 38,
+              color: primaryGreen,
+            ),
           ),
-        ),
+          const SizedBox(height: 14),
+          Text(
+            message,
+            style: TextStyle(
+              color: theme.hintColor,
+              fontSize: 15,
+              fontWeight:
+              FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Future<void> _openDirectionsInGoogleMaps(
+  // ==============================================================
+  // ROUTE LOADING
+  // ==============================================================
+
+  Widget _routeLoadingBadge() {
+    return Container(
+      padding:
+      const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 7,
+      ),
+      decoration:
+      BoxDecoration(
+        color: Colors.black87,
+        borderRadius:
+        BorderRadius.circular(
+          20,
+        ),
+      ),
+      child: const Row(
+        mainAxisSize:
+        MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 15,
+            height: 15,
+            child:
+            CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Colors.white,
+            ),
+          ),
+          SizedBox(width: 7),
+          Text(
+            'Finding best routes...',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 11.5,
+              fontWeight:
+              FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==============================================================
+  // ZOOM
+  // ==============================================================
+
+  void _zoomBy(double amount) {
+    final camera =
+        _mapController.camera;
+
+    final zoom =
+    (camera.zoom + amount)
+        .clamp(4.0, 18.0);
+
+    _mapController.move(
+      camera.center,
+      zoom,
+    );
+  }
+
+  // ==============================================================
+  // TECHNICIAN MODAL
+  // ==============================================================
+
+  void _showTechnicianModal(
+      BuildContext context,
+      Technician tech,
+      LatLng origin,
+      ) {
+    final theme =
+    Theme.of(context);
+
+    final width =
+        MediaQuery.of(context).size.width;
+
+    final small =
+        width < 400;
+
+    final route =
+    _routesData[tech.id];
+
+    final distance =
+        route?.distanceKm ??
+            tech.distanceKm;
+
+    final duration =
+        route?.durationMin;
+
+    final recommended =
+    _isRecommended(tech);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor:
+      theme.colorScheme.surface,
+      shape:
+      const RoundedRectangleBorder(
+        borderRadius:
+        BorderRadius.vertical(
+          top: Radius.circular(26),
+        ),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: SingleChildScrollView(
+            padding:
+            EdgeInsets.fromLTRB(
+              small ? 16 : 20,
+              12,
+              small ? 16 : 20,
+              18,
+            ),
+            child: Column(
+              mainAxisSize:
+              MainAxisSize.min,
+              crossAxisAlignment:
+              CrossAxisAlignment
+                  .start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 42,
+                    height: 4,
+                    decoration:
+                    BoxDecoration(
+                      color: Colors.grey
+                          .shade400,
+                      borderRadius:
+                      BorderRadius
+                          .circular(
+                        4,
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(
+                    height: 18),
+
+                // ------------------------------------------------
+                // HEADER
+                // ------------------------------------------------
+
+                Row(
+                  children: [
+                    _buildAvatar(
+                      tech,
+                      size:
+                      small ? 56 : 64,
+                      iconSize:
+                      small ? 28 : 32,
+                    ),
+
+                    const SizedBox(
+                        width: 13),
+
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment:
+                        CrossAxisAlignment
+                            .start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child:
+                                Text(
+                                  tech.name,
+                                  maxLines:
+                                  1,
+                                  overflow:
+                                  TextOverflow
+                                      .ellipsis,
+                                  style: theme
+                                      .textTheme
+                                      .titleLarge
+                                      ?.copyWith(
+                                    fontWeight:
+                                    FontWeight
+                                        .w800,
+                                  ),
+                                ),
+                              ),
+
+                              if (tech
+                                  .verified)
+                                const Icon(
+                                  Icons
+                                      .verified_rounded,
+                                  color:
+                                  Color(
+                                    0xFF1976D2,
+                                  ),
+                                  size: 19,
+                                ),
+                            ],
+                          ),
+
+                          if (recommended)
+                            const Padding(
+                              padding:
+                              EdgeInsets
+                                  .only(
+                                top: 3,
+                              ),
+                              child: Text(
+                                'Recommended because this fundi is near you',
+                                style:
+                                TextStyle(
+                                  color:
+                                  primaryGreen,
+                                  fontSize:
+                                  11.5,
+                                  fontWeight:
+                                  FontWeight
+                                      .w700,
+                                ),
+                              ),
+                            ),
+
+                          if (tech.area !=
+                              null)
+                            Padding(
+                              padding:
+                              const EdgeInsets
+                                  .only(
+                                top: 4,
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons
+                                        .location_on_rounded,
+                                    color:
+                                    locationRed,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(
+                                      width: 4),
+                                  Expanded(
+                                    child:
+                                    Text(
+                                      tech.area!,
+                                      maxLines:
+                                      1,
+                                      overflow:
+                                      TextOverflow
+                                          .ellipsis,
+                                      style:
+                                      TextStyle(
+                                        color: theme
+                                            .hintColor,
+                                        fontSize:
+                                        12.5,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+
+                    IconButton(
+                      onPressed: () {
+                        Navigator.pop(
+                          sheetContext,
+                        );
+                      },
+                      icon: const Icon(
+                        Icons
+                            .close_rounded,
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(
+                    height: 15),
+
+                // ------------------------------------------------
+                // DISTANCE CARD
+                // ------------------------------------------------
+
+                Container(
+                  width: double.infinity,
+                  padding:
+                  const EdgeInsets.all(
+                    13,
+                  ),
+                  decoration:
+                  BoxDecoration(
+                    color:
+                    distanceGreen
+                        .withOpacity(
+                      0.07,
+                    ),
+                    borderRadius:
+                    BorderRadius
+                        .circular(
+                      15,
+                    ),
+                    border: Border.all(
+                      color:
+                      distanceGreen
+                          .withOpacity(
+                        0.18,
+                      ),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      _modalInfo(
+                        Icons
+                            .directions_car_rounded,
+                        '${distance.toStringAsFixed(1)} km',
+                      ),
+
+                      const SizedBox(
+                          width: 18),
+
+                      if (duration !=
+                          null)
+                        _modalInfo(
+                          Icons
+                              .access_time_rounded,
+                          '~${duration.toStringAsFixed(0)} min',
+                        ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(
+                    height: 14),
+
+                // ------------------------------------------------
+                // RATING
+                // ------------------------------------------------
+
+                if (tech.rating > 0)
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons
+                            .star_rounded,
+                        color:
+                        Colors.amber,
+                        size: 20,
+                      ),
+                      const SizedBox(
+                          width: 4),
+                      Text(
+                        tech.rating
+                            .toStringAsFixed(
+                          1,
+                        ),
+                        style: const TextStyle(
+                          fontWeight:
+                          FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                const SizedBox(
+                    height: 13),
+
+                // ------------------------------------------------
+                // SERVICES
+                // ------------------------------------------------
+
+                if (tech.services.isNotEmpty)
+                  Wrap(
+                    spacing: 7,
+                    runSpacing: 7,
+                    children: tech.services
+                        .map(
+                          (service) {
+                        return Container(
+                          padding:
+                          const EdgeInsets
+                              .symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration:
+                          BoxDecoration(
+                            color:
+                            primaryGreen
+                                .withOpacity(
+                              0.08,
+                            ),
+                            borderRadius:
+                            BorderRadius
+                                .circular(
+                              11,
+                            ),
+                          ),
+                          child:
+                          Text(
+                            service,
+                            style:
+                            const TextStyle(
+                              color:
+                              primaryGreen,
+                              fontSize:
+                              11.5,
+                              fontWeight:
+                              FontWeight
+                                  .w600,
+                            ),
+                          ),
+                        );
+                      },
+                    )
+                        .toList(),
+                  ),
+
+                const SizedBox(
+                    height: 18),
+
+                // ------------------------------------------------
+                // BUTTONS
+                // ------------------------------------------------
+
+                Row(
+                  children: [
+                    Expanded(
+                      child:
+                      ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(
+                            sheetContext,
+                          );
+
+                          Navigator.pushNamed(
+                            context,
+                            AppRoutes
+                                .technicianDetail,
+                            arguments:
+                            tech.id,
+                          );
+                        },
+                        style:
+                        ElevatedButton
+                            .styleFrom(
+                          backgroundColor:
+                          primaryGreen,
+                          foregroundColor:
+                          Colors.white,
+                          elevation: 0,
+                          padding:
+                          const EdgeInsets
+                              .symmetric(
+                            vertical: 15,
+                          ),
+                          shape:
+                          RoundedRectangleBorder(
+                            borderRadius:
+                            BorderRadius
+                                .circular(
+                              13,
+                            ),
+                          ),
+                        ),
+                        child: const Text(
+                          'View Profile',
+                          style:
+                          TextStyle(
+                            fontWeight:
+                            FontWeight
+                                .w700,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    if (tech.latitude !=
+                        null &&
+                        tech.longitude !=
+                            null) ...[
+                      const SizedBox(
+                          width: 10),
+
+                      SizedBox(
+                        height: 52,
+                        width: 54,
+                        child:
+                        OutlinedButton(
+                          onPressed: () {
+                            _openDirectionsInGoogleMaps(
+                              context,
+                              origin:
+                              origin,
+                              destination:
+                              LatLng(
+                                tech.latitude!,
+                                tech.longitude!,
+                              ),
+                            );
+                          },
+                          style:
+                          OutlinedButton
+                              .styleFrom(
+                            foregroundColor:
+                            selectedColor,
+                            side:
+                            const BorderSide(
+                              color:
+                              selectedColor,
+                            ),
+                            shape:
+                            RoundedRectangleBorder(
+                              borderRadius:
+                              BorderRadius
+                                  .circular(
+                                13,
+                              ),
+                            ),
+                            padding:
+                            EdgeInsets.zero,
+                          ),
+                          child:
+                          const Icon(
+                            Icons
+                                .directions_rounded,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _modalInfo(
+      IconData icon,
+      String value,
+      ) {
+    return Row(
+      mainAxisSize:
+      MainAxisSize.min,
+      children: [
+        Icon(
+          icon,
+          color:
+          distanceGreen,
+          size: 18,
+        ),
+        const SizedBox(width: 5),
+        Text(
+          value,
+          style:
+          const TextStyle(
+            color:
+            distanceGreen,
+            fontWeight:
+            FontWeight.w800,
+            fontSize: 13,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ==============================================================
+  // GOOGLE MAPS
+  // ==============================================================
+
+  Future<void>
+  _openDirectionsInGoogleMaps(
       BuildContext context, {
         required LatLng origin,
         required LatLng destination,
@@ -1863,21 +3387,45 @@ class _NearbyScreenState extends State<NearbyScreen> {
           '&destination=${destination.latitude},${destination.longitude}'
           '&travelmode=driving',
     );
+
     try {
-      final launched = await launchUrl(url, mode: LaunchMode.externalApplication);
-      if (!launched && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open maps app.')),
+      final launched =
+      await launchUrl(
+        url,
+        mode:
+        LaunchMode.externalApplication,
+      );
+
+      if (!launched &&
+          context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not open maps app.',
+            ),
+          ),
         );
       }
-    } catch (_) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open maps app.')),
-        );
-      }
+    } catch (e) {
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not open maps app.',
+          ),
+        ),
+      );
     }
   }
+
+  // ==============================================================
+  // SERVICE CHIP
+  // ==============================================================
 
   Widget _buildServiceChip({
     required String label,
@@ -1886,57 +3434,91 @@ class _NearbyScreenState extends State<NearbyScreen> {
     required VoidCallback onTap,
     required bool isSmallScreen,
   }) {
-    final theme = Theme.of(context);
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: isSmallScreen ? 10 : 14,
-          vertical: isSmallScreen ? 4 : 6,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius:
+        BorderRadius.circular(
+          18,
         ),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          color: isSelected
-              ? const Color(0xFF006B5E)
-              : theme.colorScheme.surfaceContainerHighest,
-          border: Border.all(
-            color: isSelected
-                ? const Color(0xFF006B5E)
-                : theme.dividerColor.withOpacity(0.3),
-            width: 1,
+        onTap: onTap,
+        child: Container(
+          padding:
+          EdgeInsets.symmetric(
+            horizontal:
+            isSmallScreen ? 10 : 13,
+            vertical:
+            isSmallScreen ? 5 : 6,
           ),
-          boxShadow: isSelected
-              ? [
-            BoxShadow(
-              color: const Color(0xFF006B5E).withOpacity(0.25),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            )
-          ]
-              : null,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (icon != null) ...[
-              Icon(icon,
-                  size: isSmallScreen ? 12 : 14,
-                  color: isSelected ? Colors.white : theme.hintColor),
-              const SizedBox(width: 4),
-            ],
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: isSmallScreen ? 10 : 12,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                color: isSelected ? Colors.white : theme.colorScheme.onSurface,
+          decoration:
+          BoxDecoration(
+            color: isSelected
+                ? primaryGreen
+                : Theme.of(context)
+                .colorScheme
+                .surfaceContainerHighest,
+            borderRadius:
+            BorderRadius.circular(
+              18,
+            ),
+            border: Border.all(
+              color: isSelected
+                  ? primaryGreen
+                  : Theme.of(context)
+                  .dividerColor
+                  .withOpacity(
+                0.25,
               ),
             ),
-          ],
+          ),
+          child: Row(
+            mainAxisSize:
+            MainAxisSize.min,
+            children: [
+              if (icon != null) ...[
+                Icon(
+                  icon,
+                  size:
+                  isSmallScreen
+                      ? 12
+                      : 14,
+                  color: isSelected
+                      ? Colors.white
+                      : Theme.of(context)
+                      .hintColor,
+                ),
+                const SizedBox(
+                    width: 4),
+              ],
+              Text(
+                label,
+                style:
+                TextStyle(
+                  color: isSelected
+                      ? Colors.white
+                      : Theme.of(context)
+                      .colorScheme
+                      .onSurface,
+                  fontSize:
+                  isSmallScreen
+                      ? 10
+                      : 11.5,
+                  fontWeight:
+                  isSelected
+                      ? FontWeight.w700
+                      : FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
+
+  // ==============================================================
+  // CATEGORY CHIP
+  // ==============================================================
 
   Widget _buildCategoryChip({
     required String label,
@@ -1944,71 +3526,125 @@ class _NearbyScreenState extends State<NearbyScreen> {
     required VoidCallback onTap,
     required bool isSmallScreen,
   }) {
-    final theme = Theme.of(context);
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: isSmallScreen ? 8 : 12,
-          vertical: isSmallScreen ? 3 : 4,
+    final theme =
+    Theme.of(context);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius:
+        BorderRadius.circular(
+          14,
         ),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          color: isSelected
-              ? const Color(0xFF006B5E).withOpacity(0.12)
-              : Colors.transparent,
-          border: Border.all(
-            color: isSelected
-                ? const Color(0xFF006B5E)
-                : theme.dividerColor.withOpacity(0.2),
-            width: isSelected ? 1.5 : 0.5,
+        onTap: onTap,
+        child: Container(
+          padding:
+          EdgeInsets.symmetric(
+            horizontal:
+            isSmallScreen ? 9 : 12,
+            vertical:
+            isSmallScreen ? 4 : 5,
           ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (isSelected)
-              Icon(Icons.check_circle_rounded,
-                  size: isSmallScreen ? 10 : 12, color: const Color(0xFF006B5E)),
-            if (isSelected) const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: isSmallScreen ? 10 : 11,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                color: isSelected ? const Color(0xFF006B5E) : theme.colorScheme.onSurface,
+          decoration:
+          BoxDecoration(
+            color: isSelected
+                ? primaryGreen
+                .withOpacity(
+              0.10,
+            )
+                : Colors.transparent,
+            borderRadius:
+            BorderRadius.circular(
+              14,
+            ),
+            border: Border.all(
+              color: isSelected
+                  ? primaryGreen
+                  : theme.dividerColor
+                  .withOpacity(
+                0.25,
               ),
             ),
-          ],
+          ),
+          child: Row(
+            mainAxisSize:
+            MainAxisSize.min,
+            children: [
+              if (isSelected) ...[
+                const Icon(
+                  Icons
+                      .check_circle_rounded,
+                  color:
+                  primaryGreen,
+                  size: 12,
+                ),
+                const SizedBox(
+                    width: 4),
+              ],
+              Text(
+                label,
+                style:
+                TextStyle(
+                  color: isSelected
+                      ? primaryGreen
+                      : theme
+                      .colorScheme
+                      .onSurface,
+                  fontSize:
+                  isSmallScreen
+                      ? 10
+                      : 11,
+                  fontWeight:
+                  isSelected
+                      ? FontWeight.w700
+                      : FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _MapControlButton extends StatelessWidget {
+// ================================================================
+// MAP CONTROL
+// ================================================================
+
+class _MapControlButton
+    extends StatelessWidget {
   final IconData icon;
   final String tooltip;
   final VoidCallback onPressed;
 
   const _MapControlButton({
-    super.key,
     required this.icon,
     required this.tooltip,
     required this.onPressed,
   });
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+  Widget build(
+      BuildContext context,
+      ) {
     return Material(
-      color: theme.colorScheme.surface,
-      shape: const CircleBorder(),
+      color: Theme.of(context)
+          .colorScheme
+          .surface,
+      shape:
+      const CircleBorder(),
       elevation: 4,
       child: IconButton(
-        icon: Icon(icon, color: const Color(0xFF006B5E), size: 22),
         tooltip: tooltip,
         onPressed: onPressed,
+        icon: Icon(
+          icon,
+          color:
+          _NearbyScreenState
+              .primaryGreen,
+          size: 21,
+        ),
       ),
     );
   }
