@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\Technician;
 use App\Models\ServiceRequest;
 use App\Models\Post;
+use App\Models\Review;
 use App\Models\Comment;
 use App\Models\Portfolio;
 use App\Models\Service;
@@ -275,6 +276,245 @@ class ReportController extends BaseApiController
             'technicians_with_most_portfolios' => $techPortfolios,
         ]);
     }
+
+    /**
+ * Reviews report – paginated list with filters.
+ */
+public function reviewsReport(Request $request)
+{
+    $this->checkPermission('reports.view');
+
+    $query = Review::with(['customer', 'technician.user']);
+
+    // Filters
+    if ($request->filled('rating')) {
+        $query->where('rating', $request->rating);
+    }
+    if ($request->filled('search')) {
+        $search = $request->search;
+        $query->where(function ($q) use ($search) {
+            $q->where('comment', 'like', "%{$search}%")
+                ->orWhereHas('customer', fn($cq) => $cq->where('name', 'like', "%{$search}%"))
+                ->orWhereHas('technician.user', fn($tq) => $tq->where('name', 'like', "%{$search}%"));
+        });
+    }
+
+    list($start, $end) = $this->parseDateRange($request);
+    if ($start) {
+        $query->whereDate('created_at', '>=', $start);
+    }
+    if ($end) {
+        $query->whereDate('created_at', '<=', $end);
+    }
+
+    $reviews = $query->orderBy('created_at', 'desc')
+        ->paginate($request->input('per_page', 20));
+
+    return $this->successResponse($reviews);
+}
+
+    /**
+ * Get all dashboard stats and trends in one request.
+ */
+public function allStats(Request $request)
+{
+    $this->checkPermission('reports.view');
+
+    $tz = 'Africa/Dar_es_Salaam';
+    $now = Carbon::now($tz);
+    list($start, $end) = $this->parseDateRange($request);
+
+    // Default to last 30 days if no period given
+    if (!$start) {
+        $start = $now->copy()->subDays(30)->startOfDay();
+    }
+    if (!$end) {
+        $end = $now->copy()->endOfDay();
+    }
+
+    // ─── Users ──────────────────────────────────────────────
+    $usersQuery = User::query();
+    if ($start) $usersQuery->whereDate('created_at', '>=', $start);
+    if ($end)   $usersQuery->whereDate('created_at', '<=', $end);
+    $usersTotal   = $usersQuery->count();
+    $usersActive  = (clone $usersQuery)->where('is_active', true)->count();
+    $usersInactive = (clone $usersQuery)->where('is_active', false)->count();
+    $usersTrend = User::select(DB::raw('DATE(created_at) as date'), DB::raw('COUNT(*) as total'))
+        ->when($start, fn($q) => $q->whereDate('created_at', '>=', $start))
+        ->when($end,   fn($q) => $q->whereDate('created_at', '<=', $end))
+        ->groupBy('date')->orderBy('date')->get();
+
+    // ─── Technicians ────────────────────────────────────────
+    $techQuery = Technician::query();
+    if ($start) $techQuery->whereDate('created_at', '>=', $start);
+    if ($end)   $techQuery->whereDate('created_at', '<=', $end);
+    $techTotal   = $techQuery->count();
+    $techVerified = (clone $techQuery)->where('verified', true)->count();
+    $techTrend = Technician::select(DB::raw('DATE(created_at) as date'), DB::raw('COUNT(*) as total'))
+        ->when($start, fn($q) => $q->whereDate('created_at', '>=', $start))
+        ->when($end,   fn($q) => $q->whereDate('created_at', '<=', $end))
+        ->groupBy('date')->orderBy('date')->get();
+
+    // ─── Service Requests ──────────────────────────────────
+    $reqQuery = ServiceRequest::query();
+    if ($start) $reqQuery->whereDate('created_at', '>=', $start);
+    if ($end)   $reqQuery->whereDate('created_at', '<=', $end);
+    $reqTotal    = $reqQuery->count();
+    $reqByStatus = (clone $reqQuery)->select('status', DB::raw('count(*) as count'))
+        ->groupBy('status')->get();
+    $reqTrend = ServiceRequest::select(DB::raw('DATE(created_at) as date'), DB::raw('COUNT(*) as total'))
+        ->when($start, fn($q) => $q->whereDate('created_at', '>=', $start))
+        ->when($end,   fn($q) => $q->whereDate('created_at', '<=', $end))
+        ->groupBy('date')->orderBy('date')->get();
+
+    // ─── Services ───────────────────────────────────────────
+    $serviceQuery = Service::withCount(['requests' => function($q) use ($start, $end) {
+        if ($start) $q->whereDate('created_at', '>=', $start);
+        if ($end)   $q->whereDate('created_at', '<=', $end);
+    }]);
+    $topServices = $serviceQuery->orderBy('requests_count', 'desc')->limit(10)->get();
+    $totalServices = Service::count();
+    $totalRequestsAll = ServiceRequest::whereBetween('created_at', [$start, $end])->count();
+
+    // ─── Blog ────────────────────────────────────────────────
+    $blogPostsQuery = Post::query();
+    if ($start) $blogPostsQuery->whereDate('created_at', '>=', $start);
+    if ($end)   $blogPostsQuery->whereDate('created_at', '<=', $end);
+    $totalPosts = $blogPostsQuery->count();
+
+    $blogCommentsQuery = Comment::query();
+    if ($start) $blogCommentsQuery->whereDate('created_at', '>=', $start);
+    if ($end)   $blogCommentsQuery->whereDate('created_at', '<=', $end);
+    $totalComments = $blogCommentsQuery->count();
+
+    $blogLikesQuery = Like::query();
+    if ($start) $blogLikesQuery->whereDate('created_at', '>=', $start);
+    if ($end)   $blogLikesQuery->whereDate('created_at', '<=', $end);
+    $totalLikes = $blogLikesQuery->count();
+
+    $avgComments = $totalPosts > 0 ? $totalComments / $totalPosts : 0;
+
+    $postsWithMostComments = Post::withCount(['comments' => function($q) use ($start, $end) {
+        if ($start) $q->whereDate('created_at', '>=', $start);
+        if ($end)   $q->whereDate('created_at', '<=', $end);
+    }])->orderBy('comments_count', 'desc')->limit(5)->get(['id', 'title', 'comments_count']);
+
+    $postsWithMostLikes = Post::withCount(['likes' => function($q) use ($start, $end) {
+        if ($start) $q->whereDate('created_at', '>=', $start);
+        if ($end)   $q->whereDate('created_at', '<=', $end);
+    }])->orderBy('likes_count', 'desc')->limit(5)->get(['id', 'title', 'likes_count']);
+
+    $commentsByUser = Comment::select('user_id', DB::raw('count(*) as count'))
+        ->when($start, fn($q) => $q->whereDate('created_at', '>=', $start))
+        ->when($end,   fn($q) => $q->whereDate('created_at', '<=', $end))
+        ->groupBy('user_id')->orderBy('count', 'desc')->limit(5)
+        ->with('user:id,name')->get();
+
+    $blogTrend = Post::select(DB::raw('DATE(created_at) as date'), DB::raw('COUNT(*) as posts'))
+        ->when($start, fn($q) => $q->whereDate('created_at', '>=', $start))
+        ->when($end,   fn($q) => $q->whereDate('created_at', '<=', $end))
+        ->groupBy('date')->orderBy('date')->get();
+
+    // ─── Portfolio ───────────────────────────────────────────
+    $portfolioQuery = Portfolio::query();
+    if ($start) $portfolioQuery->whereDate('created_at', '>=', $start);
+    if ($end)   $portfolioQuery->whereDate('created_at', '<=', $end);
+    $totalPortfolioItems = $portfolioQuery->count();
+    $techWithMostPortfolio = Portfolio::select('technician_id', DB::raw('count(*) as count'))
+        ->when($start, fn($q) => $q->whereDate('created_at', '>=', $start))
+        ->when($end,   fn($q) => $q->whereDate('created_at', '<=', $end))
+        ->groupBy('technician_id')->orderBy('count', 'desc')->limit(10)
+        ->with('technician.user:id,name')->get();
+
+    // ─── Subscriptions ───────────────────────────────────────
+    $subQuery = Subscription::query();
+    if ($start) $subQuery->whereDate('created_at', '>=', $start);
+    if ($end)   $subQuery->whereDate('created_at', '<=', $end);
+    $subTotal    = $subQuery->count();
+    $subActive   = (clone $subQuery)->where('status', 'active')
+        ->where(function($q) { $q->whereNull('expiry_date')->orWhere('expiry_date', '>', now()); })->count();
+    $subPending  = (clone $subQuery)->where('status', 'pending')->count();
+    $subExpired  = (clone $subQuery)->where(function($q) {
+        $q->where('status', 'expired')->orWhere(function($sq) {
+            $sq->where('status', 'active')->where('expiry_date', '<', now());
+        });
+    })->count();
+    $subCancelled = (clone $subQuery)->where('status', 'cancelled')->count();
+    $subRevenue  = (clone $subQuery)->sum('amount_paid');
+    $revenueByMethod = (clone $subQuery)->select('payment_method', DB::raw('sum(amount_paid) as total'))
+        ->groupBy('payment_method')->get();
+    $subTrend = Subscription::select(DB::raw('DATE(created_at) as date'), DB::raw('COUNT(*) as total'))
+        ->when($start, fn($q) => $q->whereDate('created_at', '>=', $start))
+        ->when($end,   fn($q) => $q->whereDate('created_at', '<=', $end))
+        ->groupBy('date')->orderBy('date')->get();
+
+    // ─── Reviews ─────────────────────────────────────────────
+    $reviewQuery = Review::query();
+    if ($start) $reviewQuery->whereDate('created_at', '>=', $start);
+    if ($end)   $reviewQuery->whereDate('created_at', '<=', $end);
+    $totalReviews = $reviewQuery->count();
+    $avgRating    = (clone $reviewQuery)->avg('rating') ?? 0;
+    $ratingsDistribution = (clone $reviewQuery)->select('rating', DB::raw('count(*) as count'))
+        ->groupBy('rating')->orderBy('rating')->get();
+    $recentReviews = (clone $reviewQuery)->orderBy('created_at', 'desc')->limit(5)
+        ->with(['customer:id,name', 'technician.user:id,name'])->get();
+
+    // ─── Response ────────────────────────────────────────────
+    return $this->successResponse([
+        'users' => [
+            'total'    => $usersTotal,
+            'active'   => $usersActive,
+            'inactive' => $usersInactive,
+            'trend'    => $usersTrend,
+        ],
+        'technicians' => [
+            'total'    => $techTotal,
+            'verified' => $techVerified,
+            'trend'    => $techTrend,
+        ],
+        'requests' => [
+            'total'     => $reqTotal,
+            'by_status' => $reqByStatus,
+            'trend'     => $reqTrend,
+        ],
+        'services' => [
+            'total'          => $totalServices,
+            'total_requests' => $reqTotal,
+            'avg_per_service'=> $totalServices > 0 ? $reqTotal / $totalServices : 0,
+            'top_services'   => $topServices,
+        ],
+        'blog' => [
+            'total_posts'   => $totalPosts,
+            'total_comments'=> $totalComments,
+            'total_likes'   => $totalLikes,
+            'avg_comments_per_post' => $avgComments,
+            'posts_with_most_comments' => $postsWithMostComments,
+            'posts_with_most_likes'    => $postsWithMostLikes,
+            'comments_by_user' => $commentsByUser,
+            'trend' => $blogTrend,
+        ],
+        'portfolio' => [
+            'total_portfolio_items' => $totalPortfolioItems,
+            'technicians_with_most_portfolios' => $techWithMostPortfolio,
+        ],
+        'subscriptions' => [
+            'total'       => $subTotal,
+            'active'      => $subActive,
+            'pending'     => $subPending,
+            'expired'     => $subExpired,
+            'cancelled'   => $subCancelled,
+            'total_revenue' => $subRevenue,
+            'revenue_by_method' => $revenueByMethod,
+            'trend'       => $subTrend,
+        ],
+        'reviews' => [
+            'total' => $totalReviews,
+            'average_rating' => round($avgRating, 1),
+            'ratings_distribution' => $ratingsDistribution,
+            'recent_reviews' => $recentReviews,
+        ],
+    ]);
+}
 
     /**
      * Subscriptions report – with stats, trends, and filters.

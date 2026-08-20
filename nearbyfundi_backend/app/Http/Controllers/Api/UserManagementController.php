@@ -15,37 +15,45 @@ class UserManagementController extends BaseApiController
 {
     use Auditable;
 
+    /**
+     * Lean technician columns reused across list/detail endpoints so the
+     * frontend always gets a predictable shape (id + verification fields).
+     */
+    private function technicianRelation()
+    {
+        return ['technician:id,user_id,verified,verification_status,is_online'];
+    }
+
     // ===== LIST =====
     public function index(Request $request)
     {
         $this->checkPermission('users.view');
-        
-        $query = User::with('roles', 'technician');
-        
+
+        $query = User::with(array_merge(['roles'], $this->technicianRelation()));
+
         // Apply filters
         if ($request->filled('search')) {
             $search = $request->search;
-            $query->where(function($q) use ($search) {
+            $query->where(function ($q) use ($search) {
                 $q->where('name', 'LIKE', "%{$search}%")
                   ->orWhere('email', 'LIKE', "%{$search}%")
                   ->orWhere('phone', 'LIKE', "%{$search}%");
             });
         }
-        
+
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
-        
+
         if ($request->filled('role')) {
-            $query->whereHas('roles', function($q) use ($request) {
+            $query->whereHas('roles', function ($q) use ($request) {
                 $q->where('name', $request->role);
             });
         }
-        
+
         $perPage = $request->input('per_page', 20);
         $users = $query->orderBy('created_at', 'desc')->paginate($perPage);
-        
-        // ✅ Fix: Return paginated data in the expected format
+
         return $this->successResponse([
             'data' => $users->items(),
             'pagination' => [
@@ -62,20 +70,20 @@ class UserManagementController extends BaseApiController
     public function customers(Request $request)
     {
         $this->checkPermission('users.view');
-        
-        $query = User::role('CUSTOMER')->with('technician');
-        
+
+        $query = User::role('CUSTOMER')->with($this->technicianRelation());
+
         if ($request->filled('search')) {
             $search = $request->search;
-            $query->where(function($q) use ($search) {
+            $query->where(function ($q) use ($search) {
                 $q->where('name', 'LIKE', "%{$search}%")
                   ->orWhere('email', 'LIKE', "%{$search}%");
             });
         }
-        
+
         $perPage = $request->input('per_page', 20);
         $users = $query->orderBy('created_at', 'desc')->paginate($perPage);
-        
+
         return $this->successResponse([
             'data' => $users->items(),
             'pagination' => [
@@ -90,20 +98,20 @@ class UserManagementController extends BaseApiController
     public function fundis(Request $request)
     {
         $this->checkPermission('users.view');
-        
-        $query = User::role('FUNDI')->with('technician');
-        
+
+        $query = User::role('FUNDI')->with($this->technicianRelation());
+
         if ($request->filled('search')) {
             $search = $request->search;
-            $query->where(function($q) use ($search) {
+            $query->where(function ($q) use ($search) {
                 $q->where('name', 'LIKE', "%{$search}%")
                   ->orWhere('email', 'LIKE', "%{$search}%");
             });
         }
-        
+
         $perPage = $request->input('per_page', 20);
         $users = $query->orderBy('created_at', 'desc')->paginate($perPage);
-        
+
         return $this->successResponse([
             'data' => $users->items(),
             'pagination' => [
@@ -137,132 +145,133 @@ class UserManagementController extends BaseApiController
     public function dropdownUsers(Request $request)
     {
         $this->checkPermission('users.view');
-        
+
         $search = $request->get('search');
         $role = $request->get('role');
-        
+
         $query = User::query();
-        
+
         if ($search) {
-            $query->where(function($q) use ($search) {
+            $query->where(function ($q) use ($search) {
                 $q->where('name', 'LIKE', "%{$search}%")
                   ->orWhere('email', 'LIKE', "%{$search}%");
             });
         }
-        
+
         if ($role) {
             $query->role($role);
         }
-        
+
         $users = $query->select('id', 'name', 'email')
             ->orderBy('name')
             ->limit($request->get('limit', 100))
             ->get();
-        
+
         return $this->successResponse($users);
     }
 
     public function dropdownCustomers(Request $request)
     {
         $this->checkPermission('users.view');
-        
+
         $search = $request->get('search');
-        
+
         $query = User::role('CUSTOMER');
-        
+
         if ($search) {
-            $query->where(function($q) use ($search) {
+            $query->where(function ($q) use ($search) {
                 $q->where('name', 'LIKE', "%{$search}%")
                   ->orWhere('email', 'LIKE', "%{$search}%");
             });
         }
-        
+
         $customers = $query->select('id', 'name', 'email')
             ->orderBy('name')
             ->limit($request->get('limit', 100))
             ->get();
-        
+
         return $this->successResponse($customers);
     }
 
     public function dropdownFundis(Request $request)
     {
         $this->checkPermission('users.view');
-        
+
         $search = $request->get('search');
         $verified = $request->get('verified');
         $serviceId = $request->get('service_id');
-        
+
         $query = User::role('FUNDI')
-            ->with(['technician' => function($q) use ($serviceId) {
+            ->with(['technician' => function ($q) use ($serviceId) {
                 if ($serviceId) {
-                    $q->whereHas('services', function($sq) use ($serviceId) {
+                    $q->whereHas('services', function ($sq) use ($serviceId) {
                         $sq->where('service_id', $serviceId);
                     });
                 }
-                $q->select('id', 'user_id', 'profile_photo', 'verified', 'rating', 'is_online');
+                $q->select('id', 'user_id', 'profile_photo', 'verified', 'verification_status', 'rating', 'is_online');
             }]);
-        
+
         if ($search) {
-            $query->where(function($q) use ($search) {
+            $query->where(function ($q) use ($search) {
                 $q->where('name', 'LIKE', "%{$search}%")
                   ->orWhere('email', 'LIKE', "%{$search}%");
             });
         }
-        
+
         if ($verified !== null) {
-            $query->whereHas('technician', function($q) use ($verified) {
+            $query->whereHas('technician', function ($q) use ($verified) {
                 $q->where('verified', $verified);
             });
         }
-        
+
         $fundis = $query->select('id', 'name', 'email')
             ->orderBy('name')
             ->limit($request->get('limit', 100))
             ->get();
-        
-        $fundis->each(function($fundi) {
+
+        $fundis->each(function ($fundi) {
             if ($fundi->technician) {
                 $fundi->technician_profile = [
                     'id' => $fundi->technician->id,
                     'profile_photo' => $fundi->technician->profile_photo,
                     'verified' => $fundi->technician->verified,
+                    'verification_status' => $fundi->technician->verification_status,
                     'rating' => $fundi->technician->rating,
                     'is_online' => $fundi->technician->is_online,
                 ];
             }
         });
-        
+
         return $this->successResponse($fundis);
     }
 
     public function dropdownActiveUsers(Request $request)
     {
         $this->checkPermission('users.view');
-        
+
         $search = $request->get('search');
         $excludeRoles = $request->get('exclude_roles', []);
-        
+
         $query = User::where('is_active', true);
-        
+
         if ($search) {
-            $query->where(function($q) use ($search) {
+            $query->where(function ($q) use ($search) {
                 $q->where('name', 'LIKE', "%{$search}%")
                   ->orWhere('email', 'LIKE', "%{$search}%");
             });
         }
-        
+
         if (!empty($excludeRoles)) {
-            $query->whereDoesntHave('roles', function($q) use ($excludeRoles) {
+            $query->whereDoesntHave('roles', function ($q) use ($excludeRoles) {
                 $q->whereIn('name', $excludeRoles);
             });
         }
-        
+
         $users = $query->select('id', 'name', 'email')
             ->orderBy('name')
             ->limit($request->get('limit', 100))
             ->get();
-        
+
         return $this->successResponse($users);
     }
 
@@ -270,14 +279,14 @@ class UserManagementController extends BaseApiController
     public function show($id)
     {
         $this->checkPermission('users.view');
-        $user = User::with('roles', 'technician')->findOrFail($id);
+        $user = User::with(array_merge(['roles'], $this->technicianRelation()))->findOrFail($id);
         return $this->successResponse($user);
     }
 
     public function store(Request $request)
     {
         $this->checkPermission('users.create');
-        
+
         $data = $request->validate([
             'name'     => 'required|string|max:255',
             'email'    => 'required|email|unique:users',
@@ -308,7 +317,7 @@ class UserManagementController extends BaseApiController
     {
         $this->checkPermission('users.edit');
         $user = User::findOrFail($id);
-        
+
         $data = $request->validate([
             'name'   => 'sometimes|string|max:255',
             'email'  => 'sometimes|email|unique:users,email,' . $id,
@@ -318,16 +327,15 @@ class UserManagementController extends BaseApiController
         ]);
 
         $old = $user->toArray();
-        $oldRole = $user->roles->first()->name ?? null;
-        
+
         // Update user data
         $user->update($request->only(['name', 'email', 'phone', 'status']));
-        
+
         // Update role if provided
         if ($request->has('role')) {
             $user->syncRoles([$request->role]);
         }
-        
+
         $new = $user->fresh()->load('roles')->toArray();
 
         $this->logAudit('update_user', 'user', $id, "User #{$id} updated", $old, $new);
@@ -348,20 +356,20 @@ class UserManagementController extends BaseApiController
     public function trashed(Request $request)
     {
         $this->checkPermission('users.view');
-        
+
         $query = User::onlyTrashed()->with('roles');
-        
+
         if ($request->filled('search')) {
             $search = $request->search;
-            $query->where(function($q) use ($search) {
+            $query->where(function ($q) use ($search) {
                 $q->where('name', 'LIKE', "%{$search}%")
                   ->orWhere('email', 'LIKE', "%{$search}%");
             });
         }
-        
+
         $perPage = $request->input('per_page', 20);
         $users = $query->orderBy('deleted_at', 'desc')->paginate($perPage);
-        
+
         return $this->successResponse([
             'data' => $users->items(),
             'pagination' => [
@@ -429,11 +437,11 @@ class UserManagementController extends BaseApiController
     public function resetPassword(Request $request, $id)
     {
         $this->checkPermission('users.edit');
-        
+
         $request->validate([
             'password' => 'required|string|min:8|confirmed',
         ]);
-        
+
         $user = User::findOrFail($id);
         $user->password = Hash::make($request->password);
         $user->save();
@@ -450,7 +458,7 @@ class UserManagementController extends BaseApiController
     public function resetPasswordRandom($id)
     {
         $this->checkPermission('users.edit');
-        
+
         $user = User::findOrFail($id);
         $newPassword = Str::random(10);
         $user->password = Hash::make($newPassword);
@@ -481,38 +489,38 @@ class UserManagementController extends BaseApiController
     public function resendOtp(Request $request, $id)
     {
         $this->checkPermission('users.edit');
-        
+
         $user = User::findOrFail($id);
-        
+
         if ($user->email_verified_at) {
             return $this->errorResponse('User is already verified.', 422);
         }
-        
+
         $otpCode = rand(100000, 999999);
         $expiresAt = Carbon::now()->addMinutes(10);
-        
+
         Otp::where('email', $user->email)->delete();
-        
+
         $otp = Otp::create([
             'email' => $user->email,
             'otp' => $otpCode,
             'expires_at' => $expiresAt,
             'is_used' => false,
         ]);
-        
+
         try {
             Mail::send('emails.otp', ['otp' => $otpCode, 'user' => $user], function ($message) use ($user) {
                 $message->to($user->email)
                         ->subject('Your OTP Code');
             });
-            
+
             $this->logAudit('resend_otp', 'user', $user->id, "OTP resent to user #{$user->id}");
-            
+
             return $this->successResponse([
                 'otp_expires_at' => $expiresAt->toDateTimeString(),
                 'otp_sent_to' => $user->email,
             ], 'OTP has been resent successfully.');
-            
+
         } catch (\Exception $e) {
             \Log::error('OTP sending failed: ' . $e->getMessage());
             return $this->errorResponse('Failed to send OTP. Please try again later.', 500);
@@ -522,31 +530,31 @@ class UserManagementController extends BaseApiController
     public function resendOtpPhone($id)
     {
         $this->checkPermission('users.edit');
-        
+
         $user = User::findOrFail($id);
-        
+
         if (!$user->phone) {
             return $this->errorResponse('User does not have a phone number.', 422);
         }
-        
+
         if ($user->email_verified_at) {
             return $this->errorResponse('User is already verified.', 422);
         }
-        
+
         $otpCode = rand(100000, 999999);
         $expiresAt = Carbon::now()->addMinutes(10);
-        
+
         Otp::where('email', $user->email)->delete();
-        
+
         $otp = Otp::create([
             'email' => $user->email,
             'otp' => $otpCode,
             'expires_at' => $expiresAt,
             'is_used' => false,
         ]);
-        
+
         $this->logAudit('resend_otp_phone', 'user', $user->id, "OTP resent to phone for user #{$user->id}");
-        
+
         return $this->successResponse([
             'otp_expires_at' => $expiresAt->toDateTimeString(),
             'otp_sent_to' => $user->phone,
@@ -556,12 +564,12 @@ class UserManagementController extends BaseApiController
     public function sendPasswordResetOtp(Request $request, $id)
     {
         $this->checkPermission('users.edit');
-        
+
         $user = User::findOrFail($id);
-        
+
         $token = Str::random(60);
         $expiresAt = Carbon::now()->addHours(24);
-        
+
         \DB::table('password_reset_tokens')->updateOrInsert(
             ['email' => $user->email],
             [
@@ -570,7 +578,7 @@ class UserManagementController extends BaseApiController
                 'expires_at' => $expiresAt,
             ]
         );
-        
+
         try {
             Mail::send('emails.password-reset', [
                 'user' => $user,
@@ -580,14 +588,14 @@ class UserManagementController extends BaseApiController
                 $message->to($user->email)
                         ->subject('Password Reset Request');
             });
-            
+
             $this->logAudit('send_password_reset', 'user', $user->id, "Password reset link sent to user #{$user->id}");
-            
+
             return $this->successResponse([
                 'reset_token' => $token,
                 'expires_at' => $expiresAt->toDateTimeString(),
             ], 'Password reset link has been sent to the user.');
-            
+
         } catch (\Exception $e) {
             \Log::error('Password reset email failed: ' . $e->getMessage());
             return $this->errorResponse('Failed to send password reset email.', 500);

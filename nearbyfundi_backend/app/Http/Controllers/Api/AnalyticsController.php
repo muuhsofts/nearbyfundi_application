@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Models\Technician;
 use App\Models\Role;
 use App\Models\Permission;
+use App\Models\Subscription;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -18,11 +19,8 @@ use Carbon\Carbon;
 class AnalyticsController extends BaseApiController
 {
     /**
-     * Get comprehensive dashboard analytics with all trends and breakdowns.
-     * All date aggregations are done in East Africa Time (EAT, UTC+3).
-     *
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
+     * Get comprehensive dashboard analytics.
+     * All date aggregations are in East Africa Time (EAT, UTC+3).
      */
     public function getDashboardAnalytics(Request $request)
     {
@@ -93,7 +91,7 @@ class AnalyticsController extends BaseApiController
         $cancelledRequests = ServiceRequest::where('status', 'cancelled')->count();
         $rejectedRequests = ServiceRequest::where('status', 'rejected')->count();
 
-        // Recent requests (last 10) with related data and EAT time
+        // Recent requests (last 10) with EAT timestamps
         $recentRequests = ServiceRequest::with(['customer', 'technician.user', 'service'])
             ->orderBy('created_at', 'desc')
             ->limit(10)
@@ -104,7 +102,7 @@ class AnalyticsController extends BaseApiController
                 return $req;
             });
 
-        // Requests trend for the last 30 days (grouped by EAT date)
+        // Requests trend for the last 30 days (EAT dates)
         $requestsLast30Days = ServiceRequest::select(
                 DB::raw("DATE(CONVERT_TZ(created_at, '+00:00', '+03:00')) as date"),
                 DB::raw('count(*) as total')
@@ -114,13 +112,11 @@ class AnalyticsController extends BaseApiController
             ->orderBy('date', 'asc')
             ->get();
 
-        // ---------- EAT-aware Analytics ----------
+        // ---------- EAT-aware Analytics (with default current week) ----------
         $weeklyRequests = $this->getWeeklyRequests($request);
         $userTrend = $this->getUserTrend($request);
         $topTechnicians = $this->getTopTechnicians($request);
-        $technicianEngagement = $this->getTechnicianEngagement($request);
         $postsTrend = $this->getPostsTrend($request);
-        $technicianBreakdown = $this->getTechnicianBreakdown($request);
         $requestsByArea = $this->getRequestsByArea($request);
 
         // ---------- Engagement Metrics ----------
@@ -131,6 +127,13 @@ class AnalyticsController extends BaseApiController
             'avg_comments_per_post' => Post::withCount('comments')->get()->avg('comments_count') ?? 0,
             'avg_likes_per_post' => Post::withCount('likes')->get()->avg('likes_count') ?? 0,
         ];
+
+        // ---------- Revenue Analytics ----------
+        $totalRevenue = Subscription::whereNotNull('payment_reference')
+            ->whereNotIn('status', [Subscription::STATUS_PENDING, Subscription::STATUS_CANCELLED])
+            ->sum('amount_paid');
+
+        $weeklyRevenue = $this->getWeeklyRevenueForCurrentMonth($request);
 
         // ---------- Build Response ----------
         $data = [
@@ -182,24 +185,20 @@ class AnalyticsController extends BaseApiController
                 'last_30_days' => $requestsLast30Days,
             ],
             'engagement_metrics' => $engagementMetrics,
-            // Custom analytics (EAT-aware)
             'weekly_requests' => $weeklyRequests,
             'user_trend' => $userTrend,
             'top_technicians' => $topTechnicians,
-            'technician_engagement' => $technicianEngagement,
             'posts_trend' => $postsTrend,
-            'technician_breakdown' => $technicianBreakdown,
             'requests_by_area' => $requestsByArea,
+            'total_revenue' => round($totalRevenue, 2),
+            'weekly_revenue' => $weeklyRevenue,
         ];
 
         return $this->successResponse($data);
     }
 
     /**
-     * Get simplified dashboard summary (for quick stats).
-     *
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
+     * Simplified dashboard summary.
      */
     public function getDashboardSummary(Request $request)
     {
@@ -223,36 +222,51 @@ class AnalyticsController extends BaseApiController
         return $this->successResponse($data);
     }
 
-    // ---------- PRIVATE HELPER METHODS (EAT-aware) ----------
+    // ---------- PRIVATE HELPERS (EAT-aware) ----------
 
     /**
-     * Get number of service requests per day of the week (Monday–Sunday) in EAT.
+     * Get requests per day of the week.
+     * Defaults to current week (Mon–Sun) in EAT if no date filter.
      */
     private function getWeeklyRequests(Request $request)
     {
         list($startEat, $endEat) = $this->parseDateRangeEat($request);
-        $startUtc = $startEat ? $startEat->setTimezone('UTC') : null;
-        $endUtc = $endEat ? $endEat->setTimezone('UTC') : null;
+        
+        if (!$startEat || !$endEat) {
+            $now = Carbon::now('Africa/Dar_es_Salaam');
+            $startEat = $now->copy()->startOfWeek(Carbon::MONDAY)->startOfDay();
+            $endEat = $now->copy()->endOfWeek(Carbon::SUNDAY)->endOfDay();
+        }
+
+        $startUtc = $startEat->setTimezone('UTC');
+        $endUtc = $endEat->setTimezone('UTC');
 
         return ServiceRequest::select(
                 DB::raw("DAYNAME(CONVERT_TZ(created_at, '+00:00', '+03:00')) as day"),
                 DB::raw('COUNT(*) as total')
             )
-            ->when($startUtc, fn($q) => $q->where('created_at', '>=', $startUtc))
-            ->when($endUtc, fn($q) => $q->where('created_at', '<=', $endUtc))
+            ->whereBetween('created_at', [$startUtc, $endUtc])
             ->groupBy('day')
             ->orderByRaw("FIELD(day, 'Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday')")
             ->get();
     }
 
     /**
-     * Get daily user registration trend, split into technicians and customers (EAT dates).
+     * Get daily user registration trend (technicians vs customers).
+     * Defaults to current week in EAT if no date filter.
      */
     private function getUserTrend(Request $request)
     {
         list($startEat, $endEat) = $this->parseDateRangeEat($request);
-        $startUtc = $startEat ? $startEat->setTimezone('UTC') : null;
-        $endUtc = $endEat ? $endEat->setTimezone('UTC') : null;
+        
+        if (!$startEat || !$endEat) {
+            $now = Carbon::now('Africa/Dar_es_Salaam');
+            $startEat = $now->copy()->startOfWeek(Carbon::MONDAY)->startOfDay();
+            $endEat = $now->copy()->endOfWeek(Carbon::SUNDAY)->endOfDay();
+        }
+
+        $startUtc = $startEat->setTimezone('UTC');
+        $endUtc = $endEat->setTimezone('UTC');
 
         return User::select(
                 DB::raw("DATE(CONVERT_TZ(created_at, '+00:00', '+03:00')) as date"),
@@ -260,15 +274,14 @@ class AnalyticsController extends BaseApiController
                 DB::raw('SUM(CASE WHEN EXISTS (SELECT 1 FROM technicians WHERE technicians.user_id = users.id) THEN 1 ELSE 0 END) as technicians'),
                 DB::raw('SUM(CASE WHEN NOT EXISTS (SELECT 1 FROM technicians WHERE technicians.user_id = users.id) THEN 1 ELSE 0 END) as customers')
             )
-            ->when($startUtc, fn($q) => $q->where('created_at', '>=', $startUtc))
-            ->when($endUtc, fn($q) => $q->where('created_at', '<=', $endUtc))
+            ->whereBetween('created_at', [$startUtc, $endUtc])
             ->groupBy('date')
             ->orderBy('date', 'asc')
             ->get();
     }
 
     /**
-     * Get top technicians by total number of requests.
+     * Top technicians by number of requests.
      */
     private function getTopTechnicians(Request $request)
     {
@@ -282,35 +295,8 @@ class AnalyticsController extends BaseApiController
     }
 
     /**
-     * Get engagement metrics (likes + comments) per technician via their blog posts.
-     */
-    private function getTechnicianEngagement(Request $request)
-    {
-        $limit = $request->get('limit', 10);
-        return Technician::select(
-                'technicians.id',
-                'users.name as technician_name',
-                DB::raw('SUM(COALESCE(l.likes_count, 0)) as total_likes'),
-                DB::raw('SUM(COALESCE(c.comments_count, 0)) as total_comments')
-            )
-            ->join('users', 'users.id', '=', 'technicians.user_id')
-            ->leftJoin('posts', 'posts.technician_id', '=', 'technicians.id')
-            ->leftJoin(
-                DB::raw('(SELECT post_id, COUNT(*) as likes_count FROM likes GROUP BY post_id) as l'),
-                'l.post_id', '=', 'posts.id'
-            )
-            ->leftJoin(
-                DB::raw('(SELECT post_id, COUNT(*) as comments_count FROM comments GROUP BY post_id) as c'),
-                'c.post_id', '=', 'posts.id'
-            )
-            ->groupBy('technicians.id', 'users.name')
-            ->orderBy('total_likes', 'desc')
-            ->limit($limit)
-            ->get();
-    }
-
-    /**
-     * Get blog posts trend (number of posts per day) in EAT.
+     * Blog posts trend (posts per day).
+     * No default filter – uses request filters if provided.
      */
     private function getPostsTrend(Request $request)
     {
@@ -330,54 +316,8 @@ class AnalyticsController extends BaseApiController
     }
 
     /**
-     * Get detailed breakdown per technician: total requests, counts by status,
-     * unique customers, and area(s) served. (EAT-aware)
-     */
-    private function getTechnicianBreakdown(Request $request)
-    {
-        list($startEat, $endEat) = $this->parseDateRangeEat($request);
-        $startUtc = $startEat ? $startEat->setTimezone('UTC') : null;
-        $endUtc = $endEat ? $endEat->setTimezone('UTC') : null;
-
-        // Subquery: count unique customers per technician (within the date range)
-        $uniqueCustomers = ServiceRequest::select('technician_id', DB::raw('COUNT(DISTINCT customer_id) as unique_customers'))
-            ->when($startUtc, fn($q) => $q->where('created_at', '>=', $startUtc))
-            ->when($endUtc, fn($q) => $q->where('created_at', '<=', $endUtc))
-            ->groupBy('technician_id');
-
-        // Main query
-        $breakdown = Technician::select(
-                'technicians.id',
-                'users.name as technician_name',
-                'technicians.area',
-                DB::raw('COUNT(requests.id) as total_requests'),
-                DB::raw('SUM(CASE WHEN requests.status = "pending" THEN 1 ELSE 0 END) as pending'),
-                DB::raw('SUM(CASE WHEN requests.status = "accepted" THEN 1 ELSE 0 END) as accepted'),
-                DB::raw('SUM(CASE WHEN requests.status = "in_progress" THEN 1 ELSE 0 END) as in_progress'),
-                DB::raw('SUM(CASE WHEN requests.status = "completed" THEN 1 ELSE 0 END) as completed'),
-                DB::raw('SUM(CASE WHEN requests.status = "cancelled" THEN 1 ELSE 0 END) as cancelled'),
-                DB::raw('SUM(CASE WHEN requests.status = "rejected" THEN 1 ELSE 0 END) as rejected'),
-                DB::raw('COALESCE(uc.unique_customers, 0) as unique_customers')
-            )
-            ->join('users', 'users.id', '=', 'technicians.user_id')
-            ->leftJoin('requests', 'requests.technician_id', '=', 'technicians.id')
-            ->leftJoinSub($uniqueCustomers, 'uc', 'uc.technician_id', '=', 'technicians.id')
-            ->when($startUtc, function($q) use ($startUtc, $endUtc) {
-                $q->where(function($q2) use ($startUtc, $endUtc) {
-                    $q2->whereNull('requests.created_at')
-                       ->orWhereBetween('requests.created_at', [$startUtc, $endUtc]);
-                });
-            })
-            ->groupBy('technicians.id', 'users.name', 'technicians.area', 'uc.unique_customers')
-            ->orderBy('total_requests', 'desc')
-            ->limit(10)
-            ->get();
-
-        return $breakdown;
-    }
-
-    /**
-     * Get request counts grouped by technician area (EAT-aware).
+     * Requests grouped by technician area.
+     * Shows all-time data (no default filter).
      */
     private function getRequestsByArea(Request $request)
     {
@@ -399,14 +339,8 @@ class AnalyticsController extends BaseApiController
     }
 
     /**
-     * Parse date range from request filters, returning Carbon instances in EAT.
-     *
-     * Expected parameters:
-     * - period: 'daily'   -> date format: YYYY-MM-DD
-     * - period: 'monthly' -> date format: YYYY-MM
-     * - period: 'yearly'  -> date format: YYYY
-     *
-     * Returns an array [startEat, endEat] or [null, null] if no period set.
+     * Parse date range from request filters (period + date).
+     * Returns [startEat, endEat] or [null, null] if none.
      */
     private function parseDateRangeEat(Request $request)
     {
@@ -433,5 +367,45 @@ class AnalyticsController extends BaseApiController
         }
 
         return [$start, $end];
+    }
+
+    /**
+     * Weekly revenue for the current month.
+     * Groups by week number (Monday-based) and returns labels.
+     */
+    private function getWeeklyRevenueForCurrentMonth(Request $request)
+    {
+        $now = Carbon::now('Africa/Dar_es_Salaam');
+        $startOfMonth = $now->copy()->startOfMonth();
+        $endOfMonth = $now->copy()->endOfMonth();
+
+        $startUtc = $startOfMonth->copy()->setTimezone('UTC');
+        $endUtc = $endOfMonth->copy()->setTimezone('UTC');
+
+        $subscriptions = Subscription::whereNotNull('payment_reference')
+            ->whereNotIn('status', [Subscription::STATUS_PENDING, Subscription::STATUS_CANCELLED])
+            ->whereBetween('created_at', [$startUtc, $endUtc])
+            ->get(['amount_paid', 'created_at']);
+
+        $weeklyTotals = [];
+        foreach ($subscriptions as $sub) {
+            $dateEat = $sub->created_at->setTimezone('Africa/Dar_es_Salaam');
+            $weekNumber = $dateEat->weekOfMonth; // 1‑indexed week within the month
+            $weeklyTotals[$weekNumber] = ($weeklyTotals[$weekNumber] ?? 0) + $sub->amount_paid;
+        }
+
+        $result = [];
+        $weeksInMonth = $startOfMonth->copy()->endOfMonth()->weekOfMonth;
+        for ($w = 1; $w <= $weeksInMonth; $w++) {
+            $weekStart = $startOfMonth->copy()->addWeeks($w - 1)->startOfWeek();
+            $weekEnd = $weekStart->copy()->endOfWeek();
+            $label = $weekStart->format('M d') . ' - ' . $weekEnd->format('M d');
+            $result[] = [
+                'week' => $label,
+                'total' => round($weeklyTotals[$w] ?? 0, 2),
+            ];
+        }
+
+        return $result;
     }
 }

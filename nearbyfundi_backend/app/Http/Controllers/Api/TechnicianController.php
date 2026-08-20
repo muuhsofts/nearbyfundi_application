@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\User;
 use App\Models\Technician;
-use App\Models\Service;
 use App\Models\Notification;
 use App\Models\Subscription;
 use App\Models\RateCard;
@@ -19,6 +18,7 @@ use App\Models\Otp;
 use App\Mail\OtpMail;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Role;
+use App\Models\ServiceRequest;
 
 class TechnicianController extends BaseApiController
 {
@@ -31,89 +31,85 @@ class TechnicianController extends BaseApiController
     /**
      * Step 1: Personal Information
      */
-
-public function registerStep1(Request $request)
-{
-    $data = $request->validate([
-        'name'          => 'required|string|max:255',
-        'email'         => 'required|email|unique:users',
-        'password'      => 'required|string|min:8|confirmed',
-        'phone'         => 'nullable|string|max:20',
-        'profile_photo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-    ]);
-
-    DB::beginTransaction();
-    try {
-        $role = Role::where('name', 'FUNDI')->firstOrFail();
-
-        $user = User::create([
-            'name'       => $data['name'],
-            'email'      => $data['email'],
-            'password'   => Hash::make($data['password']),
-            'phone'      => $data['phone'] ?? null,
-            'status'     => 'pending',
-            'is_active'  => false,
-            'locale'     => 'en',
+    public function registerStep1(Request $request)
+    {
+        $data = $request->validate([
+            'name'          => 'required|string|max:255',
+            'email'         => 'required|email|unique:users',
+            'password'      => 'required|string|min:8|confirmed',
+            'phone'         => 'nullable|string|max:20',
+            'profile_photo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
 
-        $user->assignRole($role);
+        DB::beginTransaction();
+        try {
+            $role = Role::where('name', 'FUNDI')->firstOrFail();
 
-        $technicianData = [
-            'user_id'          => $user->id,
-            'registration_step' => 1,
-            'registration_completed' => false,
-            'verified'         => false,
-            'verification_status' => 'pending',
-            'is_online'        => false,
-        ];
+            $user = User::create([
+                'name'       => $data['name'],
+                'email'      => $data['email'],
+                'password'   => Hash::make($data['password']),
+                'phone'      => $data['phone'] ?? null,
+                'status'     => 'pending',
+                'is_active'  => false,
+                'locale'     => 'en',
+            ]);
 
-        if ($request->hasFile('profile_photo')) {
-            $path = $request->file('profile_photo')->store('technicians', 'public');
-            $technicianData['profile_photo'] = $path;
+            $user->assignRole($role);
+
+            $technicianData = [
+                'user_id'               => $user->id,
+                'registration_step'     => 1,
+                'registration_completed'=> false,
+                'verified'              => false,
+                'verification_status'   => 'pending',
+                'is_online'             => false,
+            ];
+
+            if ($request->hasFile('profile_photo')) {
+                $path = $request->file('profile_photo')->store('technicians', 'public');
+                $technicianData['profile_photo'] = $path;
+            }
+
+            $technician = Technician::create($technicianData);
+
+            // Generate OTP and send email
+            $otp = Otp::create([
+                'email'      => $user->email,
+                'otp'        => Otp::generateOtp(),
+                'token'      => Otp::generateToken(),
+                'type'       => Otp::TYPE_EMAIL_VERIFICATION,
+                'name'       => $user->name,
+                'expires_at' => Carbon::now()->addMinutes(10),
+                'is_used'    => false,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            Mail::to($user->email)->send(
+                new OtpMail(
+                    $otp->otp,
+                    $user->email,
+                    $user->name,
+                    Otp::TYPE_EMAIL_VERIFICATION,
+                    $otp->getVerificationUrl()
+                )
+            );
+
+            DB::commit();
+
+            $this->logAudit('register_step1', 'technician', $technician->id, "Technician Step 1 completed for {$user->email}");
+
+            return $this->successResponse([
+                'technician_id' => $technician->id,
+                'user'          => $user->only(['id', 'name', 'email', 'phone']),
+                'step'          => 1,
+            ], 'Step 1 completed. Proceed to identification.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return $this->serverError('Step 1 failed: ' . $e->getMessage());
         }
-
-        $technician = Technician::create($technicianData);
-
-        // ============================================================
-        // ✅ NEW: Generate OTP and send email (Moved from AuthController)
-        // ============================================================
-        $otp = Otp::create([
-            'email'      => $user->email,
-            'otp'        => Otp::generateOtp(),
-            'token'      => Otp::generateToken(),
-            'type'       => Otp::TYPE_EMAIL_VERIFICATION,
-            'name'       => $user->name,
-            'expires_at' => Carbon::now()->addMinutes(10),
-            'is_used'    => false,
-            'ip_address' => $request->ip(),
-            'user_agent' => $request->userAgent(),
-        ]);
-
-        Mail::to($user->email)->send(
-            new OtpMail(
-                $otp->otp,
-                $user->email,
-                $user->name,
-                Otp::TYPE_EMAIL_VERIFICATION,
-                $otp->getVerificationUrl()
-            )
-        );
-        // ============================================================
-
-        DB::commit();
-
-        $this->logAudit('register_step1', 'technician', $technician->id, "Technician Step 1 completed for {$user->email}");
-
-        return $this->successResponse([
-            'technician_id' => $technician->id,
-            'user'          => $user->only(['id', 'name', 'email', 'phone']),
-            'step'          => 1,
-        ], 'Step 1 completed. Proceed to identification.');
-    } catch (\Exception $e) {
-        DB::rollBack();
-        return $this->serverError('Step 1 failed: ' . $e->getMessage());
     }
-}
 
     /**
      * Step 2: Identification Information (NIDA / Driver's License / Voter ID)
@@ -121,16 +117,29 @@ public function registerStep1(Request $request)
     public function registerStep2(Request $request)
     {
         $request->validate([
-            'technician_id'      => 'required|exists:technicians,id',
-            'nida'               => 'required|string|size:20|unique:technicians,nida',
-            'id_document_type'   => 'required|in:nida,drivers_license,voter_id',
-            'id_document_image'  => 'required|image|mimes:jpg,jpeg,png,webp|max:5120', // Max 5MB
+            'technician_id'     => 'required|exists:technicians,id',
+            'id_document_type'  => 'required|in:nida,drivers_license,voter_id',
+            'id_document_image' => 'required|image|mimes:jpg,jpeg,png,webp|max:5120',
         ]);
 
         $technician = Technician::findOrFail($request->technician_id);
 
         if ($technician->registration_completed) {
             return $this->errorResponse('Registration already completed.', 422);
+        }
+
+        // Dynamic validation based on document type
+        $nidaValue = $request->input('nida');
+        switch ($request->id_document_type) {
+            case 'nida':
+                $request->validate(['nida' => 'required|string|size:20|unique:technicians,nida']);
+                break;
+            case 'voter_id':
+                $request->validate(['nida' => 'required|string|size:12|unique:technicians,nida']);
+                break;
+            case 'drivers_license':
+                $request->validate(['nida' => 'required|string|min:10|unique:technicians,nida']);
+                break;
         }
 
         $path = $request->file('id_document_image')->store('technician_ids', 'public');
@@ -148,7 +157,7 @@ public function registerStep1(Request $request)
     }
 
     /**
-     * Step 3: Working Area (Place name OR Latitude/Longitude from map picker)
+     * Step 3: Working Area (Place name or Lat/Lng)
      */
     public function registerStep3(Request $request, GeocodingService $geocoder)
     {
@@ -168,7 +177,6 @@ public function registerStep1(Request $request)
         $lat = $request->latitude;
         $lng = $request->longitude;
 
-        // Geocode if coordinates were not directly provided (Option A: Enter Place)
         if ($lat === null || $lng === null) {
             $coords = $geocoder->geocode($request->area);
             if (!$coords) {
@@ -220,9 +228,7 @@ public function registerStep1(Request $request)
                 ];
             }
 
-            // Sync with pivot data (preserves existing sync if any)
             $technician->servicePrices()->sync($syncData);
-
             $technician->update(['registration_step' => 4]);
 
             DB::commit();
@@ -237,6 +243,23 @@ public function registerStep1(Request $request)
     }
 
     /**
+ * Get the registration step for a technician (public endpoint)
+ */
+public function registrationStatus($id)
+{
+    $technician = Technician::find($id);
+    if (!$technician) {
+        return $this->notFound('Technician not found.');
+    }
+
+    return $this->successResponse([
+        'registration_step'        => $technician->registration_step,
+        'registration_completed'   => $technician->registration_completed,
+        'technician_id'            => $technician->id,
+    ]);
+}
+
+    /**
      * Final Submit Registration
      */
     public function submitRegistration(Request $request)
@@ -247,7 +270,6 @@ public function registerStep1(Request $request)
 
         $technician = Technician::with('servicePrices')->findOrFail($request->technician_id);
 
-        // Ensure all steps are completed
         if ($technician->registration_step < 4) {
             return $this->errorResponse('Please complete all 4 registration steps first.', 422);
         }
@@ -266,13 +288,7 @@ public function registerStep1(Request $request)
             'verified'               => false,
         ]);
 
-        // Update the user status
-        $technician->user->update([
-            'status' => 'pending', // User stays pending until admin approves
-        ]);
-
-        // (Optional) Notify admin about new pending registration
-        // $this->createAdminNotification(...);
+        $technician->user->update(['status' => 'pending']);
 
         $this->logAudit('submit_registration', 'technician', $technician->id, "Technician submitted registration for approval.");
 
@@ -296,19 +312,16 @@ public function registerStep1(Request $request)
 
         DB::beginTransaction();
         try {
-            // Approve technician
             $technician->verification_status = 'approved';
             $technician->verified = true;
             $technician->save();
 
-            // Activate user
             $user = $technician->user;
             $user->update([
                 'status'    => 'active',
                 'is_active' => true,
             ]);
 
-            // Assign 1-day Free Trial
             $freeTrialRate = RateCard::where('slug', 'free-trial')->first();
             if (!$freeTrialRate) {
                 $freeTrialRate = RateCard::create([
@@ -338,7 +351,6 @@ public function registerStep1(Request $request)
 
             $user->activateSubscription($subscription);
 
-            // Send notification
             $this->createNotification(
                 $user->id,
                 'Account Approved 🎉',
@@ -372,7 +384,6 @@ public function registerStep1(Request $request)
             return $this->notFound('Technician profile not found.');
         }
 
-        // Append computed fields if needed
         $technician->makeVisible('nida');
 
         return $this->successResponse($technician);
@@ -523,46 +534,85 @@ public function registerStep1(Request $request)
     }
 
     // ──────────────────────────────────────────────
-    // PRIVATE HELPERS
+    // PUBLIC ENDPOINTS
     // ──────────────────────────────────────────────
 
-    private function validateAndGeocodeArea(string $area, ?float $lat, ?float $lng, GeocodingService $geocoder): array
+    public function publicIndex(Request $request)
     {
-        if ($lat !== null && $lng !== null) {
-            if ($lat < -90 || $lat > 90 || $lng < -180 || $lng > 180) {
-                abort(422, 'Invalid coordinates provided.');
-            }
-            return ['lat' => $lat, 'lng' => $lng];
+        $query = Technician::with([
+            'user',
+            'services',
+            'servicePrices',
+            'portfolios',
+        ])
+        ->where('verified', true)
+        ->whereHas('user', function ($q) {
+            $q->where('is_active', true);
+        });
+
+        if ($request->filled('service_id')) {
+            $query->whereHas('services', function ($q) use ($request) {
+                $q->where('services.id', $request->service_id);
+            });
         }
 
-        $coords = $geocoder->geocode($area);
-        if (!$coords) {
-            $message = "We couldn't locate '{$area}' in OpenStreetMap. ";
-            $message .= "Please check the spelling or enter a more specific location.";
-            abort(422, $message);
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('area', 'LIKE', "%{$search}%")
+                  ->orWhereHas('user', function ($userQuery) use ($search) {
+                      $userQuery->where('name', 'LIKE', "%{$search}%");
+                  })
+                  ->orWhereHas('services', function ($serviceQuery) use ($search) {
+                      $serviceQuery->where('name', 'LIKE', "%{$search}%")
+                                   ->orWhere('swahili_name', 'LIKE', "%{$search}%");
+                  });
+            });
         }
-        return $coords;
+
+        $technicians = $query->paginate($request->input('per_page', 15));
+
+        return $this->successResponse($technicians);
     }
 
-    private function createNotification(int $userId, string $title, string $body, string $type, array $data = []): void
-    {
-        try {
-            Notification::create([
-                'user_id' => $userId,
-                'title'   => $title,
-                'body'    => $body,
-                'type'    => $type,
-                'data'    => json_encode($data),
-                'is_read' => false,
-            ]);
-        } catch (\Exception $e) {
-            \Log::error('Failed to create notification: ' . $e->getMessage());
-        }
+  
+    public function show($id)
+{
+    $technician = Technician::with([
+        'user',
+        'services',
+        'servicePrices',
+        'portfolios',
+        'user.subscriptions.rateCard' 
+    ])->find($id);
+
+    if (!$technician) {
+        return $this->notFound('Technician not found.');
     }
 
-      // =============================================
-    // NEARBY TECHNICIANS (by GPS coordinates)
-    // =============================================
+    // If the user has permission, expose sensitive fields
+    if (auth()->user() && auth()->user()->can('technicians.view')) {
+        $technician->makeVisible([
+            'nida',
+            'id_document_type',
+            'id_document_image',
+            'registration_step',
+            'registration_completed',
+            'verification_status',
+            'verified',
+            'is_online',
+            'last_activity_at',
+            'location_updated_at',
+        ]);
+    }
+
+    return $this->successResponse($technician);
+}
+
+    // ──────────────────────────────────────────────
+    // NEARBY & SEARCH
+    // ──────────────────────────────────────────────
+
     public function nearby(Request $request)
     {
         $request->validate([
@@ -685,11 +735,6 @@ public function registerStep1(Request $request)
         ], 'Technicians found within radius.');
     }
 
-
-
-      // =============================================
-    // SEARCH TECHNICIANS BY PLACE (with filters)
-    // =============================================
     public function nearbyByPlace(Request $request, GeocodingService $geocoder)
     {
         $request->validate([
@@ -826,225 +871,60 @@ public function registerStep1(Request $request)
         ], 'Technicians found.');
     }
 
-    
-    // ============================================================
-// GET TRACKING DATA FOR A REQUEST (Customer view)
-// ============================================================
-public function getTrackingData(Request $request, $requestId)
-{
-    $requestModel = \App\Models\ServiceRequest::with(['technician', 'customer'])->findOrFail($requestId);
+    // ──────────────────────────────────────────────
+    // TRACKING DATA
+    // ──────────────────────────────────────────────
 
-    $technician = $requestModel->technician;
-    $customer = $requestModel->customer;
+    public function getTrackingData(Request $request, $requestId)
+    {
+        $requestModel = ServiceRequest::with(['technician', 'customer'])->findOrFail($requestId);
 
-    if (!$technician || !$customer) {
-        return $this->notFound('Technician or Customer not found.');
-    }
+        $technician = $requestModel->technician;
+        $customer = $requestModel->customer;
 
-    $techLat = $technician->latitude;
-    $techLng = $technician->longitude;
-    $custLat = $requestModel->latitude ?? $customer->latitude;
-    $custLng = $requestModel->longitude ?? $customer->longitude;
-
-    if (is_null($techLat) || is_null($techLng)) {
-        return $this->successResponse([
-            'technician_location' => null,
-            'customer_location' => ['lat' => $custLat, 'lng' => $custLng],
-            'distance_km' => null,
-            'eta' => null,
-        ], 'Technician location not available yet.');
-    }
-
-    // Calculate Haversine distance (km)
-    $distance = $this->haversineGreatCircleDistance($techLat, $techLng, $custLat, $custLng);
-
-    // Estimate ETA in minutes (average urban speed 30 km/h)
-    $etaMinutes = $distance > 0 ? ($distance / 30) * 60 : 0;
-    $etaTime = now()->addMinutes($etaMinutes);
-
-    return $this->successResponse([
-        'technician_location' => [
-            'lat' => (float) $techLat,
-            'lng' => (float) $techLng,
-        ],
-        'customer_location' => [
-            'lat' => (float) $custLat,
-            'lng' => (float) $custLng,
-        ],
-        'distance_km' => round($distance, 2),
-        'eta' => $etaTime->toIso8601String(),
-    ], 'Tracking data retrieved.');
-}
-
-// Helper for Haversine distance
-private function haversineGreatCircleDistance($latitudeFrom, $longitudeFrom, $latitudeTo, $longitudeTo, $earthRadius = 6371)
-{
-    $latFrom = deg2rad($latitudeFrom);
-    $lonFrom = deg2rad($longitudeFrom);
-    $latTo = deg2rad($latitudeTo);
-    $lonTo = deg2rad($longitudeTo);
-
-    $latDelta = $latTo - $latFrom;
-    $lonDelta = $lonTo - $lonFrom;
-
-    $angle = 2 * asin(sqrt(pow(sin($latDelta / 2), 2) +
-        cos($latFrom) * cos($latTo) * pow(sin($lonDelta / 2), 2)));
-    return $angle * $earthRadius;
-}
-
-
-public function registerFundi(Request $request, GeocodingService $geocoder)
-{
-    $data = $request->validate([
-        'name'          => 'required|string|max:255',
-        'email'         => 'required|email|unique:users,email',
-        'password'      => 'required|string|min:8|confirmed',
-        'phone'         => 'nullable|string|max:20',
-        'bio'           => 'nullable|string',
-        'hourly_rate'   => 'nullable|numeric|min:0|max:999999.99',
-        'area'          => 'required|string|max:255',
-        'latitude'      => 'nullable|numeric|between:-90,90',
-        'longitude'     => 'nullable|numeric|between:-180,180',
-        'services'      => 'nullable|array',
-        'services.*'    => 'exists:services,id',
-    ]);
-
-    DB::beginTransaction();
-
-    try {
-        $role = Role::where('name', 'FUNDI')->firstOrFail();
-
-        $user = User::create([
-            'name'      => $data['name'],
-            'email'     => $data['email'],
-            'password'  => Hash::make($data['password']),
-            'phone'     => $data['phone'] ?? null,
-            'status'    => 'pending',
-            'is_active' => false,
-            'locale'    => 'en',
-        ]);
-
-        $user->assignRole($role);
-
-        $lat = $data['latitude'] ?? null;
-        $lng = $data['longitude'] ?? null;
-
-        if (($lat === null || $lng === null) && !empty($data['area'])) {
-            $coords = $geocoder->geocode($data['area']);
-
-            if (!$coords) {
-                DB::rollBack();
-
-                return $this->errorResponse(
-                    "We couldn't locate '{$data['area']}'. Please check the location.",
-                    422
-                );
-            }
-
-            $lat = $coords['lat'];
-            $lng = $coords['lng'];
+        if (!$technician || !$customer) {
+            return $this->notFound('Technician or Customer not found.');
         }
 
-        $technician = Technician::create([
-            'user_id'                  => $user->id,
-            'bio'                      => $data['bio'] ?? null,
-            'hourly_rate'              => $data['hourly_rate'] ?? null,
-            'area'                     => $data['area'],
-            'latitude'                 => $lat,
-            'longitude'                => $lng,
-            'location_updated_at'      => now(),
-            'registration_step'        => 4,
-            'registration_completed'   => true,
-            'verified'                 => false,
-            'verification_status'      => 'pending',
-            'is_online'                => false,
-        ]);
+        $techLat = $technician->latitude;
+        $techLng = $technician->longitude;
+        $custLat = $requestModel->latitude ?? $customer->latitude;
+        $custLng = $requestModel->longitude ?? $customer->longitude;
 
-        if (!empty($data['services'])) {
-            $syncData = [];
-
-            foreach ($data['services'] as $serviceId) {
-                $syncData[$serviceId] = [
-                    'min_price' => 0,
-                    'max_price' => 0,
-                ];
-            }
-
-            $technician->servicePrices()->sync($syncData);
+        if (is_null($techLat) || is_null($techLng)) {
+            return $this->successResponse([
+                'technician_location' => null,
+                'customer_location' => ['lat' => $custLat, 'lng' => $custLng],
+                'distance_km' => null,
+                'eta' => null,
+            ], 'Technician location not available yet.');
         }
 
-        DB::commit();
-
-        $this->logAudit(
-            'register_fundi',
-            'technician',
-            $technician->id,
-            "Technician registered for {$user->email}"
-        );
+        $distance = $this->haversineGreatCircleDistance($techLat, $techLng, $custLat, $custLng);
+        $etaMinutes = $distance > 0 ? ($distance / 30) * 60 : 0;
+        $etaTime = now()->addMinutes($etaMinutes);
 
         return $this->successResponse([
-            'technician' => $technician->load('servicePrices'),
-            'user'        => $user->only([
-                'id',
-                'name',
-                'email',
-                'phone',
-            ]),
-        ], 'Technician registered successfully.');
-
-    } catch (\Exception $e) {
-        DB::rollBack();
-
-        return $this->serverError(
-            'Technician registration failed: ' . $e->getMessage()
-        );
-    }
-}
-
-public function show($id)
-{
-    $technician = Technician::with([
-        'user',
-        'services',
-        'servicePrices',
-        'portfolios',
-    ])->find($id);
-
-    if (!$technician) {
-        return $this->notFound('Technician not found.');
+            'technician_location' => [
+                'lat' => (float) $techLat,
+                'lng' => (float) $techLng,
+            ],
+            'customer_location' => [
+                'lat' => (float) $custLat,
+                'lng' => (float) $custLng,
+            ],
+            'distance_km' => round($distance, 2),
+            'eta' => $etaTime->toIso8601String(),
+        ], 'Tracking data retrieved.');
     }
 
-    return $this->successResponse($technician);
-}
+    // ──────────────────────────────────────────────
+    // ADMIN: VERIFY TECHNICIAN
+    // ──────────────────────────────────────────────
 
-public function updateServices(Request $request)
-{
-    $technician = $request->user()->technician;
-
-    if (!$technician) {
-        return $this->notFound('Technician not found.');
-    }
-
-    $data = $request->validate([
-        'services'      => 'required|array|min:1',
-        'services.*'    => 'exists:services,id',
-    ]);
-
-    $technician->services()->sync($data['services']);
-
-    $this->logAudit(
-        'update_technician_services',
-        'technician',
-        $technician->id,
-        'Technician services updated'
-    );
-
-    return $this->successResponse(
-        $technician->load('services'),
-        'Services updated successfully.'
-    );
-}
-
+    // ──────────────────────────────────────────────
+// ADMIN: VERIFY TECHNICIAN (with free trial)
+// ──────────────────────────────────────────────
 
 public function verify($id)
 {
@@ -1054,88 +934,199 @@ public function verify($id)
         return $this->notFound('Technician not found.');
     }
 
-    $technician->update([
-        'verified'            => true,
-        'verification_status' => 'approved',
-    ]);
-
-    if ($technician->user) {
-        $technician->user->update([
-            'status'    => 'active',
-            'is_active' => true,
+    DB::beginTransaction();
+    try {
+        // Mark technician as verified
+        $technician->update([
+            'verified'            => true,
+            'verification_status' => 'approved',
         ]);
+
+        $user = $technician->user;
+        if ($user) {
+            $user->update([
+                'status'    => 'active',
+                'is_active' => true,
+            ]);
+        }
+
+        // Create or fetch the free trial rate card
+        $freeTrialRate = RateCard::where('slug', 'free-trial')->first();
+        if (!$freeTrialRate) {
+            $freeTrialRate = RateCard::create([
+                'name'          => 'Free Trial',
+                'slug'          => 'free-trial',
+                'price'         => 0,
+                'duration_days' => 1,
+                'currency'      => 'TZS',
+                'description'   => '1-day free trial after verification',
+                'is_active'     => true,
+                'display_order' => 0,
+            ]);
+        }
+
+        // Create the free trial subscription
+        $subscription = Subscription::create([
+            'user_id'        => $user->id,
+            'rate_card_id'   => $freeTrialRate->id,
+            'status'         => Subscription::STATUS_ACTIVE,
+            'start_date'     => now(),
+            'expiry_date'    => now()->addDay(),
+            'amount_paid'    => 0,
+            'currency'       => 'TZS',
+            'payment_method' => 'Free Trial',
+            'approved_at'    => now(),
+            'approved_by'    => auth()->id(),
+        ]);
+
+        // Activate the subscription on the user
+        $user->activateSubscription($subscription);
+
+        // Send notification
+        $this->createNotification(
+            $user->id,
+            'Account Verified 🎉',
+            'Your fundi account has been verified! You now have a 1-day free trial.',
+            'technician_verified',
+            [
+                'technician_id' => $technician->id,
+                'trial_expires' => $subscription->expiry_date->toIso8601String(),
+            ]
+        );
+
+        DB::commit();
+
+        $this->logAudit('verify_technician', 'technician', $technician->id, "Technician #{$technician->id} verified and free trial activated");
+
+        return $this->successResponse(
+            $technician->fresh()->load('user'),
+            'Technician verified successfully and free trial activated.'
+        );
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return $this->serverError('Verification failed: ' . $e->getMessage());
     }
-
-    $this->logAudit(
-        'verify_technician',
-        'technician',
-        $technician->id,
-        "Technician #{$technician->id} verified"
-    );
-
-    return $this->successResponse(
-        $technician->fresh()->load('user'),
-        'Technician verified successfully.'
-    );
 }
 
+    
+    // ──────────────────────────────────────────────
+    // ADMIN: UPDATE SERVICES (legacy)
+    // ──────────────────────────────────────────────
 
-public function publicIndex(Request $request)
+    public function updateServices(Request $request)
+    {
+        $technician = $request->user()->technician;
+
+        if (!$technician) {
+            return $this->notFound('Technician not found.');
+        }
+
+        $data = $request->validate([
+            'services'   => 'required|array|min:1',
+            'services.*' => 'exists:services,id',
+        ]);
+
+        $technician->services()->sync($data['services']);
+
+        $this->logAudit('update_technician_services', 'technician', $technician->id, 'Technician services updated');
+
+        return $this->successResponse(
+            $technician->load('services'),
+            'Services updated successfully.'
+        );
+    }
+
+    // ──────────────────────────────────────────────
+    // PRIVATE HELPERS
+    // ──────────────────────────────────────────────
+
+    private function validateAndGeocodeArea(string $area, ?float $lat, ?float $lng, GeocodingService $geocoder): array
+    {
+        if ($lat !== null && $lng !== null) {
+            if ($lat < -90 || $lat > 90 || $lng < -180 || $lng > 180) {
+                abort(422, 'Invalid coordinates provided.');
+            }
+            return ['lat' => $lat, 'lng' => $lng];
+        }
+
+        $coords = $geocoder->geocode($area);
+        if (!$coords) {
+            $message = "We couldn't locate '{$area}' in OpenStreetMap. ";
+            $message .= "Please check the spelling or enter a more specific location.";
+            abort(422, $message);
+        }
+        return $coords;
+    }
+
+    private function createNotification(int $userId, string $title, string $body, string $type, array $data = []): void
+    {
+        try {
+            Notification::create([
+                'user_id' => $userId,
+                'title'   => $title,
+                'body'    => $body,
+                'type'    => $type,
+                'data'    => json_encode($data),
+                'is_read' => false,
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Failed to create notification: ' . $e->getMessage());
+        }
+    }
+
+    private function haversineGreatCircleDistance($latitudeFrom, $longitudeFrom, $latitudeTo, $longitudeTo, $earthRadius = 6371)
+    {
+        $latFrom = deg2rad($latitudeFrom);
+        $lonFrom = deg2rad($longitudeFrom);
+        $latTo = deg2rad($latitudeTo);
+        $lonTo = deg2rad($longitudeTo);
+
+        $latDelta = $latTo - $latFrom;
+        $lonDelta = $lonTo - $lonFrom;
+
+        $angle = 2 * asin(sqrt(pow(sin($latDelta / 2), 2) +
+            cos($latFrom) * cos($latTo) * pow(sin($lonDelta / 2), 2)));
+        return $angle * $earthRadius;
+    }
+
+    // This method is used internally, kept for completeness
+    public function uploadImage($file)
+    {
+        if (!$file || !$file->isValid()) {
+            return null;
+        }
+
+        return $file->store('technicians', 'public');
+    }
+
+    /**
+ * Admin: List all technicians (no filters)
+ */
+public function adminIndex(Request $request)
 {
+    $this->checkPermission('technicians.view'); // reuse existing permission
+
     $query = Technician::with([
         'user',
         'services',
         'servicePrices',
-        'portfolios',
-    ])
-    ->where('verified', true)
-    ->whereHas('user', function ($q) {
-        $q->where('is_active', true);
-    });
+        'portfolios'
+    ]);
 
-    if ($request->filled('service_id')) {
-        $query->whereHas('services', function ($q) use ($request) {
-            $q->where('services.id', $request->service_id);
-        });
-    }
-
+    // Optional search
     if ($request->filled('search')) {
         $search = $request->search;
-
         $query->where(function ($q) use ($search) {
             $q->where('area', 'LIKE', "%{$search}%")
-              ->orWhereHas('user', function ($userQuery) use ($search) {
-                  $userQuery->where('name', 'LIKE', "%{$search}%");
-              })
-              ->orWhereHas('services', function ($serviceQuery) use ($search) {
-                  $serviceQuery
-                      ->where('name', 'LIKE', "%{$search}%")
-                      ->orWhere(
-                          'swahili_name',
-                          'LIKE',
-                          "%{$search}%"
-                      );
+              ->orWhereHas('user', function ($uq) use ($search) {
+                  $uq->where('name', 'LIKE', "%{$search}%")
+                     ->orWhere('email', 'LIKE', "%{$search}%");
               });
         });
     }
 
-    $technicians = $query->paginate(
-        $request->input('per_page', 15)
-    );
+    $technicians = $query->paginate($request->input('per_page', 15));
 
     return $this->successResponse($technicians);
 }
-
-public function uploadImage($file)
-{
-    if (!$file || !$file->isValid()) {
-        return null;
-    }
-
-    return $file->store(
-        'technicians',
-        'public'
-    );
-}
-
 }

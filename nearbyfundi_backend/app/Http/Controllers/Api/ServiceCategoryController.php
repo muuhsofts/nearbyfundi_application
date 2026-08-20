@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\ServiceCategory;
+use App\Traits\Auditable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -10,48 +11,38 @@ use Illuminate\Validation\Rule;
 
 class ServiceCategoryController extends BaseApiController
 {
-    /**
-     * Constructor
-     */
-    public function __construct()
-    {
-        // You can add middleware here if needed
-    }
+    use Auditable;
 
     /**
-     * Get all categories (Public)
+     * Get all categories with service count.
      * GET /v17/service-categories
      */
     public function index(Request $request)
     {
         try {
-            $query = ServiceCategory::query();
+            $query = ServiceCategory::withCount('services'); // ✅ adds services_count
 
-            // Search by category name
             if ($request->filled('search')) {
                 $search = $request->search;
-                $query->where(function($q) use ($search) {
+                $query->where(function ($q) use ($search) {
                     $q->where('category_name', 'LIKE', "%{$search}%")
+                      ->orWhere('swahili_name', 'LIKE', "%{$search}%")
                       ->orWhere('description', 'LIKE', "%{$search}%")
                       ->orWhere('comment', 'LIKE', "%{$search}%");
                 });
             }
 
-            // Order by category name
             $query->orderBy('category_name', 'asc');
-
             $perPage = $request->input('per_page', 20);
             $categories = $query->paginate($perPage);
 
             $data = $this->formatCategories($categories);
 
             return $this->successResponse($data, 'Categories retrieved successfully');
-
         } catch (\Exception $e) {
             Log::error('Error fetching service categories: ' . $e->getMessage(), [
                 'user_id' => $request->user()->id ?? 'unknown'
             ]);
-            
             return $this->errorResponse('Failed to fetch categories. Please try again.', 500);
         }
     }
@@ -63,12 +54,9 @@ class ServiceCategoryController extends BaseApiController
     public function show($id, Request $request)
     {
         try {
-            $category = ServiceCategory::findOrFail($id);
-
+            $category = ServiceCategory::withCount('services')->findOrFail($id);
             $data = $this->formatSingleCategory($category);
-
             return $this->successResponse($data, 'Category retrieved successfully');
-
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->notFound('Category not found.');
         } catch (\Exception $e) {
@@ -76,7 +64,6 @@ class ServiceCategoryController extends BaseApiController
                 'category_id' => $id,
                 'user_id' => $request->user()->id ?? 'unknown'
             ]);
-            
             return $this->errorResponse('Failed to fetch category. Please try again.', 500);
         }
     }
@@ -88,12 +75,9 @@ class ServiceCategoryController extends BaseApiController
     public function showBySlug($slug, Request $request)
     {
         try {
-            $category = ServiceCategory::where('slug', $slug)->firstOrFail();
-
+            $category = ServiceCategory::where('slug', $slug)->withCount('services')->firstOrFail();
             $data = $this->formatSingleCategory($category);
-
             return $this->successResponse($data, 'Category retrieved successfully');
-
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->notFound('Category not found.');
         } catch (\Exception $e) {
@@ -101,7 +85,6 @@ class ServiceCategoryController extends BaseApiController
                 'slug' => $slug,
                 'user_id' => $request->user()->id ?? 'unknown'
             ]);
-            
             return $this->errorResponse('Failed to fetch category. Please try again.', 500);
         }
     }
@@ -114,18 +97,17 @@ class ServiceCategoryController extends BaseApiController
     {
         try {
             $categories = ServiceCategory::orderBy('category_name', 'asc')
-                ->get(['service_categoryID', 'category_name', 'slug']);
+                ->get(['service_categoryID', 'category_name', 'swahili_name', 'slug']);
 
-            // Format as [id => name] for dropdown
-            $dropdown = $categories->mapWithKeys(function($category) {
+            $dropdown = $categories->mapWithKeys(function ($category) {
                 return [$category->service_categoryID => $category->category_name];
             });
 
-            // Alternative format with extra data
-            $dropdownWithData = $categories->map(function($category) {
+            $dropdownWithData = $categories->map(function ($category) {
                 return [
-                    'id' => $category->service_categoryID,
+                    'id'   => $category->service_categoryID,
                     'name' => $category->category_name,
+                    'swahili_name' => $category->swahili_name,
                     'slug' => $category->slug,
                 ];
             });
@@ -135,29 +117,26 @@ class ServiceCategoryController extends BaseApiController
                 'dropdown_with_data' => $dropdownWithData,
                 'count' => $categories->count()
             ], 'Categories dropdown retrieved successfully');
-
         } catch (\Exception $e) {
             Log::error('Error fetching categories dropdown by ID: ' . $e->getMessage(), [
                 'user_id' => $request->user()->id ?? 'unknown'
             ]);
-            
             return $this->errorResponse('Failed to fetch categories dropdown. Please try again.', 500);
         }
     }
 
     /**
-     * Get only active categories as dropdown (Public)
+     * Get only active (non-deleted) categories as dropdown (Public)
      * GET /v17/service-categories/dropdown/active
      */
     public function dropdownActive(Request $request)
     {
         try {
-            // If you have an 'is_active' field
-            $categories = ServiceCategory::where('is_active', true)
+            $categories = ServiceCategory::withoutTrashed()
                 ->orderBy('category_name', 'asc')
-                ->get(['service_categoryID', 'category_name', 'slug']);
+                ->get(['service_categoryID', 'category_name', 'swahili_name', 'slug']);
 
-            $dropdown = $categories->mapWithKeys(function($category) {
+            $dropdown = $categories->mapWithKeys(function ($category) {
                 return [$category->service_categoryID => $category->category_name];
             });
 
@@ -165,12 +144,10 @@ class ServiceCategoryController extends BaseApiController
                 'dropdown' => $dropdown,
                 'count' => $categories->count()
             ], 'Active categories dropdown retrieved successfully');
-
         } catch (\Exception $e) {
             Log::error('Error fetching active categories dropdown: ' . $e->getMessage(), [
                 'user_id' => $request->user()->id ?? 'unknown'
             ]);
-            
             return $this->errorResponse('Failed to fetch active categories. Please try again.', 500);
         }
     }
@@ -183,11 +160,10 @@ class ServiceCategoryController extends BaseApiController
     {
         try {
             $perPage = $request->input('per_page', 50);
-            
             $categories = ServiceCategory::orderBy('category_name', 'asc')
-                ->paginate($perPage, ['service_categoryID', 'category_name', 'slug']);
+                ->paginate($perPage, ['service_categoryID', 'category_name', 'swahili_name', 'slug']);
 
-            $dropdown = $categories->mapWithKeys(function($category) {
+            $dropdown = $categories->mapWithKeys(function ($category) {
                 return [$category->service_categoryID => $category->category_name];
             });
 
@@ -200,12 +176,10 @@ class ServiceCategoryController extends BaseApiController
                     'last_page' => $categories->lastPage(),
                 ]
             ], 'Categories dropdown retrieved successfully');
-
         } catch (\Exception $e) {
             Log::error('Error fetching paginated categories dropdown: ' . $e->getMessage(), [
                 'user_id' => $request->user()->id ?? 'unknown'
             ]);
-            
             return $this->errorResponse('Failed to fetch categories. Please try again.', 500);
         }
     }
@@ -225,6 +199,7 @@ class ServiceCategoryController extends BaseApiController
 
             $validated = $request->validate([
                 'category_name' => 'required|string|max:255|unique:service_categories,category_name',
+                'swahili_name' => 'nullable|string|max:255',
                 'slug' => 'nullable|string|max:255|unique:service_categories,slug',
                 'description' => 'nullable|string|max:1000',
                 'comment' => 'nullable|string|max:1000',
@@ -232,7 +207,6 @@ class ServiceCategoryController extends BaseApiController
 
             DB::beginTransaction();
 
-            // Generate slug if not provided
             if (empty($validated['slug'])) {
                 $validated['slug'] = \Illuminate\Support\Str::slug($validated['category_name']);
             }
@@ -241,17 +215,21 @@ class ServiceCategoryController extends BaseApiController
 
             DB::commit();
 
-            return $this->created($category, 'Category created successfully.');
+            $this->logAudit('create_category', 'service_category', $category->service_categoryID, json_encode([
+                'name' => $category->category_name,
+                'swahili_name' => $category->swahili_name,
+                'slug' => $category->slug,
+            ]));
 
+            return $this->created($category, 'Category created successfully.');
         } catch (\Illuminate\Validation\ValidationException $e) {
-            return $this->validationError($e->errors());
+            return $this->errorResponse($e->errors(), 422);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Error creating service category: ' . $e->getMessage(), [
                 'user_id' => $request->user()->id ?? 'unknown',
                 'data' => $request->all()
             ]);
-            
             return $this->errorResponse('Failed to create category. Please try again.', 500);
         }
     }
@@ -279,6 +257,7 @@ class ServiceCategoryController extends BaseApiController
                     'max:255',
                     Rule::unique('service_categories', 'category_name')->ignore($id, 'service_categoryID')
                 ],
+                'swahili_name' => 'nullable|string|max:255',
                 'slug' => [
                     'nullable',
                     'string',
@@ -291,21 +270,25 @@ class ServiceCategoryController extends BaseApiController
 
             DB::beginTransaction();
 
-            // Generate slug if not provided and category_name is being updated
             if (empty($validated['slug']) && isset($validated['category_name'])) {
                 $validated['slug'] = \Illuminate\Support\Str::slug($validated['category_name']);
             }
 
+            $oldData = $category->toArray();
             $category->update($validated);
 
             DB::commit();
 
-            return $this->successResponse($category, 'Category updated successfully.');
+            $this->logAudit('update_category', 'service_category', $category->service_categoryID, json_encode([
+                'old' => $oldData,
+                'new' => $category->toArray(),
+            ]));
 
+            return $this->successResponse($category, 'Category updated successfully.');
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->notFound('Category not found.');
         } catch (\Illuminate\Validation\ValidationException $e) {
-            return $this->validationError($e->errors());
+            return $this->errorResponse($e->errors(), 422);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Error updating service category: ' . $e->getMessage(), [
@@ -313,7 +296,6 @@ class ServiceCategoryController extends BaseApiController
                 'user_id' => $request->user()->id ?? 'unknown',
                 'data' => $request->all()
             ]);
-            
             return $this->errorResponse('Failed to update category. Please try again.', 500);
         }
     }
@@ -333,7 +315,6 @@ class ServiceCategoryController extends BaseApiController
 
             $category = ServiceCategory::findOrFail($id);
 
-            // Check if category has services (if relationship exists)
             if ($category->services()->exists()) {
                 return $this->errorResponse(
                     'Cannot delete category with associated services.',
@@ -347,8 +328,12 @@ class ServiceCategoryController extends BaseApiController
 
             DB::commit();
 
-            return $this->successResponse(null, 'Category deleted successfully.');
+            $this->logAudit('delete_category', 'service_category', $category->service_categoryID, json_encode([
+                'name' => $category->category_name,
+                'swahili_name' => $category->swahili_name,
+            ]));
 
+            return $this->successResponse(null, 'Category deleted successfully.');
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->notFound('Category not found.');
         } catch (\Exception $e) {
@@ -357,7 +342,6 @@ class ServiceCategoryController extends BaseApiController
                 'category_id' => $id,
                 'user_id' => $request->user()->id ?? 'unknown'
             ]);
-            
             return $this->errorResponse('Failed to delete category. Please try again.', 500);
         }
     }
@@ -382,7 +366,6 @@ class ServiceCategoryController extends BaseApiController
 
             $categories = ServiceCategory::whereIn('service_categoryID', $validated['ids'])->get();
 
-            // Check if any category has services
             foreach ($categories as $category) {
                 if ($category->services()->exists()) {
                     return $this->errorResponse(
@@ -398,17 +381,20 @@ class ServiceCategoryController extends BaseApiController
 
             DB::commit();
 
-            return $this->successResponse(['deleted_count' => $deleted], 'Categories deleted successfully.');
+            $this->logAudit('bulk_delete_categories', 'service_category', null, json_encode([
+                'deleted_ids' => $validated['ids'],
+                'deleted_count' => $deleted,
+            ]));
 
+            return $this->successResponse(['deleted_count' => $deleted], 'Categories deleted successfully.');
         } catch (\Illuminate\Validation\ValidationException $e) {
-            return $this->validationError($e->errors());
+            return $this->errorResponse($e->errors(), 422);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Error bulk deleting service categories: ' . $e->getMessage(), [
                 'user_id' => $request->user()->id ?? 'unknown',
                 'ids' => $request->ids ?? []
             ]);
-            
             return $this->errorResponse('Failed to delete categories. Please try again.', 500);
         }
     }
@@ -433,22 +419,22 @@ class ServiceCategoryController extends BaseApiController
             ];
 
             return $this->successResponse($stats, 'Category statistics retrieved successfully');
-
         } catch (\Exception $e) {
             Log::error('Error fetching service category stats: ' . $e->getMessage(), [
                 'user_id' => $request->user()->id ?? 'unknown'
             ]);
-            
             return $this->errorResponse('Failed to fetch statistics. Please try again.', 500);
         }
     }
 
+    // ─── Private Formatters ─────────────────────────────────────────────
+
     /**
-     * Format categories for response
+     * Format paginated categories for response.
      */
     private function formatCategories($categories): array
     {
-        $data = $categories->map(function($category) {
+        $data = $categories->map(function ($category) {
             return $this->formatSingleCategory($category);
         });
 
@@ -464,19 +450,21 @@ class ServiceCategoryController extends BaseApiController
     }
 
     /**
-     * Format single category
+     * Format a single category.
      */
     private function formatSingleCategory($category): array
     {
         return [
             'service_categoryID' => $category->service_categoryID,
-            'category_name' => $category->category_name,
-            'formatted_name' => $category->formatted_name,
-            'slug' => $category->slug,
-            'description' => $category->description,
-            'comment' => $category->comment,
-            'created_at' => $category->created_at,
-            'updated_at' => $category->updated_at,
+            'category_name'      => $category->category_name,
+            'swahili_name'       => $category->swahili_name,
+            'formatted_name'     => $category->formatted_name,
+            'slug'               => $category->slug,
+            'description'        => $category->description,
+            'comment'            => $category->comment,
+            'services_count'     => $category->services_count ?? 0, // ✅ now included
+            'created_at'         => $category->created_at,
+            'updated_at'         => $category->updated_at,
         ];
     }
 }

@@ -95,11 +95,16 @@ Route::prefix('v2')->middleware(['auth:sanctum', 'active.session', 'subscription
     Route::post('technicians/heartbeat', [TechnicianController::class, 'heartbeat']);
     Route::post('technicians/location', [TechnicianController::class, 'updateLocation']);
     Route::post('technicians/profile/photo', [TechnicianController::class, 'uploadProfilePhoto']);
-    Route::patch('technicians/{id}/verify', [TechnicianController::class, 'verify']);
+    // Route::patch('technicians/{id}/verify', [TechnicianController::class, 'verify']); // MOVED to group below
     Route::apiResource('technicians', TechnicianController::class)->except(['show', 'nearby', 'updateProfile', 'toggleOnline']);
 
     // ✅ NEW: Technician service price management
     Route::put('technicians/service-prices', [TechnicianController::class, 'updateServicePrices']);
+});
+
+// Verification route – no subscription required
+Route::prefix('v2')->middleware(['auth:sanctum', 'active.session'])->group(function () {
+    Route::patch('technicians/{id}/verify', [TechnicianController::class, 'verify']);
 });
 
 // =============================================
@@ -150,20 +155,21 @@ Route::prefix('v4')->middleware(['auth:sanctum', 'active.session'])->group(funct
 
     // Monitoring
     Route::prefix('monitoring')->group(function () {
-        Route::get('map', [MonitoringController::class, 'map']);
-        Route::get('notifications', [MonitoringController::class, 'getNotifications']);
-        Route::get('statuses', [MonitoringController::class, 'getStatuses']);
-        Route::get('pending-history', [MonitoringController::class, 'getPendingHistory']);
-        Route::get('technicians', [MonitoringController::class, 'getTechnicians']);
-        Route::get('technicians/{id}', [MonitoringController::class, 'getTechnician']);
-        Route::get('technicians/area/{area}', [MonitoringController::class, 'getTechniciansByArea']);
-        Route::get('technicians/{id}/completed-requests', [MonitoringController::class, 'getTechnicianCompletedRequests']);
-        Route::post('technicians/{id}/call', [MonitoringController::class, 'callTechnician']);
-        Route::get('requests/{id}/logs', [MonitoringController::class, 'getRequestLogs']);
-        Route::patch('requests/{id}/status', [MonitoringController::class, 'updateStatus']);
-        Route::post('requests/{id}/complete', [MonitoringController::class, 'completeRequest']);
-        Route::post('requests/{id}/check-arrival', [MonitoringController::class, 'checkArrival']);
-    });
+    Route::get('map', [MonitoringController::class, 'map']);
+    Route::get('notifications', [MonitoringController::class, 'getNotifications']);
+    Route::get('statuses', [MonitoringController::class, 'getStatuses']);
+    Route::get('pending-history', [MonitoringController::class, 'getPendingHistory']);
+    Route::get('technicians', [MonitoringController::class, 'getTechnicians']);
+    Route::get('technicians/{id}', [MonitoringController::class, 'getTechnician']);
+    Route::get('technicians/area/{area}', [MonitoringController::class, 'getTechniciansByArea']);
+    Route::get('technicians/{id}/completed-requests', [MonitoringController::class, 'getTechnicianCompletedRequests']);
+    Route::post('technicians/{id}/call', [MonitoringController::class, 'callTechnician']);
+    Route::get('requests/{id}/logs', [MonitoringController::class, 'getRequestLogs']);
+    Route::patch('requests/{id}/status', [MonitoringController::class, 'updateStatus']);
+    Route::post('requests/{id}/complete', [MonitoringController::class, 'completeRequest']);
+    Route::post('requests/{id}/check-arrival', [MonitoringController::class, 'checkArrival']);
+    Route::get('requests/{id}/tracking', [MonitoringController::class, 'getRequestTracking']); // ✅ NEW
+});
 });
 
 // =============================================
@@ -276,6 +282,7 @@ Route::prefix('v10')->middleware(['auth:sanctum', 'active.session'])->group(func
 // V11 – SERVICES (Updated with categories)
 // =============================================
 Route::prefix('v11')->group(function () {
+     Route::get('services/grouped-by-category', [ServiceController::class, 'getServicesGroupedByCategory']);
     Route::get('services', [ServiceController::class, 'index']);
     Route::get('services/{id}', [ServiceController::class, 'show']);
     Route::get('services/dropdown', [ServiceController::class, 'getServicesDropdown']);
@@ -306,6 +313,8 @@ Route::prefix('v12')->middleware(['auth:sanctum', 'active.session'])->group(func
     Route::get('reports/portfolio', [ReportController::class, 'portfolioReport']);
     Route::get('reports/revenue', [ReportController::class, 'revenueReport']);
     Route::get('reports/subscriptions', [ReportController::class, 'subscriptionsReport']);
+    Route::get('reports/all-stats', [ReportController::class, 'allStats']);
+    Route::get('reports/reviews', [ReportController::class, 'reviewsReport']);
 });
 
 // =============================================
@@ -418,18 +427,22 @@ Route::prefix('v17')->group(function () {
 // V18 – REVIEWS & PRIVACY POLICY (Phase 2)
 // =============================================
 Route::prefix('v18')->group(function () {
-    // Public endpoints
+    // Public singleton
     Route::get('privacy-policy', [PrivacyPolicyController::class, 'show']);
-    Route::get('technicians/{id}/reviews', [ReviewController::class, 'technicianReviews']);
 
-    // Authenticated endpoints
-    Route::middleware(['auth:sanctum', 'active.session'])->group(function () {
-        Route::post('reviews', [ReviewController::class, 'store']);
+    // Public index
+    Route::get('privacy-policies', [PrivacyPolicyController::class, 'index']);
 
-        // Admin only (requires 'privacy.edit' permission)
-        Route::middleware(['permission:privacy.edit'])->group(function () {
-            Route::put('privacy-policy', [PrivacyPolicyController::class, 'update']);
-        });
+    // Authenticated admin routes
+    Route::middleware(['auth:sanctum', 'active.session', 'permission:privacy.edit'])->group(function () {
+        Route::post('privacy-policies', [PrivacyPolicyController::class, 'store']);
+        Route::get('privacy-policies/{id}', [PrivacyPolicyController::class, 'showById']);
+        Route::get('privacy-policies/{id}/edit', [PrivacyPolicyController::class, 'edit']);
+        Route::put('privacy-policies/{id}', [PrivacyPolicyController::class, 'update']); // update by ID
+        Route::delete('privacy-policies/{id}', [PrivacyPolicyController::class, 'destroy']);
+
+        // Existing singleton update (upsert)
+        Route::put('privacy-policy', [PrivacyPolicyController::class, 'update']);
     });
 });
 
@@ -462,7 +475,16 @@ Route::prefix('v19')->group(function () {
     });
 });
 
+Route::prefix('v20')->middleware(['auth:sanctum', 'active.session'])->group(function () {
+    Route::get('admin/technicians', [TechnicianController::class, 'adminIndex']);
+});
+
 // =============================================
 // Public tracking endpoint 
 // =============================================
 Route::get('tracking/{requestId}', [TechnicianController::class, 'getTrackingData']);
+
+// =============================================
+// Registration Status (public, no auth)
+// =============================================
+Route::get('technicians/registration-status/{id}', [TechnicianController::class, 'registrationStatus']);

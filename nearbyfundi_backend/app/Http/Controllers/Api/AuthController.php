@@ -320,17 +320,12 @@ class AuthController extends BaseApiController
 public function login(Request $request)
 {
     $request->validate([
-        'email'    => 'required|string', // can be email or phone
+        'email'    => 'required|string',
         'password' => 'required|string',
     ]);
 
     $login = $request->email;
-
-    // Try to find user by email first, if not, by phone
-    $user = User::where('email', $login)->first();
-    if (!$user) {
-        $user = User::where('phone', $login)->first();
-    }
+    $user = User::where('email', $login)->first() ?? User::where('phone', $login)->first();
 
     if (!$user || !Hash::check($request->password, $user->password)) {
         FailedLoginAttempt::record($login, $request->ip());
@@ -346,7 +341,15 @@ public function login(Request $request)
         return $this->forbidden('Account is not active.');
     }
 
-    // Generate token
+    // ✅ NEW: Check technician verification (if user is FUNDI)
+    if ($user->hasRole('FUNDI')) {
+        $technician = Technician::where('user_id', $user->id)->first();
+        if (!$technician || !$technician->verified || $technician->verification_status !== 'approved') {
+            return $this->forbidden('Your technician account is not verified. Please wait for admin approval.');
+        }
+    }
+
+    // Generate token and respond
     $token = $user->createToken('auth_token')->plainTextToken;
     $this->createSession($user, $request, $token);
 
@@ -355,7 +358,7 @@ public function login(Request $request)
         'last_login_ip' => $request->ip(),
     ]);
 
-    if ($request->has('fcm_token') && !empty($request->fcm_token)) {
+    if ($request->filled('fcm_token')) {
         $this->storeFcmToken($user, $request->fcm_token);
     }
 
@@ -367,6 +370,7 @@ public function login(Request $request)
         'token' => $token,
     ], 'Login successful.');
 }
+
 
 public function googleLogin(Request $request)
 {
