@@ -28,6 +28,7 @@ import {
     CalendarToday as CalendarIcon,
     Timer as TimerIcon,
     Info as InfoIcon,
+    Verified as VerifiedIcon,
 } from '@mui/icons-material';
 import { usePermissions } from 'hooks/usePermissions';
 import { subscriptionService } from 'services/subscription.service';
@@ -88,6 +89,16 @@ const SubscriptionList = () => {
     const [viewDialog, setViewDialog] = useState({
         open: false,
         subscription: null,
+    });
+
+    // ✅ Approve Dialog State
+    const [approveDialog, setApproveDialog] = useState({
+        open: false,
+        subscription: null,
+        loading: false,
+        progress: 0,
+        status: 'idle', // idle, confirming, approving, done, error
+        error: null,
     });
 
     // ============================================================
@@ -176,19 +187,109 @@ const SubscriptionList = () => {
     };
 
     // ============================================================
-    // HANDLERS
+    // APPROVE HANDLER WITH MODAL
     // ============================================================
 
-    const handleApprove = async (id) => {
-        try {
-            await subscriptionService.approveSubscription(id);
-            showSnackbar({ type: 'success', message: `Subscription #${id} approved` });
-            refresh();
-        } catch (err) {
-            showSnackbar({ type: 'error', message: 'Approval failed' });
-        }
+    const openApproveDialog = (sub) => {
+        setApproveDialog({
+            open: true,
+            subscription: sub,
+            loading: false,
+            progress: 0,
+            status: 'idle',
+            error: null,
+        });
         setActionMenu(null);
     };
+
+    const closeApproveDialog = () => {
+        setApproveDialog({
+            open: false,
+            subscription: null,
+            loading: false,
+            progress: 0,
+            status: 'idle',
+            error: null,
+        });
+    };
+
+    const handleApproveConfirm = async () => {
+        if (!approveDialog.subscription) return;
+
+        setApproveDialog(prev => ({
+            ...prev,
+            loading: true,
+            status: 'confirming',
+            progress: 10,
+            error: null,
+        }));
+
+        // Simulate progress steps
+        const steps = [
+            { progress: 20, status: 'Validating subscription...' },
+            { progress: 40, status: 'Processing payment confirmation...' },
+            { progress: 60, status: 'Updating subscription status...' },
+            { progress: 80, status: 'Generating invoice...' },
+            { progress: 90, status: 'Sending notification...' },
+            { progress: 100, status: 'Complete!' },
+        ];
+
+        let currentStep = 0;
+
+        const progressInterval = setInterval(() => {
+            if (currentStep < steps.length) {
+                const step = steps[currentStep];
+                setApproveDialog(prev => ({
+                    ...prev,
+                    progress: step.progress,
+                    status: step.status,
+                }));
+                currentStep++;
+            }
+        }, 500);
+
+        try {
+            // Make the actual API call
+            await subscriptionService.approveSubscription(approveDialog.subscription.id);
+
+            clearInterval(progressInterval);
+
+            setApproveDialog(prev => ({
+                ...prev,
+                progress: 100,
+                status: 'done',
+                loading: false,
+            }));
+
+            showSnackbar({
+                type: 'success',
+                message: `Subscription #${approveDialog.subscription.id} approved successfully!`
+            });
+
+            // Refresh data after a delay
+            setTimeout(() => {
+                closeApproveDialog();
+                refresh();
+            }, 1500);
+
+        } catch (err) {
+            clearInterval(progressInterval);
+            setApproveDialog(prev => ({
+                ...prev,
+                loading: false,
+                status: 'error',
+                error: err.message || 'Approval failed. Please try again.',
+            }));
+            showSnackbar({
+                type: 'error',
+                message: 'Approval failed: ' + (err.message || 'Unknown error')
+            });
+        }
+    };
+
+    // ============================================================
+    // OTHER HANDLERS
+    // ============================================================
 
     const handleReject = async (id, reason) => {
         try {
@@ -350,7 +451,6 @@ const SubscriptionList = () => {
     };
 
     const getStatusChip = (status, expiryDate) => {
-        // Check if expired based on expiry date
         if (status === 'active' && expiryDate && new Date(expiryDate) < new Date()) {
             status = 'expired';
         }
@@ -375,21 +475,6 @@ const SubscriptionList = () => {
                 size="small"
             />
         );
-    };
-
-    const getExpiryStatus = (sub) => {
-        if (!sub.expiry_date) return null;
-        const expiry = new Date(sub.expiry_date);
-        const now = new Date();
-        const daysRemaining = Math.ceil((expiry - now) / (1000 * 60 * 60 * 24));
-
-        if (daysRemaining < 0) {
-            return { label: 'Expired', color: '#ef4444', icon: <ExpiredIcon sx={{ fontSize: 14 }} /> };
-        } else if (daysRemaining <= 3) {
-            return { label: `${daysRemaining} days`, color: '#f59e0b', icon: <TimerIcon sx={{ fontSize: 14 }} /> };
-        } else {
-            return { label: `${daysRemaining} days`, color: '#10b981', icon: <CheckCircleIcon sx={{ fontSize: 14 }} /> };
-        }
     };
 
     // ============================================================
@@ -484,6 +569,11 @@ const SubscriptionList = () => {
                 }
                 .pulse {
                     animation: pulse 2s ease-in-out infinite;
+                }
+                @keyframes progressGlow {
+                    0% { box-shadow: 0 0 10px rgba(16, 185, 129, 0.3); }
+                    50% { box-shadow: 0 0 30px rgba(16, 185, 129, 0.6); }
+                    100% { box-shadow: 0 0 10px rgba(16, 185, 129, 0.3); }
                 }
             `}</style>
 
@@ -854,7 +944,12 @@ const SubscriptionList = () => {
                                                 <Box mt={2} display="flex" gap={1} flexWrap="wrap">
                                                     {canApprove && sub.status === 'pending' && (
                                                         <>
-                                                            <Button size="small" variant="contained" color="success" onClick={() => handleApprove(sub.id)}>
+                                                            <Button
+                                                                size="small"
+                                                                variant="contained"
+                                                                color="success"
+                                                                onClick={() => openApproveDialog(sub)}
+                                                            >
                                                                 Approve
                                                             </Button>
                                                             <Button size="small" variant="contained" color="error" onClick={() => {
@@ -902,7 +997,7 @@ const SubscriptionList = () => {
                 <Menu anchorEl={actionMenu} open={Boolean(actionMenu)} onClose={handleMenuClose}>
                     {selectedSub?.status === 'pending' && canApprove && (
                         <>
-                            <MenuItem onClick={() => handleApprove(selectedSub.id)}>
+                            <MenuItem onClick={() => openApproveDialog(selectedSub)}>
                                 <ApproveIcon sx={{ mr: 1, color: 'success.main' }} /> Approve
                             </MenuItem>
                             <MenuItem onClick={() => {
@@ -958,6 +1053,274 @@ const SubscriptionList = () => {
                         >
                             Reject
                         </Button>
+                    </DialogActions>
+                </Dialog>
+
+                {/* ✅ Approve Dialog with Progress - User Name Displayed */}
+                <Dialog
+                    open={approveDialog.open}
+                    onClose={approveDialog.loading ? null : closeApproveDialog}
+                    maxWidth="sm"
+                    fullWidth
+                    PaperProps={{
+                        sx: {
+                            borderRadius: 3,
+                            overflow: 'hidden',
+                            border: approveDialog.status === 'done' ? '2px solid #10b981' :
+                                approveDialog.status === 'error' ? '2px solid #ef4444' : 'none',
+                        }
+                    }}
+                >
+                    <DialogTitle sx={{ pb: 1 }}>
+                        <Box display="flex" alignItems="center" gap={1.5}>
+                            <Avatar
+                                sx={{
+                                    bgcolor: approveDialog.status === 'done' ? '#10b981' :
+                                        approveDialog.status === 'error' ? '#ef4444' : '#f59e0b',
+                                    width: 40,
+                                    height: 40,
+                                }}
+                            >
+                                {approveDialog.status === 'done' ? <VerifiedIcon /> :
+                                    approveDialog.status === 'error' ? <RejectIcon /> :
+                                        <ApproveIcon />}
+                            </Avatar>
+                            <Box>
+                                <Typography variant="h6" fontWeight="bold">
+                                    {approveDialog.status === 'done' ? 'Approved Successfully!' :
+                                        approveDialog.status === 'error' ? 'Approval Failed' :
+                                            'Confirm Approval'}
+                                </Typography>
+                                {approveDialog.subscription && (
+                                    <Typography variant="body2" color="textSecondary">
+                                        Subscription #{approveDialog.subscription.id}
+                                    </Typography>
+                                )}
+                            </Box>
+                        </Box>
+                    </DialogTitle>
+
+                    <DialogContent>
+                        {approveDialog.status === 'idle' && (
+                            <Box sx={{ py: 2 }}>
+                                <Alert
+                                    severity="info"
+                                    sx={{ mb: 2, borderRadius: 2 }}
+                                >
+                                    You are about to approve this subscription. The user will gain access immediately.
+                                </Alert>
+
+                                {/* ✅ User/Technician Card */}
+                                <Paper
+                                    elevation={0}
+                                    sx={{
+                                        p: 2,
+                                        mb: 2,
+                                        borderRadius: 2,
+                                        backgroundColor: colors.sky,
+                                        border: `1px solid ${colors.middle}`,
+                                    }}
+                                >
+                                    <Box display="flex" alignItems="center" gap={2}>
+                                        <Avatar
+                                            sx={{
+                                                width: 48,
+                                                height: 48,
+                                                bgcolor: colors.primary,
+                                                color: 'white',
+                                                fontWeight: 'bold',
+                                            }}
+                                        >
+                                            {approveDialog.subscription?.user?.name?.[0]?.toUpperCase() || 'U'}
+                                        </Avatar>
+                                        <Box>
+                                            <Typography variant="subtitle1" fontWeight="bold">
+                                                {approveDialog.subscription?.user?.name || 'Unknown User'}
+                                            </Typography>
+                                            <Typography variant="body2" color="textSecondary">
+                                                {approveDialog.subscription?.user?.email || 'No email'}
+                                            </Typography>
+                                            {approveDialog.subscription?.user?.phone && (
+                                                <Typography variant="caption" color="textSecondary">
+                                                    📞 {approveDialog.subscription.user.phone}
+                                                </Typography>
+                                            )}
+                                        </Box>
+                                    </Box>
+                                </Paper>
+
+                                {/* ✅ Subscription Details */}
+                                <Grid container spacing={2}>
+                                    <Grid item xs={6}>
+                                        <Typography variant="caption" color="textSecondary">Plan</Typography>
+                                        <Typography variant="body2" fontWeight={500}>
+                                            {approveDialog.subscription?.rate_card?.name || '-'}
+                                        </Typography>
+                                    </Grid>
+                                    <Grid item xs={6}>
+                                        <Typography variant="caption" color="textSecondary">Amount</Typography>
+                                        <Typography variant="body2" fontWeight={600} color={colors.primary}>
+                                            {approveDialog.subscription?.amount || '-'}
+                                        </Typography>
+                                    </Grid>
+                                    <Grid item xs={6}>
+                                        <Typography variant="caption" color="textSecondary">Payment Method</Typography>
+                                        <Typography variant="body2">{approveDialog.subscription?.payment_method || '-'}</Typography>
+                                    </Grid>
+                                    <Grid item xs={6}>
+                                        <Typography variant="caption" color="textSecondary">Reference</Typography>
+                                        <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                                            {approveDialog.subscription?.payment_reference || '-'}
+                                        </Typography>
+                                    </Grid>
+                                    <Grid item xs={6}>
+                                        <Typography variant="caption" color="textSecondary">Created</Typography>
+                                        <Typography variant="body2">{formatDate(approveDialog.subscription?.created_at)}</Typography>
+                                    </Grid>
+                                    <Grid item xs={6}>
+                                        <Typography variant="caption" color="textSecondary">Status</Typography>
+                                        <Chip
+                                            label="Pending Approval"
+                                            size="small"
+                                            sx={{
+                                                backgroundColor: '#fef3c7',
+                                                color: '#f59e0b',
+                                                fontWeight: 600,
+                                            }}
+                                        />
+                                    </Grid>
+                                </Grid>
+                            </Box>
+                        )}
+
+                        {(approveDialog.status === 'confirming' || approveDialog.status === 'approving') && (
+                            <Box sx={{ py: 3 }}>
+                                <Box display="flex" justifyContent="center" mb={3}>
+                                    <CircularProgress
+                                        size={60}
+                                        thickness={4}
+                                        value={approveDialog.progress}
+                                        variant="determinate"
+                                        sx={{ color: '#10b981' }}
+                                    />
+                                </Box>
+                                <Box display="flex" justifyContent="center" mb={1}>
+                                    <Typography variant="h5" fontWeight="bold" color="#10b981">
+                                        {approveDialog.progress}%
+                                    </Typography>
+                                </Box>
+                                <LinearProgress
+                                    variant="determinate"
+                                    value={approveDialog.progress}
+                                    sx={{
+                                        height: 8,
+                                        borderRadius: 4,
+                                        mb: 2,
+                                        backgroundColor: '#e5e7eb',
+                                        '& .MuiLinearProgress-bar': {
+                                            backgroundColor: '#10b981',
+                                            borderRadius: 4,
+                                        }
+                                    }}
+                                />
+                                <Typography variant="body2" color="textSecondary" textAlign="center">
+                                    {approveDialog.status || 'Processing...'}
+                                </Typography>
+                                <Typography variant="caption" color="textSecondary" textAlign="center" display="block" sx={{ mt: 1 }}>
+                                    {approveDialog.subscription?.user?.name || 'User'}
+                                </Typography>
+                            </Box>
+                        )}
+
+                        {approveDialog.status === 'done' && (
+                            <Box sx={{ py: 2, textAlign: 'center' }}>
+                                <Box
+                                    sx={{
+                                        width: 80,
+                                        height: 80,
+                                        borderRadius: '50%',
+                                        backgroundColor: '#d1fae5',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        margin: '0 auto 16px',
+                                    }}
+                                >
+                                    <VerifiedIcon sx={{ fontSize: 48, color: '#10b981' }} />
+                                </Box>
+                                <Typography variant="h6" fontWeight="bold" color="#10b981">
+                                    Subscription Approved!
+                                </Typography>
+                                <Typography variant="body2" color="textSecondary">
+                                    {approveDialog.subscription?.user?.name || 'User'} can now access all features.
+                                </Typography>
+                            </Box>
+                        )}
+
+                        {approveDialog.status === 'error' && (
+                            <Box sx={{ py: 2 }}>
+                                <Alert severity="error" sx={{ borderRadius: 2 }}>
+                                    {approveDialog.error || 'An error occurred while approving the subscription.'}
+                                </Alert>
+                            </Box>
+                        )}
+                    </DialogContent>
+
+                    <DialogActions sx={{ p: 3, pt: 0 }}>
+                        {approveDialog.status === 'idle' && (
+                            <>
+                                <Button onClick={closeApproveDialog} disabled={approveDialog.loading}>
+                                    Cancel
+                                </Button>
+                                <Button
+                                    onClick={handleApproveConfirm}
+                                    variant="contained"
+                                    color="success"
+                                    disabled={approveDialog.loading}
+                                    startIcon={<ApproveIcon />}
+                                    sx={{
+                                        borderRadius: 2,
+                                        px: 3,
+                                    }}
+                                >
+                                    Confirm Approve
+                                </Button>
+                            </>
+                        )}
+
+                        {approveDialog.status === 'done' && (
+                            <Button
+                                onClick={closeApproveDialog}
+                                variant="contained"
+                                color="success"
+                                sx={{ borderRadius: 2, px: 4 }}
+                            >
+                                Done
+                            </Button>
+                        )}
+
+                        {approveDialog.status === 'error' && (
+                            <>
+                                <Button onClick={closeApproveDialog}>
+                                    Cancel
+                                </Button>
+                                <Button
+                                    onClick={handleApproveConfirm}
+                                    variant="contained"
+                                    color="success"
+                                    startIcon={<RefreshIcon />}
+                                    sx={{ borderRadius: 2 }}
+                                >
+                                    Retry
+                                </Button>
+                            </>
+                        )}
+
+                        {(approveDialog.status === 'confirming' || approveDialog.status === 'approving') && (
+                            <Typography variant="caption" color="textSecondary">
+                                Please wait...
+                            </Typography>
+                        )}
                     </DialogActions>
                 </Dialog>
 

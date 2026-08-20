@@ -1,28 +1,11 @@
 // src/pages/technicians/TechniciansList.js
+
 import React, { useState, useEffect } from 'react';
 import {
-    Box,
-    Paper,
-    Typography,
-    Button,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    TablePagination,
-    TableSortLabel,
-    TextField,
-    InputAdornment,
-    useMediaQuery,
-    useTheme,
-    Card,
-    CardContent,
-    Divider,
-    Avatar,
-    CircularProgress,
-    Alert,
+    Box, Paper, Typography, Table, TableBody, TableCell,
+    TableContainer, TableHead, TableRow, TablePagination, TableSortLabel,
+    TextField, InputAdornment, useMediaQuery, useTheme,
+    Card, CardContent, Divider, Avatar, CircularProgress, Alert,
 } from '@mui/material';
 import {
     Search as SearchIcon,
@@ -31,7 +14,9 @@ import {
     Star as StarIcon,
     CheckCircle as VerifiedIcon,
 } from '@mui/icons-material';
-import { technicianService } from 'services/technician.service';
+import { useNavigate } from 'react-router-dom';
+import { useTechnicianManagement } from 'hooks/useTechnician';
+import { useAdminTechnicianManagement } from 'hooks/useAdminTechnicians';
 import { usePermissions } from 'hooks/usePermissions';
 import appConfig from '../../config';
 
@@ -48,12 +33,17 @@ const TechniciansList = () => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const showTableView = useMediaQuery(theme.breakpoints.up('md'));
+    const navigate = useNavigate();
 
-    const [technicians, setTechnicians] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
-    const [pagination, setPagination] = useState({ total: 0, per_page: 10, current_page: 1, last_page: 1 });
     const { can } = usePermissions();
+    const canViewAll = can('technicians.view'); // admins have this
+
+    // Choose context based on permission
+    const publicContext = useTechnicianManagement();
+    const adminContext = useAdminTechnicianManagement();
+
+    const context = canViewAll ? adminContext : publicContext;
+    const { technicians, loading, error, getTechnicians, clearError } = context;
 
     const [search, setSearch] = useState('');
     const [serviceFilter, setServiceFilter] = useState('');
@@ -61,55 +51,40 @@ const TechniciansList = () => {
     const [orderBy, setOrderBy] = useState('name');
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
+    const [pagination, setPagination] = useState({ total: 0, per_page: 10, current_page: 1, last_page: 1 });
 
-    const canView = can('technicians.view');
+    // Helper to get service names
+    const getServiceNames = (technician) => {
+        if (!technician.services || !Array.isArray(technician.services)) return '';
+        return technician.services.map(s => s.name).join(', ');
+    };
+
+    const getServiceCount = (technician) => {
+        if (!technician.services || !Array.isArray(technician.services)) return 0;
+        return technician.services.length;
+    };
 
     const loadTechnicians = async () => {
-        if (!canView) return;
+        const params = {
+            page: page + 1,
+            per_page: rowsPerPage,
+            search: search || undefined,
+        };
+        if (serviceFilter) params.service_id = serviceFilter;
 
-        setLoading(true);
-        setError(null);
         try {
-            const response = await technicianService.getTechnicians({
-                page: page + 1,
-                per_page: rowsPerPage,
-                search: search || undefined,
-                service_id: serviceFilter || undefined,
-            });
-
-            if (response?.data?.status === 'success') {
-                const data = response.data.data;
-                if (data && data.data) {
-                    setTechnicians(data.data);
-                    setPagination({
-                        total: data.total || 0,
-                        per_page: data.per_page || rowsPerPage,
-                        current_page: data.current_page || 1,
-                        last_page: data.last_page || 1,
-                    });
-                } else if (Array.isArray(data)) {
-                    setTechnicians(data);
-                    setPagination({ total: data.length, per_page: rowsPerPage, current_page: 1, last_page: 1 });
-                } else {
-                    setTechnicians([]);
-                }
-            } else {
-                setTechnicians([]);
+            const result = await getTechnicians(params);
+            if (result && result.pagination) {
+                setPagination(result.pagination);
             }
         } catch (err) {
-            console.error('Technicians error:', err);
-            setError(err.message || 'Failed to load technicians');
-        } finally {
-            setLoading(false);
+            // error handled by context
         }
     };
 
-    // Auto-load when filters change
     useEffect(() => {
-        if (canView) {
-            loadTechnicians();
-        }
-    }, [page, rowsPerPage, search, serviceFilter, canView]);
+        loadTechnicians();
+    }, [page, rowsPerPage, search, serviceFilter]);
 
     const handleRequestSort = (property) => {
         const isAsc = orderBy === property && order === 'asc';
@@ -117,23 +92,15 @@ const TechniciansList = () => {
         setOrderBy(property);
     };
 
-    const getServiceCount = (technician) => {
-        if (!technician.services || !Array.isArray(technician.services)) {
-            return 0;
-        }
-        return technician.services.length;
-    };
-
     const sortData = (data) => {
         if (!data) return [];
         const sorted = [...data];
         sorted.sort((a, b) => {
             let aValue, bValue;
-
             switch (orderBy) {
                 case 'name':
-                    aValue = a.name || '';
-                    bValue = b.name || '';
+                    aValue = a.user?.name || '';
+                    bValue = b.user?.name || '';
                     break;
                 case 'area':
                     aValue = a.area || '';
@@ -147,12 +114,10 @@ const TechniciansList = () => {
                     aValue = a[orderBy] || '';
                     bValue = b[orderBy] || '';
             }
-
             if (typeof aValue === 'string') {
                 aValue = aValue.toLowerCase();
                 bValue = bValue.toLowerCase();
             }
-
             if (aValue < bValue) return order === 'asc' ? -1 : 1;
             if (aValue > bValue) return order === 'asc' ? 1 : -1;
             return 0;
@@ -160,7 +125,11 @@ const TechniciansList = () => {
         return sorted;
     };
 
-    if (!canView) {
+    const handleRowClick = (id) => {
+        navigate(`/app/technicians/${id}`);
+    };
+
+    if (!canViewAll) {
         return (
             <Box p={3}>
                 <Paper sx={{ p: 3, textAlign: 'center', backgroundColor: colors.light }}>
@@ -173,7 +142,11 @@ const TechniciansList = () => {
     if (error) {
         return (
             <Box p={3}>
-                <Alert severity="error">
+                <Alert severity="error" action={
+                    <Button color="inherit" size="small" onClick={() => { clearError(); loadTechnicians(); }}>
+                        Retry
+                    </Button>
+                }>
                     {error}
                 </Alert>
             </Box>
@@ -197,11 +170,9 @@ const TechniciansList = () => {
                 <Box sx={{ p: { xs: 2, sm: 3 }, borderBottom: `1px solid ${colors.middle}` }}>
                     <Box display="flex" justifyContent="space-between" alignItems="center" mb={2} flexWrap="wrap" gap={1}>
                         <Typography variant="h5" fontWeight="600" sx={{ fontSize: { xs: '1.5rem', sm: '1.75rem' }, color: colors.dark }}>
-                            Technicians
+                            Technicians {canViewAll && <Typography component="span" variant="caption" sx={{ color: colors.rain }}>(All)</Typography>}
                         </Typography>
                     </Box>
-
-                    {/* Filters */}
                     <Box display="flex" gap={2} flexWrap="wrap" alignItems="center">
                         <TextField
                             label="Search Technicians"
@@ -214,13 +185,8 @@ const TechniciansList = () => {
                             sx={{
                                 minWidth: { xs: '100%', sm: 200 },
                                 flexGrow: { xs: 1, sm: 0 },
-                                '& .MuiInputBase-root': {
-                                    backgroundColor: colors.sky,
-                                    borderRadius: 2,
-                                },
-                                '& .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: colors.middle,
-                                },
+                                '& .MuiInputBase-root': { backgroundColor: colors.sky, borderRadius: 2 },
+                                '& .MuiOutlinedInput-notchedOutline': { borderColor: colors.middle },
                             }}
                         />
                         <TextField
@@ -232,13 +198,8 @@ const TechniciansList = () => {
                             sx={{
                                 minWidth: { xs: '100%', sm: 180 },
                                 flexGrow: { xs: 1, sm: 0 },
-                                '& .MuiInputBase-root': {
-                                    backgroundColor: colors.sky,
-                                    borderRadius: 2,
-                                },
-                                '& .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: colors.middle,
-                                },
+                                '& .MuiInputBase-root': { backgroundColor: colors.sky, borderRadius: 2 },
+                                '& .MuiOutlinedInput-notchedOutline': { borderColor: colors.middle },
                             }}
                         />
                     </Box>
@@ -274,33 +235,36 @@ const TechniciansList = () => {
                                 ) : sortedData.length === 0 ? (
                                     <TableRow>
                                         <TableCell colSpan={headCells.length} align="center">
-                                            <Typography sx={{ py: 3, color: colors.rain }}>
-                                                No technicians found
-                                            </Typography>
+                                            <Typography sx={{ py: 3, color: colors.rain }}>No technicians found</Typography>
                                         </TableCell>
                                     </TableRow>
                                 ) : (
                                     sortedData.map((technician) => (
-                                        <TableRow key={technician.id} hover>
+                                        <TableRow
+                                            key={technician.id}
+                                            hover
+                                            onClick={() => handleRowClick(technician.id)}
+                                            sx={{ cursor: 'pointer' }}
+                                        >
                                             <TableCell>
                                                 <Box display="flex" alignItems="center" gap={2}>
                                                     <Avatar
-                                                        src={technician.profile_photo || undefined}
+                                                        src={technician.profile_photo ? `/storage/${technician.profile_photo}` : undefined}
                                                         sx={{ width: 40, height: 40, bgcolor: colors.sea }}
                                                     >
-                                                        {technician.name?.charAt(0).toUpperCase() || 'T'}
+                                                        {technician.user?.name?.charAt(0).toUpperCase() || 'T'}
                                                     </Avatar>
                                                     <Box>
                                                         <Box display="flex" alignItems="center" gap={1}>
                                                             <Typography variant="body2" fontWeight="medium" sx={{ color: colors.dark }}>
-                                                                {technician.name || 'Unknown'}
+                                                                {technician.user?.name || 'Unknown'}
                                                             </Typography>
                                                             {technician.verified && (
                                                                 <VerifiedIcon sx={{ fontSize: 16, color: colors.salat }} />
                                                             )}
                                                         </Box>
                                                         <Typography variant="caption" sx={{ color: colors.rain }}>
-                                                            {technician.email || ''}
+                                                            {technician.user?.email || ''}
                                                         </Typography>
                                                     </Box>
                                                 </Box>
@@ -314,8 +278,8 @@ const TechniciansList = () => {
                                                 </Box>
                                                 {technician.services && technician.services.length > 0 && (
                                                     <Typography variant="caption" sx={{ color: colors.rain }} display="block" mt={0.5}>
-                                                        {technician.services.slice(0, 2).join(', ')}
-                                                        {technician.services.length > 2 && ` +${technician.services.length - 2} more`}
+                                                        {getServiceNames(technician).slice(0, 50)}
+                                                        {getServiceNames(technician).length > 50 && '...'}
                                                     </Typography>
                                                 )}
                                             </TableCell>
@@ -341,7 +305,7 @@ const TechniciansList = () => {
                                                         </Typography>
                                                         {technician.hourly_rate && (
                                                             <Typography variant="caption" sx={{ color: colors.rain }} ml={1}>
-                                                                ${technician.hourly_rate}/hr
+                                                                {technician.hourly_rate} TZS/hr
                                                             </Typography>
                                                         )}
                                                     </Box>
@@ -366,36 +330,39 @@ const TechniciansList = () => {
                             </Box>
                         ) : sortedData.length === 0 ? (
                             <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', borderColor: colors.middle }}>
-                                <Typography sx={{ color: colors.rain }}>
-                                    No technicians found
-                                </Typography>
+                                <Typography sx={{ color: colors.rain }}>No technicians found</Typography>
                             </Paper>
                         ) : (
                             sortedData.map((technician) => (
-                                <Card key={technician.id} sx={{
-                                    mb: 2,
-                                    borderRadius: 2,
-                                    border: `1px solid ${colors.middle}`,
-                                }}>
+                                <Card
+                                    key={technician.id}
+                                    sx={{
+                                        mb: 2,
+                                        borderRadius: 2,
+                                        border: `1px solid ${colors.middle}`,
+                                        cursor: 'pointer',
+                                    }}
+                                    onClick={() => handleRowClick(technician.id)}
+                                >
                                     <CardContent sx={{ p: 2 }}>
                                         <Box display="flex" alignItems="center" gap={2} mb={1.5}>
                                             <Avatar
-                                                src={technician.profile_photo || undefined}
+                                                src={technician.profile_photo ? `/storage/${technician.profile_photo}` : undefined}
                                                 sx={{ width: 48, height: 48, bgcolor: colors.sea }}
                                             >
-                                                {technician.name?.charAt(0).toUpperCase() || 'T'}
+                                                {technician.user?.name?.charAt(0).toUpperCase() || 'T'}
                                             </Avatar>
                                             <Box>
                                                 <Box display="flex" alignItems="center" gap={1}>
                                                     <Typography variant="h6" fontSize="1rem" fontWeight="medium" sx={{ color: colors.dark }}>
-                                                        {technician.name || 'Unknown'}
+                                                        {technician.user?.name || 'Unknown'}
                                                     </Typography>
                                                     {technician.verified && (
                                                         <VerifiedIcon sx={{ fontSize: 16, color: colors.salat }} />
                                                     )}
                                                 </Box>
                                                 <Typography variant="caption" sx={{ color: colors.rain }}>
-                                                    {technician.email || ''}
+                                                    {technician.user?.email || ''}
                                                 </Typography>
                                             </Box>
                                         </Box>
@@ -424,7 +391,7 @@ const TechniciansList = () => {
                                             )}
                                             {technician.hourly_rate && (
                                                 <Typography variant="body2" sx={{ color: colors.rain }}>
-                                                    ${technician.hourly_rate}/hr
+                                                    {technician.hourly_rate} TZS/hr
                                                 </Typography>
                                             )}
                                         </Box>
@@ -433,7 +400,7 @@ const TechniciansList = () => {
                                             <>
                                                 <Divider sx={{ my: 1, borderColor: colors.middle }} />
                                                 <Typography variant="caption" sx={{ color: colors.rain }} display="block">
-                                                    Services: {technician.services.join(', ')}
+                                                    Services: {getServiceNames(technician)}
                                                 </Typography>
                                             </>
                                         )}
@@ -462,9 +429,7 @@ const TechniciansList = () => {
                                 fontSize: { xs: '0.75rem', sm: '0.875rem' },
                                 color: colors.black,
                             },
-                            '.MuiTablePagination-actions': {
-                                color: colors.sea,
-                            },
+                            '.MuiTablePagination-actions': { color: colors.sea },
                         }}
                     />
                 </Box>

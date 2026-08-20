@@ -1,24 +1,22 @@
 // src/pages/auth/Login.jsx
 import { useState, useEffect } from 'react';
 import {
-    Container,
+    Box,
     Paper,
     TextField,
     Button,
     Typography,
-    Box,
-    IconButton,
     InputAdornment,
     CircularProgress,
-    useTheme,
+    Checkbox,
+    FormControlLabel,
+    Link,
     alpha,
-    Grid,
+    Stack,
 } from '@mui/material';
 import {
-    Visibility,
-    VisibilityOff,
-    Email as EmailIcon,
-    Lock as LockIcon,
+    PersonOutline,
+    LockOutlined,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from 'context/AuthContext';
@@ -27,17 +25,16 @@ import { showSnackbar } from 'utils/snackbar';
 const logo = '/assets/logo.png';
 
 export default function Login() {
-    const theme = useTheme();
     const navigate = useNavigate();
     const { login, isAuthenticated } = useAuth();
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+    const [rememberMe, setRememberMe] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
-    // Redirect if already authenticated
     useEffect(() => {
         if (isAuthenticated) {
             navigate('/app/dashboard', { replace: true });
@@ -57,8 +54,6 @@ export default function Login() {
         try {
             await login(email, password);
             showSnackbar({ type: 'success', message: 'Welcome back! 👋' });
-
-            // Always redirect to dashboard
             navigate('/app/dashboard', { replace: true });
         } catch (err) {
             setError(err.message || 'Invalid credentials');
@@ -75,342 +70,363 @@ export default function Login() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                bgcolor: '#f5f7fa',
+                background: 'linear-gradient(135deg, #0d5c5f 0%, #0d7377 40%, #14919b 100%)',
                 p: { xs: 2, sm: 3 },
+                position: 'relative',
+                overflow: 'hidden',
             }}
         >
-            <Container maxWidth="lg">
+            {/* ========== MAIN CONTAINER (Card + Mockups) ========== */}
+            <Box
+                sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: { xs: 0, md: 3, lg: 5 },
+                    width: '100%',
+                    maxWidth: 1400,
+                    position: 'relative',
+                }}
+            >
+                {/* ===== LEFT PHONE MOCKUP (larger) ===== */}
+                <Box
+                    sx={{
+                        display: { xs: 'none', md: 'block' },
+                        width: { md: 210, lg: 240 },
+                        flexShrink: 0,
+                        transform: 'rotate(-7deg)',
+                        transition: 'transform 0.35s ease',
+                        '&:hover': {
+                            transform: 'rotate(-2deg) scale(1.04)',
+                        },
+                    }}
+                >
+                    <Box
+                        component="img"
+                        src="/assets/mockups/phone-mockup.png"
+                        alt="NearbyFundi App"
+                        onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src =
+                                'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="240" height="480" viewBox="0 0 240 480"%3E%3Crect width="240" height="480" fill="%231e293b" rx="28"/%3E%3Ctext x="55" y="245" fill="white" font-size="16"%3EMap View%3C/text%3E%3C/svg%3E';
+                        }}
+                        sx={{
+                            width: '100%',
+                            height: 'auto',
+                            borderRadius: 5,
+                            boxShadow: '0 30px 60px rgba(0,0,0,0.45)',
+                            display: 'block',
+                        }}
+                    />
+                </Box>
+
+                {/* ===== MAIN LOGIN CARD ===== */}
                 <Paper
                     elevation={0}
                     sx={{
+                        width: '100%',
+                        maxWidth: 900,
                         borderRadius: 4,
                         overflow: 'hidden',
-                        boxShadow: '0 20px 60px rgba(0,0,0,0.06)',
-                        border: `1px solid ${alpha('#006B5E', 0.06)}`,
-                        bgcolor: '#ffffff',
+                        display: 'flex',
+                        flexDirection: { xs: 'column', md: 'row' },
+                        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.35)',
+                        zIndex: 2,
                     }}
                 >
-                    <Grid container>
-                        {/* Left Side - Phone Mockup & Branding with #006B5E background */}
-                        <Grid
-                            item
-                            xs={12}
-                            md={7}
-                            sx={{
-                                display: { xs: 'none', md: 'flex' },
-                                flexDirection: 'column',
-                                justifyContent: 'center',
-                                alignItems: 'center',
-                                p: 6,
-                                background: 'linear-gradient(135deg, #006B5E 0%, #00897B 50%, #00A896 100%)',
-                                color: 'white',
-                                position: 'relative',
-                                overflow: 'hidden',
-                                minHeight: '700px',
-                            }}
+                    {/* Left Panel inside card */}
+                    <Box
+                        sx={{
+                            flex: { xs: 'none', md: '0 0 42%' },
+                            background: 'linear-gradient(160deg, #0a5c5f 0%, #0d7377 50%, #14919b 100%)',
+                            color: 'white',
+                            position: 'relative',
+                            overflow: 'hidden',
+                            p: { xs: 4, md: 5 },
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'center',
+                            minHeight: { xs: 220, md: 540 },
+                        }}
+                    >
+                        {/* Abstract circles */}
+                        <Box sx={{ position: 'absolute', top: -80, right: -60, width: 280, height: 280, borderRadius: '50%', bgcolor: alpha('#ffffff', 0.08) }} />
+                        <Box sx={{ position: 'absolute', bottom: -40, left: -50, width: 180, height: 180, borderRadius: '50%', bgcolor: alpha('#ffffff', 0.1) }} />
+                        <Box sx={{ position: 'absolute', bottom: 40, right: 30, width: 110, height: 110, borderRadius: '50%', bgcolor: alpha('#ffffff', 0.12) }} />
+                        <Box sx={{ position: 'absolute', top: 60, left: -30, width: 90, height: 90, borderRadius: '50%', bgcolor: alpha('#ffffff', 0.07) }} />
+
+                        <Box sx={{ position: 'relative', zIndex: 1 }}>
+                            {/* Logo */}
+                            <Box
+                                component="img"
+                                src={logo}
+                                alt="NearbyFundi"
+                                onError={(e) => {
+                                    e.target.onerror = null;
+                                    e.target.src =
+                                        'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 24 24"%3E%3Ccircle cx="12" cy="12" r="10" fill="white"/%3E%3Ctext x="5" y="16" font-size="11" fill="%230d7377" font-weight="bold"%3ENF%3C/text%3E%3C/svg%3E';
+                                }}
+                                sx={{
+                                    width: 56,
+                                    height: 56,
+                                    mb: 3,
+                                    filter: 'brightness(0) invert(1)',
+                                }}
+                            />
+
+                            <Typography
+                                variant="h3"
+                                fontWeight={800}
+                                sx={{
+                                    letterSpacing: 1,
+                                    mb: 1,
+                                    fontSize: { xs: '1.9rem', md: '2.5rem' },
+                                }}
+                            >
+                                WELCOME
+                            </Typography>
+                            <Typography
+                                variant="h6"
+                                fontWeight={600}
+                                sx={{ opacity: 0.95, mb: 1.5, letterSpacing: 0.5 }}
+                            >
+                                NearbyFundi
+                            </Typography>
+                            <Typography
+                                variant="body2"
+                                sx={{
+                                    opacity: 0.85,
+                                    maxWidth: 270,
+                                    lineHeight: 1.7,
+                                    display: { xs: 'none', sm: 'block' },
+                                }}
+                            >
+                                Find trusted technicians near you. Fast, reliable and verified local fundis at your fingertips.
+                            </Typography>
+                        </Box>
+                    </Box>
+
+                    {/* Right Form Panel */}
+                    <Box
+                        sx={{
+                            flex: 1,
+                            bgcolor: '#ffffff',
+                            p: { xs: 3.5, sm: 5 },
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'center',
+                        }}
+                    >
+                        <Typography
+                            variant="h4"
+                            fontWeight={700}
+                            sx={{ color: '#1e293b', mb: 0.5, letterSpacing: -0.5 }}
                         >
-                            {/* Decorative elements */}
-                            <Box
-                                sx={{
-                                    position: 'absolute',
-                                    top: -150,
-                                    right: -150,
-                                    width: 400,
-                                    height: 400,
-                                    borderRadius: '50%',
-                                    background: alpha('#ffffff', 0.06),
-                                }}
-                            />
-                            <Box
-                                sx={{
-                                    position: 'absolute',
-                                    bottom: -80,
-                                    left: -80,
-                                    width: 250,
-                                    height: 250,
-                                    borderRadius: '50%',
-                                    background: alpha('#ffffff', 0.05),
-                                }}
-                            />
-                            <Box
-                                sx={{
-                                    position: 'absolute',
-                                    top: '50%',
-                                    left: '50%',
-                                    transform: 'translate(-50%, -50%)',
-                                    width: 600,
-                                    height: 600,
-                                    borderRadius: '50%',
-                                    border: `1px solid ${alpha('#ffffff', 0.05)}`,
-                                }}
-                            />
+                            Sign in
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
+                            Sign in to find trusted technicians near you
+                        </Typography>
 
-                            <Box sx={{ position: 'relative', zIndex: 1, textAlign: 'center', width: '100%' }}>
-                                {/* Logo */}
-                                <Box
-                                    component="img"
-                                    src={logo}
-                                    alt="NearbyFundi"
-                                    onError={(e) => {
-                                        e.target.onerror = null;
-                                        e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 24 24"%3E%3Ctext x="0" y="20" font-size="20" fill="white"%3ENF%3C/text%3E%3C/svg%3E';
-                                    }}
+                        <form onSubmit={handleSubmit}>
+                            <Stack spacing={2.5}>
+                                <TextField
+                                    fullWidth
+                                    placeholder="Email address"
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    required
+                                    autoFocus
                                     sx={{
-                                        width: 80,
-                                        height: 80,
-                                        mb: 3,
-                                        display: 'block',
-                                        mx: 'auto',
-                                        filter: 'brightness(0) invert(1)',
-                                    }}
-                                />
-                                <Typography variant="h2" fontWeight="800" gutterBottom>
-                                    NearbyFundi
-                                </Typography>
-                                <Typography variant="h6" sx={{ opacity: 0.9, mb: 5, maxWidth: 420, mx: 'auto' }}>
-                                    Find trusted technicians near you.
-                                </Typography>
-
-                                {/* Phone Mockup - Main Feature */}
-                                <Box
-                                    sx={{
-                                        display: 'flex',
-                                        justifyContent: 'center',
-                                        alignItems: 'center',
-                                        gap: 4,
-                                        perspective: '1000px',
-                                    }}
-                                >
-                                    <Box
-                                        sx={{
-                                            width: 220,
-                                            height: 'auto',
-                                            borderRadius: 4,
-                                            boxShadow: '0 30px 80px rgba(0,0,0,0.35)',
-                                            transition: 'all 0.4s ease',
-                                            transform: 'rotate(-3deg) scale(1)',
-                                            '&:hover': {
-                                                transform: 'rotate(0deg) scale(1.03)',
-                                                boxShadow: '0 40px 100px rgba(0,0,0,0.45)',
-                                            },
-                                        }}
-                                    >
-                                        <Box
-                                            component="img"
-                                            src="/assets/mockups/phone-mockup-.jpeg"
-                                            alt="NearbyFundi App"
-                                            onError={(e) => {
-                                                e.target.onerror = null;
-                                                e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="220" height="400" viewBox="0 0 220 400"%3E%3Crect width="220" height="400" fill="%23333" rx="20"/%3E%3Ctext x="60" y="200" fill="white" font-size="16"%3EPhone%3C/text%3E%3C/svg%3E';
-                                            }}
-                                            sx={{
-                                                width: '100%',
-                                                height: 'auto',
-                                                borderRadius: 4,
-                                                display: 'block',
-                                            }}
-                                        />
-                                    </Box>
-
-                                    <Box
-                                        sx={{
-                                            width: 220,
-                                            height: 'auto',
-                                            borderRadius: 4,
-                                            boxShadow: '0 30px 80px rgba(0,0,0,0.35)',
-                                            transition: 'all 0.4s ease',
-                                            transform: 'rotate(3deg) scale(1)',
-                                            '&:hover': {
-                                                transform: 'rotate(0deg) scale(1.03)',
-                                                boxShadow: '0 40px 100px rgba(0,0,0,0.45)',
-                                            },
-                                        }}
-                                    >
-                                        <Box
-                                            component="img"
-                                            src="/assets/mockups/phone-mockup-2.jpeg"
-                                            alt="NearbyFundi App"
-                                            onError={(e) => {
-                                                e.target.onerror = null;
-                                                e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="220" height="400" viewBox="0 0 220 400"%3E%3Crect width="220" height="400" fill="%23444" rx="20"/%3E%3Ctext x="60" y="200" fill="white" font-size="16"%3EPhone 2%3C/text%3E%3C/svg%3E';
-                                            }}
-                                            sx={{
-                                                width: '100%',
-                                                height: 'auto',
-                                                borderRadius: 4,
-                                                display: 'block',
-                                            }}
-                                        />
-                                    </Box>
-                                </Box>
-                            </Box>
-                        </Grid>
-
-                        {/* Right Side - Login Form */}
-                        <Grid item xs={12} md={5}>
-                            <Box sx={{ p: { xs: 4, sm: 5, md: 6 }, bgcolor: '#ffffff' }}>
-                                {/* Logo at top */}
-                                <Box
-                                    component="img"
-                                    src={logo}
-                                    alt="NearbyFundi"
-                                    onError={(e) => {
-                                        e.target.onerror = null;
-                                        e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24"%3E%3Ctext x="0" y="20" font-size="20" fill="%23006B5E"%3ENF%3C/text%3E%3C/svg%3E';
-                                    }}
-                                    sx={{
-                                        width: 60,
-                                        height: 60,
-                                        display: 'block',
-                                        mx: 'auto',
-                                        mb: 2,
-                                    }}
-                                />
-
-                                {/* Welcome Back Text */}
-                                <Box textAlign="center" mb={5}>
-                                    <Typography variant="h4" fontWeight="700" gutterBottom sx={{ color: '#1a1a2e' }}>
-                                        Welcome Back
-                                    </Typography>
-                                    <Typography variant="body2" color="text.secondary">
-                                        Sign in to find trusted technicians
-                                    </Typography>
-                                </Box>
-
-                                <form onSubmit={handleSubmit}>
-                                    {/* Email Field */}
-                                    <TextField
-                                        fullWidth
-                                        label="Email Address"
-                                        type="email"
-                                        value={email}
-                                        onChange={(e) => setEmail(e.target.value)}
-                                        required
-                                        autoFocus
-                                        sx={{
-                                            mb: 3,
-                                            '& .MuiInputBase-root': {
-                                                borderRadius: 2,
-                                                py: 0.5,
-                                                bgcolor: '#f8f9fa',
-                                            },
-                                            '& .MuiOutlinedInput-notchedOutline': {
-                                                borderColor: '#e0e0e0',
-                                            },
-                                        }}
-                                        InputProps={{
-                                            startAdornment: (
-                                                <InputAdornment position="start">
-                                                    <EmailIcon color="action" fontSize="small" />
-                                                </InputAdornment>
-                                            ),
-                                        }}
-                                    />
-
-                                    {/* Password Field */}
-                                    <TextField
-                                        fullWidth
-                                        label="Password"
-                                        type={showPassword ? 'text' : 'password'}
-                                        value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
-                                        required
-                                        sx={{
-                                            mb: 1,
-                                            '& .MuiInputBase-root': {
-                                                borderRadius: 2,
-                                                py: 0.5,
-                                                bgcolor: '#f8f9fa',
-                                            },
-                                            '& .MuiOutlinedInput-notchedOutline': {
-                                                borderColor: '#e0e0e0',
-                                            },
-                                        }}
-                                        InputProps={{
-                                            startAdornment: (
-                                                <InputAdornment position="start">
-                                                    <LockIcon color="action" fontSize="small" />
-                                                </InputAdornment>
-                                            ),
-                                            endAdornment: (
-                                                <InputAdornment position="end">
-                                                    <IconButton
-                                                        onClick={() => setShowPassword(!showPassword)}
-                                                        edge="end"
-                                                        size="small"
-                                                    >
-                                                        {showPassword ? <VisibilityOff /> : <Visibility />}
-                                                    </IconButton>
-                                                </InputAdornment>
-                                            ),
-                                        }}
-                                    />
-
-                                    {error && (
-                                        <Typography color="error" variant="body2" sx={{ mt: 1 }}>
-                                            {error}
-                                        </Typography>
-                                    )}
-
-                                    {/* Forgot Password */}
-                                    <Box
-                                        display="flex"
-                                        justifyContent="flex-end"
-                                        sx={{ mb: 4 }}
-                                    >
-                                        <Button
-                                            variant="text"
-                                            size="small"
-                                            onClick={() => navigate('/forgot-password')}
-                                            sx={{
-                                                textTransform: 'none',
-                                                color: 'text.secondary',
-                                                '&:hover': { color: '#006B5E' },
-                                            }}
-                                        >
-                                            Forgot Password?
-                                        </Button>
-                                    </Box>
-
-                                    {/* Sign In Button */}
-                                    <Button
-                                        type="submit"
-                                        variant="contained"
-                                        fullWidth
-                                        disabled={loading}
-                                        sx={{
-                                            py: 1.8,
-                                            fontSize: '1.1rem',
-                                            fontWeight: 600,
+                                        '& .MuiOutlinedInput-root': {
                                             borderRadius: 2,
-                                            textTransform: 'none',
-                                            background: 'linear-gradient(135deg, #006B5E 0%, #00897B 100%)',
-                                            '&:hover': {
-                                                transform: 'translateY(-2px)',
-                                                boxShadow: 4,
-                                                background: 'linear-gradient(135deg, #005245 0%, #006B5E 100%)',
+                                            bgcolor: '#f1f5f9',
+                                            '& fieldset': { border: 'none' },
+                                            '&:hover': { bgcolor: '#e2e8f0' },
+                                            '&.Mui-focused': {
+                                                bgcolor: '#fff',
+                                                boxShadow: `0 0 0 2px ${alpha('#0d7377', 0.3)}`,
                                             },
+                                        },
+                                    }}
+                                    InputProps={{
+                                        startAdornment: (
+                                            <InputAdornment position="start">
+                                                <PersonOutline sx={{ color: '#94a3b8' }} />
+                                            </InputAdornment>
+                                        ),
+                                    }}
+                                />
+
+                                <TextField
+                                    fullWidth
+                                    placeholder="Password"
+                                    type={showPassword ? 'text' : 'password'}
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    required
+                                    sx={{
+                                        '& .MuiOutlinedInput-root': {
+                                            borderRadius: 2,
+                                            bgcolor: '#f1f5f9',
+                                            '& fieldset': { border: 'none' },
+                                            '&:hover': { bgcolor: '#e2e8f0' },
+                                            '&.Mui-focused': {
+                                                bgcolor: '#fff',
+                                                boxShadow: `0 0 0 2px ${alpha('#0d7377', 0.3)}`,
+                                            },
+                                        },
+                                    }}
+                                    InputProps={{
+                                        startAdornment: (
+                                            <InputAdornment position="start">
+                                                <LockOutlined sx={{ color: '#94a3b8' }} />
+                                            </InputAdornment>
+                                        ),
+                                        endAdornment: (
+                                            <InputAdornment position="end">
+                                                <Button
+                                                    size="small"
+                                                    onClick={() => setShowPassword(!showPassword)}
+                                                    sx={{
+                                                        textTransform: 'none',
+                                                        color: '#0d7377',
+                                                        fontWeight: 600,
+                                                        minWidth: 'auto',
+                                                        px: 1,
+                                                    }}
+                                                >
+                                                    {showPassword ? 'HIDE' : 'SHOW'}
+                                                </Button>
+                                            </InputAdornment>
+                                        ),
+                                    }}
+                                />
+
+                                {error && (
+                                    <Typography color="error" variant="body2">
+                                        {error}
+                                    </Typography>
+                                )}
+
+                                <Box display="flex" justifyContent="space-between" alignItems="center">
+                                    <FormControlLabel
+                                        control={
+                                            <Checkbox
+                                                checked={rememberMe}
+                                                onChange={(e) => setRememberMe(e.target.checked)}
+                                                size="small"
+                                                sx={{
+                                                    color: '#94a3b8',
+                                                    '&.Mui-checked': { color: '#0d7377' },
+                                                }}
+                                            />
+                                        }
+                                        label={
+                                            <Typography variant="body2" color="text.secondary">
+                                                Remember me
+                                            </Typography>
+                                        }
+                                    />
+                                    <Link
+                                        component="button"
+                                        type="button"
+                                        underline="hover"
+                                        onClick={() => navigate('/forgot-password')}
+                                        sx={{
+                                            color: '#0d7377',
+                                            fontSize: '0.875rem',
+                                            fontWeight: 500,
                                         }}
                                     >
-                                        {loading ? <CircularProgress size={24} color="inherit" /> : 'Sign In'}
-                                    </Button>
-                                </form>
+                                        Forgot Password?
+                                    </Link>
+                                </Box>
 
-                                {/* Footer */}
-                                <Typography
-                                    variant="caption"
-                                    color="text.secondary"
-                                    align="center"
-                                    display="block"
-                                    sx={{ mt: 5 }}
+                                <Button
+                                    type="submit"
+                                    fullWidth
+                                    disabled={loading}
+                                    sx={{
+                                        mt: 1,
+                                        py: 1.7,
+                                        borderRadius: 2,
+                                        textTransform: 'none',
+                                        fontSize: '1rem',
+                                        fontWeight: 600,
+                                        bgcolor: '#0d5c5f',
+                                        color: '#fff',
+                                        boxShadow: '0 4px 14px rgba(13, 92, 95, 0.35)',
+                                        '&:hover': {
+                                            bgcolor: '#0a4a4d',
+                                            boxShadow: '0 6px 20px rgba(13, 92, 95, 0.45)',
+                                        },
+                                        '&.Mui-disabled': {
+                                            bgcolor: alpha('#0d5c5f', 0.5),
+                                            color: '#fff',
+                                        },
+                                    }}
                                 >
-                                    © {new Date().getFullYear()} NearbyFundi • All Rights Reserved
-                                </Typography>
-                            </Box>
-                        </Grid>
-                    </Grid>
+                                    {loading ? (
+                                        <CircularProgress size={24} color="inherit" />
+                                    ) : (
+                                        'Sign in'
+                                    )}
+                                </Button>
+                            </Stack>
+                        </form>
+
+                        <Typography
+                            variant="body2"
+                            align="center"
+                            sx={{ mt: 4, color: '#64748b' }}
+                        >
+                            Don’t have an account?{' '}
+                            <Link
+                                component="button"
+                                underline="hover"
+                                onClick={() => navigate('/register')}
+                                sx={{ color: '#0d7377', fontWeight: 600 }}
+                            >
+                                Sign Up
+                            </Link>
+                        </Typography>
+                    </Box>
                 </Paper>
-            </Container>
+
+                {/* ===== RIGHT PHONE MOCKUP (larger) ===== */}
+                <Box
+                    sx={{
+                        display: { xs: 'none', md: 'block' },
+                        width: { md: 210, lg: 240 },
+                        flexShrink: 0,
+                        transform: 'rotate(7deg)',
+                        transition: 'transform 0.35s ease',
+                        '&:hover': {
+                            transform: 'rotate(2deg) scale(1.04)',
+                        },
+                    }}
+                >
+                    <Box
+                        component="img"
+                        src="/assets/mockups/phone-mockup1.png"
+                        alt="NearbyFundi App"
+                        onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src =
+                                'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="240" height="480" viewBox="0 0 240 480"%3E%3Crect width="240" height="480" fill="%23334155" rx="28"/%3E%3Ctext x="50" y="245" fill="white" font-size="16"%3EApp Preview%3C/text%3E%3C/svg%3E';
+                        }}
+                        sx={{
+                            width: '100%',
+                            height: 'auto',
+                            borderRadius: 5,
+                            boxShadow: '0 30px 60px rgba(0,0,0,0.45)',
+                            display: 'block',
+                        }}
+                    />
+                </Box>
+            </Box>
         </Box>
     );
 }

@@ -66,7 +66,7 @@ function Layout() {
           <Footer>
             <div>
               <Link color="primary" href="https://imaratech.co.tz/" target="_blank" className={classes.link}>
-                imaratech
+                hanai technologies
               </Link>
             </div>
             <div>

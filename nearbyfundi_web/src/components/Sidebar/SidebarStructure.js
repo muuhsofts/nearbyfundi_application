@@ -20,15 +20,11 @@ import {
   MonitorHeart as MonitoringIcon,
   AccountBalance as FundIcon,
   Subscriptions as SubscriptionsIcon,
+  PrivacyTip as PrivacyPolicyIcon,
 } from '@mui/icons-material';
 
 const addIf = (condition, item) => (condition ? [item] : []);
 
-/**
- * Builds the sidebar structure dynamically based on user permissions.
- * @param {Function} hasPermission - function that checks if a permission exists.
- * @returns {Array} – array of menu items (with nested children).
- */
 export function getSidebarStructure(hasPermission) {
   const structure = [];
 
@@ -42,11 +38,12 @@ export function getSidebarStructure(hasPermission) {
     });
   }
 
-  // ----- Static Pages -----
+  // ----- Static Pages (About, Terms, FAQs, Privacy Policy) -----
   const staticChildren = [
     ...addIf(hasPermission('about.view'), { label: 'About', link: '/app/about' }),
     ...addIf(hasPermission('terms.view'), { label: 'Terms', link: '/app/terms' }),
     ...addIf(hasPermission('faqs.view'), { label: 'FAQs', link: '/app/faqs' }),
+    ...addIf(hasPermission('privacy.view'), { label: 'Privacy Policy', link: '/app/privacy-policy' }), // 🆕 moved here
   ];
   if (staticChildren.length > 0) {
     structure.push({
@@ -150,9 +147,7 @@ export function getSidebarStructure(hasPermission) {
     });
   }
 
-  // =============================================================
-  // 🆕 SUBSCRIPTIONS (Admin)
-  // =============================================================
+  // ----- Subscriptions -----
   const subscriptionChildren = [
     ...addIf(hasPermission('subscriptions.view'), { label: 'All Subscriptions', link: '/app/subscriptions' }),
     ...addIf(hasPermission('subscriptions.manage'), { label: 'Rate Cards', link: '/app/rate-cards' }),
@@ -175,6 +170,7 @@ export function getSidebarStructure(hasPermission) {
     ...addIf(hasPermission('permissions.view'), { label: 'Permissions', link: '/app/permissions' }),
     ...addIf(hasPermission('audit.view'), { label: 'Audit Logs', link: '/app/audit' }),
     ...addIf(hasPermission('otp.view'), { label: 'OTP Management', link: '/app/otp' }),
+    // Privacy Policy removed from Settings – now in Static Pages
     ...addIf(hasPermission('profile.view'), { label: 'Profile', link: '/app/profile' }),
   ];
   if (settingsChildren.length > 0) {
@@ -191,7 +187,7 @@ export function getSidebarStructure(hasPermission) {
 }
 
 // =============================================================
-// STATIC STRUCTURE (used for breadcrumbs / fallback)
+// STATIC STRUCTURE (fallback – used for breadcrumbs / fallback)
 // =============================================================
 const staticStructure = [
   { id: 1, label: 'Dashboard', link: '/app/dashboard', icon: <DashboardIcon /> },
@@ -204,6 +200,7 @@ const staticStructure = [
       { label: 'About', link: '/app/about' },
       { label: 'Terms', link: '/app/terms' },
       { label: 'FAQs', link: '/app/faqs' },
+      { label: 'Privacy Policy', link: '/app/privacy-policy' }, // 🆕 moved here
     ],
   },
   {
@@ -260,9 +257,6 @@ const staticStructure = [
     icon: <ReportIcon />,
     children: [{ label: 'Reports Dashboard', link: '/app/reports' }],
   },
-  // =============================================================
-  // 🆕 SUBSCRIPTIONS (static)
-  // =============================================================
   {
     id: 12,
     label: 'Subscriptions',
@@ -285,6 +279,7 @@ const staticStructure = [
       { label: 'Permissions', link: '/app/permissions' },
       { label: 'Audit Logs', link: '/app/audit' },
       { label: 'OTP Management', link: '/app/otp' },
+      // Privacy Policy removed from Settings
       { label: 'Profile', link: '/app/profile' },
     ],
   },

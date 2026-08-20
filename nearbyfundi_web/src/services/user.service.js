@@ -38,4 +38,6 @@ export const userService = {
     getCustomersDropdown: (params) => api.get('/v8/dropdown/customers', { params }),
     getFundisDropdown: (params) => api.get('/v8/dropdown/fundis', { params }),
     getActiveUsersDropdown: (params) => api.get('/v8/dropdown/active-users', { params }),
+    // ===== TECHNICIAN VERIFICATION =====
+    verifyTechnician: (technicianId) => api.patch(`/v2/technicians/${technicianId}/verify`),
 };
