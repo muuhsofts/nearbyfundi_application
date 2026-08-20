@@ -30,6 +30,9 @@ export const monitoringService = {
     completeRequest: (id, data = {}) =>
         api.post(`/v4/monitoring/requests/${id}/complete`, data),
     getRequestLogs: (id) => api.get(`/v4/monitoring/requests/${id}/logs`),
+
+    // ✅ NEW: live technician tracking (haversine distance / ETA / current GPS position)
+    getRequestTracking: (id) => api.get(`/v4/monitoring/requests/${id}/tracking`),
 };
 
 // ===== UTILITY FUNCTIONS =====

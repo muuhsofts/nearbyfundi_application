@@ -7,6 +7,7 @@ import {
     Build as BuildIcon,
     Person as PersonIcon,
     Assignment as RequestIcon,
+    AttachMoney as MoneyIcon,   // <-- new icon for revenue
 } from '@mui/icons-material';
 import { useDashboardManagement } from 'hooks/useDashboard';
 import { usePermissions } from 'hooks/usePermissions';
@@ -15,17 +16,18 @@ import DashboardFilters from './components/DashboardFilters';
 import {
     StatCard,
     StatusDistribution,
-    ServicesBarChart,
+    // ServicesBarChart,          // removed
     WeeklyRequestsChart,
     UserTrendChart,
     TopTechniciansChart,
-    TechnicianEngagementTable,
+    // TechnicianEngagementTable, // removed
     PostsTrendChart,
     RequestsByAreaChart,
-    TechnicianStatusChart,
+    // TechnicianStatusChart,    // removed
     RecentRequestsList,
     QuickStats,
     UsersByRole,
+    WeeklyRevenueChart,          // new component
 } from './dashboard_components';
 
 const Dashboard = () => {
@@ -102,6 +104,7 @@ const Dashboard = () => {
     const services = analytics?.services || {};
     const requests = analytics?.service_requests || {};
     const statsData = summary || {};
+    const totalRevenue = analytics?.total_revenue || 0;
 
     return (
         <Box sx={{ p: { xs: 2, sm: 3 } }}>
@@ -145,6 +148,13 @@ const Dashboard = () => {
                         </Grid>
                     </Grid>
 
+                    {/* New Revenue Stat Card */}
+                    <Grid container spacing={3} sx={{ mb: 4 }}>
+                        <Grid item xs={12} sm={6} md={3}>
+                            <StatCard title="Total Revenue" value={`Tshs-${totalRevenue.toFixed(2)}`} icon={<MoneyIcon />} color={theme.palette.success.main} />
+                        </Grid>
+                    </Grid>
+
                     <Grid container spacing={3} sx={{ mb: 4 }}>
                         <Grid item xs={12} md={6}>
                             <Paper sx={{ p: 3, borderRadius: 3, height: '100%' }}>
@@ -158,10 +168,11 @@ const Dashboard = () => {
                         </Grid>
                     </Grid>
 
+                    {/* Replacing ServicesBarChart with WeeklyRevenueChart */}
                     <Grid container spacing={3} sx={{ mb: 4 }}>
                         <Grid item xs={12} md={6}>
                             <Paper sx={{ p: 3, borderRadius: 3, height: '100%' }}>
-                                <ServicesBarChart data={services?.top_services} />
+                                <WeeklyRevenueChart data={analytics?.weekly_revenue} />
                             </Paper>
                         </Grid>
                         <Grid item xs={12} md={6}>
@@ -173,41 +184,32 @@ const Dashboard = () => {
 
                     <Grid container spacing={3} sx={{ mb: 4 }}>
                         <Grid item xs={12} md={6}>
-                            <TechnicianEngagementTable data={analytics?.technician_engagement} />
-                        </Grid>
-                        <Grid item xs={12} md={6}>
+                            {/* TechnicianEngagementTable removed */}
                             <Paper sx={{ p: 3, borderRadius: 3, height: '100%' }}>
                                 <PostsTrendChart data={analytics?.posts_trend} />
                             </Paper>
                         </Grid>
+                        <Grid item xs={12} md={6}>
+                            {/*<Paper sx={{ p: 3, borderRadius: 3, height: '100%' }}>*/}
+                            {/*    <RequestsByAreaChart data={analytics?.requests_by_area} />*/}
+                            {/*</Paper>*/}
+                        </Grid>
                     </Grid>
 
                     <Grid container spacing={3} sx={{ mb: 4 }}>
-                        <Grid item xs={12} md={6}>
-                            <Paper sx={{ p: 3, borderRadius: 3, height: '100%' }}>
-                                <RequestsByAreaChart data={analytics?.requests_by_area} />
-                            </Paper>
-                        </Grid>
                         <Grid item xs={12} md={6}>
                             <StatusDistribution data={requests?.by_status || statsData?.requests_by_status || []} title="Request Status Distribution" />
                         </Grid>
+                        {/* TechnicianStatusChart removed */}
                     </Grid>
 
                     <Grid container spacing={3} sx={{ mb: 4 }}>
-                        <Grid item xs={12}>
-                            <TechnicianStatusChart data={analytics?.technician_breakdown} />
-                        </Grid>
+                        {/*<Grid item xs={12}>*/}
+                        {/*    <QuickStats users={users} technicians={technicians} services={services} requests={requests} />*/}
+                        {/*</Grid>*/}
                     </Grid>
 
-                    <Grid container spacing={3} sx={{ mb: 4 }}>
-                        <Grid item xs={12}>
-                            <QuickStats users={users} technicians={technicians} services={services} requests={requests} />
-                        </Grid>
-                    </Grid>
 
-                    {users.by_role && users.by_role.length > 0 && (
-                        <UsersByRole roles={users.by_role} />
-                    )}
 
                     {requests.recent && requests.recent.length > 0 && (
                         <RecentRequestsList requests={requests.recent} />

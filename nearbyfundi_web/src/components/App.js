@@ -1,3 +1,5 @@
+// App.js (only the relevant parts)
+
 import React from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
@@ -30,6 +32,7 @@ import PostsList from "pages/posts/PostsList";
 import RequestsList from "pages/requests/RequestsList";
 import ReportsDashboard from "pages/reports/ReportsDashboard";
 import ServicesList from "pages/services/ServicesList";
+import CategoriesList from "pages/categories/CategoriesList"; // <-- added
 import MonitoringMap from "pages/monitoring/MonitoringMap";
 import PrivacyPolicyPage from "pages/privacy-policy/PrivacyPolicyPage";
 
@@ -50,7 +53,7 @@ import { TermsProvider } from "context/TermsContext";
 import { FaqProvider } from "context/FaqContext";
 import { ServiceProvider } from "context/ServiceContext";
 import { TechnicianProvider } from "context/TechnicianContext";
-import { AdminTechnicianProvider } from "context/AdminTechnicianContext"; // 🆕
+import { AdminTechnicianProvider } from "context/AdminTechnicianContext";
 import { PortfolioProvider } from "context/PortfolioContext";
 import { PostProvider } from "context/PostContext";
 import { CommentProvider } from "context/CommentContext";
@@ -123,6 +126,7 @@ function AppContent() {
                 <Route path="faqs/create" element={<FaqList />} />
                 <Route path="faqs/:id/edit" element={<FaqList />} />
                 <Route path="services" element={<ServicesList />} />
+                <Route path="services/categories" element={<CategoriesList />} /> {/* new route */}
                 <Route path="services/create" element={<ServicesList />} />
                 <Route path="services/:id/edit" element={<ServicesList />} />
                 <Route path="technicians" element={<TechniciansList />} />
@@ -173,7 +177,7 @@ export default function App() {
                                                     <PrivacyPolicyProvider>
                                                         <ServiceProvider>
                                                             <TechnicianProvider>
-                                                                <AdminTechnicianProvider>   {/* 🆕 */}
+                                                                <AdminTechnicianProvider>
                                                                     <PortfolioProvider>
                                                                         <PostProvider>
                                                                             <CommentProvider>
@@ -199,7 +203,7 @@ export default function App() {
                                                                             </CommentProvider>
                                                                         </PostProvider>
                                                                     </PortfolioProvider>
-                                                                </AdminTechnicianProvider>   {/* 🆕 */}
+                                                                </AdminTechnicianProvider>
                                                             </TechnicianProvider>
                                                         </ServiceProvider>
                                                     </PrivacyPolicyProvider>

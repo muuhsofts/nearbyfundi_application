@@ -1,16 +1,4 @@
 // src/pages/monitoring/MonitoringMap.jsx
-// Full-screen map showing TODAY's PENDING (red), ACCEPTED (green), and COMPLETED (blue) service requests.
-// Pending requests from previous days show as orange.
-//
-// NEW IN THIS VERSION:
-// 1. OSRM Route Fetching (router.project-osrm.org): real driving routes are drawn between a
-//    selected request's technician and the customer location, instead of a straight line.
-// 2. Route caching: routes are cached per (request, technician) pair so re-selecting the same
-//    marker or polling refreshes doesn't refetch OSRM unnecessarily.
-// 3. Map Navigation Controls: interactive Zoom (+ / -) and Recenter / Fit All floating buttons.
-// 4. Interactive Focus: selecting a request marker highlights its route and fits the camera
-//    bounds between the technician and the customer; other markers dim slightly for contrast.
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import L from 'leaflet';
@@ -33,9 +21,10 @@ import {
     useMediaQuery,
     useTheme,
     Tooltip,
-    Menu,
+    FormControl,
+    InputLabel,
+    Select,
     MenuItem,
-    SwipeableDrawer,
 } from '@mui/material';
 import {
     Refresh as RefreshIcon,
@@ -46,146 +35,152 @@ import {
     ArrowUpward as ArrowUpwardIcon,
     MyLocation as MyLocationIcon,
     Star as StarIcon,
-    Person as PersonIcon,
-    LocationOn as LocationOnIcon,
-    Phone as PhoneIconSmall,
-    CalendarToday as CalendarIcon,
-    ExpandMore as ExpandMoreIcon,
-    KeyboardArrowRight as KeyboardArrowRightIcon,
-    Add as AddIcon,
-    Remove as RemoveIcon,
     Route as RouteIcon,
     Timer as TimerIcon,
+    Add as AddIcon,
+    Remove as RemoveIcon,
+    Fullscreen as FullscreenIcon,
+    FullscreenExit as FullscreenExitIcon,
 } from '@mui/icons-material';
 import { usePermissions } from 'hooks';
 import { monitoringService } from 'services/monitoring.service';
 import { NotificationBell } from './components/NotificationBell';
 
-// Constants
+// ─── Constants ───────────────────────────────────────────────
 const RED = '#ea4335';
 const GREEN = '#22c55e';
 const BLUE = '#3b82f6';
 const ORANGE = '#f59e0b';
+const PURPLE = '#8b5cf6';
 const DAR_ES_SALAAM = [-6.7924, 39.2083];
 const TIMEOUT_MINUTES = 5;
 const POLL_MS = 15000;
-const DEFAULT_PENDING_DAYS = 3;
+const TRACKING_POLL_MS = 10000;
 const OSRM_BASE_URL = 'https://router.project-osrm.org/route/v1/driving';
 
-// CSS for pulse animation
+// ✅ Include on_the_way and arrived as trackable
+const TRACKABLE_STATUSES = ['accepted', 'on_the_way', 'arrived', 'in_progress'];
+
+// ─── Pulse animations ────────────────────────────────────────
 const pulseStyles = `
-    @keyframes pulseRed {
-        0% { box-shadow: 0 0 0 0 rgba(234, 67, 53, 0.7); }
-        70% { box-shadow: 0 0 0 16px rgba(234, 67, 53, 0); }
-        100% { box-shadow: 0 0 0 0 rgba(234, 67, 53, 0); }
-    }
-    @keyframes pulseGreen {
-        0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5); }
-        70% { box-shadow: 0 0 0 12px rgba(34, 197, 94, 0); }
-        100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
-    }
-    @keyframes pulseOrange {
-        0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.6); }
-        70% { box-shadow: 0 0 0 14px rgba(245, 158, 11, 0); }
-        100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
-    }
-    .leaflet-container { 
-        width: 100% !important; 
-        height: 100% !important; 
-    }
-    .pending-old-marker {
-        animation: pulseOrange 2s infinite !important;
-    }
+  @keyframes pulseRed {
+    0%   { box-shadow: 0 0 0 0 rgba(234, 67, 53, 0.7); }
+    70%  { box-shadow: 0 0 0 16px rgba(234, 67, 53, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(234, 67, 53, 0); }
+  }
+  @keyframes pulseGreen {
+    0%   { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5); }
+    70%  { box-shadow: 0 0 0 12px rgba(34, 197, 94, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+  }
+  @keyframes pulseOrange {
+    0%   { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.6); }
+    70%  { box-shadow: 0 0 0 14px rgba(245, 158, 11, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+  }
+  @keyframes pulsePurple {
+    0%   { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.6); }
+    70%  { box-shadow: 0 0 0 14px rgba(139, 92, 246, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); }
+  }
+  @keyframes pulseLiveDot {
+    0%   { opacity: 1; transform: scale(1); }
+    50%  { opacity: 0.4; transform: scale(1.3); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+  .leaflet-container {
+    width: 100% !important;
+    height: 100% !important;
+  }
 `;
 
-// Helper functions
-const getWhatsAppUrl = (phone) => {
-    if (!phone) return '#';
-    const clean = phone.replace(/\D/g, '');
-    return `https://wa.me/${clean}`;
-};
-
-const getCallUrl = (phone) => {
-    if (!phone) return '#';
-    const clean = phone.replace(/\D/g, '');
-    return `tel:+${clean}`;
-};
-
-const formatPhoneDisplay = (phone) => {
-    if (!phone) return 'No phone';
-    const clean = phone.replace(/\D/g, '');
-    if (clean.length === 10) {
-        return `0${clean.slice(1, 4)} ${clean.slice(4, 7)} ${clean.slice(7)}`;
-    }
-    if (clean.length === 9) {
-        return `0${clean.slice(0, 3)} ${clean.slice(3, 6)} ${clean.slice(6)}`;
-    }
-    return phone;
-};
-
-const getDayLabel = (dayAgo) => {
-    if (dayAgo === 0) return 'Today';
-    if (dayAgo === 1) return 'Yesterday';
-    if (dayAgo === 2) return '2 days ago';
-    if (dayAgo === 3) return '3 days ago';
-    return `${dayAgo} days ago`;
-};
-
-const createIcon = (status, isTimeout, dayAgo, dimmed) => {
+// ─── Marker icon ─────────────────────────────────────────────
+const createMarkerIcon = (status, isTimeout, dayAgo, dimmed, techPhoto = null) => {
     let color = RED;
     let icon = '⚡';
     let size = 30;
-    let className = '';
-    let animation = 'none';
+    let animation = '';
 
     if (status === 'accepted') {
         color = GREEN;
         icon = '✓';
         size = 30;
         animation = 'pulseGreen 2s infinite';
+    } else if (status === 'on_the_way') {
+        color = ORANGE;
+        icon = '🚗';
+        size = 32;
+        animation = 'pulseOrange 2s infinite';
+    } else if (status === 'arrived') {
+        color = PURPLE;
+        icon = '📍';
+        size = 32;
+        animation = 'pulsePurple 2s infinite';
     } else if (status === 'completed') {
         color = BLUE;
         icon = '✅';
         size = 28;
-        animation = 'none';
     } else if (status === 'pending') {
         if (dayAgo > 0) {
             color = ORANGE;
             icon = '⏳';
             size = 32;
-            className = 'pending-old-marker';
             animation = 'pulseOrange 2s infinite';
         } else {
             color = RED;
             icon = isTimeout ? '⚠️' : '⚡';
             size = isTimeout ? 36 : 30;
-            animation = isTimeout ? 'pulseRed 1.8s infinite' : 'none';
+            animation = isTimeout ? 'pulseRed 1.8s infinite' : '';
         }
+    }
+
+    // Large circular photo marker for active statuses
+    if (techPhoto && (status === 'accepted' || status === 'on_the_way' || status === 'arrived' || status === 'in_progress')) {
+        const photoSize = 88;
+        const borderColor = status === 'in_progress' ? '#8b5cf6' : status === 'on_the_way' ? '#f97316' : status === 'arrived' ? '#8b5cf6' : '#22c55e';
+        return L.divIcon({
+            className: 'tech-marker',
+            html: `
+        <div style="
+          width:${photoSize}px;height:${photoSize}px;border-radius:50%;
+          border:5px solid ${borderColor};
+          box-shadow:0 0 0 8px rgba(0,0,0,0.2), 0 6px 18px rgba(0,0,0,0.35);
+          background-image:url(${techPhoto});
+          background-size:cover;
+          background-position:center;
+          ${dimmed ? 'opacity:0.45;' : ''}
+          transition:opacity 0.2s;
+        "></div>
+      `,
+            iconSize: [photoSize, photoSize],
+            iconAnchor: [photoSize / 2, photoSize / 2],
+            popupAnchor: [0, -(photoSize / 2)],
+        });
     }
 
     const markerStyle = {
         backgroundColor: color,
-        width: size + 'px',
-        height: size + 'px',
+        width: `${size}px`,
+        height: `${size}px`,
         borderRadius: '50%',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         border: '3px solid white',
         color: 'white',
-        fontSize: (isTimeout ? '14' : '12') + 'px',
+        fontSize: isTimeout ? '14px' : '12px',
         boxShadow: '0 2px 10px rgba(0,0,0,0.35)',
-        animation: animation,
+        animation,
         opacity: dimmed ? 0.45 : 1,
         transition: 'opacity 0.2s ease',
     };
 
     const styleString = Object.entries(markerStyle)
-        .map(([key, value]) => `${key.replace(/([A-Z])/g, '-$1').toLowerCase()}:${value}`)
+        .map(([k, v]) => `${k.replace(/([A-Z])/g, '-$1').toLowerCase()}:${v}`)
         .join(';');
 
     return L.divIcon({
-        className: `monitoring-marker ${className}`,
+        className: 'monitoring-marker',
         html: `<div style="${styleString}">${icon}</div>`,
         iconSize: [size, size],
         iconAnchor: [size / 2, size / 2],
@@ -193,30 +188,47 @@ const createIcon = (status, isTimeout, dayAgo, dimmed) => {
     });
 };
 
-// Fetches a real driving route between two lat/lng points using the public OSRM demo server.
-// Returns { coords, distanceKm, durationMin } or null if the route can't be resolved.
+// ─── Helpers ─────────────────────────────────────────────────
+const formatPhoneDisplay = (phone) => {
+    if (!phone) return 'No phone';
+    const clean = phone.replace(/\D/g, '');
+    if (clean.length === 10) return `0${clean.slice(1, 4)} ${clean.slice(4, 7)} ${clean.slice(7)}`;
+    if (clean.length === 9) return `0${clean.slice(0, 3)} ${clean.slice(3, 6)} ${clean.slice(6)}`;
+    return phone;
+};
+
+const routeCache = {};
 const fetchOsrmRoute = async (origin, destination) => {
+    const key = `${origin.lat},${origin.lng}|${destination.lat},${destination.lng}`;
+    if (routeCache[key]) return routeCache[key];
+
     try {
         const url = `${OSRM_BASE_URL}/${origin.lng},${origin.lat};${destination.lng},${destination.lat}?overview=full&geometries=geojson`;
         const res = await fetch(url);
-        if (!res.ok) throw new Error(`OSRM request failed with status ${res.status}`);
+        if (!res.ok) throw new Error(`OSRM error ${res.status}`);
         const data = await res.json();
-        if (data.code !== 'Ok' || !data.routes?.length) return null;
+
+        if (data.code !== 'Ok' || !data.routes?.length) {
+            console.warn('OSRM returned no route, falling back to straight line');
+            return null;
+        }
 
         const route = data.routes[0];
         const coords = route.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
-
-        return {
+        const result = {
             coords,
             distanceKm: route.distance / 1000,
             durationMin: route.duration / 60,
         };
+        routeCache[key] = result;
+        return result;
     } catch (err) {
-        console.error('OSRM route fetch error:', err);
+        console.error('OSRM fetch error:', err);
         return null;
     }
 };
 
+// ─── Main Component ──────────────────────────────────────────
 const MonitoringMap = () => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -227,41 +239,41 @@ const MonitoringMap = () => {
 
     const [requests, setRequests] = useState([]);
     const [counts, setCounts] = useState({});
-    const [pendingCounts, setPendingCounts] = useState({});
     const [statusFilter, setStatusFilter] = useState('all');
-    const [pendingDays, setPendingDays] = useState(DEFAULT_PENDING_DAYS);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [selected, setSelected] = useState(null);
     const [callInfo, setCallInfo] = useState(null);
     const [toast, setToast] = useState(null);
     const [showScrollTop, setShowScrollTop] = useState(false);
-    const [anchorEl, setAnchorEl] = useState(null);
-
-    // --- Route state ---
-    const [routeInfo, setRouteInfo] = useState(null); // { coords, distanceKm, durationMin, requestId }
+    const [routeInfo, setRouteInfo] = useState(null);
     const [routeLoading, setRouteLoading] = useState(false);
-    const routeCacheRef = useRef({}); // key: `${requestId}-${technicianId}` -> route result
+    const [isFullscreen, setIsFullscreen] = useState(false);
+
+    const [trackingData, setTrackingData] = useState(null);
+    const [trackingError, setTrackingError] = useState(null);
+    const trackingIntervalRef = useRef(null);
 
     const mapRef = useRef(null);
+    const containerRef = useRef(null);
 
+    // ─── Load map data ─────────────────────────────────────────
     const load = useCallback(async () => {
         setError(null);
         try {
-            const statusParam = statusFilter === 'all' ? 'pending,accepted,completed' : statusFilter;
-            const res = await monitoringService.getMap(statusParam, pendingDays);
+            const statusParam = statusFilter === 'all'
+                ? 'pending,accepted,on_the_way,arrived,in_progress,completed'
+                : statusFilter;
+            const res = await monitoringService.getMap(statusParam);
             const data = res.data?.data || res.data || {};
-
             setRequests(data.requests || []);
             setCounts(data.counts || {});
-            setPendingCounts(data.pending_counts || {});
         } catch (err) {
-            console.error('Load error:', err);
-            setError(err.response?.data?.message || err.message || 'Failed to load map data');
+            setError(err.response?.data?.message || 'Failed to load map data');
         } finally {
             setLoading(false);
         }
-    }, [statusFilter, pendingDays]);
+    }, [statusFilter]);
 
     useEffect(() => {
         setLoading(true);
@@ -271,50 +283,60 @@ const MonitoringMap = () => {
     }, [load]);
 
     useEffect(() => {
-        const handleScroll = () => {
-            setShowScrollTop(window.scrollY > 400);
-        };
+        const handleScroll = () => setShowScrollTop(window.scrollY > 400);
         window.addEventListener('scroll', handleScroll);
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
 
-    const handleScrollToTop = () => {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+    // ─── Fullscreen ────────────────────────────────────────────
+    const toggleFullscreen = () => {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen?.();
+            setIsFullscreen(true);
+        } else {
+            document.exitFullscreen?.();
+            setIsFullscreen(false);
+        }
     };
 
+    // ─── Map helpers ───────────────────────────────────────────
     const fitToBounds = useCallback((points, options = {}) => {
         const map = mapRef.current;
         if (!map || !points || points.length === 0) return;
+
         if (points.length === 1) {
             map.flyTo(points[0], 15, { duration: 0.75 });
             return;
         }
+
         const bounds = L.latLngBounds(points);
-        map.flyToBounds(bounds, { padding: [80, 80], maxZoom: 16, duration: 0.75, ...options });
+        map.flyToBounds(bounds, {
+            padding: [80, 80],
+            maxZoom: 16,
+            duration: 0.75,
+            ...options,
+        });
     }, []);
 
     const handleRecenter = () => {
         const map = mapRef.current;
         if (!map) return;
 
-        const mapRequests = requests.filter(r => r.latitude && r.longitude);
-        if (mapRequests.length > 0) {
-            fitToBounds(mapRequests.map((r) => [r.latitude, r.longitude]), { maxZoom: 15 });
+        const valid = requests.filter((r) => r.latitude && r.longitude);
+        if (valid.length > 0) {
+            fitToBounds(
+                valid.map((r) => [r.latitude, r.longitude]),
+                { maxZoom: 15 }
+            );
         } else {
             map.flyTo(DAR_ES_SALAAM, 13, { duration: 0.75 });
         }
     };
 
-    const handleZoomIn = () => {
-        const map = mapRef.current;
-        if (map) map.zoomIn(1);
-    };
+    const handleZoomIn = () => mapRef.current?.zoomIn(1);
+    const handleZoomOut = () => mapRef.current?.zoomOut(1);
 
-    const handleZoomOut = () => {
-        const map = mapRef.current;
-        if (map) map.zoomOut(1);
-    };
-
+    // ─── Call technician ───────────────────────────────────────
     const handleCallTechnician = async (technicianId, requestId) => {
         if (!canCall) return;
         try {
@@ -323,136 +345,156 @@ const MonitoringMap = () => {
         } catch (err) {
             setToast({
                 severity: 'error',
-                message: err.response?.data?.message || 'Failed to get call details'
+                message: err.response?.data?.message || 'Failed to get call details',
             });
         }
     };
 
-    const handleNotificationClick = (notification) => {
-        if (notification?.viewAll) {
-            load();
-            return;
-        }
-        const request = requests.find(r => r.id === notification?.request_id);
-        if (request) {
-            setSelected(request);
-            if (isMobile && mapRef.current && request.latitude && request.longitude) {
-                setTimeout(() => {
-                    mapRef.current.flyTo([request.latitude, request.longitude], 15, {
-                        duration: 0.75
-                    });
-                }, 300);
-            }
-        }
-    };
-
-    const handleDaysClick = (event) => {
-        setAnchorEl(event.currentTarget);
-    };
-
-    const handleDaysClose = () => {
-        setAnchorEl(null);
-    };
-
-    const handleDaysSelect = (days) => {
-        setPendingDays(days);
-        handleDaysClose();
-        load();
-    };
-
-    // Handle close drawer with escape key
-    useEffect(() => {
-        const handleEscape = (event) => {
-            if (event.key === 'Escape' && selected) {
-                setSelected(null);
-            }
-        };
-        document.addEventListener('keydown', handleEscape);
-        return () => document.removeEventListener('keydown', handleEscape);
-    }, [selected]);
-
-    // --- Route fetching: whenever the selected request changes, fetch (or reuse a cached)
-    // driving route between the assigned technician and the customer location, then fit the
-    // camera to that route. This is the "interactive focus" behavior.
+    // ─── OSRM road route ──────────────────────────────────────
     useEffect(() => {
         let cancelled = false;
 
         const loadRoute = async () => {
-            const hasTechLocation = selected?.technician?.latitude && selected?.technician?.longitude;
-            const hasDestLocation = selected?.latitude && selected?.longitude;
+            const tech = selected?.technician;
+            const hasTechLoc = tech?.latitude && tech?.longitude;
+            const hasCustLoc = selected?.latitude && selected?.longitude;
 
-            if (!selected || !hasTechLocation || !hasDestLocation) {
+            if (!selected || !hasTechLoc || !hasCustLoc) {
                 setRouteInfo(null);
                 setRouteLoading(false);
-                // Still focus the camera on the request itself even without a technician route.
-                if (selected && hasDestLocation) {
+                if (selected && hasCustLoc) {
                     fitToBounds([[selected.latitude, selected.longitude]], { maxZoom: 15 });
                 }
                 return;
             }
 
-            const cacheKey = `${selected.id}-${selected.technician.id}`;
-            const cached = routeCacheRef.current[cacheKey];
-
-            if (cached) {
-                setRouteInfo({ ...cached, requestId: selected.id });
-                fitToBounds(cached.coords);
-                return;
-            }
-
             setRouteLoading(true);
-            const origin = { lat: selected.technician.latitude, lng: selected.technician.longitude };
-            const destination = { lat: selected.latitude, lng: selected.longitude };
-            const result = await fetchOsrmRoute(origin, destination);
 
+            const origin = { lat: tech.latitude, lng: tech.longitude };
+            const destination = { lat: selected.latitude, lng: selected.longitude };
+
+            const result = await fetchOsrmRoute(origin, destination);
             if (cancelled) return;
+
             setRouteLoading(false);
 
             if (result) {
-                routeCacheRef.current[cacheKey] = result;
-                setRouteInfo({ ...result, requestId: selected.id });
+                setRouteInfo({ ...result, requestId: selected.id, isFallback: false });
                 fitToBounds(result.coords);
             } else {
-                setRouteInfo(null);
-                // Fall back to fitting between the two raw points if OSRM couldn't resolve a route.
-                fitToBounds([
+                const fallbackCoords = [
                     [origin.lat, origin.lng],
                     [destination.lat, destination.lng],
-                ]);
+                ];
+                setRouteInfo({
+                    coords: fallbackCoords,
+                    distanceKm: 0,
+                    durationMin: 0,
+                    requestId: selected.id,
+                    isFallback: true,
+                });
+                fitToBounds(fallbackCoords);
+                console.warn('Using fallback straight line route');
             }
         };
 
         loadRoute();
-        return () => { cancelled = true; };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selected?.id]);
+        return () => {
+            cancelled = true;
+        };
+    }, [selected?.id, selected?.technician?.latitude, selected?.technician?.longitude, fitToBounds]);
 
+    // ─── Live technician tracking ─────────────────────────────
+    const fetchTracking = useCallback(async (requestId) => {
+        try {
+            const res = await monitoringService.getRequestTracking(requestId);
+            const data = res.data?.data || res.data;
+            setTrackingData(data);
+            setTrackingError(null);
+
+            const lat = data?.technician_location?.lat;
+            const lng = data?.technician_location?.lng;
+            if (lat && lng) {
+                setRequests((prev) =>
+                    prev.map((r) => {
+                        if (r.id !== requestId || !r.technician) return r;
+                        if (r.technician.latitude === lat && r.technician.longitude === lng) return r;
+                        return {
+                            ...r,
+                            technician: { ...r.technician, latitude: lat, longitude: lng },
+                        };
+                    })
+                );
+
+                setSelected((prev) => {
+                    if (!prev || prev.id !== requestId || !prev.technician) return prev;
+                    if (prev.technician.latitude === lat && prev.technician.longitude === lng) return prev;
+                    return {
+                        ...prev,
+                        technician: { ...prev.technician, latitude: lat, longitude: lng },
+                    };
+                });
+            }
+        } catch (err) {
+            setTrackingError(err.response?.data?.message || 'Failed to fetch tracking data');
+        }
+    }, []);
+
+    useEffect(() => {
+        if (trackingIntervalRef.current) {
+            clearInterval(trackingIntervalRef.current);
+            trackingIntervalRef.current = null;
+        }
+        setTrackingData(null);
+        setTrackingError(null);
+
+        if (!selected?.id || !selected?.technician || !TRACKABLE_STATUSES.includes(selected.status)) {
+            return;
+        }
+
+        fetchTracking(selected.id);
+        trackingIntervalRef.current = setInterval(() => fetchTracking(selected.id), TRACKING_POLL_MS);
+
+        return () => {
+            if (trackingIntervalRef.current) {
+                clearInterval(trackingIntervalRef.current);
+                trackingIntervalRef.current = null;
+            }
+        };
+    }, [selected?.id, selected?.status, fetchTracking]);
+
+    // ─── Permission guard ──────────────────────────────────────
     if (!canView) {
         return (
             <Box p={3}>
-                <Alert severity="error">
-                    You do not have permission to view the monitoring map.
-                </Alert>
+                <Alert severity="error">You do not have permission to view the monitoring map.</Alert>
             </Box>
         );
     }
 
-    const center = requests.length > 0 && requests[0].latitude && requests[0].longitude
-        ? [requests[0].latitude, requests[0].longitude]
-        : DAR_ES_SALAAM;
+    const center =
+        requests.length > 0 && requests[0].latitude && requests[0].longitude
+            ? [requests[0].latitude, requests[0].longitude]
+            : DAR_ES_SALAAM;
 
-    const routeColor = selected?.status === 'accepted' ? GREEN
-        : selected?.status === 'completed' ? BLUE
-            : RED;
+    const routeColor =
+        selected?.status === 'accepted' || selected?.status === 'on_the_way' || selected?.status === 'arrived'
+            ? GREEN
+            : selected?.status === 'completed'
+                ? BLUE
+                : RED;
 
     return (
-        <Box sx={{
-            position: 'relative',
-            width: '100%',
-            height: '100vh',
-            overflow: 'hidden',
-            bgcolor: '#f5f5f5',
-        }}>
+        <Box
+            ref={containerRef}
+            sx={{
+                position: 'relative',
+                width: '100%',
+                height: '100vh',
+                overflow: 'hidden',
+                bgcolor: '#f5f5f5',
+            }}
+        >
             <style>{pulseStyles}</style>
 
             {loading && requests.length === 0 ? (
@@ -472,69 +514,76 @@ const MonitoringMap = () => {
                         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                     />
 
-                    {routeInfo?.coords?.length > 0 && (
+                    {/* Route line */}
+                    {routeInfo?.coords?.length > 1 && (
                         <Polyline
                             positions={routeInfo.coords}
                             pathOptions={{
                                 color: routeColor,
                                 weight: 5,
-                                opacity: 0.8,
-                                dashArray: selected?.status === 'pending' ? '10, 8' : null,
+                                opacity: 0.85,
+                                dashArray: routeInfo.isFallback
+                                    ? null
+                                    : selected?.status === 'pending'
+                                        ? '10, 8'
+                                        : null,
                                 lineCap: 'round',
                             }}
                         />
                     )}
 
+                    {/* Request markers */}
                     {requests.map((r) => {
                         if (!r.latitude || !r.longitude) return null;
-                        const dayAgo = r.status === 'pending' ? (r.day_ago || 0) : 0;
+
                         const dimmed = !!selected && selected.id !== r.id;
+                        const dayAgo = r.status === 'pending' ? r.day_ago || 0 : 0;
+                        const icon = createMarkerIcon(
+                            r.status,
+                            r.is_timeout,
+                            dayAgo,
+                            dimmed,
+                            r.technician?.profile_photo
+                        );
+
                         return (
                             <Marker
                                 key={r.id}
                                 position={[r.latitude, r.longitude]}
-                                icon={createIcon(r.status, r.is_timeout, dayAgo, dimmed)}
+                                icon={icon}
                                 eventHandlers={{ click: () => setSelected(r) }}
                             >
                                 <Popup>
-                                    <Box sx={{ minWidth: 200 }}>
+                                    <Box sx={{ minWidth: 220 }}>
                                         <Typography variant="subtitle2" fontWeight="bold">
                                             {r.customer?.name || 'Unknown Customer'}
                                         </Typography>
-                                        <Typography variant="caption" color="text.secondary" display="block">
+                                        <Typography variant="caption" display="block" color="text.secondary">
                                             {r.service?.name || 'Service'} · {r.status}
                                             {r.is_timeout ? ` · ⚠️ ${r.minutes_elapsed}m` : ''}
-                                            {r.status === 'pending' && dayAgo > 0 ? ` · 📅 ${getDayLabel(dayAgo)}` : ''}
                                         </Typography>
-                                        {r.technician ? (
-                                            <Box sx={{ mt: 0.5, pt: 0.5, borderTop: '1px solid #e5e7eb' }}>
-                                                <Box display="flex" alignItems="center" gap={0.5}>
-                                                    <PersonIcon sx={{ fontSize: 12, color: '#6b7280' }} />
-                                                    <Typography variant="caption" fontWeight="medium">
-                                                        {r.technician.name || 'Unknown Technician'}
-                                                    </Typography>
+
+                                        {r.technician && (
+                                            <Box sx={{ mt: 0.75, pt: 0.75, borderTop: '1px solid #e5e7eb' }}>
+                                                <Box display="flex" alignItems="center" gap={1}>
+                                                    <Avatar
+                                                        src={r.technician.profile_photo}
+                                                        sx={{
+                                                            width: 52,
+                                                            height: 52,
+                                                            border: '2px solid #22c55e',
+                                                        }}
+                                                    />
+                                                    <Box>
+                                                        <Typography variant="caption" fontWeight="600" display="block">
+                                                            {r.technician.name}
+                                                        </Typography>
+                                                        <Typography variant="caption" color="text.secondary">
+                                                            {r.technician.area || 'Technician'}
+                                                        </Typography>
+                                                    </Box>
                                                 </Box>
-                                                {r.technician.area && (
-                                                    <Box display="flex" alignItems="center" gap={0.5}>
-                                                        <LocationOnIcon sx={{ fontSize: 12, color: '#6b7280' }} />
-                                                        <Typography variant="caption" color="text.secondary">
-                                                            {r.technician.area}
-                                                        </Typography>
-                                                    </Box>
-                                                )}
-                                                {r.technician.phone && (
-                                                    <Box display="flex" alignItems="center" gap={0.5}>
-                                                        <PhoneIconSmall sx={{ fontSize: 12, color: '#6b7280' }} />
-                                                        <Typography variant="caption" color="text.secondary">
-                                                            {formatPhoneDisplay(r.technician.phone)}
-                                                        </Typography>
-                                                    </Box>
-                                                )}
                                             </Box>
-                                        ) : (
-                                            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                                                No technician assigned
-                                            </Typography>
                                         )}
                                     </Box>
                                 </Popup>
@@ -544,7 +593,7 @@ const MonitoringMap = () => {
                 </MapContainer>
             )}
 
-            {/* Top Overlay */}
+            {/* ─── Top Overlay ─────────────────────────────────────── */}
             <Paper
                 elevation={4}
                 sx={{
@@ -557,165 +606,89 @@ const MonitoringMap = () => {
                     borderRadius: 2,
                     bgcolor: 'rgba(255,255,255,0.97)',
                     maxHeight: { xs: 'auto', sm: 140 },
-                    overflow: 'auto',
                 }}
             >
-                <Box display="flex" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1}>
+                <Box
+                    display="flex"
+                    alignItems="center"
+                    justifyContent="space-between"
+                    flexWrap="wrap"
+                    gap={1}
+                >
                     <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
-                        <Typography variant="subtitle1" fontWeight="bold" sx={{ fontSize: { xs: '0.9rem', sm: '1.1rem' } }}>
+                        <Typography variant="subtitle1" fontWeight="bold">
                             🗺️ Monitoring
                         </Typography>
+
+                        <FormControl size="small" sx={{ minWidth: 120 }}>
+                            <InputLabel>Filter</InputLabel>
+                            <Select
+                                value={statusFilter}
+                                label="Filter"
+                                onChange={(e) => setStatusFilter(e.target.value)}
+                            >
+                                <MenuItem value="all">All</MenuItem>
+                                <MenuItem value="pending">🔴 Pending</MenuItem>
+                                <MenuItem value="accepted">🟢 Accepted</MenuItem>
+                                <MenuItem value="on_the_way">🟠 On the Way</MenuItem>
+                                <MenuItem value="arrived">🟣 Arrived</MenuItem>
+                                <MenuItem value="in_progress">🟣 In Progress</MenuItem>
+                                <MenuItem value="completed">🔵 Completed</MenuItem>
+                            </Select>
+                        </FormControl>
+
+                        <Chip label={`Total: ${counts.total || 0}`} size="small" />
                         <Chip
-                            label="All"
+                            label={`Pending: ${counts.pending || 0}`}
                             size="small"
-                            color={statusFilter === 'all' ? 'primary' : 'default'}
-                            onClick={() => setStatusFilter('all')}
+                            sx={{ bgcolor: '#fee2e2', color: '#991b1b' }}
                         />
                         <Chip
-                            label={`🔴 Pending (${counts.pending || 0})`}
+                            label={`Accepted: ${counts.accepted || 0}`}
                             size="small"
-                            color={statusFilter === 'pending' ? 'primary' : 'default'}
-                            onClick={() => setStatusFilter('pending')}
+                            sx={{ bgcolor: '#d1fae5', color: '#065f46' }}
                         />
                         <Chip
-                            label={`🟢 Accepted (${counts.accepted || 0})`}
+                            label={`On Way: ${counts.on_the_way || 0}`}
                             size="small"
-                            color={statusFilter === 'accepted' ? 'primary' : 'default'}
-                            onClick={() => setStatusFilter('accepted')}
+                            sx={{ bgcolor: '#ffedd5', color: '#9a3412' }}
                         />
                         <Chip
-                            label={`🔵 Completed (${counts.completed || 0})`}
+                            label={`Arrived: ${counts.arrived || 0}`}
                             size="small"
-                            color={statusFilter === 'completed' ? 'primary' : 'default'}
-                            onClick={() => setStatusFilter('completed')}
+                            sx={{ bgcolor: '#ede9fe', color: '#4c1d95' }}
                         />
-                        {counts.timeout > 0 && (
-                            <Chip
-                                icon={<WarningIcon sx={{ fontSize: 16 }} />}
-                                label={`${counts.timeout} waiting 5+ min`}
-                                size="small"
-                                sx={{ bgcolor: '#fee2e2', color: '#991b1b', fontWeight: 'bold' }}
-                            />
-                        )}
+                        <Chip
+                            label={`Completed: ${counts.completed || 0}`}
+                            size="small"
+                            sx={{ bgcolor: '#dbeafe', color: '#1e40af' }}
+                        />
                     </Box>
+
                     <Box display="flex" alignItems="center" gap={1}>
-                        <NotificationBell onNotificationClick={handleNotificationClick} />
+                        <Tooltip title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}>
+                            <IconButton size="small" onClick={toggleFullscreen} sx={{ color: '#1a73e8' }}>
+                                {isFullscreen ? <FullscreenExitIcon /> : <FullscreenIcon />}
+                            </IconButton>
+                        </Tooltip>
+                        <NotificationBell onNotificationClick={() => {}} />
                         <IconButton size="small" onClick={load} disabled={loading}>
                             <RefreshIcon fontSize="small" />
                         </IconButton>
                     </Box>
                 </Box>
-
-                {/* Stats Summary */}
-                <Box display="flex" alignItems="center" gap={1.5} flexWrap="wrap" sx={{ mt: 0.5 }}>
-                    <Typography variant="caption" color="text.secondary">
-                        📅 {new Date().toLocaleDateString('en-US', {
-                        weekday: 'short',
-                        month: 'short',
-                        day: 'numeric'
-                    })}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                        Total: {counts.total || 0}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: '#f59e0b' }}>
-                        Pending: {counts.pending || 0}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: '#10b981' }}>
-                        Accepted: {counts.accepted || 0}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: '#3b82f6' }}>
-                        Completed: {counts.completed || 0}
-                    </Typography>
-                    {counts.timeout > 0 && (
-                        <Typography variant="caption" sx={{ color: '#ef4444' }}>
-                            Timeout: {counts.timeout}
-                        </Typography>
-                    )}
-
-                    <Box sx={{ ml: 'auto' }}>
-                        <Button
-                            size="small"
-                            variant="outlined"
-                            endIcon={<ExpandMoreIcon />}
-                            onClick={handleDaysClick}
-                            sx={{
-                                fontSize: '0.7rem',
-                                textTransform: 'none',
-                                borderColor: '#d1d5db',
-                            }}
-                        >
-                            <CalendarIcon sx={{ fontSize: 14, mr: 0.5 }} />
-                            {pendingDays === 0 ? 'Today' : `${pendingDays}d`}
-                        </Button>
-                        <Menu
-                            anchorEl={anchorEl}
-                            open={Boolean(anchorEl)}
-                            onClose={handleDaysClose}
-                        >
-                            <MenuItem onClick={() => handleDaysSelect(0)}>Today only</MenuItem>
-                            <MenuItem onClick={() => handleDaysSelect(1)}>Last 1 day</MenuItem>
-                            <MenuItem onClick={() => handleDaysSelect(3)}>Last 3 days</MenuItem>
-                            <MenuItem onClick={() => handleDaysSelect(5)}>Last 5 days</MenuItem>
-                            <MenuItem onClick={() => handleDaysSelect(7)}>Last 7 days</MenuItem>
-                        </Menu>
-                    </Box>
-                </Box>
-
-                {/* Pending counts by day */}
-                {pendingCounts.total_pending > 0 && (
-                    <Box display="flex" alignItems="center" gap={1} flexWrap="wrap" sx={{ mt: 0.5 }}>
-                        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 'bold' }}>
-                            Pending:
-                        </Typography>
-                        {pendingCounts.today > 0 && (
-                            <Chip
-                                label={`Today: ${pendingCounts.today}`}
-                                size="small"
-                                sx={{ height: 22, fontSize: '0.6rem', bgcolor: '#fee2e2', color: '#991b1b', fontWeight: '600' }}
-                            />
-                        )}
-                        {pendingCounts.day_1?.count > 0 && (
-                            <Chip
-                                label={`${pendingCounts.day_1.label}: ${pendingCounts.day_1.count}`}
-                                size="small"
-                                sx={{ height: 22, fontSize: '0.6rem', bgcolor: '#fef3c7', color: '#92400e', fontWeight: '600' }}
-                            />
-                        )}
-                        {pendingCounts.day_2?.count > 0 && (
-                            <Chip
-                                label={`${pendingCounts.day_2.label}: ${pendingCounts.day_2.count}`}
-                                size="small"
-                                sx={{ height: 22, fontSize: '0.6rem', bgcolor: '#fef3c7', color: '#92400e', fontWeight: '600' }}
-                            />
-                        )}
-                        {pendingCounts.day_3?.count > 0 && (
-                            <Chip
-                                label={`${pendingCounts.day_3.label}: ${pendingCounts.day_3.count}`}
-                                size="small"
-                                sx={{ height: 22, fontSize: '0.6rem', bgcolor: '#fef3c7', color: '#92400e', fontWeight: '600' }}
-                            />
-                        )}
-                        {pendingCounts.total_pending > 0 && (
-                            <Chip
-                                label={`📋 Requests: ${pendingCounts.total_pending}`}
-                                size="small"
-                                sx={{ height: 22, fontSize: '0.65rem', bgcolor: '#e5e7eb', color: '#374151', fontWeight: '700' }}
-                            />
-                        )}
-                    </Box>
-                )}
             </Paper>
 
+            {/* Error */}
             {error && (
                 <Alert
                     severity="error"
                     sx={{
                         position: 'absolute',
-                        top: { xs: 140, sm: 160 },
+                        top: { xs: 130, sm: 150 },
                         left: 16,
                         right: 16,
-                        zIndex: 1000
+                        zIndex: 1000,
                     }}
                     action={
                         <Button color="inherit" size="small" onClick={load}>
@@ -727,8 +700,8 @@ const MonitoringMap = () => {
                 </Alert>
             )}
 
-            {/* Route info badge (shown while a route is loading or resolved) */}
-            {selected && (routeLoading || routeInfo) && (
+            {/* Route + live tracking info badge */}
+            {selected && (routeLoading || routeInfo || trackingData || trackingError) && (
                 <Paper
                     elevation={3}
                     sx={{
@@ -742,31 +715,121 @@ const MonitoringMap = () => {
                         borderRadius: 2,
                         bgcolor: 'rgba(255,255,255,0.97)',
                         display: 'flex',
-                        alignItems: 'center',
-                        gap: 1,
+                        flexDirection: 'column',
+                        gap: 0.5,
+                        maxWidth: 260,
                     }}
                 >
-                    {routeLoading ? (
-                        <>
-                            <CircularProgress size={14} />
-                            <Typography variant="caption" color="text.secondary">
-                                Calculating route…
+                    {/* OSRM road route */}
+                    <Box display="flex" alignItems="center" gap={1}>
+                        {routeLoading ? (
+                            <>
+                                <CircularProgress size={14} />
+                                <Typography variant="caption">Calculating route…</Typography>
+                            </>
+                        ) : routeInfo ? (
+                            <>
+                                <RouteIcon sx={{ fontSize: 16, color: routeColor }} />
+                                {!routeInfo.isFallback ? (
+                                    <>
+                                        <Typography variant="caption" fontWeight="600">
+                                            {routeInfo.distanceKm.toFixed(1)} km (road)
+                                        </Typography>
+                                        <TimerIcon sx={{ fontSize: 14, color: '#6b7280' }} />
+                                        <Typography variant="caption" color="text.secondary">
+                                            {Math.round(routeInfo.durationMin)} min
+                                        </Typography>
+                                    </>
+                                ) : (
+                                    <Typography variant="caption" color="text.secondary">
+                                        ⚠️ Direct line
+                                    </Typography>
+                                )}
+                            </>
+                        ) : null}
+                    </Box>
+
+                    {/* Live tracking */}
+                    {trackingData?.distance_km != null && (
+                        <Box display="flex" alignItems="center" gap={1}>
+                            <Box
+                                sx={{
+                                    width: 8,
+                                    height: 8,
+                                    borderRadius: '50%',
+                                    bgcolor: '#22c55e',
+                                    animation: 'pulseLiveDot 1.6s infinite',
+                                }}
+                            />
+                            <Typography variant="caption" fontWeight="600" sx={{ color: '#16a34a' }}>
+                                {trackingData.distance_km} km live
                             </Typography>
-                        </>
-                    ) : (
-                        <>
-                            <RouteIcon sx={{ fontSize: 16, color: routeColor }} />
-                            <Typography variant="caption" fontWeight="600">
-                                {routeInfo.distanceKm.toFixed(1)} km
-                            </Typography>
-                            <TimerIcon sx={{ fontSize: 14, color: '#6b7280', ml: 0.5 }} />
-                            <Typography variant="caption" color="text.secondary">
-                                {Math.round(routeInfo.durationMin)} min
-                            </Typography>
-                        </>
+                            {trackingData.eta_minutes != null && (
+                                <Typography variant="caption" color="text.secondary">
+                                    · ETA {trackingData.eta_minutes} min
+                                </Typography>
+                            )}
+                        </Box>
+                    )}
+                    {trackingError && (
+                        <Typography variant="caption" color="error">
+                            ⚠️ {trackingError}
+                        </Typography>
                     )}
                 </Paper>
             )}
+
+            {/* ─── Zoom & Recenter — now centered on the right side ─── */}
+            <Box
+                sx={{
+                    position: 'absolute',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    right: { xs: 16, sm: 20 },
+                    zIndex: 1000,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 1,
+                }}
+            >
+                <Paper elevation={3} sx={{ borderRadius: 2, overflow: 'hidden' }}>
+                    <Tooltip title="Zoom in">
+                        <IconButton size="small" onClick={handleZoomIn} sx={{ borderRadius: 0, py: 1 }}>
+                            <AddIcon />
+                        </IconButton>
+                    </Tooltip>
+                    <Divider />
+                    <Tooltip title="Zoom out">
+                        <IconButton size="small" onClick={handleZoomOut} sx={{ borderRadius: 0, py: 1 }}>
+                            <RemoveIcon />
+                        </IconButton>
+                    </Tooltip>
+                </Paper>
+
+                <Tooltip title="Recenter / Fit All">
+                    <Fab
+                        size="small"
+                        onClick={handleRecenter}
+                        sx={{
+                            bgcolor: '#fff',
+                            color: '#1a73e8',
+                            boxShadow: '0 4px 14px rgba(0,0,0,0.25)',
+                        }}
+                    >
+                        <MyLocationIcon />
+                    </Fab>
+                </Tooltip>
+
+                <Zoom in={showScrollTop}>
+                    <Fab
+                        size="small"
+                        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                        sx={{ bgcolor: '#1a73e8', color: '#fff' }}
+                    >
+                        <ArrowUpwardIcon />
+                    </Fab>
+                </Zoom>
+            </Box>
 
             {/* Legend */}
             {!isMobile && (
@@ -778,188 +841,99 @@ const MonitoringMap = () => {
                         left: 20,
                         zIndex: 1000,
                         p: 1.5,
-                        borderRadius: 2,
                         bgcolor: 'rgba(255,255,255,0.95)',
+                        borderRadius: 2,
                     }}
                 >
                     <Box display="flex" alignItems="center" gap={1.5}>
                         <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: RED }} />
-                        <Typography variant="caption">Pending (Today)</Typography>
+                        <Typography variant="caption">Pending</Typography>
                     </Box>
-                    <Box display="flex" alignItems="center" gap={1.5} sx={{ mt: 0.5 }}>
-                        <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: ORANGE }} />
-                        <Typography variant="caption">Pending (Older)</Typography>
-                    </Box>
-                    <Box display="flex" alignItems="center" gap={1.5} sx={{ mt: 0.5 }}>
+                    <Box display="flex" alignItems="center" gap={1.5}>
                         <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: GREEN }} />
                         <Typography variant="caption">Accepted</Typography>
                     </Box>
-                    <Box display="flex" alignItems="center" gap={1.5} sx={{ mt: 0.5 }}>
+                    <Box display="flex" alignItems="center" gap={1.5}>
+                        <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: ORANGE }} />
+                        <Typography variant="caption">On the Way</Typography>
+                    </Box>
+                    <Box display="flex" alignItems="center" gap={1.5}>
+                        <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: PURPLE }} />
+                        <Typography variant="caption">Arrived</Typography>
+                    </Box>
+                    <Box display="flex" alignItems="center" gap={1.5}>
                         <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: BLUE }} />
                         <Typography variant="caption">Completed</Typography>
                     </Box>
-                    <Box display="flex" alignItems="center" gap={1.5} sx={{ mt: 0.5 }}>
+                    <Box display="flex" alignItems="center" gap={1.5}>
                         <Typography variant="caption">⚠️</Typography>
                         <Typography variant="caption">Waiting 5+ min</Typography>
                     </Box>
-                    <Box display="flex" alignItems="center" gap={1.5} sx={{ mt: 0.5 }}>
+                    <Box display="flex" alignItems="center" gap={1.5}>
                         <Box sx={{ width: 16, height: 3, bgcolor: '#9ca3af', borderRadius: 1 }} />
-                        <Typography variant="caption">Driving route</Typography>
+                        <Typography variant="caption">Route</Typography>
+                    </Box>
+                    <Box display="flex" alignItems="center" gap={1.5}>
+                        <Box
+                            sx={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: '50%',
+                                bgcolor: '#22c55e',
+                                animation: 'pulseLiveDot 1.6s infinite',
+                            }}
+                        />
+                        <Typography variant="caption">Live GPS</Typography>
                     </Box>
                 </Paper>
             )}
 
-            {/* Map Navigation Controls: Zoom, Recenter, Scroll to Top */}
-            <Box
-                sx={{
-                    position: 'absolute',
-                    bottom: { xs: 80, sm: 20 },
-                    right: { xs: 16, sm: 20 },
-                    zIndex: 1000,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 1,
-                }}
-            >
-                <Paper
-                    elevation={3}
-                    sx={{
-                        borderRadius: 2,
-                        overflow: 'hidden',
-                        display: 'flex',
-                        flexDirection: 'column',
-                    }}
-                >
-                    <Tooltip title="Zoom in" placement="left">
-                        <IconButton
-                            size="small"
-                            onClick={handleZoomIn}
-                            sx={{ borderRadius: 0, py: 1 }}
-                        >
-                            <AddIcon fontSize="small" />
-                        </IconButton>
-                    </Tooltip>
-                    <Divider />
-                    <Tooltip title="Zoom out" placement="left">
-                        <IconButton
-                            size="small"
-                            onClick={handleZoomOut}
-                            sx={{ borderRadius: 0, py: 1 }}
-                        >
-                            <RemoveIcon fontSize="small" />
-                        </IconButton>
-                    </Tooltip>
-                </Paper>
-
-                <Tooltip title="Recenter / fit all" placement="left">
-                    <Fab
-                        size="small"
-                        onClick={handleRecenter}
-                        sx={{
-                            bgcolor: '#ffffff',
-                            color: '#1a73e8',
-                            boxShadow: '0 4px 14px rgba(0,0,0,0.25)',
-                            '&:hover': { bgcolor: '#f1f5ff' },
-                        }}
-                    >
-                        <MyLocationIcon />
-                    </Fab>
-                </Tooltip>
-
-                <Zoom in={showScrollTop}>
-                    <Fab
-                        size="small"
-                        onClick={handleScrollToTop}
-                        sx={{
-                            bgcolor: '#1a73e8',
-                            color: 'white',
-                            boxShadow: '0 4px 14px rgba(0,0,0,0.25)',
-                            '&:hover': { bgcolor: '#1557b0' },
-                        }}
-                    >
-                        <ArrowUpwardIcon />
-                    </Fab>
-                </Zoom>
-            </Box>
-
-            {/* Detail Panel - Side Drawer with Close Button */}
+            {/* ─── Detail Drawer ───────────────────────────────────── */}
             <Drawer
                 anchor="right"
                 open={!!selected}
                 onClose={() => setSelected(null)}
-                ModalProps={{
-                    keepMounted: true,
-                }}
                 PaperProps={{
                     sx: {
-                        width: { xs: '100vw', sm: 400, md: 420 },
-                        maxWidth: { xs: '100vw', sm: 400, md: 420 },
+                        width: { xs: '100vw', sm: 480 },
+                        maxWidth: { xs: '100vw', sm: 520 },
                         borderRadius: { xs: 0, sm: '16px 0 0 16px' },
                         boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
                         overflow: 'hidden',
-                    }
+                    },
                 }}
             >
                 {selected && (
-                    <Box sx={{
-                        p: { xs: 2, sm: 3 },
-                        overflowY: 'auto',
-                        height: '100%',
-                        display: 'flex',
-                        flexDirection: 'column',
-                    }}>
-                        {/* Header with Close Button - Sticky */}
-                        <Box sx={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            mb: 2,
-                            position: 'sticky',
-                            top: 0,
-                            bgcolor: 'white',
-                            zIndex: 10,
-                            py: 1,
-                            borderBottom: '1px solid #f3f4f6',
-                        }}>
-                            <Box display="flex" alignItems="center" gap={1}>
-                                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
-                                    {selected.customer?.name || 'Customer'}
-                                </Typography>
-                            </Box>
-                            <IconButton
-                                onClick={() => setSelected(null)}
-                                sx={{
-                                    bgcolor: '#f3f4f6',
-                                    '&:hover': {
-                                        bgcolor: '#e5e7eb',
-                                        transform: 'scale(1.05)',
-                                    },
-                                    width: { xs: 32, sm: 36 },
-                                    height: { xs: 32, sm: 36 },
-                                    transition: 'all 0.2s ease',
-                                    borderRadius: '50%',
-                                }}
-                                aria-label="Close"
-                            >
-                                <CloseIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />
+                    <Box sx={{ p: 3, overflowY: 'auto', height: '100%' }}>
+                        {/* Header */}
+                        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                            <Typography variant="h6">Request #{selected.id}</Typography>
+                            <IconButton onClick={() => setSelected(null)}>
+                                <CloseIcon />
                             </IconButton>
                         </Box>
 
-                        {/* Service & Status */}
-                        <Box display="flex" alignItems="center" gap={1} flexWrap="wrap" mb={2}>
+                        {/* Status chips */}
+                        <Box display="flex" gap={1} flexWrap="wrap" mb={2}>
+                            <Chip label={selected.service?.name || 'Service'} size="small" variant="outlined" />
                             <Chip
-                                label={selected.service?.name || 'Service'}
+                                label={selected.status}
                                 size="small"
-                                variant="outlined"
-                                sx={{ fontSize: '0.75rem' }}
-                            />
-                            <Chip
-                                label={selected.status === 'accepted' ? '✅ Accepted' : selected.status === 'completed' ? '✅ Completed' : '🔴 Pending'}
                                 sx={{
-                                    bgcolor: selected.status === 'accepted' ? '#d1fae5' : selected.status === 'completed' ? '#dbeafe' : '#fee2e2',
-                                    color: selected.status === 'accepted' ? '#065f46' : selected.status === 'completed' ? '#1e40af' : '#991b1b',
-                                    fontSize: '0.7rem',
-                                    height: 24,
+                                    bgcolor:
+                                        selected.status === 'accepted' ? '#d1fae5'
+                                            : selected.status === 'on_the_way' ? '#ffedd5'
+                                                : selected.status === 'arrived' ? '#ede9fe'
+                                                    : selected.status === 'completed' ? '#dbeafe'
+                                                        : selected.status === 'pending' ? '#fee2e2'
+                                                            : '#f3f4f6',
+                                    color:
+                                        selected.status === 'accepted' ? '#065f46'
+                                            : selected.status === 'on_the_way' ? '#9a3412'
+                                                : selected.status === 'arrived' ? '#4c1d95'
+                                                    : selected.status === 'completed' ? '#1e40af'
+                                                        : selected.status === 'pending' ? '#991b1b'
+                                                            : '#374151',
                                 }}
                             />
                             {selected.is_timeout && (
@@ -967,48 +941,71 @@ const MonitoringMap = () => {
                                     icon={<WarningIcon sx={{ fontSize: 14 }} />}
                                     label={`${selected.minutes_elapsed}m waiting`}
                                     size="small"
-                                    sx={{ bgcolor: '#fee2e2', color: '#991b1b', fontSize: '0.65rem', height: 24 }}
-                                />
-                            )}
-                            {selected.status === 'pending' && selected.day_ago > 0 && (
-                                <Chip
-                                    icon={<CalendarIcon sx={{ fontSize: 14 }} />}
-                                    label={getDayLabel(selected.day_ago)}
-                                    size="small"
-                                    sx={{ bgcolor: '#fef3c7', color: '#92400e', fontSize: '0.65rem', height: 24 }}
+                                    color="error"
                                 />
                             )}
                         </Box>
 
-                        {/* Route summary, when a technician route is available */}
-                        {(routeLoading || routeInfo) && (
+                        {/* Route + live tracking summary */}
+                        {(routeLoading || routeInfo || trackingData) && (
                             <Box
                                 sx={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 1,
+                                    p: 1.5,
                                     mb: 2,
-                                    p: 1.25,
                                     borderRadius: 2,
                                     bgcolor: '#f9fafb',
                                     border: '1px solid #e5e7eb',
                                 }}
                             >
-                                <RouteIcon sx={{ fontSize: 18, color: routeColor }} />
-                                {routeLoading ? (
-                                    <Typography variant="body2" color="text.secondary">
-                                        Calculating driving route…
-                                    </Typography>
-                                ) : (
-                                    <Typography variant="body2">
-                                        <strong>{routeInfo.distanceKm.toFixed(1)} km</strong> driving
-                                        {' · '}
-                                        <strong>{Math.round(routeInfo.durationMin)} min</strong> ETA
+                                <Box display="flex" alignItems="center" gap={1}>
+                                    <RouteIcon sx={{ fontSize: 18, color: routeColor }} />
+                                    {routeLoading ? (
+                                        <Typography variant="body2" color="text.secondary">
+                                            Calculating route…
+                                        </Typography>
+                                    ) : routeInfo?.isFallback ? (
+                                        <Typography variant="body2">⚠️ Direct line (no road data)</Typography>
+                                    ) : routeInfo ? (
+                                        <Typography variant="body2">
+                                            <strong>{routeInfo.distanceKm.toFixed(1)} km</strong> (road) ·{' '}
+                                            <TimerIcon sx={{ fontSize: 14, verticalAlign: 'middle', ml: 0.5 }} />{' '}
+                                            <strong>{Math.round(routeInfo.durationMin)} min</strong> ETA
+                                        </Typography>
+                                    ) : null}
+                                </Box>
+
+                                {trackingData?.distance_km != null && (
+                                    <Box display="flex" alignItems="center" gap={1} sx={{ mt: routeInfo ? 1 : 0 }}>
+                                        <Box
+                                            sx={{
+                                                width: 8,
+                                                height: 8,
+                                                borderRadius: '50%',
+                                                bgcolor: '#22c55e',
+                                                animation: 'pulseLiveDot 1.6s infinite',
+                                            }}
+                                        />
+                                        <Typography variant="body2" fontWeight="600" sx={{ color: '#16a34a' }}>
+                                            {trackingData.distance_km} km live (straight-line)
+                                            {trackingData.eta_minutes != null &&
+                                                ` · ETA ~${trackingData.eta_minutes} min`}
+                                        </Typography>
+                                    </Box>
+                                )}
+
+                                {trackingData?.last_updated && (
+                                    <Typography
+                                        variant="caption"
+                                        color="text.secondary"
+                                        sx={{ display: 'block', mt: 0.5 }}
+                                    >
+                                        Last GPS update: {new Date(trackingData.last_updated).toLocaleTimeString()}
                                     </Typography>
                                 )}
                             </Box>
                         )}
 
+                        {/* Description */}
                         <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600, mt: 1 }}>
                             Description
                         </Typography>
@@ -1018,57 +1015,75 @@ const MonitoringMap = () => {
 
                         <Divider sx={{ my: 2 }} />
 
-                        {/* Customer Section */}
-                        <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600, mb: 1 }}>
-                            Customer
+                        {/* Customer */}
+                        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, color: '#1a73e8' }}>
+                            👤 Customer
                         </Typography>
                         <Box display="flex" alignItems="center" gap={2} mb={2}>
-                            <Avatar sx={{ bgcolor: '#e5e7eb', width: 40, height: 40 }}>
+                            <Avatar sx={{ width: 96, height: 96, bgcolor: '#e5e7eb', fontSize: '2rem' }}>
                                 {selected.customer?.name?.charAt(0) || '?'}
                             </Avatar>
                             <Box>
-                                <Typography fontWeight="500" fontSize="0.95rem">
+                                <Typography fontWeight="600" fontSize="1.1rem">
                                     {selected.customer?.name || 'Unknown'}
                                 </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                    {selected.customer?.phone || 'No phone'}
+                                <Typography variant="body2" color="text.secondary">
+                                    📞 {selected.customer?.phone || 'No phone'}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                                    📍 {selected.customer?.area || selected.area || 'Location not available'}
                                 </Typography>
                             </Box>
                         </Box>
 
                         <Divider sx={{ my: 2 }} />
 
-                        {/* Technician Section */}
-                        <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600, mb: 1 }}>
-                            Technician
+                        {/* Technician */}
+                        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, color: '#22c55e' }}>
+                            🔧 Technician
+                            {trackingData && TRACKABLE_STATUSES.includes(selected.status) && (
+                                <Chip
+                                    label="LIVE"
+                                    size="small"
+                                    sx={{
+                                        ml: 1,
+                                        height: 18,
+                                        fontSize: 10,
+                                        fontWeight: 700,
+                                        bgcolor: '#dcfce7',
+                                        color: '#16a34a',
+                                        animation: 'pulseLiveDot 2s infinite',
+                                    }}
+                                />
+                            )}
                         </Typography>
+
                         {selected.technician ? (
                             <>
                                 <Box display="flex" alignItems="center" gap={2} mb={2}>
                                     <Avatar
                                         src={selected.technician.profile_photo}
-                                        sx={{ bgcolor: '#e5e7eb', width: 40, height: 40 }}
+                                        sx={{ width: 96, height: 96, bgcolor: '#e5e7eb' }}
                                     >
-                                        {selected.technician.name?.charAt(0) || '?'}
+                                        {!selected.technician.profile_photo &&
+                                            (selected.technician.name?.charAt(0) || '?')}
                                     </Avatar>
                                     <Box>
-                                        <Typography fontWeight="500" fontSize="0.95rem">
+                                        <Typography fontWeight="600" fontSize="1.1rem">
                                             {selected.technician.name}
                                         </Typography>
-                                        {selected.technician.area && (
-                                            <Typography variant="caption" color="text.secondary" display="block">
-                                                📍 {selected.technician.area}
-                                            </Typography>
-                                        )}
+                                        <Typography variant="body2" color="text.secondary">
+                                            📍 {selected.technician.area || 'Area not set'}
+                                        </Typography>
                                         {selected.technician.phone && (
-                                            <Typography variant="caption" color="text.secondary" display="block">
+                                            <Typography variant="body2" color="text.secondary">
                                                 📞 {formatPhoneDisplay(selected.technician.phone)}
                                             </Typography>
                                         )}
                                         {selected.technician.rating > 0 && (
                                             <Box display="flex" alignItems="center" gap={0.5}>
-                                                <StarIcon sx={{ fontSize: 14, color: '#f59e0b' }} />
-                                                <Typography variant="caption" fontWeight="500">
+                                                <StarIcon sx={{ fontSize: 16, color: '#f59e0b' }} />
+                                                <Typography variant="body2" fontWeight="500">
                                                     {selected.technician.rating.toFixed(1)}
                                                 </Typography>
                                             </Box>
@@ -1079,37 +1094,30 @@ const MonitoringMap = () => {
                                 {canCall && selected.technician.phone && (
                                     <Box display="flex" gap={1} mb={2}>
                                         <Button
-                                            size="small"
                                             variant="contained"
                                             startIcon={<PhoneIcon />}
-                                            onClick={() => handleCallTechnician(selected.technician.id, selected.id)}
+                                            onClick={() =>
+                                                handleCallTechnician(selected.technician.id, selected.id)
+                                            }
                                             sx={{
                                                 bgcolor: '#22c55e',
                                                 '&:hover': { bgcolor: '#16a34a' },
                                                 flex: 1,
                                                 textTransform: 'none',
-                                                fontWeight: 600,
-                                                borderRadius: 2,
-                                                py: 1,
                                             }}
                                         >
-                                            Call Technician
+                                            Call
                                         </Button>
                                         <Button
-                                            size="small"
                                             variant="contained"
                                             startIcon={<WhatsAppIcon />}
-                                            href={getWhatsAppUrl(selected.technician.phone)}
+                                            href={`https://wa.me/${selected.technician.phone.replace(/\D/g, '')}`}
                                             target="_blank"
-                                            rel="noopener noreferrer"
                                             sx={{
                                                 bgcolor: '#25d366',
                                                 '&:hover': { bgcolor: '#1da851' },
                                                 flex: 1,
                                                 textTransform: 'none',
-                                                fontWeight: 600,
-                                                borderRadius: 2,
-                                                py: 1,
                                             }}
                                         >
                                             WhatsApp
@@ -1126,25 +1134,15 @@ const MonitoringMap = () => {
                 )}
             </Drawer>
 
-            {/* Call Technician Confirmation */}
+            {/* Call Info Drawer */}
             <Drawer anchor="bottom" open={!!callInfo} onClose={() => setCallInfo(null)}>
                 {callInfo && (
                     <Box textAlign="center" p={4}>
-                        <Avatar sx={{ width: 64, height: 64, mx: 'auto', mb: 2 }}>
+                        <Avatar sx={{ width: 88, height: 88, mx: 'auto', mb: 2, fontSize: '2rem' }}>
                             {callInfo.technician_name?.charAt(0) || '?'}
                         </Avatar>
                         <Typography variant="h6">{callInfo.technician_name}</Typography>
-                        {callInfo.technician?.area && (
-                            <Typography variant="body2" color="text.secondary">
-                                📍 {callInfo.technician.area}
-                            </Typography>
-                        )}
-                        {callInfo.technician?.phone && (
-                            <Typography variant="body2" color="text.secondary">
-                                📞 {formatPhoneDisplay(callInfo.technician.phone)}
-                            </Typography>
-                        )}
-                        <Typography variant="body2" color="text.secondary" gutterBottom>
+                        <Typography variant="body2" color="text.secondary">
                             {callInfo.phone_number}
                         </Typography>
                         <Box display="flex" gap={2} justifyContent="center" sx={{ mt: 2 }}>
@@ -1152,8 +1150,7 @@ const MonitoringMap = () => {
                                 variant="contained"
                                 startIcon={<PhoneIcon />}
                                 href={callInfo.call_url}
-                                onClick={() => setCallInfo(null)}
-                                sx={{ bgcolor: '#22c55e', '&:hover': { bgcolor: '#16a34a' } }}
+                                sx={{ bgcolor: '#22c55e' }}
                             >
                                 Call
                             </Button>
@@ -1162,9 +1159,7 @@ const MonitoringMap = () => {
                                 startIcon={<WhatsAppIcon />}
                                 href={callInfo.whatsapp_url}
                                 target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={() => setCallInfo(null)}
-                                sx={{ bgcolor: '#25d366', '&:hover': { bgcolor: '#1da851' } }}
+                                sx={{ bgcolor: '#25d366' }}
                             >
                                 WhatsApp
                             </Button>
@@ -1173,7 +1168,7 @@ const MonitoringMap = () => {
                 )}
             </Drawer>
 
-            {/* Toast/Snackbar */}
+            {/* Toast */}
             <Snackbar
                 open={!!toast}
                 autoHideDuration={4000}

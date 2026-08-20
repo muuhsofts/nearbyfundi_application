@@ -10,4 +10,8 @@ export const reportService = {
     getPortfolioReport: (params) => api.get('/v12/reports/portfolio', { params }),
     getSubscriptionsReport: (params) => api.get('/v12/reports/subscriptions', { params }),
     getRevenueReport: (params) => api.get('/v12/reports/revenue', { params }),
+
+    // ✅ New methods
+    getReviewsReport: (params) => api.get('/v12/reports/reviews', { params }),
+    getAllStats: (params) => api.get('/v12/reports/all-stats', { params }),
 };

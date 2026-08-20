@@ -21,6 +21,7 @@ import {
   AccountBalance as FundIcon,
   Subscriptions as SubscriptionsIcon,
   PrivacyTip as PrivacyPolicyIcon,
+  Category as CategoryIcon, // <-- added
 } from '@mui/icons-material';
 
 const addIf = (condition, item) => (condition ? [item] : []);
@@ -43,7 +44,7 @@ export function getSidebarStructure(hasPermission) {
     ...addIf(hasPermission('about.view'), { label: 'About', link: '/app/about' }),
     ...addIf(hasPermission('terms.view'), { label: 'Terms', link: '/app/terms' }),
     ...addIf(hasPermission('faqs.view'), { label: 'FAQs', link: '/app/faqs' }),
-    ...addIf(hasPermission('privacy.view'), { label: 'Privacy Policy', link: '/app/privacy-policy' }), // 🆕 moved here
+    ...addIf(hasPermission('privacy.view'), { label: 'Privacy Policy', link: '/app/privacy-policy' }),
   ];
   if (staticChildren.length > 0) {
     structure.push({
@@ -55,14 +56,25 @@ export function getSidebarStructure(hasPermission) {
     });
   }
 
-  // ----- Services -----
+  // ----- Services (with Categories child) -----
   if (hasPermission('services.view')) {
+    const servicesChildren = [
+      { label: 'All Services', link: '/app/services' },
+    ];
+    // Add Categories if user has permission
+    if (hasPermission('service-categories.view')) {
+      servicesChildren.push({
+        label: 'Categories',
+        link: '/app/services/categories',
+        icon: <CategoryIcon />,
+      });
+    }
     structure.push({
       id: 3,
       label: 'Services',
       link: '/app/services',
       icon: <ServicesIcon />,
-      children: [{ label: 'All Services', link: '/app/services' }],
+      children: servicesChildren,
     });
   }
 
@@ -170,7 +182,6 @@ export function getSidebarStructure(hasPermission) {
     ...addIf(hasPermission('permissions.view'), { label: 'Permissions', link: '/app/permissions' }),
     ...addIf(hasPermission('audit.view'), { label: 'Audit Logs', link: '/app/audit' }),
     ...addIf(hasPermission('otp.view'), { label: 'OTP Management', link: '/app/otp' }),
-    // Privacy Policy removed from Settings – now in Static Pages
     ...addIf(hasPermission('profile.view'), { label: 'Profile', link: '/app/profile' }),
   ];
   if (settingsChildren.length > 0) {
@@ -200,7 +211,7 @@ const staticStructure = [
       { label: 'About', link: '/app/about' },
       { label: 'Terms', link: '/app/terms' },
       { label: 'FAQs', link: '/app/faqs' },
-      { label: 'Privacy Policy', link: '/app/privacy-policy' }, // 🆕 moved here
+      { label: 'Privacy Policy', link: '/app/privacy-policy' },
     ],
   },
   {
@@ -208,7 +219,10 @@ const staticStructure = [
     label: 'Services',
     link: '/app/services',
     icon: <ServicesIcon />,
-    children: [{ label: 'All Services', link: '/app/services' }],
+    children: [
+      { label: 'All Services', link: '/app/services' },
+      { label: 'Categories', link: '/app/services/categories' },
+    ],
   },
   {
     id: 4,
@@ -279,7 +293,6 @@ const staticStructure = [
       { label: 'Permissions', link: '/app/permissions' },
       { label: 'Audit Logs', link: '/app/audit' },
       { label: 'OTP Management', link: '/app/otp' },
-      // Privacy Policy removed from Settings
       { label: 'Profile', link: '/app/profile' },
     ],
   },
