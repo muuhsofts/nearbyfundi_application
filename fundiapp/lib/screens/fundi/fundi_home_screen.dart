@@ -173,14 +173,15 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
   }
 
   // ============================================================
-  // DRAWER
+  // DRAWER – NOW FULLY THEME‑AWARE
   // ============================================================
 
   Drawer _buildDrawer(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return Drawer(
-      backgroundColor: Colors.white,
+      backgroundColor: theme.cardColor, // adapts to dark/light
       child: SafeArea(
         child: Column(
           children: [
@@ -188,10 +189,10 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: theme.cardColor,
                 border: Border(
                   bottom: BorderSide(
-                    color: Colors.grey.shade200,
+                    color: theme.dividerColor,
                     width: 1,
                   ),
                 ),
@@ -199,7 +200,7 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
               child: Text(
                 'Menu',
                 style: theme.textTheme.titleLarge?.copyWith(
-                  color: Colors.black87,
+                  color: colorScheme.onSurface,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -208,12 +209,12 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
             ListTile(
               leading: Icon(
                 Icons.handshake_outlined,
-                color: theme.primaryColor,
+                color: colorScheme.primary,
               ),
-              title: const Text(
+              title: Text(
                 'Partnerships',
-                style: TextStyle(
-                  color: Colors.black87,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: colorScheme.onSurface,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -594,7 +595,7 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
       backgroundColor: theme.scaffoldBackgroundColor,
 
       // ========================================================
-      // WHITE DRAWER
+      // WHITE DRAWER – now theme‑aware
       // ========================================================
       drawer: _buildDrawer(context),
 

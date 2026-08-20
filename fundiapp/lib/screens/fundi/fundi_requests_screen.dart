@@ -125,7 +125,6 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
 
   // ─── EAST AFRICA TIME (EAT) HELPER ────────────────────────────────
   DateTime _toEAT(DateTime dateTime) {
-    // Assume server time is UTC, convert to UTC+3 (East Africa Time)
     return dateTime.toUtc().add(const Duration(hours: 3));
   }
 
@@ -284,7 +283,7 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
         children: [
           Container(
             decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
+              color: theme.cardColor,
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: theme.dividerColor),
             ),
@@ -346,7 +345,7 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primary : theme.colorScheme.surface,
+          color: isSelected ? AppTheme.primary : theme.cardColor,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
             color: isSelected ? AppTheme.primary : theme.dividerColor,
@@ -366,40 +365,81 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
   // ─── STATS BAR ──────────────────────────────────────────────────────────
   Widget _buildStatsBar(RequestProvider provider, ThemeData theme) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: Row(
         children: [
-          _buildStatChip('Total', provider.totalCount,
-              theme.colorScheme.onSurface, theme, Colors.grey.shade200),
+          // Total card – fixed white background with black text
+          _buildStatCard(
+            'Total',
+            provider.totalCount,
+            Colors.black,
+            theme,
+            Colors.white,
+            forceFixed: true,
+          ),
           const SizedBox(width: 8),
-          _buildStatChip('Pending', provider.pendingCount, AppTheme.warning,
-              theme, AppTheme.warning.withOpacity(0.12)),
+          _buildStatCard(
+            'Pending',
+            provider.pendingCount,
+            AppTheme.warning,
+            theme,
+            AppTheme.warning.withOpacity(0.12),
+            forceFixed: false,
+          ),
           const SizedBox(width: 8),
-          _buildStatChip('Accepted', provider.acceptedCount, AppTheme.primary,
-              theme, AppTheme.primary.withOpacity(0.12)),
+          _buildStatCard(
+            'Accepted',
+            provider.acceptedCount,
+            AppTheme.primary,
+            theme,
+            AppTheme.primary.withOpacity(0.12),
+            forceFixed: false,
+          ),
           const SizedBox(width: 8),
-          _buildStatChip('Done', provider.completedCount, AppTheme.success,
-              theme, AppTheme.success.withOpacity(0.12)),
+          _buildStatCard(
+            'Done',
+            provider.completedCount,
+            AppTheme.success,
+            theme,
+            AppTheme.success.withOpacity(0.12),
+            forceFixed: false,
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildStatChip(String label, int count, Color textColor,
-      ThemeData theme, Color bgColor) {
+  Widget _buildStatCard(
+      String label,
+      int count,
+      Color textColor,
+      ThemeData theme,
+      Color bgColor, {
+        bool forceFixed = false,
+      }) {
+    final effectiveBgColor = forceFixed ? Colors.white : bgColor;
+    final effectiveTextColor = forceFixed ? Colors.black : textColor;
+    final borderColor = forceFixed
+        ? Colors.grey.shade300
+        : textColor.withOpacity(0.2);
+
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: bgColor,
-          borderRadius: BorderRadius.circular(10),
+          color: effectiveBgColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: borderColor,
+            width: 0.8,
+          ),
         ),
         child: Column(
           children: [
             Text(
               '$count',
               style: theme.textTheme.titleMedium?.copyWith(
-                color: textColor,
+                color: effectiveTextColor,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -407,7 +447,7 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
             Text(
               label,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: textColor.withOpacity(0.8),
+                color: effectiveTextColor.withOpacity(0.8),
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -458,7 +498,7 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
+              color: theme.cardColor,
               shape: BoxShape.circle,
               border: Border.all(color: theme.dividerColor),
             ),
@@ -486,14 +526,13 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
     final isCompleted = request.isCompleted;
     final isRejectedOrCancelled = request.isRejected || request.isCancelled;
 
-    // Format created date in EAT
     final createdDate = request.createdAt != null
         ? _formatRequestDate(request.createdAt!)
         : '';
 
     return Container(
       decoration: BoxDecoration(
-        color: theme.cardTheme.color,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: isCompleted
@@ -502,7 +541,7 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: theme.shadowColor.withOpacity(0.06),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -519,7 +558,9 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
                 Expanded(
                   child: Text(
                     request.serviceName,
-                    style: theme.textTheme.titleMedium,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: theme.colorScheme.onSurface,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -562,7 +603,9 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
                 Expanded(
                   child: Text(
                     request.customerName,
-                    style: theme.textTheme.bodyMedium,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurface,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -572,11 +615,12 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
             const SizedBox(height: 6),
             Text(
               request.description,
-              style: theme.textTheme.bodySmall,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurface.withOpacity(0.7),
+              ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
-            // ─── DATE/TIME ROW (EAT) ────────────────────────────────────
             if (createdDate.isNotEmpty) ...[
               const SizedBox(height: 6),
               Row(
@@ -659,7 +703,6 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
       AppLocalizations l10n, ThemeData theme) {
     return Column(
       children: [
-        // Chat button
         SizedBox(
           width: double.infinity,
           child: _PrimaryButton(
@@ -670,8 +713,6 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
           ),
         ),
         const SizedBox(height: 8),
-
-        // I'm On The Way (only when accepted)
         if (request.isAccepted)
           SizedBox(
             width: double.infinity,
@@ -695,8 +736,6 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
               },
             ),
           ),
-
-        // I Have Arrived (only when on_the_way)
         if (request.isOnTheWay)
           SizedBox(
             width: double.infinity,
@@ -720,11 +759,8 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
               },
             ),
           ),
-
         if (request.isAccepted || request.isOnTheWay)
           const SizedBox(height: 8),
-
-        // Mark Complete
         SizedBox(
           width: double.infinity,
           child: _PrimaryButton(
@@ -797,14 +833,16 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: theme.dividerColor),
       ),
       child: Center(
         child: Text(
           request.isRejected ? 'Request Rejected' : 'Request Cancelled',
-          style: theme.textTheme.bodySmall,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurface.withOpacity(0.6),
+          ),
         ),
       ),
     );
@@ -829,13 +867,14 @@ class _PrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final child = icon == null
         ? Text(label)
         : Row(
       mainAxisAlignment: MainAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 18),
+        Icon(icon, size: 18, color: outlined ? color : Colors.white),
         const SizedBox(width: 8),
         Text(label),
       ],

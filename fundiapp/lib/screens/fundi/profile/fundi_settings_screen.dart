@@ -35,15 +35,13 @@ class FundiSettingsScreen extends StatelessWidget {
           child: Column(
             children: [
               // ---- Notifications ----
-              Container(
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surface,
+              Card(
+                shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: theme.dividerColor.withOpacity(0.5)),
                 ),
+                elevation: 1,
                 child: Column(
                   children: [
-                    // Toggle Row
                     SwitchListTile(
                       title: Row(
                         children: [
@@ -71,10 +69,9 @@ class FundiSettingsScreen extends StatelessWidget {
                       onChanged: (val) => settings.updateNotificationStatus(val),
                       activeColor: theme.colorScheme.primary,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      tileColor: Colors.transparent,
                     ),
-                    // Divider
                     Divider(height: 1, color: theme.dividerColor, indent: 16, endIndent: 16),
-                    // Navigate to Notification List
                     ListTile(
                       leading: Container(
                         padding: const EdgeInsets.all(8),
@@ -106,6 +103,7 @@ class FundiSettingsScreen extends StatelessWidget {
                         );
                       },
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                      tileColor: Colors.transparent,
                     ),
                   ],
                 ),
@@ -113,12 +111,11 @@ class FundiSettingsScreen extends StatelessWidget {
               const SizedBox(height: 12),
 
               // ---- Language ----
-              Container(
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surface,
+              Card(
+                shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: theme.dividerColor.withOpacity(0.5)),
                 ),
+                elevation: 1,
                 child: ListTile(
                   leading: Container(
                     padding: const EdgeInsets.all(8),
@@ -146,22 +143,22 @@ class FundiSettingsScreen extends StatelessWidget {
                       color: theme.colorScheme.primary,
                       fontWeight: FontWeight.w500,
                     ),
-                    dropdownColor: theme.colorScheme.surface,
+                    dropdownColor: theme.cardColor,
                     underline: Container(),
                     icon: Icon(Icons.arrow_drop_down, color: theme.colorScheme.primary),
                   ),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  tileColor: Colors.transparent,
                 ),
               ),
               const SizedBox(height: 12),
 
               // ---- Dark Mode ----
-              Container(
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surface,
+              Card(
+                shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: theme.dividerColor.withOpacity(0.5)),
                 ),
+                elevation: 1,
                 child: SwitchListTile(
                   title: Row(
                     children: [
@@ -198,17 +195,17 @@ class FundiSettingsScreen extends StatelessWidget {
                   },
                   activeColor: theme.colorScheme.primary,
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  tileColor: Colors.transparent,
                 ),
               ),
               const SizedBox(height: 20),
 
               // ---- Static Pages ----
-              Container(
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surface,
+              Card(
+                shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: theme.dividerColor.withOpacity(0.5)),
                 ),
+                elevation: 1,
                 child: Column(
                   children: [
                     _buildSettingsTile(
@@ -232,7 +229,6 @@ class FundiSettingsScreen extends StatelessWidget {
                       onTap: () => Navigator.pushNamed(context, AppRoutes.terms),
                     ),
                     _buildDivider(context),
-                    // ✅ UPDATED: Now uses l10n.privacyPolicy to support Swahili
                     _buildSettingsTile(
                       context,
                       icon: Icons.privacy_tip_rounded,
@@ -280,6 +276,7 @@ class FundiSettingsScreen extends StatelessWidget {
       ),
       onTap: onTap,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      tileColor: Colors.transparent,
     );
   }
 

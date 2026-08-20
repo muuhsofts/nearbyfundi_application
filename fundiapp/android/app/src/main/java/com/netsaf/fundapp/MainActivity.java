@@ -9,6 +9,7 @@ import io.flutter.plugin.common.MethodChannel;
 
 public class MainActivity extends FlutterActivity {
     private static final String SECURITY_CHANNEL = "com.netsaf.security";
+    private static final String BADGE_CHANNEL   = "com.fundiapp/badge";   // ← match the channel name used in Dart
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -40,12 +41,41 @@ public class MainActivity extends FlutterActivity {
                             break;
                     }
                 });
+
+        // Badge Channel
+        new MethodChannel(flutterEngine.getDartExecutor().getBinaryMessenger(), BADGE_CHANNEL)
+                .setMethodCallHandler((call, result) -> {
+                    switch (call.method) {
+                        case "setBadgeCount":
+                            // Android has no universal badge API.
+                            // Just acknowledge the call so the MissingPluginException disappears.
+                            // (Real badge support is launcher-dependent – see notes below)
+                            Integer count = call.argument("count");
+                            // Optional: you can log it
+                            // Log.d("Badge", "setBadgeCount called with: " + count);
+                            result.success(true);
+                            break;
+
+                        case "removeBadge":
+                        case "clearBadge":
+                            result.success(true);
+                            break;
+
+                        case "getBadgeCount":
+                            // You can return 0 or keep a local variable if you want
+                            result.success(0);
+                            break;
+
+                        default:
+                            result.notImplemented();
+                            break;
+                    }
+                });
     }
 
     // ============================================================
-    // SECURITY METHODS
+    // SECURITY METHODS (unchanged)
     // ============================================================
-
     private void enableSecureScreen() {
         runOnUiThread(() -> getWindow().setFlags(
                 WindowManager.LayoutParams.FLAG_SECURE,
