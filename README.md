@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # NearbyFundi Website
 
 A Bolt-inspired, static marketing website for NearbyFundi built with React, TypeScript, Vite and Tailwind CSS.
@@ -70,3 +71,6 @@ The website palette follows the supplied Flutter `AppTheme`:
 ## App stores
 
 The footer now contains App Store and Google Play badges. Their links are placeholders (`#`) until the official store URLs are available.
+=======
+# nearbyfundi_application
+>>>>>>> f93aec1ac88c4cf3f1980ebe2bf70b84e5b717e7
