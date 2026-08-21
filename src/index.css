@@ -1,0 +1,26 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: "Nunito", ui-sans-serif, system-ui, sans-serif;
+  color: #13191D;
+  background: #ffffff;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+html { scroll-behavior: smooth; }
+body { margin: 0; min-width: 320px; }
+button, a { -webkit-tap-highlight-color: transparent; }
+::selection { background: #21AE8C; color: #002B49; }
+
+@layer components {
+  .container-page { @apply mx-auto w-full max-w-7xl px-5 sm:px-8 lg:px-10; }
+  .section-pad { @apply py-20 sm:py-24 lg:py-28; }
+  .eyebrow { @apply mb-4 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-extrabold uppercase tracking-[0.14em] text-nf-primary; }
+  .btn-primary { @apply inline-flex items-center justify-center gap-2 rounded-xl bg-nf-primary px-6 py-3.5 font-bold text-white transition hover:bg-nf-primaryDark hover:-translate-y-0.5; }
+  .btn-dark { @apply inline-flex items-center justify-center gap-2 rounded-xl bg-nf-dark px-6 py-3.5 font-bold text-white transition hover:bg-nf-sea hover:-translate-y-0.5; }
+  .card { @apply rounded-2xl border border-nf-border bg-white shadow-card; }
+}
