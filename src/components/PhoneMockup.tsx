@@ -14,7 +14,7 @@ export default function PhoneMockup({ screen, label }: Props) {
         <div className="mx-auto mt-2 h-5 w-20 rounded-full bg-slate-950" />
         <div className="px-4 pb-5 pt-4">
           <div className="flex items-center justify-between text-[10px] font-bold text-slate-500"><span>NearbyFundi</span><span>9:41</span></div>
-          <div className="mt-4 rounded-2xl bg-nf-primary p-4">
+          <div className="mt-4 rounded-2xl bg-bolt-500 p-4">
             <div className="text-3xl">{d.icon}</div>
             <p className="mt-3 text-base font-black text-slate-950">{d.title}</p>
             <p className="text-[10px] font-medium text-slate-800">{d.sub}</p>
