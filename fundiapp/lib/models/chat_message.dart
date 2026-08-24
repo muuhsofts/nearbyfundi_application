@@ -55,7 +55,9 @@ class ChatMessage {
     );
   }
 
-  bool get isFromMe => senderType == 'fundi' || senderType == 'customer';
+  /// Correct ownership check – use current user id
+  bool isFromMe(int currentUserId) => senderId == currentUserId;
+
   bool get isText => messageType == 'text';
   bool get isImage => messageType == 'image';
   bool get isFile => messageType == 'file';

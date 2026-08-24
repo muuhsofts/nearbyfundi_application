@@ -49,7 +49,52 @@ class _ChatListScreenState extends State<ChatListScreen> {
         currentUser: chatUser,
       );
     }
-    _isInitializing = false;
+    if (mounted) {
+      setState(() => _isInitializing = false);
+    }
+  }
+
+  Future<void> _confirmAndDelete(
+      BuildContext context,
+      ChatConversation conversation,
+      ) async {
+    final l10n = AppLocalizations.of(context)!;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.deleteConversation),
+        content: Text(l10n.deleteConversationConfirmation),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: Text(l10n.delete),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !mounted) return;
+
+    final success =
+    await context.read<ChatProvider>().deleteConversation(conversation.id);
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          success ? l10n.conversationDeleted : 'Failed to delete conversation',
+        ),
+        backgroundColor: success ? Colors.green : Colors.red,
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   @override
@@ -75,18 +120,23 @@ class _ChatListScreenState extends State<ChatListScreen> {
               return Stack(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.mark_chat_read_outlined, color: Colors.white),
+                    icon: const Icon(
+                      Icons.mark_chat_read_outlined,
+                      color: Colors.white,
+                    ),
                     onPressed: () async {
                       if (chatProvider.conversations.isNotEmpty) {
                         for (var conv in chatProvider.conversations) {
                           await chatProvider.markConversationAsRead(conv.id);
                         }
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(l10n.markAllAsRead),
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(l10n.markAllAsRead),
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                        }
                       }
                     },
                   ),
@@ -105,7 +155,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
                           minHeight: 16,
                         ),
                         child: Text(
-                          chatProvider.totalUnread > 9 ? '9+' : '${chatProvider.totalUnread}',
+                          chatProvider.totalUnread > 9
+                              ? '9+'
+                              : '${chatProvider.totalUnread}',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 9,
@@ -138,7 +190,10 @@ class _ChatListScreenState extends State<ChatListScreen> {
           return RefreshIndicator(
             onRefresh: () => chatProvider.refreshConversations(),
             child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 8,
+              ),
               itemCount: conversations.length,
               itemBuilder: (context, index) {
                 final conversation = conversations[index];
@@ -155,37 +210,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
                       chatProvider.refreshConversations();
                     });
                   },
-                  onDelete: () async {
-                    final confirm = await showDialog<bool>(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: Text(l10n.deleteConversation),
-                        content: Text(l10n.deleteConversationConfirmation),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, false),
-                            child: Text(l10n.cancel),
-                          ),
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, true),
-                            style: TextButton.styleFrom(
-                              foregroundColor: Colors.red,
-                            ),
-                            child: Text(l10n.delete),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (confirm == true) {
-                      // await chatProvider.deleteConversation(conversation.id);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(l10n.conversationDeleted),
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
-                    }
-                  },
+                  onDelete: () =>
+                      _confirmAndDelete(context, conversation),
                 );
               },
             ),
@@ -195,16 +221,16 @@ class _ChatListScreenState extends State<ChatListScreen> {
     );
   }
 
-  Widget _buildEmptyState(BuildContext context, AppLocalizations l10n, ThemeData theme) {
+  Widget _buildEmptyState(
+      BuildContext context,
+      AppLocalizations l10n,
+      ThemeData theme,
+      ) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.chat_outlined,
-            size: 80,
-            color: Colors.grey.shade300,
-          ),
+          Icon(Icons.chat_outlined, size: 80, color: Colors.grey.shade300),
           const SizedBox(height: 16),
           Text(
             l10n.noConversationsYet,
@@ -218,10 +244,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
           Text(
             l10n.startChattingWithFundis,
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey.shade500,
-            ),
+            style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
           ),
         ],
       ),
@@ -248,6 +271,10 @@ class _ConversationTile extends StatelessWidget {
     return Dismissible(
       key: Key('conversation_${conversation.id}'),
       direction: DismissDirection.endToStart,
+      confirmDismiss: (_) async {
+        onDelete();
+        return false; // dialog handles real delete; don't auto-remove tile
+      },
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 16),
@@ -255,13 +282,8 @@ class _ConversationTile extends StatelessWidget {
           color: Colors.red,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: const Icon(
-          Icons.delete_outline,
-          color: Colors.white,
-          size: 28,
-        ),
+        child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
       ),
-      onDismissed: (_) => onDelete(),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
@@ -342,7 +364,8 @@ class _ConversationTile extends StatelessWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            conversation.lastMessage?.content ?? l10n.noMessagesYet,
+                            conversation.lastMessage?.content ??
+                                l10n.noMessagesYet,
                             style: TextStyle(
                               fontSize: 14,
                               color: conversation.unreadCount > 0

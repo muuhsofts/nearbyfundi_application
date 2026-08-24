@@ -1,7 +1,13 @@
 // lib/screens/chat/chat_screen.dart
+// FIXES:
+// 1. isCurrentUser = message.senderId == currentUserId
+// 4. Voice: download to temp then play; send voiceDuration
+// 6. Call buttons show "Coming soon"
+// 7. Typing debounce + force false on send/dispose
 
 import 'dart:io';
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -10,16 +16,17 @@ import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:dio/dio.dart';
 import 'package:provider/provider.dart';
+
 import '../../providers/chat_provider.dart';
+import '../../providers/auth_provider.dart';
 import '../../models/chat_conversation.dart';
 import '../../models/chat_message.dart';
 import '../../widgets/message_bubble.dart';
 import '../../widgets/typing_indicator.dart';
 import '../../l10n/app_localizations.dart';
 import '../../services/voice_recording_service.dart';
-import 'voice_call_screen.dart';
-import 'video_call_screen.dart';
 
 class ChatScreen extends StatefulWidget {
   final ChatConversation conversation;
@@ -39,8 +46,8 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isTyping = false;
   bool _isSending = false;
   bool _showEmojiPicker = false;
+  Timer? _typingDebounce;
 
-  // Voice recording states
   bool _isRecording = false;
   bool _isPlayingVoice = false;
   String? _recordingPath;
@@ -49,6 +56,10 @@ class _ChatScreenState extends State<ChatScreen> {
   int _recordingDuration = 0;
   Duration _playbackPosition = Duration.zero;
   Duration _playbackDuration = Duration.zero;
+
+  /// Fixed: no broken ?? / ?: mix — always int
+  int get _currentUserId =>
+      context.read<AuthProvider>().user?.id ?? 0;
 
   @override
   void initState() {
@@ -71,6 +82,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    _typingDebounce?.cancel();
+    _forceStopTyping();
     _textController.dispose();
     _scrollController.dispose();
     _recordingTimer?.cancel();
@@ -79,13 +92,15 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _subscribeToUser() {
-    final provider = context.read<ChatProvider>();
-    provider.subscribeToUser(widget.conversation.otherParty.id);
+    context
+        .read<ChatProvider>()
+        .subscribeToUser(widget.conversation.otherParty.id);
   }
 
   Future<void> _loadMessages() async {
-    final provider = context.read<ChatProvider>();
-    await provider.getMessages(conversationId: widget.conversation.id);
+    await context
+        .read<ChatProvider>()
+        .getMessages(conversationId: widget.conversation.id);
     _scrollToBottom();
   }
 
@@ -107,12 +122,50 @@ class _ChatScreenState extends State<ChatScreen> {
         .markConversationAsRead(widget.conversation.id);
   }
 
+  // ── Typing (debounce + force false) ───────────────────────────────────────
+
+  void _onTextChanged(String text) {
+    setState(() {});
+    _typingDebounce?.cancel();
+
+    if (text.isEmpty) {
+      _forceStopTyping();
+      return;
+    }
+
+    if (!_isTyping) {
+      _isTyping = true;
+      context.read<ChatProvider>().sendTypingStatus(
+        conversationId: widget.conversation.id,
+        typing: true,
+      );
+    }
+
+    _typingDebounce = Timer(const Duration(milliseconds: 1200), () {
+      _forceStopTyping();
+    });
+  }
+
+  Future<void> _forceStopTyping() async {
+    _typingDebounce?.cancel();
+    if (_isTyping) {
+      _isTyping = false;
+      try {
+        await context.read<ChatProvider>().sendTypingStatus(
+          conversationId: widget.conversation.id,
+          typing: false,
+        );
+      } catch (_) {}
+    }
+  }
+
   Future<void> _sendMessage() async {
     final text = _textController.text.trim();
     if (text.isEmpty || _isSending) return;
 
     _textController.clear();
     setState(() => _isSending = true);
+    await _forceStopTyping();
 
     try {
       await context.read<ChatProvider>().sendMessage(
@@ -121,7 +174,6 @@ class _ChatScreenState extends State<ChatScreen> {
         messageType: 'text',
       );
       _scrollToBottom();
-      await _sendTypingStatus(false);
     } catch (e) {
       if (mounted) {
         final l10n = AppLocalizations.of(context)!;
@@ -133,25 +185,9 @@ class _ChatScreenState extends State<ChatScreen> {
         );
       }
     } finally {
-      if (mounted) {
-        setState(() => _isSending = false);
-      }
+      if (mounted) setState(() => _isSending = false);
     }
   }
-
-  Future<void> _sendTypingStatus(bool typing) async {
-    if (_isTyping != typing) {
-      _isTyping = typing;
-      await context.read<ChatProvider>().sendTypingStatus(
-        conversationId: widget.conversation.id,
-        typing: typing,
-      );
-    }
-  }
-
-  // ============================================
-  // FILE PICKING METHODS
-  // ============================================
 
   Future<void> _pickImage() async {
     final XFile? image = await _imagePicker.pickImage(
@@ -179,13 +215,14 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _pickFile() async {
     try {
-      // ✅ FIXED: Use FilePicker.platform.pickFiles() instead of FilePicker.pickFiles()
       final result = await FilePicker.platform.pickFiles(
         type: FileType.any,
         allowMultiple: false,
       );
       if (result != null && result.files.isNotEmpty) {
-        final file = File(result.files.first.path!);
+        final path = result.files.first.path;
+        if (path == null) return;
+        final file = File(path);
         final fileName = result.files.first.name;
         await _sendFile(file, 'file', '📎 $fileName');
       }
@@ -201,22 +238,28 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Future<void> _sendFile(File file, String type, String content) async {
+  Future<void> _sendFile(
+      File file,
+      String type,
+      String content, {
+        int? voiceDuration,
+      }) async {
     setState(() => _isSending = true);
+    await _forceStopTyping();
     try {
       await context.read<ChatProvider>().sendMessage(
         conversationId: widget.conversation.id,
         file: file,
         messageType: type,
         content: content,
+        voiceDuration: voiceDuration,
       );
       _scrollToBottom();
     } catch (e) {
       if (mounted) {
         final l10n = AppLocalizations.of(context)!;
-        String errorMsg = type == 'image'
-            ? l10n.failedToSendImage
-            : l10n.failedToSendFile;
+        final errorMsg =
+        type == 'image' ? l10n.failedToSendImage : l10n.failedToSendFile;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('$errorMsg: $e'),
@@ -225,15 +268,11 @@ class _ChatScreenState extends State<ChatScreen> {
         );
       }
     } finally {
-      if (mounted) {
-        setState(() => _isSending = false);
-      }
+      if (mounted) setState(() => _isSending = false);
     }
   }
 
-  // ============================================
-  // VOICE RECORDING METHODS
-  // ============================================
+  // ── Voice recording ───────────────────────────────────────────────────────
 
   void _startVoiceRecording() async {
     try {
@@ -255,7 +294,12 @@ class _ChatScreenState extends State<ChatScreen> {
       final path = await _voiceService.stopRecording();
       if (path != null && mounted) {
         final file = File(path);
-        await _sendFile(file, 'voice', '🎤 Voice message');
+        await _sendFile(
+          file,
+          'voice',
+          '🎤 Voice message',
+          voiceDuration: _recordingDuration > 0 ? _recordingDuration : 1,
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -277,16 +321,32 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  void _playVoiceMessage(String path) async {
+  /// Download remote voice to temp file, then play locally
+  Future<void> _playVoiceMessage(ChatMessage message) async {
+    final url = message.file?.url;
+    if (url == null || url.isEmpty) return;
+
     try {
       if (_voiceService.isPlaying) {
         await _voiceService.stopPlayback();
-        setState(() {
-          _isPlayingVoice = false;
-        });
-      } else {
-        await _voiceService.playRecording(path);
+        setState(() => _isPlayingVoice = false);
+        return;
       }
+
+      String localPath;
+      if (url.startsWith('http')) {
+        final dir = await getTemporaryDirectory();
+        final ext = message.file?.extension ?? 'm4a';
+        localPath = '${dir.path}/voice_${message.id}.$ext';
+        final file = File(localPath);
+        if (!await file.exists()) {
+          await Dio().download(url, localPath);
+        }
+      } else {
+        localPath = url;
+      }
+
+      await _voiceService.playRecording(localPath);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -298,10 +358,6 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     }
   }
-
-  // ============================================
-  // VOICE SERVICE CALLBACKS
-  // ============================================
 
   void _onRecordingStarted() {
     setState(() {
@@ -322,14 +378,10 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _onAmplitudeChanged(double amplitude) {
-    setState(() {
-      _amplitude = amplitude;
-    });
+    setState(() => _amplitude = amplitude);
   }
 
-  void _onPlaybackStarted() {
-    setState(() => _isPlayingVoice = true);
-  }
+  void _onPlaybackStarted() => setState(() => _isPlayingVoice = true);
 
   void _onPlaybackFinished() {
     setState(() {
@@ -357,9 +409,14 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  // ============================================
-  // FILE DOWNLOAD/DELETE METHODS
-  // ============================================
+  void _showComingSoon(String feature) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$feature – Coming soon'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
 
   Future<void> _downloadFile(ChatMessage message) async {
     if (message.file == null) return;
@@ -374,21 +431,15 @@ class _ChatScreenState extends State<ChatScreen> {
           );
           return;
         }
-      } else if (Platform.isIOS) {
-        final status = await Permission.photos.request();
-        if (!status.isGranted) {
-          final l10n = AppLocalizations.of(context)!;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(l10n.photosPermissionDenied)),
-          );
-          return;
-        }
       }
 
       String savePath;
       final fileName = message.file!.name ?? 'file_${message.id}';
       final extension = message.file!.extension ?? '';
-      final fullFileName = extension.isNotEmpty ? '$fileName.$extension' : fileName;
+      final fullFileName =
+      extension.isNotEmpty && !fileName.endsWith('.$extension')
+          ? '$fileName.$extension'
+          : fileName;
 
       if (Platform.isAndroid) {
         final directory = await getExternalStorageDirectory();
@@ -398,42 +449,26 @@ class _ChatScreenState extends State<ChatScreen> {
           await downloadDir.create(recursive: true);
         }
         savePath = '${downloadDir.path}/$fullFileName';
-      } else if (Platform.isIOS) {
-        final directory = await getApplicationDocumentsDirectory();
-        savePath = '${directory.path}/$fullFileName';
       } else {
         final directory = await getApplicationDocumentsDirectory();
         savePath = '${directory.path}/$fullFileName';
       }
 
-      final provider = context.read<ChatProvider>();
-      final result = await provider.downloadFile(message.id, savePath);
+      final result =
+      await context.read<ChatProvider>().downloadFile(message.id, savePath);
 
-      if (result != null) {
-        if (mounted) {
-          final l10n = AppLocalizations.of(context)!;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.check_circle, color: Colors.green),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text('${l10n.fileDownloaded}: $fullFileName'),
-                  ),
-                ],
-              ),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 4),
-              action: SnackBarAction(
-                label: 'Open',
-                onPressed: () => OpenFile.open(savePath),
-              ),
+      if (result != null && mounted) {
+        final l10n = AppLocalizations.of(context)!;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${l10n.fileDownloaded}: $fullFileName'),
+            backgroundColor: Colors.green,
+            action: SnackBarAction(
+              label: 'Open',
+              onPressed: () => OpenFile.open(savePath),
             ),
-          );
-        }
-      } else {
-        throw Exception('Download failed');
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -448,54 +483,13 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Future<void> _deleteFile(ChatMessage message) async {
-    if (message.file == null) return;
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete File'),
-        content: const Text('Are you sure you want to delete this file?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      final provider = context.read<ChatProvider>();
-      final success = await provider.deleteFile(message.id);
-      if (success && mounted) {
-        final l10n = AppLocalizations.of(context)!;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.fileDeleted),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    }
-  }
-
-  // ============================================
-  // CONVERSATION DELETE
-  // ============================================
-
   Future<void> _deleteConversation() async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Conversation'),
         content: const Text(
-          'Are you sure you want to delete this entire conversation? This action cannot be undone.',
+          'Are you sure you want to delete this entire conversation? This cannot be undone.',
         ),
         actions: [
           TextButton(
@@ -512,8 +506,9 @@ class _ChatScreenState extends State<ChatScreen> {
     );
 
     if (confirm == true) {
-      final provider = context.read<ChatProvider>();
-      final success = await provider.deleteConversation(widget.conversation.id);
+      final success = await context
+          .read<ChatProvider>()
+          .deleteConversation(widget.conversation.id);
       if (success && mounted) {
         Navigator.pop(context);
         final l10n = AppLocalizations.of(context)!;
@@ -527,14 +522,102 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  // ============================================
-  // BUILD METHODS
-  // ============================================
+  Future<void> _deleteFile(ChatMessage message) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete File'),
+        content: const Text('Delete this file from the message?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      await context.read<ChatProvider>().deleteFile(message.id);
+    }
+  }
+
+  void _showMessageOptions(BuildContext context, ChatMessage message) {
+    final l10n = AppLocalizations.of(context)!;
+    final currentUserId = context.read<AuthProvider>().user?.id ?? 0;
+    final isMine = message.isFromMe(currentUserId);
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              if (message.content != null && message.content!.isNotEmpty)
+                ListTile(
+                  leading: const Icon(Icons.content_copy, color: Colors.blue),
+                  title: Text(l10n.copy),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Clipboard.setData(ClipboardData(text: message.content!));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(l10n.messageCopied)),
+                    );
+                  },
+                ),
+              if (message.file != null)
+                ListTile(
+                  leading: const Icon(Icons.download, color: Colors.green),
+                  title: Text(l10n.downloadFile),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _downloadFile(message);
+                  },
+                ),
+              if (message.isVoice && message.file?.url != null)
+                ListTile(
+                  leading: Icon(
+                    _isPlayingVoice ? Icons.pause : Icons.play_arrow,
+                    color: Colors.blue,
+                  ),
+                  title: Text(_isPlayingVoice ? 'Pause Voice' : 'Play Voice'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _playVoiceMessage(message);
+                  },
+                ),
+              if (isMine)
+                ListTile(
+                  leading:
+                  const Icon(Icons.delete_outline, color: Colors.red),
+                  title: Text(
+                    l10n.deleteMessage,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    context.read<ChatProvider>().deleteMessage(message.id);
+                  },
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
+    final currentUserId = context.watch<AuthProvider>().user?.id ?? 0;
 
     return Scaffold(
       backgroundColor: const Color(0xFFECE5DD),
@@ -554,28 +637,28 @@ class _ChatScreenState extends State<ChatScreen> {
 
                 return ListView.builder(
                   controller: _scrollController,
-                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                  padding:
+                  const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
                   reverse: true,
                   itemCount: provider.currentMessages.length,
                   itemBuilder: (context, index) {
                     final message = provider.currentMessages[
                     provider.currentMessages.length - 1 - index];
-                    final isCurrentUser = message.senderType == 'fundi';
+                    // Ownership by sender id (works for customer & fundi)
+                    final isCurrentUser = message.isFromMe(currentUserId);
 
                     return MessageBubble(
                       message: message,
                       isCurrentUser: isCurrentUser,
-                      onLongPress: () {
-                        _showMessageOptions(context, message);
-                      },
+                      onLongPress: () => _showMessageOptions(context, message),
                       onDownload: message.file != null
                           ? () => _downloadFile(message)
                           : null,
-                      onDeleteFile: message.file != null && message.senderType == 'fundi'
+                      onDeleteFile: message.file != null && isCurrentUser
                           ? () => _deleteFile(message)
                           : null,
                       onPlayVoice: message.isVoice && message.file?.url != null
-                          ? () => _playVoiceMessage(message.file!.url!)
+                          ? () => _playVoiceMessage(message)
                           : null,
                       isPlaying: _isPlayingVoice,
                       playbackPosition: _playbackPosition,
@@ -603,7 +686,11 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  PreferredSizeWidget _buildAppBar(BuildContext context, ThemeData theme, AppLocalizations l10n) {
+  PreferredSizeWidget _buildAppBar(
+      BuildContext context,
+      ThemeData theme,
+      AppLocalizations l10n,
+      ) {
     final otherParty = widget.conversation.otherParty;
 
     return AppBar(
@@ -618,25 +705,10 @@ class _ChatScreenState extends State<ChatScreen> {
           CircleAvatar(
             radius: 20,
             backgroundColor: Colors.white.withOpacity(0.2),
-            child: otherParty.avatar != null
-                ? ClipOval(
-              child: Image.network(
-                otherParty.avatar!,
-                width: 40,
-                height: 40,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Text(
-                  otherParty.name.isNotEmpty ? otherParty.name[0].toUpperCase() : '?',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-              ),
-            )
-                : Text(
-              otherParty.name.isNotEmpty ? otherParty.name[0].toUpperCase() : '?',
+            child: Text(
+              otherParty.name.isNotEmpty
+                  ? otherParty.name[0].toUpperCase()
+                  : '?',
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
@@ -674,49 +746,21 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.videocam, color: Colors.white),
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => VideoCallScreen(
-                  userName: otherParty.name,
-                  userId: otherParty.id.toString(),
-                ),
-              ),
-            );
-          },
+          icon: const Icon(Icons.videocam, color: Colors.white70),
+          tooltip: 'Video call – Coming soon',
+          onPressed: () => _showComingSoon('Video call'),
         ),
         IconButton(
-          icon: const Icon(Icons.phone, color: Colors.white),
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => VoiceCallScreen(
-                  userName: otherParty.name,
-                  userId: otherParty.id.toString(),
-                ),
-              ),
-            );
-          },
+          icon: const Icon(Icons.phone, color: Colors.white70),
+          tooltip: 'Voice call – Coming soon',
+          onPressed: () => _showComingSoon('Voice call'),
         ),
         PopupMenuButton<String>(
           icon: const Icon(Icons.more_vert, color: Colors.white),
           onSelected: (value) {
-            if (value == 'delete_conversation') {
-              _deleteConversation();
-            }
+            if (value == 'delete_conversation') _deleteConversation();
           },
           itemBuilder: (context) => [
-            const PopupMenuItem(
-              value: 'view_profile',
-              child: Text('View Profile'),
-            ),
-            const PopupMenuItem(
-              value: 'clear_chat',
-              child: Text('Clear Chat'),
-            ),
             const PopupMenuItem(
               value: 'delete_conversation',
               child: Text(
@@ -756,17 +800,18 @@ class _ChatScreenState extends State<ChatScreen> {
           const SizedBox(height: 8),
           Text(
             l10n.sayHelloToStart,
-            style: TextStyle(
-              color: Colors.grey.shade500,
-              fontSize: 14,
-            ),
+            style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildMessageInput(BuildContext context, ThemeData theme, AppLocalizations l10n) {
+  Widget _buildMessageInput(
+      BuildContext context,
+      ThemeData theme,
+      AppLocalizations l10n,
+      ) {
     return Column(
       children: [
         Container(
@@ -784,11 +829,19 @@ class _ChatScreenState extends State<ChatScreen> {
           child: Row(
             children: [
               PopupMenuButton<String>(
-                icon: Icon(Icons.attach_file, color: Colors.grey.shade600, size: 26),
+                icon: Icon(
+                  Icons.attach_file,
+                  color: Colors.grey.shade600,
+                  size: 26,
+                ),
                 onSelected: (value) {
-                  if (value == 'camera') _pickCamera();
-                  else if (value == 'gallery') _pickImage();
-                  else if (value == 'document') _pickFile();
+                  if (value == 'camera') {
+                    _pickCamera();
+                  } else if (value == 'gallery') {
+                    _pickImage();
+                  } else if (value == 'document') {
+                    _pickFile();
+                  }
                 },
                 itemBuilder: (context) => const [
                   PopupMenuItem(
@@ -832,10 +885,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                   child: TextField(
                     controller: _textController,
-                    onChanged: (text) {
-                      setState(() {});
-                      _sendTypingStatus(text.isNotEmpty);
-                    },
+                    onChanged: _onTextChanged,
                     decoration: InputDecoration(
                       hintText: l10n.typeAMessage,
                       hintStyle: TextStyle(color: Colors.grey.shade500),
@@ -853,11 +903,14 @@ class _ChatScreenState extends State<ChatScreen> {
               const SizedBox(width: 4),
               IconButton(
                 icon: Icon(
-                  _showEmojiPicker ? Icons.keyboard : Icons.emoji_emotions_outlined,
+                  _showEmojiPicker
+                      ? Icons.keyboard
+                      : Icons.emoji_emotions_outlined,
                   color: Colors.grey.shade600,
                   size: 26,
                 ),
-                onPressed: () => setState(() => _showEmojiPicker = !_showEmojiPicker),
+                onPressed: () =>
+                    setState(() => _showEmojiPicker = !_showEmojiPicker),
               ),
               if (_textController.text.trim().isNotEmpty)
                 Container(
@@ -890,31 +943,19 @@ class _ChatScreenState extends State<ChatScreen> {
                   onLongPressEnd: (_) => _stopVoiceRecording(),
                   child: Container(
                     decoration: BoxDecoration(
-                      color: _isRecording ? Colors.red.withOpacity(0.1) : Colors.transparent,
+                      color: _isRecording
+                          ? Colors.red.withOpacity(0.1)
+                          : Colors.transparent,
                       shape: BoxShape.circle,
                     ),
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        if (_isRecording)
-                          Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.red, width: 2),
-                            ),
-                            child: _buildAmplitudeWaveform(),
-                          ),
-                        IconButton(
-                          icon: Icon(
-                            _isRecording ? Icons.stop_circle : Icons.mic,
-                            color: _isRecording ? Colors.red : Colors.grey.shade600,
-                            size: 26,
-                          ),
-                          onPressed: null,
-                        ),
-                      ],
+                    child: IconButton(
+                      icon: Icon(
+                        _isRecording ? Icons.stop_circle : Icons.mic,
+                        color:
+                        _isRecording ? Colors.red : Colors.grey.shade600,
+                        size: 26,
+                      ),
+                      onPressed: null,
                     ),
                   ),
                 ),
@@ -929,16 +970,8 @@ class _ChatScreenState extends State<ChatScreen> {
               children: [
                 const Icon(Icons.circle, color: Colors.red, size: 12),
                 const SizedBox(width: 8),
-                const Text(
-                  'Recording...',
-                  style: TextStyle(
-                    color: Colors.red,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(width: 8),
                 Text(
-                  '${_recordingDuration}s',
+                  'Recording... ${_recordingDuration}s',
                   style: const TextStyle(
                     color: Colors.red,
                     fontWeight: FontWeight.bold,
@@ -953,9 +986,8 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
         if (_showEmojiPicker)
-          Container(
-            height: 300,
-            color: Colors.white,
+          SizedBox(
+            height: 280,
             child: EmojiPicker(
               onEmojiSelected: (category, emoji) {
                 final text = _textController.text;
@@ -968,119 +1000,13 @@ class _ChatScreenState extends State<ChatScreen> {
               onBackspacePressed: () {
                 final text = _textController.text;
                 if (text.isNotEmpty) {
-                  _textController.text = text.substring(0, text.length - 1);
-                  _textController.selection = TextSelection.fromPosition(
-                    TextPosition(offset: _textController.text.length),
-                  );
+                  _textController.text =
+                      text.characters.skipLast(1).toString();
                 }
               },
             ),
           ),
       ],
-    );
-  }
-
-  Widget _buildAmplitudeWaveform() {
-    const bars = 6;
-    final amplitude = (_amplitude * 100).clamp(5, 100).toDouble();
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(bars, (index) {
-        final height = (amplitude / 100 * 20 * (0.5 + 0.5 * (index / bars)))
-            .clamp(4, 20)
-            .toDouble();
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 2),
-          width: 3,
-          height: height,
-          decoration: BoxDecoration(
-            color: Colors.red,
-            borderRadius: BorderRadius.circular(2),
-          ),
-        );
-      }),
-    );
-  }
-
-  void _showMessageOptions(BuildContext context, ChatMessage message) {
-    final l10n = AppLocalizations.of(context)!;
-
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          child: Wrap(
-            children: [
-              if (message.content != null && message.content!.isNotEmpty)
-                ListTile(
-                  leading: const Icon(Icons.content_copy, color: Colors.blue),
-                  title: Text(l10n.copy),
-                  onTap: () {
-                    Navigator.pop(context);
-                    if (message.content != null) {
-                      Clipboard.setData(ClipboardData(text: message.content!));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(l10n.messageCopied),
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
-                    }
-                  },
-                ),
-              if (message.file != null)
-                ListTile(
-                  leading: const Icon(Icons.download, color: Colors.green),
-                  title: Text(l10n.downloadFile),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _downloadFile(message);
-                  },
-                ),
-              if (message.file != null && message.senderType == 'fundi')
-                ListTile(
-                  leading: const Icon(Icons.delete_outline, color: Colors.red),
-                  title: Text(l10n.deleteFile, style: const TextStyle(color: Colors.red)),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _deleteFile(message);
-                  },
-                ),
-              if (message.isVoice && message.file?.url != null)
-                ListTile(
-                  leading: Icon(
-                    _isPlayingVoice ? Icons.pause : Icons.play_arrow,
-                    color: Colors.blue,
-                  ),
-                  title: Text(_isPlayingVoice ? 'Pause Voice' : 'Play Voice'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _playVoiceMessage(message.file!.url!);
-                  },
-                ),
-              if (message.senderType == 'fundi')
-                ListTile(
-                  leading: const Icon(Icons.delete_outline, color: Colors.red),
-                  title: Text(l10n.deleteMessage, style: const TextStyle(color: Colors.red)),
-                  onTap: () {
-                    Navigator.pop(context);
-                    context.read<ChatProvider>().deleteMessage(message.id);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(l10n.messageDeleted),
-                        duration: const Duration(seconds: 2),
-                      ),
-                    );
-                  },
-                ),
-            ],
-          ),
-        );
-      },
     );
   }
 }

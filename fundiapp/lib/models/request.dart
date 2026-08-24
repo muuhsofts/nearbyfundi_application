@@ -1,4 +1,4 @@
-// lib/models/request.dart  (or service_request.dart)
+// lib/models/request.dart
 
 class ServiceRequest {
   final int id;
@@ -10,6 +10,7 @@ class ServiceRequest {
   final String technicianName;
   final String serviceName;
   final String customerName;
+  final String? customerPhone;          // ← NEW
   final String? technicianArea;
   final String? technicianPhone;
   final double? technicianRating;
@@ -24,6 +25,7 @@ class ServiceRequest {
     required this.technicianName,
     required this.serviceName,
     required this.customerName,
+    this.customerPhone,                 // ← NEW
     this.technicianArea,
     this.technicianPhone,
     this.technicianRating,
@@ -65,10 +67,30 @@ class ServiceRequest {
       techName = json['technician_name'].toString();
     }
 
+    // Customer data
+    String customerName = 'Customer';
+    String? customerPhone;
+    int customerId = json['customer_id'] ?? 0;
+
+    if (json['customer'] != null && json['customer'] is Map) {
+      final customer = json['customer'] as Map;
+      customerName = customer['name']?.toString() ?? customerName;
+      customerPhone = customer['phone']?.toString();
+      customerId = customer['id'] ?? customerId;
+    }
+
+    // Fallbacks for flat responses
+    if (json['customer_name'] != null) {
+      customerName = json['customer_name'].toString();
+    }
+    if (json['customer_phone'] != null) {
+      customerPhone = json['customer_phone'].toString();
+    }
+
     return ServiceRequest(
       id: json['id'] ?? 0,
       technicianId: json['technician_id'] ?? 0,
-      customerId: json['customer_id'] ?? json['customer']?['id'] ?? 0,
+      customerId: customerId,
       description: json['description'] ?? '',
       status: json['status'] ?? 'pending',
       createdAt: json['created_at'] != null
@@ -77,7 +99,8 @@ class ServiceRequest {
       technicianName: techName,
       serviceName:
       json['service']?['name'] ?? json['service_name'] ?? 'Service',
-      customerName: json['customer']?['name'] ?? 'Customer',
+      customerName: customerName,
+      customerPhone: customerPhone,       // ← NEW
       technicianArea: techArea,
       technicianPhone: techPhone,
       technicianRating: techRating,

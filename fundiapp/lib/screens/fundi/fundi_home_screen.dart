@@ -13,7 +13,6 @@ import '../../providers/technician_provider.dart';
 import '../../providers/request_provider.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/notification_provider.dart';
-import '../../providers/subscription_provider.dart';
 import '../../widgets/confirmation_dialog.dart';
 import '../../widgets/notification_bell_icon.dart';
 import '../../l10n/app_localizations.dart';
@@ -35,13 +34,11 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
     with WidgetsBindingObserver {
   int _currentIndex = 0;
   late final List<Widget> _screens;
-  Timer? _refreshTimer;
   bool _isRefreshing = false;
 
   @override
   void initState() {
     super.initState();
-
     WidgetsBinding.instance.addObserver(this);
 
     _screens = [
@@ -59,7 +56,6 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
 
   @override
   void dispose() {
-    _refreshTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -67,9 +63,9 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _checkSubscriptionAndStartTimer();
       context.read<RequestProvider>().loadMyRequests();
       context.read<NotificationProvider>().loadNotifications();
+      context.read<TechnicianProvider>().fetchMyProfile();
     }
   }
 
@@ -80,39 +76,8 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
   void _initializeData() {
     context.read<TechnicianProvider>().fetchMyProfile();
     context.read<RequestProvider>().loadMyRequests();
-    _checkSubscriptionAndStartTimer();
     _initializeChat();
     _loadNotifications();
-  }
-
-  // ============================================================
-  // SUBSCRIPTION CHECK + AUTO REFRESH
-  // ============================================================
-
-  void _checkSubscriptionAndStartTimer() {
-    final provider = context.read<SubscriptionProvider>();
-
-    provider.checkSubscriptionStatus();
-    provider.loadMySubscriptions();
-
-    final isPending = provider.isPending;
-
-    _refreshTimer?.cancel();
-
-    if (isPending) {
-      _refreshTimer = Timer.periodic(
-        const Duration(seconds: 10),
-            (timer) {
-          provider.checkSubscriptionStatus();
-          provider.loadMySubscriptions();
-
-          if (!provider.isPending && mounted) {
-            timer.cancel();
-            setState(() {});
-          }
-        },
-      );
-    }
   }
 
   Future<void> _manualRefresh() async {
@@ -120,19 +85,11 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
 
     setState(() => _isRefreshing = true);
 
-    final provider = context.read<SubscriptionProvider>();
-
     await Future.wait([
-      provider.checkSubscriptionStatus(),
-      provider.loadMySubscriptions(),
       context.read<TechnicianProvider>().fetchMyProfile(),
       context.read<RequestProvider>().loadMyRequests(),
       context.read<NotificationProvider>().loadNotifications(),
     ]);
-
-    if (!provider.isPending) {
-      _refreshTimer?.cancel();
-    }
 
     if (mounted) {
       setState(() => _isRefreshing = false);
@@ -173,7 +130,7 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
   }
 
   // ============================================================
-  // DRAWER – NOW FULLY THEME‑AWARE
+  // DRAWER
   // ============================================================
 
   Drawer _buildDrawer(BuildContext context) {
@@ -181,18 +138,18 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
     final colorScheme = theme.colorScheme;
 
     return Drawer(
-      backgroundColor: theme.cardColor, // adapts to dark/light
+      backgroundColor: theme.cardColor,
       child: SafeArea(
         child: Column(
           children: [
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+              padding: const EdgeInsets.fromLTRB(20, 28, 20, 20),
               decoration: BoxDecoration(
                 color: theme.cardColor,
                 border: Border(
                   bottom: BorderSide(
-                    color: theme.dividerColor,
+                    color: theme.dividerColor.withOpacity(0.6),
                     width: 1,
                   ),
                 ),
@@ -202,10 +159,11 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
                 style: theme.textTheme.titleLarge?.copyWith(
                   color: colorScheme.onSurface,
                   fontWeight: FontWeight.w700,
+                  letterSpacing: -0.3,
                 ),
               ),
             ),
-
+            const SizedBox(height: 8),
             ListTile(
               leading: Icon(
                 Icons.handshake_outlined,
@@ -241,10 +199,9 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: theme.cardColor,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(24),
-        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
         return DraggableScrollableSheet(
@@ -253,8 +210,8 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
           maxChildSize: 0.95,
           expand: false,
           builder: (context, scrollController) {
-            return Container(
-              padding: const EdgeInsets.all(16),
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
               child: Column(
                 children: [
                   Container(
@@ -284,14 +241,10 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 8),
                   Expanded(
                     child: Consumer<NotificationProvider>(
-                      builder: (
-                          context,
-                          notificationProvider,
-                          child,
-                          ) {
+                      builder: (context, notificationProvider, child) {
                         if (notificationProvider.isLoading) {
                           return const Center(
                             child: CircularProgressIndicator(),
@@ -322,8 +275,7 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
 
                         return ListView.builder(
                           controller: scrollController,
-                          itemCount:
-                          notificationProvider.notifications.length,
+                          itemCount: notificationProvider.notifications.length,
                           itemBuilder: (context, index) {
                             final notification =
                             notificationProvider.notifications[index];
@@ -334,11 +286,9 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
                                 notificationProvider.markAsRead(
                                   notification['id'],
                                 );
-
                                 Navigator.pop(ctx);
 
-                                final type =
-                                    notification['type'] ?? '';
+                                final type = notification['type'] ?? '';
 
                                 if (type == 'chat_message') {
                                   _navigateToTab(3);
@@ -369,27 +319,19 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
   // COMING SOON
   // ============================================================
 
-  void _showComingSoon(
-      BuildContext context,
-      String feature,
-      ) {
+  void _showComingSoon(BuildContext context, String feature) {
     final theme = Theme.of(context);
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
           children: [
-            const Icon(
-              Icons.construction_rounded,
-              color: Colors.white,
-            ),
+            const Icon(Icons.construction_rounded, color: Colors.white),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 '$feature ${AppLocalizations.of(context)!.comingSoon} 🚀',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w500,
-                ),
+                style: const TextStyle(fontWeight: FontWeight.w500),
               ),
             ),
           ],
@@ -408,9 +350,7 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
   // LOGOUT
   // ============================================================
 
-  Future<void> _logoutWithConfirmation(
-      BuildContext context,
-      ) async {
+  Future<void> _logoutWithConfirmation(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
 
     final confirm = await showConfirmationDialog(
@@ -423,135 +363,9 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
       await context.read<AuthProvider>().logout();
 
       if (context.mounted) {
-        Navigator.pushReplacementNamed(
-          context,
-          AppRoutes.login,
-        );
+        Navigator.pushReplacementNamed(context, AppRoutes.login);
       }
     }
-  }
-
-  // ============================================================
-  // SUBSCRIPTION REQUIRED DIALOG
-  // ============================================================
-
-  void _showSubscriptionRequiredDialog(
-      BuildContext context,
-      ) {
-    final theme = Theme.of(context);
-
-    showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        title: Row(
-          children: [
-            const Icon(
-              Icons.lock_outline,
-              color: Colors.orange,
-              size: 28,
-            ),
-            const SizedBox(width: 12),
-            Flexible(
-              child: Text(
-                'Subscription Required',
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'You need an active subscription to access this feature.',
-              style: theme.textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Subscribe now to unlock all Fundi features:',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.hintColor,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Row(
-              children: [
-                Icon(
-                  Icons.check_circle,
-                  color: Colors.green,
-                  size: 16,
-                ),
-                SizedBox(width: 8),
-                Text('Manage your services'),
-              ],
-            ),
-            const Row(
-              children: [
-                Icon(
-                  Icons.check_circle,
-                  color: Colors.green,
-                  size: 16,
-                ),
-                SizedBox(width: 8),
-                Text('Accept and manage requests'),
-              ],
-            ),
-            const Row(
-              children: [
-                Icon(
-                  Icons.check_circle,
-                  color: Colors.green,
-                  size: 16,
-                ),
-                SizedBox(width: 8),
-                Text('Chat with customers'),
-              ],
-            ),
-            const Row(
-              children: [
-                Icon(
-                  Icons.check_circle,
-                  color: Colors.green,
-                  size: 16,
-                ),
-                SizedBox(width: 8),
-                Text('Showcase your portfolio'),
-              ],
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              Navigator.pushNamed(
-                context,
-                AppRoutes.rateCards,
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: theme.primaryColor,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: const Text('Subscribe Now'),
-          ),
-        ],
-      ),
-    );
   }
 
   // ============================================================
@@ -564,68 +378,29 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
     final l10n = AppLocalizations.of(context)!;
     final isDark = theme.brightness == Brightness.dark;
 
-    final subscription = context.watch<SubscriptionProvider>();
-    final hasSubscription =
-        subscription.hasActiveSubscription;
-    final isPending = subscription.isPending;
-
-    final bool isProfileTab = _currentIndex == 4;
-
-    Widget body;
-
-    if (isProfileTab) {
-      body = _screens[4];
-    } else if (hasSubscription) {
-      body = _screens[_currentIndex];
-    } else if (isPending) {
-      body = _LockedDashboardOverlay(
-        isPending: true,
-        onRefresh: _manualRefresh,
-        isRefreshing: _isRefreshing,
-      );
-    } else {
-      body = _LockedDashboardOverlay(
-        isPending: false,
-        onRefresh: _manualRefresh,
-        isRefreshing: _isRefreshing,
-      );
-    }
-
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-
-      // ========================================================
-      // WHITE DRAWER – now theme‑aware
-      // ========================================================
       drawer: _buildDrawer(context),
-
       appBar: AppBar(
         title: Text(
           l10n.fundiDashboard,
           style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
+            letterSpacing: -0.2,
           ),
         ),
         elevation: 0,
         backgroundColor: theme.primaryColor,
         foregroundColor: Colors.white,
-
-        // Drawer button
         leading: Builder(
           builder: (context) {
             return IconButton(
-              icon: const Icon(
-                Icons.menu_rounded,
-                color: Colors.white,
-              ),
-              onPressed: () {
-                Scaffold.of(context).openDrawer();
-              },
+              icon: const Icon(Icons.menu_rounded, color: Colors.white),
+              onPressed: () => Scaffold.of(context).openDrawer(),
             );
           },
         ),
-
         actions: [
           IconButton(
             icon: _isRefreshing
@@ -637,202 +412,115 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
                 color: Colors.white,
               ),
             )
-                : const Icon(
-              Icons.refresh_rounded,
-              color: Colors.white,
-            ),
+                : const Icon(Icons.refresh_rounded, color: Colors.white),
             tooltip: 'Refresh',
-            onPressed: _isRefreshing
-                ? null
-                : _manualRefresh,
+            onPressed: _isRefreshing ? null : _manualRefresh,
           ),
-
           NotificationBellIcon(
-            onTap: hasSubscription
-                ? () => _showNotifications(context)
-                : () => _showSubscriptionRequiredDialog(
-              context,
-            ),
+            onTap: () => _showNotifications(context),
           ),
-
           IconButton(
-            icon: Icon(
+            icon: const Icon(
               Icons.smart_toy_rounded,
-              color: hasSubscription
-                  ? Colors.white
-                  : Colors.white.withOpacity(0.5),
+              color: Colors.white,
               size: 26,
             ),
-            onPressed: hasSubscription
-                ? () => _showComingSoon(
-              context,
-              l10n.aiAssistant,
-            )
-                : () => _showSubscriptionRequiredDialog(
-              context,
-            ),
-            tooltip: hasSubscription
-                ? '${l10n.aiAssistant} (${l10n.comingSoon})'
-                : '🔒 Subscription Required',
+            onPressed: () => _showComingSoon(context, l10n.aiAssistant),
+            tooltip: '${l10n.aiAssistant} (${l10n.comingSoon})',
           ),
-
           PopupMenuButton<String>(
-            icon: Icon(
-              Icons.more_vert_rounded,
-              color: hasSubscription
-                  ? Colors.white
-                  : Colors.white.withOpacity(0.5),
-            ),
+            icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
             offset: const Offset(0, 50),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
             elevation: 8,
-            itemBuilder: (context) =>
-                _buildMenuItems(
-                  context,
-                  hasSubscription,
-                ),
+            itemBuilder: (context) => _buildMenuItems(context),
           ),
         ],
       ),
-
-      body: body,
-
+      body: _screens[_currentIndex],
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           boxShadow: [
             BoxShadow(
-              color: theme.shadowColor.withOpacity(0.05),
-              blurRadius: 8,
+              color: theme.shadowColor.withOpacity(0.06),
+              blurRadius: 10,
               offset: const Offset(0, -2),
             ),
           ],
           border: Border(
             top: BorderSide(
-              color: theme.dividerColor,
+              color: theme.dividerColor.withOpacity(0.5),
               width: 0.5,
             ),
           ),
         ),
         child: Consumer<ChatProvider>(
-          builder: (
-              context,
-              chatProvider,
-              child,
-              ) {
+          builder: (context, chatProvider, child) {
             return BottomNavigationBar(
               currentIndex: _currentIndex,
               selectedItemColor: theme.primaryColor,
               unselectedItemColor:
-              isDark
-                  ? Colors.grey.shade400
-                  : Colors.grey.shade600,
-              onTap: (i) {
-                if (!hasSubscription && i != 4) {
-                  _showSubscriptionRequiredDialog(
-                    context,
-                  );
-                  return;
-                }
-
-                setState(() => _currentIndex = i);
-              },
+              isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+              onTap: (i) => setState(() => _currentIndex = i),
               type: BottomNavigationBarType.fixed,
               backgroundColor: theme.cardColor,
               elevation: 0,
+              selectedFontSize: 12,
+              unselectedFontSize: 11,
               items: [
                 BottomNavigationBarItem(
-                  icon: const Icon(
-                    Icons.home_outlined,
-                  ),
-                  activeIcon: const Icon(
-                    Icons.home_rounded,
-                  ),
-                  label: hasSubscription
-                      ? l10n.home
-                      : '🔒 Home',
+                  icon: const Icon(Icons.home_outlined),
+                  activeIcon: const Icon(Icons.home_rounded),
+                  label: l10n.home,
                 ),
                 BottomNavigationBarItem(
-                  icon: const Icon(
-                    Icons.article_outlined,
-                  ),
-                  activeIcon: const Icon(
-                    Icons.article_rounded,
-                  ),
-                  label: hasSubscription
-                      ? l10n.blog
-                      : '🔒 Blog',
+                  icon: const Icon(Icons.article_outlined),
+                  activeIcon: const Icon(Icons.article_rounded),
+                  label: l10n.blog,
                 ),
                 BottomNavigationBarItem(
                   icon: Stack(
                     alignment: Alignment.topRight,
                     children: [
-                      const Icon(
-                        Icons.list_alt_outlined,
-                      ),
-                      if (hasSubscription &&
-                          chatProvider.totalUnread > 0)
-                        _buildBadge(
-                          chatProvider.totalUnread,
-                        ),
+                      const Icon(Icons.list_alt_outlined),
+                      if (chatProvider.totalUnread > 0)
+                        _buildBadge(chatProvider.totalUnread),
                     ],
                   ),
                   activeIcon: Stack(
                     alignment: Alignment.topRight,
                     children: [
-                      const Icon(
-                        Icons.list_alt_rounded,
-                      ),
-                      if (hasSubscription &&
-                          chatProvider.totalUnread > 0)
-                        _buildBadge(
-                          chatProvider.totalUnread,
-                        ),
+                      const Icon(Icons.list_alt_rounded),
+                      if (chatProvider.totalUnread > 0)
+                        _buildBadge(chatProvider.totalUnread),
                     ],
                   ),
-                  label: hasSubscription
-                      ? l10n.requests
-                      : '🔒 Requests',
+                  label: l10n.requests,
                 ),
                 BottomNavigationBarItem(
                   icon: Stack(
                     alignment: Alignment.topRight,
                     children: [
-                      const Icon(
-                        Icons.chat_bubble_outline_rounded,
-                      ),
-                      if (hasSubscription &&
-                          chatProvider.totalUnread > 0)
-                        _buildBadge(
-                          chatProvider.totalUnread,
-                        ),
+                      const Icon(Icons.chat_bubble_outline_rounded),
+                      if (chatProvider.totalUnread > 0)
+                        _buildBadge(chatProvider.totalUnread),
                     ],
                   ),
                   activeIcon: Stack(
                     alignment: Alignment.topRight,
                     children: [
-                      const Icon(
-                        Icons.chat_bubble_rounded,
-                      ),
-                      if (hasSubscription &&
-                          chatProvider.totalUnread > 0)
-                        _buildBadge(
-                          chatProvider.totalUnread,
-                        ),
+                      const Icon(Icons.chat_bubble_rounded),
+                      if (chatProvider.totalUnread > 0)
+                        _buildBadge(chatProvider.totalUnread),
                     ],
                   ),
-                  label: hasSubscription
-                      ? l10n.chat
-                      : '🔒 Chat',
+                  label: l10n.chat,
                 ),
                 BottomNavigationBarItem(
-                  icon: const Icon(
-                    Icons.person_outline,
-                  ),
-                  activeIcon: const Icon(
-                    Icons.person_rounded,
-                  ),
+                  icon: const Icon(Icons.person_outline),
+                  activeIcon: const Icon(Icons.person_rounded),
                   label: l10n.profile,
                 ),
               ],
@@ -850,10 +538,7 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
         color: Colors.red,
         shape: BoxShape.circle,
       ),
-      constraints: const BoxConstraints(
-        minWidth: 14,
-        minHeight: 14,
-      ),
+      constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
       child: Text(
         count > 9 ? '9+' : '$count',
         style: const TextStyle(
@@ -867,13 +552,10 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
   }
 
   // ============================================================
-  // MENU ITEMS – REMOVED ABOUT, TERMS, FAQ, CONTACT
+  // MENU ITEMS
   // ============================================================
 
-  List<PopupMenuEntry<String>> _buildMenuItems(
-      BuildContext context,
-      bool hasSubscription,
-      ) {
+  List<PopupMenuEntry<String>> _buildMenuItems(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
     return [
@@ -881,91 +563,30 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
         context,
         key: 'settings',
         icon: Icons.settings_outlined,
-        title: hasSubscription
-            ? l10n.settings
-            : '🔒 ${l10n.settings}',
-        isLocked: !hasSubscription,
-        onTap: () {
-          if (hasSubscription) {
-            Navigator.pushNamed(
-              context,
-              AppRoutes.settings,
-            );
-          } else {
-            _showSubscriptionRequiredDialog(
-              context,
-            );
-          }
-        },
+        title: l10n.settings,
+        onTap: () => Navigator.pushNamed(context, AppRoutes.settings),
       ),
-
       _buildPopupMenuItem(
         context,
         key: 'portfolio',
         icon: Icons.photo_library_outlined,
-        title: hasSubscription
-            ? l10n.portfolio
-            : '🔒 ${l10n.portfolio}',
-        isLocked: !hasSubscription,
-        onTap: () {
-          if (hasSubscription) {
-            Navigator.pushNamed(
-              context,
-              AppRoutes.portfolio,
-            );
-          } else {
-            _showSubscriptionRequiredDialog(
-              context,
-            );
-          }
-        },
+        title: l10n.portfolio,
+        onTap: () => Navigator.pushNamed(context, AppRoutes.portfolio),
       ),
-
-      _buildPopupMenuItem(
-        context,
-        key: 'subscriptions',
-        icon: Icons.subscriptions_outlined,
-        title: 'Subscriptions',
-        isLocked: false,
-        onTap: () => Navigator.pushNamed(
-          context,
-          AppRoutes.subscriptions,
-        ),
-      ),
-
       _buildPopupMenuItem(
         context,
         key: 'downloads',
         icon: Icons.file_download_rounded,
-        title: hasSubscription
-            ? 'Downloads'
-            : '🔒 Downloads',
-        isLocked: !hasSubscription,
-        onTap: () {
-          if (hasSubscription) {
-            Navigator.pushNamed(
-              context,
-              AppRoutes.downloads,
-            );
-          } else {
-            _showSubscriptionRequiredDialog(
-              context,
-            );
-          }
-        },
+        title: 'Downloads',
+        onTap: () => Navigator.pushNamed(context, AppRoutes.downloads),
       ),
-
       const PopupMenuDivider(),
-
       _buildPopupMenuItem(
         context,
         key: 'logout',
         icon: Icons.logout_rounded,
         title: l10n.logout,
-        isLocked: false,
-        onTap: () => _logoutWithConfirmation(
-          context,
-        ),
+        onTap: () => _logoutWithConfirmation(context),
         isDestructive: true,
       ),
     ];
@@ -976,51 +597,29 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
         required String key,
         required IconData icon,
         required String title,
-        required bool isLocked,
         required VoidCallback onTap,
         bool isDestructive = false,
       }) {
     final theme = Theme.of(context);
-    final color =
-    isDestructive ? Colors.red : theme.primaryColor;
+    final color = isDestructive ? Colors.red : theme.primaryColor;
 
     return PopupMenuItem<String>(
       value: key,
       onTap: onTap,
-      enabled: true,
       child: Row(
         children: [
-          Icon(
-            icon,
-            color: isDestructive
-                ? Colors.red
-                : (isLocked
-                ? Colors.grey
-                : color),
-            size: 22,
-          ),
+          Icon(icon, color: color, size: 22),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               title,
               style: theme.textTheme.titleMedium?.copyWith(
-                color: isDestructive
-                    ? Colors.red
-                    : (isLocked
-                    ? Colors.grey
-                    : null),
-                fontWeight: isDestructive
-                    ? FontWeight.w600
-                    : FontWeight.normal,
+                color: isDestructive ? Colors.red : null,
+                fontWeight:
+                isDestructive ? FontWeight.w600 : FontWeight.normal,
               ),
             ),
           ),
-          if (isLocked)
-            const Icon(
-              Icons.lock_outline,
-              size: 16,
-              color: Colors.grey,
-            ),
         ],
       ),
     );
@@ -1047,23 +646,21 @@ class _NotificationTile extends StatelessWidget {
 
     return ListTile(
       onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       leading: CircleAvatar(
         backgroundColor: isRead
-            ? theme.dividerColor
-            : theme.primaryColor.withOpacity(0.1),
+            ? theme.dividerColor.withOpacity(0.4)
+            : theme.primaryColor.withOpacity(0.12),
         child: Icon(
           _getIcon(notification['type']),
-          color: isRead
-              ? theme.hintColor
-              : theme.primaryColor,
+          color: isRead ? theme.hintColor : theme.primaryColor,
           size: 20,
         ),
       ),
       title: Text(
         notification['title'] ?? '',
         style: theme.textTheme.bodyMedium?.copyWith(
-          fontWeight:
-          isRead ? FontWeight.normal : FontWeight.bold,
+          fontWeight: isRead ? FontWeight.normal : FontWeight.w600,
         ),
       ),
       subtitle: Text(
@@ -1115,368 +712,12 @@ class _NotificationTile extends StatelessWidget {
 }
 
 // ================================================================
-// LOCKED DASHBOARD OVERLAY
-// ================================================================
-
-class _LockedDashboardOverlay extends StatelessWidget {
-  final bool isPending;
-  final Future<void> Function() onRefresh;
-  final bool isRefreshing;
-
-  const _LockedDashboardOverlay({
-    required this.isPending,
-    required this.onRefresh,
-    required this.isRefreshing,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    final bottomPadding =
-        MediaQuery.of(context).padding.bottom + 80.0;
-
-    return RefreshIndicator(
-      onRefresh: onRefresh,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 20,
-          bottom: bottomPadding,
-        ),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 20),
-              Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  color: isPending
-                      ? Colors.orange.shade50
-                      : Colors.grey.shade100,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color:
-                      (isPending
-                          ? Colors.orange
-                          : Colors.grey)
-                          .withOpacity(0.2),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: Icon(
-                  isPending
-                      ? Icons.hourglass_top_rounded
-                      : Icons.lock_outline,
-                  size: 50,
-                  color: isPending
-                      ? Colors.orange
-                      : Colors.grey.shade600,
-                ),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                isPending
-                    ? '⏳ Subscription Pending'
-                    : '🔒 Dashboard Locked',
-                style:
-                theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: isPending
-                      ? Colors.orange
-                      : Colors.grey.shade700,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                isPending
-                    ? 'Your subscription is pending approval.\nPlease wait for admin confirmation.'
-                    : 'Subscribe to unlock all Fundi features\nand start managing your services.',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: Colors.grey.shade600,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-
-              if (isPending) ...[
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: Colors.orange.shade200,
-                    ),
-                  ),
-                  child: Column(
-                    children: [
-                      const Text(
-                        'If approval takes more than 3-5 minutes,\nplease contact support:',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 8),
-                      _buildContactRow(
-                        context,
-                        'Airtel',
-                        '0682131140',
-                      ),
-                      _buildContactRow(
-                        context,
-                        'M-Pesa',
-                        '074838838',
-                      ),
-                      _buildContactRow(
-                        context,
-                        'Mix by Yas',
-                        '0673292922',
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-
-              if (!isPending) ...[
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: Colors.grey.shade300,
-                    ),
-                  ),
-                  child: Column(
-                    children: [
-                      _buildFeatureItem(
-                        Icons.verified_rounded,
-                        'Verified Technician Profile',
-                      ),
-                      const SizedBox(height: 8),
-                      _buildFeatureItem(
-                        Icons.list_alt_rounded,
-                        'Manage Service Requests',
-                      ),
-                      const SizedBox(height: 8),
-                      _buildFeatureItem(
-                        Icons.chat_rounded,
-                        'Chat with Customers',
-                      ),
-                      const SizedBox(height: 8),
-                      _buildFeatureItem(
-                        Icons.photo_library_rounded,
-                        'Showcase Your Portfolio',
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-              ],
-
-              ElevatedButton(
-                onPressed: isRefreshing
-                    ? null
-                    : () {
-                  if (isPending) {
-                    Navigator.pushNamed(
-                      context,
-                      AppRoutes.subscriptions,
-                    );
-                  } else {
-                    Navigator.pushNamed(
-                      context,
-                      AppRoutes.rateCards,
-                    );
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor:
-                  isPending
-                      ? Colors.orange
-                      : theme.primaryColor,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 48,
-                    vertical: 16,
-                  ),
-                  elevation: 4,
-                ),
-                child: Text(
-                  isPending
-                      ? 'Check Status'
-                      : 'Subscribe Now',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 12),
-
-              OutlinedButton.icon(
-                onPressed:
-                isRefreshing ? null : onRefresh,
-                icon: isRefreshing
-                    ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                  ),
-                )
-                    : const Icon(
-                  Icons.refresh_rounded,
-                  size: 20,
-                ),
-                label: Text(
-                  isRefreshing
-                      ? 'Refreshing...'
-                      : 'Refresh Status',
-                ),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 12,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-
-              if (!isPending) ...[
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: () {
-                    Navigator.pushNamed(
-                      context,
-                      AppRoutes.subscriptions,
-                    );
-                  },
-                  child: const Text(
-                    'View My Subscriptions',
-                  ),
-                ),
-              ],
-
-              const SizedBox(height: 20),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildContactRow(
-      BuildContext context,
-      String name,
-      String number,
-      ) {
-    return InkWell(
-      onTap: () => _makePhoneCall(
-        context,
-        number,
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          vertical: 4,
-        ),
-        child: Row(
-          mainAxisAlignment:
-          MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.phone,
-              size: 16,
-              color: Colors.blue.shade700,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              '$name: $number',
-              style: TextStyle(
-                color: Colors.blue.shade700,
-                fontWeight: FontWeight.w500,
-                fontSize: 14,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _makePhoneCall(
-      BuildContext context,
-      String phoneNumber,
-      ) async {
-    final url = 'tel:$phoneNumber';
-
-    if (await canLaunchUrl(Uri.parse(url))) {
-      await launchUrl(Uri.parse(url));
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Unable to make a call. Please dial manually.',
-          ),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
-  Widget _buildFeatureItem(
-      IconData icon,
-      String label,
-      ) {
-    return Row(
-      children: [
-        const Icon(
-          Icons.check_circle,
-          color: Colors.green,
-          size: 20,
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            label,
-            style: const TextStyle(
-              fontSize: 14,
-              color: Colors.grey,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ================================================================
 // HOME DASHBOARD CONTENT
 // ================================================================
 
 class _HomeDashboardContent extends StatelessWidget {
   const _HomeDashboardContent();
 
-  // ─── EAST AFRICA TIME (EAT) HELPER ────────────────────────────────
   DateTime _toEAT(DateTime dateTime) {
     return dateTime.toUtc().add(const Duration(hours: 3));
   }
@@ -1513,82 +754,45 @@ class _HomeDashboardContent extends StatelessWidget {
     final auth = context.watch<AuthProvider>();
     final user = auth.user;
 
-    final tech =
-        context.watch<TechnicianProvider>().technician;
-
+    final tech = context.watch<TechnicianProvider>().technician;
     final online = tech?.isOnline ?? false;
 
-    final requestProvider =
-    context.watch<RequestProvider>();
-
+    final requestProvider = context.watch<RequestProvider>();
     final requests = requestProvider.requests;
 
     final pendingRequests =
-        requests.where(
-              (r) => r.status == 'pending',
-        ).length;
-
+        requests.where((r) => r.status == 'pending').length;
     final completedRequests =
-        requests.where(
-              (r) => r.status == 'completed',
-        ).length;
-
-    // ==========================================================
-    // LATEST 5 REQUESTS
-    // ==========================================================
+        requests.where((r) => r.status == 'completed').length;
 
     final latestRequests = List.of(requests);
+    latestRequests.sort((a, b) {
+      final aDate = _requestCreatedAt(a);
+      final bDate = _requestCreatedAt(b);
+      return bDate.compareTo(aDate);
+    });
+    final topFiveRequests = latestRequests.take(5).toList();
 
-    latestRequests.sort(
-          (a, b) {
-        final aDate = _requestCreatedAt(a);
-        final bDate = _requestCreatedAt(b);
-        return bDate.compareTo(aDate);
-      },
-    );
-
-    final topFiveRequests =
-    latestRequests.take(5).toList();
-
-    final screenWidth =
-        MediaQuery.of(context).size.width;
-
+    final screenWidth = MediaQuery.of(context).size.width;
     final isTablet = screenWidth >= 600;
-
-    final padding =
-    isTablet ? 24.0 : 16.0;
-
-    final cardPadding =
-    isTablet ? 24.0 : 16.0;
-
-    final gap =
-    isTablet ? 16.0 : 12.0;
+    final padding = isTablet ? 24.0 : 16.0;
+    final cardPadding = isTablet ? 24.0 : 18.0;
+    final gap = isTablet ? 16.0 : 12.0;
 
     return SafeArea(
       bottom: true,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final bottomPadding =
-              MediaQuery.of(context).padding.bottom +
-                  80.0;
+              MediaQuery.of(context).padding.bottom + 80.0;
 
           return RefreshIndicator(
             onRefresh: () async {
-              await context
-                  .read<RequestProvider>()
-                  .loadMyRequests();
-
-              await context
-                  .read<TechnicianProvider>()
-                  .fetchMyProfile();
-
-              await context
-                  .read<SubscriptionProvider>()
-                  .checkSubscriptionStatus();
+              await context.read<RequestProvider>().loadMyRequests();
+              await context.read<TechnicianProvider>().fetchMyProfile();
             },
             child: SingleChildScrollView(
-              physics:
-              const AlwaysScrollableScrollPhysics(),
+              physics: const AlwaysScrollableScrollPhysics(),
               padding: EdgeInsets.only(
                 left: padding,
                 right: padding,
@@ -1596,173 +800,112 @@ class _HomeDashboardContent extends StatelessWidget {
                 bottom: bottomPadding,
               ),
               child: Column(
-                crossAxisAlignment:
-                CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ==================================================
-                  // EXISTING USER PROFILE CARD
-                  // ==================================================
-
+                  // ── Profile / Greeting Card ─────────────────────────
                   Container(
-                    padding:
-                    EdgeInsets.all(cardPadding),
+                    padding: EdgeInsets.all(cardPadding),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
                           theme.primaryColor,
-                          theme.primaryColorDark ??
-                              theme.primaryColor,
+                          theme.primaryColorDark ?? theme.primaryColor,
                         ],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
-                      borderRadius:
-                      BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: theme.primaryColor
-                              .withOpacity(0.3),
-                          blurRadius: 20,
-                          offset:
-                          const Offset(0, 8),
+                          color: theme.primaryColor.withOpacity(0.28),
+                          blurRadius: 18,
+                          offset: const Offset(0, 8),
                         ),
                       ],
                     ),
                     child: Row(
                       children: [
                         CircleAvatar(
-                          radius:
-                          isTablet ? 36 : 30,
-                          backgroundColor:
-                          Colors.white,
+                          radius: isTablet ? 36 : 30,
+                          backgroundColor: Colors.white,
                           child: Text(
-                            user?.name.isNotEmpty ==
-                                true
-                                ? user!.name[0]
-                                .toUpperCase()
+                            user?.name.isNotEmpty == true
+                                ? user!.name[0].toUpperCase()
                                 : 'F',
                             style: TextStyle(
-                              color:
-                              theme.primaryColor,
-                              fontSize:
-                              isTablet
-                                  ? 28
-                                  : 24,
-                              fontWeight:
-                              FontWeight.bold,
+                              color: theme.primaryColor,
+                              fontSize: isTablet ? 28 : 24,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
-
                         const SizedBox(width: 16),
-
                         Expanded(
                           child: Column(
-                            crossAxisAlignment:
-                            CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 '${l10n.hello}, ${user?.name ?? 'Fundi'}! 👋',
-                                style:
-                                const TextStyle(
-                                  color:
-                                  Colors.white,
+                                style: const TextStyle(
+                                  color: Colors.white,
                                   fontSize: 18,
-                                  fontWeight:
-                                  FontWeight.bold,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: -0.2,
                                 ),
                                 maxLines: 1,
-                                overflow:
-                                TextOverflow.ellipsis,
+                                overflow: TextOverflow.ellipsis,
                               ),
-
-                              const SizedBox(height: 4),
-
+                              const SizedBox(height: 6),
                               Row(
                                 children: [
                                   if (online) ...[
                                     Container(
-                                      padding:
-                                      const EdgeInsets
-                                          .symmetric(
+                                      padding: const EdgeInsets.symmetric(
                                         horizontal: 10,
-                                        vertical: 2,
+                                        vertical: 3,
                                       ),
-                                      decoration:
-                                      BoxDecoration(
-                                        color:
-                                        Colors.green,
-                                        borderRadius:
-                                        BorderRadius
-                                            .circular(
-                                          12,
-                                        ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green.shade600,
+                                        borderRadius: BorderRadius.circular(20),
                                       ),
                                       child: Row(
-                                        mainAxisSize:
-                                        MainAxisSize.min,
+                                        mainAxisSize: MainAxisSize.min,
                                         children: [
                                           const Icon(
-                                            Icons
-                                                .wifi_rounded,
-                                            color:
-                                            Colors.white,
+                                            Icons.wifi_rounded,
+                                            color: Colors.white,
                                             size: 14,
                                           ),
-                                          const SizedBox(
-                                            width: 4,
-                                          ),
+                                          const SizedBox(width: 4),
                                           Text(
                                             l10n.online,
-                                            style:
-                                            const TextStyle(
-                                              color:
-                                              Colors.white,
-                                              fontSize:
-                                              12,
-                                              fontWeight:
-                                              FontWeight
-                                                  .w500,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w500,
                                             ),
                                           ),
                                         ],
                                       ),
                                     ),
-                                    const SizedBox(
-                                      width: 8,
-                                    ),
+                                    const SizedBox(width: 8),
                                   ],
-
-                                  if (pendingRequests >
-                                      0)
+                                  if (pendingRequests > 0)
                                     Container(
-                                      padding:
-                                      const EdgeInsets
-                                          .symmetric(
+                                      padding: const EdgeInsets.symmetric(
                                         horizontal: 10,
-                                        vertical: 2,
+                                        vertical: 3,
                                       ),
-                                      decoration:
-                                      BoxDecoration(
-                                        color:
-                                        Colors.orange,
-                                        borderRadius:
-                                        BorderRadius
-                                            .circular(
-                                          12,
-                                        ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.orange.shade700,
+                                        borderRadius: BorderRadius.circular(20),
                                       ),
                                       child: Text(
                                         '$pendingRequests ${l10n.pending}',
-                                        style:
-                                        const TextStyle(
-                                          color:
-                                          Colors.white,
-                                          fontSize:
-                                          12,
-                                          fontWeight:
-                                          FontWeight
-                                              .w500,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
                                         ),
                                       ),
                                     ),
@@ -1771,7 +914,6 @@ class _HomeDashboardContent extends StatelessWidget {
                             ],
                           ),
                         ),
-
                         const Icon(
                           Icons.check_circle,
                           color: Colors.white,
@@ -1781,152 +923,99 @@ class _HomeDashboardContent extends StatelessWidget {
                     ),
                   ),
 
-                  SizedBox(
-                    height: gap + 4,
-                  ),
+                  SizedBox(height: gap + 6),
 
-                  // ==================================================
-                  // EXISTING REQUEST COUNTS
-                  // ==================================================
-
+                  // ── Stats Row ───────────────────────────────────────
                   Row(
                     children: [
                       Flexible(
                         child: _buildStatCard(
                           context,
-                          icon:
-                          Icons.list_alt_rounded,
-                          label:
-                          l10n.totalRequests,
-                          value:
-                          requests.length.toString(),
+                          icon: Icons.list_alt_rounded,
+                          label: l10n.totalRequests,
+                          value: requests.length.toString(),
                           color: Colors.blue,
                           isTablet: isTablet,
-                          onTap: () =>
-                              _navigateToTab(
-                                context,
-                                2,
-                              ),
+                          onTap: () => _navigateToTab(context, 2),
                         ),
                       ),
-
-                      const SizedBox(width: 8),
-
+                      const SizedBox(width: 10),
                       Flexible(
                         child: _buildStatCard(
                           context,
-                          icon:
-                          Icons.pending_rounded,
+                          icon: Icons.pending_rounded,
                           label: l10n.pending,
-                          value:
-                          pendingRequests
-                              .toString(),
+                          value: pendingRequests.toString(),
                           color: Colors.orange,
                           isTablet: isTablet,
-                          onTap: () =>
-                              _navigateToTab(
-                                context,
-                                2,
-                              ),
+                          onTap: () => _navigateToTab(context, 2),
                         ),
                       ),
-
-                      const SizedBox(width: 8),
-
+                      const SizedBox(width: 10),
                       Flexible(
                         child: _buildStatCard(
                           context,
-                          icon:
-                          Icons.check_circle_rounded,
-                          label:
-                          l10n.completed,
-                          value:
-                          completedRequests
-                              .toString(),
+                          icon: Icons.check_circle_rounded,
+                          label: l10n.completed,
+                          value: completedRequests.toString(),
                           color: Colors.green,
                           isTablet: isTablet,
-                          onTap: () =>
-                              _navigateToTab(
-                                context,
-                                2,
-                              ),
+                          onTap: () => _navigateToTab(context, 2),
                         ),
                       ),
                     ],
                   ),
 
-                  SizedBox(
-                    height: gap + 8,
-                  ),
+                  SizedBox(height: gap + 10),
 
-                  // ==================================================
-                  // LATEST REQUESTS
-                  // ==================================================
-
+                  // ── Latest Requests Header ──────────────────────────
                   Row(
-                    mainAxisAlignment:
-                    MainAxisAlignment.spaceBetween,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
                         'Latest Requests',
-                        style:
-                        theme.textTheme.titleLarge
-                            ?.copyWith(
-                          fontWeight:
-                          FontWeight.w700,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.3,
                         ),
                       ),
                       if (requests.isNotEmpty)
                         TextButton(
-                          onPressed: () =>
-                              _navigateToTab(
-                                context,
-                                2,
-                              ),
-                          child:
-                          const Text('View All'),
+                          onPressed: () => _navigateToTab(context, 2),
+                          child: const Text('View All'),
                         ),
                     ],
                   ),
 
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
 
+                  // ── Latest Requests List ────────────────────────────
                   if (topFiveRequests.isEmpty)
                     Container(
                       width: double.infinity,
-                      padding:
-                      const EdgeInsets.all(24),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 32,
+                        horizontal: 20,
+                      ),
                       decoration: BoxDecoration(
-                        color:
-                        theme.cardColor,
-                        borderRadius:
-                        BorderRadius.circular(
-                          16,
-                        ),
+                        color: theme.cardColor,
+                        borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color:
-                          theme.dividerColor,
+                          color: theme.dividerColor.withOpacity(0.6),
                         ),
                       ),
                       child: Column(
                         children: [
                           Icon(
                             Icons.inbox_outlined,
-                            size: 40,
-                            color:
-                            theme.hintColor,
+                            size: 44,
+                            color: theme.hintColor,
                           ),
-                          const SizedBox(
-                            height: 10,
-                          ),
+                          const SizedBox(height: 12),
                           Text(
                             l10n.noRequests,
-                            style: theme
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(
-                              color:
-                              theme.hintColor,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.hintColor,
                             ),
                           ),
                         ],
@@ -1934,15 +1023,8 @@ class _HomeDashboardContent extends StatelessWidget {
                     )
                   else
                     Column(
-                      children:
-                      topFiveRequests
-                          .map(
-                            (request) =>
-                            _buildLatestRequest(
-                              context,
-                              request,
-                            ),
-                      )
+                      children: topFiveRequests
+                          .map((request) => _buildLatestRequest(context, request))
                           .toList(),
                     ),
 
@@ -1956,52 +1038,42 @@ class _HomeDashboardContent extends StatelessWidget {
     );
   }
 
-  // ─── LATEST REQUEST ITEM ──────────────────────────────────────────────
-  Widget _buildLatestRequest(
-      BuildContext context,
-      dynamic request,
-      ) {
+  // ─── Latest Request Item ─────────────────────────────────────────────
+  Widget _buildLatestRequest(BuildContext context, dynamic request) {
     final theme = Theme.of(context);
-
-    final status =
-        request.status?.toString() ?? 'pending';
-
-    final statusColor =
-    _requestStatusColor(status);
-
-    final created =
-    _formatRequestDate(request);
+    final status = request.status?.toString() ?? 'pending';
+    final statusColor = _requestStatusColor(status);
+    final created = _formatRequestDate(request);
 
     return InkWell(
-      onTap: () {
-        _navigateToTab(context, 2);
-      },
-      borderRadius:
-      BorderRadius.circular(16),
+      onTap: () => _navigateToTab(context, 2),
+      borderRadius: BorderRadius.circular(16),
       child: Container(
         width: double.infinity,
-        margin:
-        const EdgeInsets.only(bottom: 10),
-        padding:
-        const EdgeInsets.all(14),
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: theme.cardColor,
-          borderRadius:
-          BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: theme.dividerColor,
+            color: theme.dividerColor.withOpacity(0.55),
           ),
+          boxShadow: [
+            BoxShadow(
+              color: theme.shadowColor.withOpacity(0.04),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Row(
-          crossAxisAlignment:
-          CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color:
-                statusColor.withOpacity(0.1),
+                color: statusColor.withOpacity(0.12),
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -2010,95 +1082,63 @@ class _HomeDashboardContent extends StatelessWidget {
                 size: 21,
               ),
             ),
-
             const SizedBox(width: 12),
-
             Expanded(
               child: Column(
-                crossAxisAlignment:
-                CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
                       Expanded(
                         child: Text(
-                          request.serviceName
-                              .toString(),
-                          style: theme
-                              .textTheme
-                              .titleSmall
-                              ?.copyWith(
-                            fontWeight:
-                            FontWeight.w700,
+                          request.serviceName.toString(),
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
                           ),
                           maxLines: 1,
-                          overflow:
-                          TextOverflow.ellipsis,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-
                       const SizedBox(width: 8),
-
                       Container(
-                        padding:
-                        const EdgeInsets
-                            .symmetric(
+                        padding: const EdgeInsets.symmetric(
                           horizontal: 8,
                           vertical: 4,
                         ),
-                        decoration:
-                        BoxDecoration(
-                          color: statusColor
-                              .withOpacity(
-                            0.1,
-                          ),
-                          borderRadius:
-                          BorderRadius
-                              .circular(
-                            20,
-                          ),
+                        decoration: BoxDecoration(
+                          color: statusColor.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
-                          _requestStatusLabel(
-                            status,
-                          ),
+                          _requestStatusLabel(status),
                           style: TextStyle(
                             color: statusColor,
                             fontSize: 9.5,
-                            fontWeight:
-                            FontWeight.w700,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 5),
-
                   Row(
                     children: [
                       Icon(
                         Icons.person_outline,
                         size: 14,
-                        color:
-                        theme.hintColor,
+                        color: theme.hintColor,
                       ),
                       const SizedBox(width: 5),
                       Expanded(
                         child: Text(
-                          request.customerName
-                              .toString(),
-                          style: theme
-                              .textTheme
-                              .bodySmall,
+                          request.customerName.toString(),
+                          style: theme.textTheme.bodySmall,
                           maxLines: 1,
-                          overflow:
-                          TextOverflow.ellipsis,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
                   ),
-
                   if (created.isNotEmpty) ...[
                     const SizedBox(height: 5),
                     Row(
@@ -2106,18 +1146,13 @@ class _HomeDashboardContent extends StatelessWidget {
                         Icon(
                           Icons.access_time_rounded,
                           size: 13,
-                          color:
-                          theme.hintColor,
+                          color: theme.hintColor,
                         ),
                         const SizedBox(width: 5),
                         Text(
                           created,
-                          style: theme
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(
-                            color:
-                            theme.hintColor,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.hintColor,
                             fontSize: 11,
                           ),
                         ),
@@ -2138,20 +1173,15 @@ class _HomeDashboardContent extends StatelessWidget {
       case 'accepted':
       case 'in_progress':
         return AppTheme.primary;
-
       case 'on_the_way':
         return Colors.green;
-
       case 'arrived':
         return Colors.teal;
-
       case 'completed':
         return AppTheme.success;
-
       case 'rejected':
       case 'cancelled':
         return AppTheme.error;
-
       default:
         return AppTheme.warning;
     }
@@ -2162,22 +1192,16 @@ class _HomeDashboardContent extends StatelessWidget {
       case 'accepted':
       case 'in_progress':
         return Icons.check_circle_outline_rounded;
-
       case 'on_the_way':
         return Icons.directions_car_rounded;
-
       case 'arrived':
         return Icons.location_on_rounded;
-
       case 'completed':
         return Icons.verified_rounded;
-
       case 'rejected':
         return Icons.cancel_outlined;
-
       case 'cancelled':
         return Icons.do_not_disturb_on_outlined;
-
       default:
         return Icons.hourglass_empty_rounded;
     }
@@ -2187,45 +1211,32 @@ class _HomeDashboardContent extends StatelessWidget {
     switch (status) {
       case 'pending':
         return 'PENDING';
-
       case 'accepted':
         return 'ACCEPTED';
-
       case 'on_the_way':
         return 'ON THE WAY';
-
       case 'arrived':
         return 'ARRIVED';
-
       case 'in_progress':
         return 'IN PROGRESS';
-
       case 'completed':
         return 'COMPLETED';
-
       case 'rejected':
         return 'REJECTED';
-
       case 'cancelled':
         return 'CANCELLED';
-
       default:
         return status.toUpperCase();
     }
   }
 
-  void _navigateToTab(
-      BuildContext context,
-      int index,
-      ) {
+  void _navigateToTab(BuildContext context, int index) {
     final homeState =
-    context.findAncestorStateOfType<
-        _FundiHomeScreenState>();
-
+    context.findAncestorStateOfType<_FundiHomeScreenState>();
     homeState?._navigateToTab(index);
   }
 
-  // ─── STAT CARD ─────────────────────────────────────────────────────────
+  // ─── Stat Card ───────────────────────────────────────────────────────
   Widget _buildStatCard(
       BuildContext context, {
         required IconData icon,
@@ -2241,74 +1252,48 @@ class _HomeDashboardContent extends StatelessWidget {
       onTap: onTap,
       child: Container(
         padding: EdgeInsets.symmetric(
-          vertical:
-          isTablet ? 14.0 : 12.0,
-          horizontal:
-          isTablet ? 12.0 : 8.0,
+          vertical: isTablet ? 16.0 : 14.0,
+          horizontal: isTablet ? 12.0 : 8.0,
         ),
         decoration: BoxDecoration(
           color: theme.cardColor,
-          borderRadius:
-          BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color:
-              theme.shadowColor.withOpacity(
-                0.08,
-              ),
+              color: theme.shadowColor.withOpacity(0.07),
               blurRadius: 8,
-              offset:
-              const Offset(0, 4),
+              offset: const Offset(0, 3),
             ),
           ],
         ),
         child: Column(
-          mainAxisAlignment:
-          MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Row(
-              mainAxisAlignment:
-              MainAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  icon,
-                  size:
-                  isTablet ? 20 : 16,
-                  color: color,
-                ),
-                const SizedBox(width: 4),
+                Icon(icon, size: isTablet ? 20 : 16, color: color),
+                const SizedBox(width: 5),
                 Text(
                   value,
-                  style: theme
-                      .textTheme
-                      .headlineSmall
-                      ?.copyWith(
-                    fontSize:
-                    isTablet ? 20 : 16,
-                    fontWeight:
-                    FontWeight.bold,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontSize: isTablet ? 20 : 16,
+                    fontWeight: FontWeight.bold,
                     color: color,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 4),
             Text(
               label,
-              style: theme
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(
-                fontSize:
-                isTablet ? 11 : 10,
-                color:
-                theme.hintColor,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontSize: isTablet ? 11 : 10,
+                color: theme.hintColor,
               ),
-              textAlign:
-              TextAlign.center,
+              textAlign: TextAlign.center,
               maxLines: 1,
-              overflow:
-              TextOverflow.ellipsis,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
