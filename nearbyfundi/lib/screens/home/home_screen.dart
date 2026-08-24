@@ -1,19 +1,10 @@
-// screens/home/home_screen.dart
+// lib/screens/home/home_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/post_provider.dart';
 import '../../providers/request_provider.dart';
-
-import 'nearby_screen.dart';
-import 'nearby_map_screen.dart';
-import 'blogs_screen.dart';
-
-import '../requests/my_requests_screen.dart';
-import '../profile/profile_screen.dart';
-import '../chat/chat_list_screen.dart';
-
 import '../../providers/chat_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/notification_provider.dart';
@@ -22,9 +13,14 @@ import '../../providers/service_provider.dart';
 import '../../providers/settings_provider.dart';
 
 import '../../models/chat_user.dart';
-import '../../config/app_theme.dart';
-import '../../config/app_routes.dart';
 import '../../l10n/app_localizations.dart';
+
+import 'nearby_screen.dart';
+import 'blogs_screen.dart';
+
+import '../requests/my_requests_screen.dart';
+import '../profile/profile_screen.dart';
+import '../chat/chat_list_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -53,6 +49,8 @@ class _HomeScreenState extends State<HomeScreen> {
     ];
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
       final settings = context.read<SettingsProvider>();
 
       _currentLocale = settings.locale;
@@ -95,8 +93,16 @@ class _HomeScreenState extends State<HomeScreen> {
   // LOAD NOTIFICATIONS
   // ================================================================
 
-  void _loadNotifications() {
-    context.read<NotificationProvider>().loadNotifications();
+  Future<void> _loadNotifications() async {
+    try {
+      await context
+          .read<NotificationProvider>()
+          .loadNotifications();
+    } catch (e) {
+      debugPrint(
+        'Notification loading error: $e',
+      );
+    }
   }
 
   // ================================================================
@@ -143,7 +149,8 @@ class _HomeScreenState extends State<HomeScreen> {
           .read<NotificationProvider>()
           .loadNotifications();
 
-      final settings = context.read<SettingsProvider>();
+      final settings =
+      context.read<SettingsProvider>();
 
       if (_currentLocale != settings.locale) {
         _currentLocale = settings.locale;
@@ -159,27 +166,61 @@ class _HomeScreenState extends State<HomeScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(l10n.refreshed),
+          content: Row(
+            children: [
+              const Icon(
+                Icons.check_circle_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Text(l10n.refreshed),
+            ],
+          ),
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 1),
-          backgroundColor: Colors.green,
+          backgroundColor: const Color(0xFF006B5E),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       );
     } catch (e) {
+      debugPrint(
+        'Refresh error: $e',
+      );
+
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(l10n.refreshFailed),
+          content: Row(
+            children: [
+              const Icon(
+                Icons.error_outline_rounded,
+                color: Colors.white,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  l10n.refreshFailed,
+                ),
+              ),
+            ],
+          ),
           behavior: SnackBarBehavior.floating,
-          backgroundColor: Theme.of(context).colorScheme.error,
+          backgroundColor:
+          Theme.of(context).colorScheme.error,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       );
     }
   }
 
   // ================================================================
-  // PARTNERSHIPS COMING SOON
+  // PARTNERSHIPS
   // ================================================================
 
   void _showPartnershipsComingSoon() {
@@ -198,7 +239,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Text(
                 'Partnerships Coming Soon! 🚀',
                 style: TextStyle(
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -207,7 +248,7 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: theme.primaryColor,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
         ),
         duration: const Duration(seconds: 2),
       ),
@@ -215,108 +256,222 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ================================================================
-  // NOTIFICATIONS
+  // NOTIFICATION SHEET
   // ================================================================
 
   void _showNotifications(BuildContext context) {
-    final notificationProvider =
-    context.read<NotificationProvider>();
-
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(24),
-        ),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (ctx) {
         return DraggableScrollableSheet(
-          initialChildSize: 0.8,
-          minChildSize: 0.5,
-          maxChildSize: 0.95,
+          initialChildSize: 0.78,
+          minChildSize: 0.50,
+          maxChildSize: 0.96,
           expand: false,
-          builder: (context, scrollController) {
+          builder: (
+              sheetContext,
+              scrollController,
+              ) {
             return Container(
-              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface,
+                borderRadius:
+                const BorderRadius.vertical(
+                  top: Radius.circular(28),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color:
+                    Colors.black.withOpacity(0.18),
+                    blurRadius: 20,
+                    offset: const Offset(0, -5),
+                  ),
+                ],
+              ),
               child: Column(
                 children: [
-                  // Drag handle
+                  // =================================================
+                  // HANDLE
+                  // =================================================
+
+                  const SizedBox(height: 10),
+
                   Container(
-                    width: 40,
+                    width: 42,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(4),
+                      color: theme
+                          .colorScheme
+                          .onSurface
+                          .withOpacity(0.18),
+                      borderRadius:
+                      BorderRadius.circular(20),
                     ),
                   ),
 
-                  const SizedBox(height: 16),
+                  // =================================================
+                  // HEADER
+                  // =================================================
 
-                  // Header
-                  Row(
-                    mainAxisAlignment:
-                    MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        l10n.notifications,
-                        style:
-                        theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          notificationProvider.markAllAsRead();
-                          Navigator.pop(ctx);
-                        },
-                        child: Text(
-                          l10n.markAllAsRead,
-                        ),
-                      ),
-                    ],
+                  Padding(
+                    padding:
+                    const EdgeInsets.fromLTRB(
+                      20,
+                      18,
+                      12,
+                      12,
+                    ),
+                    child: Consumer<
+                        NotificationProvider>(
+                      builder: (
+                          context,
+                          provider,
+                          child,
+                          ) {
+                        final unread =
+                            provider.unreadCount;
+
+                        return Row(
+                          children: [
+                            Container(
+                              width: 46,
+                              height: 46,
+                              decoration: BoxDecoration(
+                                color: theme
+                                    .primaryColor
+                                    .withOpacity(0.10),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons
+                                    .notifications_rounded,
+                                color:
+                                theme.primaryColor,
+                              ),
+                            ),
+
+                            const SizedBox(width: 12),
+
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment:
+                                CrossAxisAlignment
+                                    .start,
+                                children: [
+                                  Text(
+                                    l10n.notifications,
+                                    style: theme
+                                        .textTheme
+                                        .titleLarge
+                                        ?.copyWith(
+                                      fontWeight:
+                                      FontWeight
+                                          .w700,
+                                    ),
+                                  ),
+                                  if (unread > 0)
+                                    Text(
+                                      '$unread unread notification${unread == 1 ? '' : 's'}',
+                                      style: theme
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                        color: theme
+                                            .primaryColor,
+                                        fontWeight:
+                                        FontWeight
+                                            .w500,
+                                      ),
+                                    )
+                                  else
+                                    Text(
+                                      'You are all caught up',
+                                      style: theme
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                        color: Colors
+                                            .grey
+                                            .shade600,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+
+                            if (unread > 0)
+                              TextButton(
+                                onPressed: () async {
+                                  await provider
+                                      .markAllAsRead();
+                                },
+                                child: Text(
+                                  l10n.markAllAsRead,
+                                  style: TextStyle(
+                                    color:
+                                    theme.primaryColor,
+                                    fontWeight:
+                                    FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
                   ),
 
-                  const SizedBox(height: 16),
+                  Divider(
+                    height: 1,
+                    color: theme.dividerColor
+                        .withOpacity(0.4),
+                  ),
 
-                  // Notification list
+                  // =================================================
+                  // LIST
+                  // =================================================
+
                   Expanded(
-                    child: Consumer<NotificationProvider>(
+                    child: Consumer<
+                        NotificationProvider>(
                       builder: (
                           context,
                           provider,
                           child,
                           ) {
                         if (provider.isLoading) {
-                          return const Center(
-                            child:
-                            CircularProgressIndicator(),
-                          );
-                        }
-
-                        if (provider.notifications.isEmpty) {
                           return Center(
                             child: Column(
                               mainAxisAlignment:
                               MainAxisAlignment.center,
                               children: [
-                                Icon(
-                                  Icons
-                                      .notifications_off_outlined,
-                                  size: 64,
-                                  color:
-                                  Colors.grey.shade400,
+                                SizedBox(
+                                  width: 30,
+                                  height: 30,
+                                  child:
+                                  CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                    color: theme
+                                        .primaryColor,
+                                  ),
                                 ),
-                                const SizedBox(height: 16),
+                                const SizedBox(
+                                  height: 14,
+                                ),
                                 Text(
-                                  l10n.noNotificationsYet,
-                                  style: TextStyle(
-                                    color:
-                                    Colors.grey.shade600,
-                                    fontSize: 16,
+                                  'Loading notifications...',
+                                  style: theme
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
+                                    color: Colors
+                                        .grey
+                                        .shade600,
                                   ),
                                 ),
                               ],
@@ -324,50 +479,81 @@ class _HomeScreenState extends State<HomeScreen> {
                           );
                         }
 
-                        return ListView.builder(
-                          controller: scrollController,
-                          itemCount:
-                          provider.notifications.length,
-                          itemBuilder:
-                              (context, index) {
-                            final notification =
-                            provider.notifications[
-                            index];
+                        if (provider.notifications
+                            .isEmpty) {
+                          return _EmptyNotifications(
+                            theme: theme,
+                            title:
+                            l10n.noNotificationsYet,
+                          );
+                        }
 
-                            return _NotificationTile(
-                              notification:
-                              notification,
-                              onTap: () {
-                                provider.markAsRead(
-                                  notification['id'],
-                                );
+                        return RefreshIndicator(
+                          color:
+                          theme.primaryColor,
+                          onRefresh: provider
+                              .loadNotifications,
+                          child:
+                          ListView.builder(
+                            controller:
+                            scrollController,
+                            padding:
+                            const EdgeInsets
+                                .fromLTRB(
+                              16,
+                              14,
+                              16,
+                              30,
+                            ),
+                            itemCount: provider
+                                .notifications.length,
+                            itemBuilder:
+                                (context, index) {
+                              final notification =
+                              provider
+                                  .notifications[
+                              index];
 
-                                Navigator.pop(ctx);
+                              return Padding(
+                                padding:
+                                const EdgeInsets
+                                    .only(
+                                  bottom: 10,
+                                ),
+                                child:
+                                _NotificationTile(
+                                  notification:
+                                  notification,
+                                  locale:
+                                  _currentLocale,
+                                  onTap: () async {
+                                    final id =
+                                    notification[
+                                    'id'];
 
-                                final type =
-                                    notification['type'] ??
-                                        '';
+                                    if (id != null) {
+                                      await provider
+                                          .markAsRead(
+                                        id.toString(),
+                                      );
+                                    }
 
-                                if (type ==
-                                    'chat_message') {
-                                  setState(() {
-                                    _currentIndex = 3;
-                                  });
-                                } else if (
-                                type ==
-                                    'new_request' ||
-                                    type ==
-                                        'request_accepted' ||
-                                    type ==
-                                        'request_rejected') {
-                                  setState(() {
-                                    _currentIndex = 2;
-                                  });
-                                }
-                              },
-                              locale: _currentLocale,
-                            );
-                          },
+                                    if (!mounted) {
+                                      return;
+                                    }
+
+                                    Navigator.pop(
+                                      ctx,
+                                    );
+
+                                    _handleNotificationNavigation(
+                                      notification,
+                                    );
+                                  },
+                                ),
+                              );
+                            },
+                          ),
                         );
                       },
                     ),
@@ -382,12 +568,224 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ================================================================
+  // NOTIFICATION NAVIGATION
+  // ================================================================
+
+  void _handleNotificationNavigation(
+      Map<String, dynamic> notification,
+      ) {
+    final type =
+        notification['type']?.toString() ?? '';
+
+    if (type == 'chat_message') {
+      setState(() {
+        _currentIndex = 3;
+      });
+      return;
+    }
+
+    if (type == 'new_request' ||
+        type == 'request_accepted' ||
+        type == 'request_rejected' ||
+        type == 'request_in_progress' ||
+        type == 'request_completed') {
+      setState(() {
+        _currentIndex = 2;
+      });
+      return;
+    }
+  }
+
+  // ================================================================
+  // DRAWER
+  // ================================================================
+
+  Widget _buildDrawer(
+      BuildContext context,
+      ThemeData theme,
+      bool isDark,
+      ) {
+    return Drawer(
+      backgroundColor: theme.colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.only(
+          topRight: Radius.circular(28),
+          bottomRight: Radius.circular(28),
+        ),
+      ),
+      child: SafeArea(
+        child: Column(
+          children: [
+            // =======================================================
+            // DRAWER HEADER
+            // =======================================================
+
+            Container(
+              margin: const EdgeInsets.all(14),
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [
+                    Color(0xFF006B5E),
+                    Color(0xFF004D40),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius:
+                BorderRadius.circular(22),
+              ),
+              child: Column(
+                crossAxisAlignment:
+                CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          color: Colors.white
+                              .withOpacity(0.15),
+                          borderRadius:
+                          BorderRadius.circular(16),
+                        ),
+                        child: const Icon(
+                          Icons
+                              .handyman_rounded,
+                          color: Colors.white,
+                          size: 28,
+                        ),
+                      ),
+
+                      const Spacer(),
+
+                      IconButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                        },
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 18),
+
+                  const Text(
+                    'NearbyFundi',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight:
+                      FontWeight.w700,
+                    ),
+                  ),
+
+                  const SizedBox(height: 4),
+
+                  Text(
+                    'Find trusted technicians near you',
+                    style: TextStyle(
+                      color: Colors.white
+                          .withOpacity(0.78),
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // =======================================================
+            // MENU
+            // =======================================================
+
+            Expanded(
+              child: ListView(
+                padding:
+                const EdgeInsets.symmetric(
+                  horizontal: 12,
+                ),
+                children: [
+                  _DrawerItem(
+                    icon: Icons
+                        .handshake_rounded,
+                    title: 'Partnerships',
+                    color:
+                    theme.primaryColor,
+                    onTap: () {
+                      Navigator.pop(context);
+                      _showPartnershipsComingSoon();
+                    },
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  Padding(
+                    padding:
+                    const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
+                    child: Text(
+                      'MORE',
+                      style: theme
+                          .textTheme
+                          .labelSmall
+                          ?.copyWith(
+                        color: Colors.grey.shade500,
+                        fontWeight:
+                        FontWeight.w700,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+
+                  _DrawerItem(
+                    icon: Icons.more_horiz_rounded,
+                    title: 'Others',
+                    color: Colors.grey,
+                    onTap: () {
+                      Navigator.pop(context);
+                    },
+                  ),
+                ],
+              ),
+            ),
+
+            // =======================================================
+            // FOOTER
+            // =======================================================
+
+            Padding(
+              padding:
+              const EdgeInsets.all(18),
+              child: Text(
+                'NearbyFundi',
+                style: theme
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(
+                  color: Colors.grey.shade500,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ================================================================
   // BUILD
   // ================================================================
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
+    final l10n =
+    AppLocalizations.of(context)!;
 
     final theme = Theme.of(context);
 
@@ -400,7 +798,10 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_currentLocale != settings.locale) {
       _currentLocale = settings.locale;
 
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) {
+        if (!mounted) return;
+
         context
             .read<ServiceProvider>()
             .fetchServices(
@@ -410,155 +811,24 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return Scaffold(
-
       // ============================================================
       // LEFT DRAWER
       // ============================================================
 
-      drawer: Drawer(
-        backgroundColor: Colors.white,
-
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.only(
-            topRight: Radius.circular(24),
-            bottomRight: Radius.circular(24),
-          ),
-        ),
-
-        child: ListView(
-          padding: EdgeInsets.zero,
-
-          children: [
-
-            // ======================================================
-            // LEFT DRAWER HEADER
-            // ======================================================
-
-            Container(
-              padding: const EdgeInsets.only(
-                left: 24,
-                top: 48,
-                bottom: 24,
-              ),
-
-              decoration: const BoxDecoration(
-                color: Color(0xFF006B5E),
-
-                borderRadius: BorderRadius.only(
-                  bottomRight: Radius.circular(24),
-                ),
-              ),
-
-              child: Row(
-                children: [
-
-                  Container(
-                    width: 48,
-                    height: 48,
-
-                    decoration: BoxDecoration(
-                      color:
-                      Colors.white.withOpacity(0.2),
-                      shape: BoxShape.circle,
-                    ),
-
-                    child: const Icon(
-                      Icons.handyman_rounded,
-                      color: Colors.white,
-                    ),
-                  ),
-
-                  const SizedBox(width: 12),
-
-                  const Text(
-                    'Menu',
-
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 8),
-
-            // ======================================================
-            // PARTNERSHIPS
-            // ======================================================
-
-            ListTile(
-              contentPadding:
-              const EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 4,
-              ),
-
-              leading: const Icon(
-                Icons.handshake_rounded,
-                color: Color(0xFF006B5E),
-              ),
-
-              title: const Text(
-                'Partnerships',
-
-                style: TextStyle(
-                  fontWeight: FontWeight.w500,
-                  fontSize: 16,
-                ),
-              ),
-
-              onTap: () {
-                Navigator.pop(context);
-
-                _showPartnershipsComingSoon();
-              },
-            ),
-
-            // ======================================================
-            // OTHERS
-            // ======================================================
-
-            ListTile(
-              contentPadding:
-              const EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 4,
-              ),
-
-              leading: const Icon(
-                Icons.more_horiz,
-                color: Colors.grey,
-              ),
-
-              title: const Text(
-                'Others',
-
-                style: TextStyle(
-                  fontWeight: FontWeight.w500,
-                  fontSize: 16,
-                ),
-              ),
-
-              onTap: () {
-                Navigator.pop(context);
-              },
-            ),
-          ],
-        ),
+      drawer: _buildDrawer(
+        context,
+        theme,
+        isDark,
       ),
 
       // ============================================================
       // RIGHT DRAWER
-      //
-      // INTENTIONALLY EMPTY
       // ============================================================
 
-      endDrawer: const Drawer(
-        backgroundColor: Colors.white,
-        child: SizedBox.shrink(),
+      endDrawer: Drawer(
+        backgroundColor:
+        theme.colorScheme.surface,
+        child: const SizedBox.shrink(),
       ),
 
       // ============================================================
@@ -568,35 +838,32 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         backgroundColor:
         const Color(0xFF006B5E),
+        foregroundColor: Colors.white,
+        elevation: 0,
+        scrolledUnderElevation: 0,
 
-        iconTheme: const IconThemeData(
+        iconTheme:
+        const IconThemeData(
           color: Colors.white,
         ),
 
-        foregroundColor: Colors.white,
-
-        elevation: 0,
+        titleSpacing: 8,
 
         title: Row(
           children: [
-
             Container(
-              width: 36,
-              height: 36,
-
+              width: 38,
+              height: 38,
               decoration: BoxDecoration(
-                color:
-                Colors.white.withOpacity(0.2),
+                color: Colors.white
+                    .withOpacity(0.14),
                 borderRadius:
-                BorderRadius.circular(8),
+                BorderRadius.circular(11),
               ),
-
-              child: const Center(
-                child: Icon(
-                  Icons.handyman_rounded,
-                  color: Colors.white,
-                  size: 22,
-                ),
+              child: const Icon(
+                Icons.handyman_rounded,
+                color: Colors.white,
+                size: 22,
               ),
             ),
 
@@ -604,10 +871,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
             Text(
               l10n.appTitle,
-
               style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
+                fontSize: 19,
+                fontWeight:
+                FontWeight.w700,
                 color: Colors.white,
               ),
             ),
@@ -615,24 +882,21 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
 
         actions: [
-
           // ========================================================
           // REFRESH
           // ========================================================
 
           IconButton(
+            onPressed: _refreshCurrentScreen,
+            tooltip: l10n.refresh,
             icon: const Icon(
               Icons.refresh_rounded,
-              size: 26,
+              size: 25,
             ),
-
-            onPressed: _refreshCurrentScreen,
-
-            tooltip: l10n.refresh,
           ),
 
           // ========================================================
-          // NOTIFICATION BELL
+          // NOTIFICATIONS
           // ========================================================
 
           Consumer<NotificationProvider>(
@@ -642,90 +906,87 @@ class _HomeScreenState extends State<HomeScreen> {
                 child,
                 ) {
               final unreadCount =
-                  notificationProvider.unreadCount;
+                  notificationProvider
+                      .unreadCount;
 
               return IconButton(
+                onPressed: () =>
+                    _showNotifications(context),
+                tooltip: l10n.notifications,
                 icon: Stack(
-                  clipBehavior: Clip.none,
-
+                  clipBehavior:
+                  Clip.none,
                   children: [
                     const Icon(
-                      Icons.notifications_outlined,
+                      Icons
+                          .notifications_outlined,
                       size: 26,
                     ),
 
                     if (unreadCount > 0)
                       Positioned(
-                        right: -2,
-                        top: -3,
-
+                        right: -5,
+                        top: -5,
                         child: Container(
-                          padding:
-                          const EdgeInsets.all(4),
-
-                          decoration:
-                          const BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
-                          ),
-
                           constraints:
                           const BoxConstraints(
                             minWidth: 18,
                             minHeight: 18,
                           ),
-
+                          padding:
+                          const EdgeInsets
+                              .symmetric(
+                            horizontal: 4,
+                          ),
+                          decoration:
+                          const BoxDecoration(
+                            color: Colors.red,
+                            shape:
+                            BoxShape.circle,
+                          ),
+                          alignment:
+                          Alignment.center,
                           child: Text(
                             unreadCount > 9
                                 ? '9+'
                                 : '$unreadCount',
-
                             style:
                             const TextStyle(
                               color: Colors.white,
-                              fontSize: 10,
+                              fontSize: 9,
                               fontWeight:
-                              FontWeight.bold,
+                              FontWeight.w800,
                             ),
-
-                            textAlign:
-                            TextAlign.center,
                           ),
                         ),
                       ),
                   ],
                 ),
-
-                onPressed: () =>
-                    _showNotifications(context),
               );
             },
           ),
 
           // ========================================================
-          // RIGHT THREE-DOT MENU
-          //
-          // OPENS EMPTY RIGHT DRAWER
+          // MORE
           // ========================================================
 
           Builder(
-            builder: (BuildContext ctx) {
+            builder: (ctx) {
               return IconButton(
+                onPressed: () {
+                  Scaffold.of(ctx)
+                      .openEndDrawer();
+                },
+                tooltip: 'More Options',
                 icon: const Icon(
-                  Icons.more_vert,
+                  Icons.more_vert_rounded,
                   size: 26,
                 ),
-
-                tooltip: 'More Options',
-
-                onPressed: () {
-                  Scaffold.of(ctx).openEndDrawer();
-                },
               );
             },
           ),
 
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
         ],
       ),
 
@@ -735,12 +996,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
       body: RefreshIndicator(
         onRefresh: _refreshCurrentScreen,
-
         color: theme.primaryColor,
-
         backgroundColor:
         theme.colorScheme.surface,
-
         child: _screens[_currentIndex],
       ),
 
@@ -750,228 +1008,383 @@ class _HomeScreenState extends State<HomeScreen> {
 
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          boxShadow: [
-            BoxShadow(
-              color:
-              theme.shadowColor.withOpacity(0.12),
-
-              blurRadius: 12,
-
-              offset: const Offset(0, -4),
-            ),
-          ],
-
+          color: theme.colorScheme.surface,
           border: Border(
             top: BorderSide(
               color: isDark
                   ? Colors.grey.shade800
                   : Colors.grey.shade200,
-
-              width: 0.5,
+              width: 0.6,
             ),
           ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black
+                  .withOpacity(
+                isDark ? 0.25 : 0.07,
+              ),
+              blurRadius: 15,
+              offset: const Offset(0, -4),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          top: false,
+          child: Consumer<ChatProvider>(
+            builder: (
+                context,
+                chatProvider,
+                child,
+                ) {
+              return BottomNavigationBar(
+                currentIndex:
+                _currentIndex,
+
+                onTap: (index) {
+                  if (_currentIndex ==
+                      index) {
+                    return;
+                  }
+
+                  setState(() {
+                    _currentIndex =
+                        index;
+                  });
+                },
+
+                type:
+                BottomNavigationBarType
+                    .fixed,
+
+                backgroundColor:
+                theme.colorScheme.surface,
+
+                elevation: 0,
+
+                selectedItemColor:
+                theme.primaryColor,
+
+                unselectedItemColor:
+                isDark
+                    ? Colors.grey.shade500
+                    : Colors.grey.shade600,
+
+                selectedFontSize: 11,
+
+                unselectedFontSize: 11,
+
+                selectedLabelStyle:
+                const TextStyle(
+                  fontWeight:
+                  FontWeight.w600,
+                ),
+
+                items: [
+                  // =================================================
+                  // NEARBY
+                  // =================================================
+
+                  BottomNavigationBarItem(
+                    icon: const Icon(
+                      Icons
+                          .home_outlined,
+                    ),
+                    activeIcon:
+                    const Icon(
+                      Icons.home_rounded,
+                    ),
+                    label: l10n.nearby,
+                  ),
+
+                  // =================================================
+                  // BLOG
+                  // =================================================
+
+                  BottomNavigationBarItem(
+                    icon: const Icon(
+                      Icons
+                          .article_outlined,
+                    ),
+                    activeIcon:
+                    const Icon(
+                      Icons
+                          .article_rounded,
+                    ),
+                    label: l10n.blog,
+                  ),
+
+                  // =================================================
+                  // REQUESTS
+                  // =================================================
+
+                  BottomNavigationBarItem(
+                    icon: const Icon(
+                      Icons
+                          .list_alt_outlined,
+                    ),
+                    activeIcon:
+                    const Icon(
+                      Icons
+                          .list_alt_rounded,
+                    ),
+                    label: l10n.requests,
+                  ),
+
+                  // =================================================
+                  // CHAT
+                  // =================================================
+
+                  BottomNavigationBarItem(
+                    icon: _ChatIcon(
+                      unread:
+                      chatProvider
+                          .totalUnread,
+                      active: false,
+                    ),
+                    activeIcon: _ChatIcon(
+                      unread:
+                      chatProvider
+                          .totalUnread,
+                      active: true,
+                    ),
+                    label: l10n.chat,
+                  ),
+
+                  // =================================================
+                  // PROFILE
+                  // =================================================
+
+                  BottomNavigationBarItem(
+                    icon: const Icon(
+                      Icons
+                          .person_outline,
+                    ),
+                    activeIcon:
+                    const Icon(
+                      Icons.person_rounded,
+                    ),
+                    label: l10n.profile,
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ==================================================================
+// DRAWER ITEM
+// ==================================================================
+
+class _DrawerItem extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _DrawerItem({
+    required this.icon,
+    required this.title,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme =
+    Theme.of(context);
+
+    return Container(
+      margin:
+      const EdgeInsets.symmetric(
+        vertical: 3,
+      ),
+      child: ListTile(
+        onTap: onTap,
+        shape:
+        RoundedRectangleBorder(
+          borderRadius:
+          BorderRadius.circular(14),
+        ),
+        contentPadding:
+        const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 2,
+        ),
+        leading: Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.09),
+            borderRadius:
+            BorderRadius.circular(12),
+          ),
+          child: Icon(
+            icon,
+            color: color,
+            size: 21,
+          ),
+        ),
+        title: Text(
+          title,
+          style: theme
+              .textTheme
+              .bodyLarge
+              ?.copyWith(
+            fontWeight:
+            FontWeight.w600,
+          ),
+        ),
+        trailing: Icon(
+          Icons
+              .chevron_right_rounded,
+          color: Colors.grey.shade500,
+        ),
+      ),
+    );
+  }
+}
+
+// ==================================================================
+// CHAT ICON
+// ==================================================================
+
+class _ChatIcon extends StatelessWidget {
+  final int unread;
+  final bool active;
+
+  const _ChatIcon({
+    required this.unread,
+    required this.active,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Icon(
+          active
+              ? Icons
+              .chat_bubble_rounded
+              : Icons
+              .chat_bubble_outline_rounded,
         ),
 
-        child: Consumer<ChatProvider>(
-          builder: (
-              context,
-              chatProvider,
-              child,
-              ) {
-            return BottomNavigationBar(
-              currentIndex: _currentIndex,
-
-              onTap: (index) {
-                setState(() {
-                  _currentIndex = index;
-                });
-              },
-
-              type:
-              BottomNavigationBarType.fixed,
-
-              selectedItemColor:
-              theme.primaryColor,
-
-              unselectedItemColor:
-              isDark
-                  ? Colors.grey.shade400
-                  : Colors.grey.shade600,
-
-              backgroundColor:
-              theme.colorScheme.surface,
-
-              elevation: 0,
-
-              items: [
-
-                // ==================================================
-                // HOME
-                // ==================================================
-
-                BottomNavigationBarItem(
-                  icon: const Icon(
-                    Icons.home_outlined,
-                  ),
-
-                  activeIcon: const Icon(
-                    Icons.home_rounded,
-                  ),
-
-                  label: l10n.nearby,
+        if (unread > 0)
+          Positioned(
+            right: -8,
+            top: -7,
+            child: Container(
+              constraints:
+              const BoxConstraints(
+                minWidth: 15,
+                minHeight: 15,
+              ),
+              padding:
+              const EdgeInsets.symmetric(
+                horizontal: 3,
+              ),
+              decoration:
+              const BoxDecoration(
+                color: Colors.red,
+                shape: BoxShape.circle,
+              ),
+              alignment:
+              Alignment.center,
+              child: Text(
+                unread > 9
+                    ? '9+'
+                    : '$unread',
+                style:
+                const TextStyle(
+                  color: Colors.white,
+                  fontSize: 8,
+                  fontWeight:
+                  FontWeight.w800,
                 ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
 
-                // ==================================================
-                // BLOG
-                // ==================================================
+// ==================================================================
+// EMPTY NOTIFICATIONS
+// ==================================================================
 
-                BottomNavigationBarItem(
-                  icon: const Icon(
-                    Icons.article_outlined,
-                  ),
+class _EmptyNotifications
+    extends StatelessWidget {
+  final ThemeData theme;
+  final String title;
 
-                  activeIcon: const Icon(
-                    Icons.article_rounded,
-                  ),
+  const _EmptyNotifications({
+    required this.theme,
+    required this.title,
+  });
 
-                  label: l10n.blog,
-                ),
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding:
+        const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment:
+          MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 90,
+              height: 90,
+              decoration: BoxDecoration(
+                color: theme
+                    .primaryColor
+                    .withOpacity(0.08),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons
+                    .notifications_none_rounded,
+                size: 46,
+                color:
+                theme.primaryColor,
+              ),
+            ),
 
-                // ==================================================
-                // REQUESTS
-                // ==================================================
+            const SizedBox(height: 20),
 
-                BottomNavigationBarItem(
-                  icon: const Icon(
-                    Icons.list_alt_outlined,
-                  ),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: theme
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(
+                fontWeight:
+                FontWeight.w700,
+              ),
+            ),
 
-                  activeIcon: const Icon(
-                    Icons.list_alt_rounded,
-                  ),
+            const SizedBox(height: 8),
 
-                  label: l10n.requests,
-                ),
-
-                // ==================================================
-                // CHAT
-                // ==================================================
-
-                BottomNavigationBarItem(
-                  icon: Stack(
-                    alignment:
-                    Alignment.topRight,
-
-                    children: [
-                      const Icon(
-                        Icons
-                            .chat_bubble_outline_rounded,
-                      ),
-
-                      if (chatProvider.totalUnread > 0)
-                        Container(
-                          padding:
-                          const EdgeInsets.all(3),
-
-                          decoration:
-                          const BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
-                          ),
-
-                          constraints:
-                          const BoxConstraints(
-                            minWidth: 14,
-                            minHeight: 14,
-                          ),
-
-                          child: Text(
-                            chatProvider.totalUnread > 9
-                                ? '9+'
-                                : '${chatProvider.totalUnread}',
-
-                            style:
-                            const TextStyle(
-                              color: Colors.white,
-                              fontSize: 8,
-                              fontWeight:
-                              FontWeight.bold,
-                            ),
-
-                            textAlign:
-                            TextAlign.center,
-                          ),
-                        ),
-                    ],
-                  ),
-
-                  activeIcon: Stack(
-                    alignment:
-                    Alignment.topRight,
-
-                    children: [
-                      const Icon(
-                        Icons.chat_bubble_rounded,
-                      ),
-
-                      if (chatProvider.totalUnread > 0)
-                        Container(
-                          padding:
-                          const EdgeInsets.all(3),
-
-                          decoration:
-                          const BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
-                          ),
-
-                          constraints:
-                          const BoxConstraints(
-                            minWidth: 14,
-                            minHeight: 14,
-                          ),
-
-                          child: Text(
-                            chatProvider.totalUnread > 9
-                                ? '9+'
-                                : '${chatProvider.totalUnread}',
-
-                            style:
-                            const TextStyle(
-                              color: Colors.white,
-                              fontSize: 8,
-                              fontWeight:
-                              FontWeight.bold,
-                            ),
-
-                            textAlign:
-                            TextAlign.center,
-                          ),
-                        ),
-                    ],
-                  ),
-
-                  label: l10n.chat,
-                ),
-
-                // ==================================================
-                // PROFILE
-                // ==================================================
-
-                BottomNavigationBarItem(
-                  icon: const Icon(
-                    Icons.person_outline,
-                  ),
-
-                  activeIcon: const Icon(
-                    Icons.person_rounded,
-                  ),
-
-                  label: l10n.profile,
-                ),
-              ],
-            );
-          },
+            Text(
+              'We will notify you when there is something new.',
+              textAlign: TextAlign.center,
+              style: theme
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(
+                color:
+                Colors.grey.shade600,
+                height: 1.4,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -982,11 +1395,10 @@ class _HomeScreenState extends State<HomeScreen> {
 // NOTIFICATION TILE
 // ==================================================================
 
-class _NotificationTile extends StatelessWidget {
+class _NotificationTile
+    extends StatelessWidget {
   final Map<String, dynamic> notification;
-
   final VoidCallback onTap;
-
   final String locale;
 
   const _NotificationTile({
@@ -999,7 +1411,9 @@ class _NotificationTile extends StatelessWidget {
   // TYPE LABEL
   // ================================================================
 
-  String _getTypeLabel(String? type) {
+  String _getTypeLabel(
+      String? type,
+      ) {
     switch (type) {
       case 'chat_message':
         return 'Chat';
@@ -1028,28 +1442,186 @@ class _NotificationTile extends StatelessWidget {
   // ICON
   // ================================================================
 
-  IconData _getIcon(String? type) {
+  IconData _getIcon(
+      String? type,
+      ) {
     switch (type) {
       case 'chat_message':
-        return Icons.chat_bubble_outline;
+        return Icons
+            .chat_bubble_outline_rounded;
 
       case 'new_request':
-        return Icons.request_page_outlined;
+        return Icons
+            .request_page_outlined;
 
       case 'request_accepted':
-        return Icons.check_circle_outline;
+        return Icons
+            .check_circle_outline_rounded;
 
       case 'request_rejected':
-        return Icons.cancel_outlined;
+        return Icons
+            .cancel_outlined;
 
       case 'request_in_progress':
-        return Icons.hourglass_top_outlined;
+        return Icons
+            .hourglass_top_rounded;
 
       case 'request_completed':
-        return Icons.check_circle_outline;
+        return Icons
+            .task_alt_rounded;
 
       default:
-        return Icons.notifications_outlined;
+        return Icons
+            .notifications_outlined;
+    }
+  }
+
+  // ================================================================
+  // ICON COLOR
+  // ================================================================
+
+  Color _getIconColor(
+      String? type,
+      ThemeData theme,
+      ) {
+    switch (type) {
+      case 'request_accepted':
+      case 'request_completed':
+        return Colors.green.shade600;
+
+      case 'request_rejected':
+        return Colors.red.shade600;
+
+      case 'request_in_progress':
+        return Colors.orange.shade700;
+
+      case 'chat_message':
+        return Colors.blue.shade600;
+
+      case 'new_request':
+        return theme.primaryColor;
+
+      default:
+        return theme.primaryColor;
+    }
+  }
+
+  // ================================================================
+  // FORMAT DATE TIME
+  // ================================================================
+
+  String _formatCreatedAt(
+      dynamic value,
+      ) {
+    if (value == null ||
+        value.toString().trim().isEmpty) {
+      return '';
+    }
+
+    try {
+      DateTime dateTime =
+      DateTime.parse(
+        value.toString(),
+      );
+
+      if (dateTime.isUtc) {
+        dateTime = dateTime.toLocal();
+      }
+
+      final day = dateTime.day
+          .toString()
+          .padLeft(2, '0');
+
+      final month = dateTime.month
+          .toString()
+          .padLeft(2, '0');
+
+      final year =
+      dateTime.year.toString();
+
+      final hour12 =
+      dateTime.hour % 12 == 0
+          ? 12
+          : dateTime.hour % 12;
+
+      final hour = hour12
+          .toString()
+          .padLeft(2, '0');
+
+      final minute = dateTime.minute
+          .toString()
+          .padLeft(2, '0');
+
+      final period =
+      dateTime.hour >= 12
+          ? 'PM'
+          : 'AM';
+
+      return '$day/$month/$year • $hour:$minute $period';
+    } catch (e) {
+      debugPrint(
+        'Invalid notification created_at: $value',
+      );
+
+      return value.toString();
+    }
+  }
+
+  // ================================================================
+  // RELATIVE TIME
+  // ================================================================
+
+  String _getRelativeTime(
+      dynamic value,
+      ) {
+    if (value == null) {
+      return '';
+    }
+
+    try {
+      DateTime dateTime =
+      DateTime.parse(
+        value.toString(),
+      );
+
+      if (dateTime.isUtc) {
+        dateTime = dateTime.toLocal();
+      }
+
+      final now = DateTime.now();
+
+      final difference =
+      now.difference(dateTime);
+
+      if (difference.inSeconds < 30) {
+        return 'Just now';
+      }
+
+      if (difference.inMinutes < 60) {
+        final minutes =
+            difference.inMinutes;
+
+        return '$minutes min ago';
+      }
+
+      if (difference.inHours < 24) {
+        final hours =
+            difference.inHours;
+
+        return '$hours hr ago';
+      }
+
+      if (difference.inDays == 1) {
+        return 'Yesterday';
+      }
+
+      if (difference.inDays < 7) {
+        return '${difference.inDays} days ago';
+      }
+
+      return _formatCreatedAt(value);
+    } catch (_) {
+      return '';
     }
   }
 
@@ -1058,100 +1630,330 @@ class _NotificationTile extends StatelessWidget {
   // ================================================================
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+  Widget build(
+      BuildContext context,
+      ) {
+    final theme =
+    Theme.of(context);
+
+    final isReadValue =
+    notification['is_read'];
 
     final isRead =
-        notification['is_read'] ?? false;
+        isReadValue == true ||
+            isReadValue == 1 ||
+            isReadValue == '1';
 
-    final l10n =
-    AppLocalizations.of(context)!;
+    final title =
+        notification['title']
+            ?.toString() ??
+            'Notification';
 
-    return ListTile(
-      onTap: onTap,
+    final body =
+        notification['body']
+            ?.toString() ??
+            '';
 
-      leading: CircleAvatar(
-        backgroundColor: isRead
-            ? Colors.grey.shade200
-            : theme.primaryColor
-            .withOpacity(0.1),
+    final type =
+        notification['type']
+            ?.toString() ??
+            '';
 
-        child: Icon(
-          _getIcon(
-            notification['type'],
+    final createdAt =
+    notification['created_at'];
+
+    final exactDate =
+    _formatCreatedAt(
+      createdAt,
+    );
+
+    final relativeTime =
+    _getRelativeTime(
+      createdAt,
+    );
+
+    final iconColor =
+    _getIconColor(
+      type,
+      theme,
+    );
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius:
+        BorderRadius.circular(16),
+        child: AnimatedContainer(
+          duration:
+          const Duration(
+            milliseconds: 200,
           ),
-
-          color: isRead
-              ? Colors.grey.shade600
-              : theme.primaryColor,
-
-          size: 20,
-        ),
-      ),
-
-      title: Text(
-        notification['title'] ??
-            l10n.notification,
-
-        style: TextStyle(
-          fontWeight: isRead
-              ? FontWeight.normal
-              : FontWeight.bold,
-        ),
-      ),
-
-      subtitle: Column(
-        crossAxisAlignment:
-        CrossAxisAlignment.start,
-
-        children: [
-          Text(
-            notification['body'] ?? '',
-
-            maxLines: 2,
-
-            overflow:
-            TextOverflow.ellipsis,
-
-            style:
-            theme.textTheme.bodySmall,
-          ),
-
-          if (notification['type'] != null)
-            Text(
-              _getTypeLabel(
-                notification['type'],
-              ),
-
-              style:
-              theme.textTheme.labelSmall
-                  ?.copyWith(
-                color:
-                theme.primaryColor,
-
-                fontWeight:
-                FontWeight.w500,
-              ),
+          padding:
+          const EdgeInsets.all(13),
+          decoration: BoxDecoration(
+            color: isRead
+                ? theme
+                .colorScheme
+                .surface
+                : theme
+                .primaryColor
+                .withOpacity(0.055),
+            borderRadius:
+            BorderRadius.circular(16),
+            border: Border.all(
+              color: isRead
+                  ? theme.dividerColor
+                  .withOpacity(0.30)
+                  : theme.primaryColor
+                  .withOpacity(0.16),
             ),
-        ],
-      ),
+          ),
+          child: Row(
+            crossAxisAlignment:
+            CrossAxisAlignment.start,
+            children: [
+              // =====================================================
+              // ICON
+              // =====================================================
 
-      trailing: isRead
-          ? null
-          : Container(
-        width: 8,
-        height: 8,
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: iconColor
+                      .withOpacity(0.10),
+                  borderRadius:
+                  BorderRadius.circular(
+                    14,
+                  ),
+                ),
+                child: Icon(
+                  _getIcon(type),
+                  color: iconColor,
+                  size: 22,
+                ),
+              ),
 
-        decoration:
-        const BoxDecoration(
-          color: Colors.blue,
-          shape: BoxShape.circle,
+              const SizedBox(width: 12),
+
+              // =====================================================
+              // CONTENT
+              // =====================================================
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment:
+                  CrossAxisAlignment.start,
+                  children: [
+                    // =============================================
+                    // TITLE + UNREAD DOT
+                    // =============================================
+
+                    Row(
+                      crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            maxLines: 2,
+                            overflow:
+                            TextOverflow
+                                .ellipsis,
+                            style: TextStyle(
+                              fontSize: 14.5,
+                              height: 1.25,
+                              fontWeight: isRead
+                                  ? FontWeight
+                                  .w500
+                                  : FontWeight
+                                  .w700,
+                            ),
+                          ),
+                        ),
+
+                        if (!isRead)
+                          Container(
+                            width: 8,
+                            height: 8,
+                            margin:
+                            const EdgeInsets
+                                .only(
+                              left: 8,
+                              top: 5,
+                            ),
+                            decoration:
+                            BoxDecoration(
+                              color: theme
+                                  .primaryColor,
+                              shape:
+                              BoxShape.circle,
+                            ),
+                          ),
+                      ],
+                    ),
+
+                    // =============================================
+                    // BODY
+                    // =============================================
+
+                    if (body.isNotEmpty) ...[
+                      const SizedBox(
+                        height: 5,
+                      ),
+                      Text(
+                        body,
+                        maxLines: 2,
+                        overflow:
+                        TextOverflow.ellipsis,
+                        style: theme
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(
+                          height: 1.35,
+                          color: theme
+                              .textTheme
+                              .bodySmall
+                              ?.color
+                              ?.withOpacity(
+                            0.72,
+                          ),
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(
+                      height: 8,
+                    ),
+
+                    // =============================================
+                    // TYPE + TIME
+                    // =============================================
+
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 5,
+                      crossAxisAlignment:
+                      WrapCrossAlignment
+                          .center,
+                      children: [
+                        if (type.isNotEmpty)
+                          Container(
+                            padding:
+                            const EdgeInsets
+                                .symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration:
+                            BoxDecoration(
+                              color: iconColor
+                                  .withOpacity(
+                                0.08,
+                              ),
+                              borderRadius:
+                              BorderRadius
+                                  .circular(
+                                7,
+                              ),
+                            ),
+                            child: Text(
+                              _getTypeLabel(
+                                type,
+                              ),
+                              style: TextStyle(
+                                color:
+                                iconColor,
+                                fontSize: 10,
+                                fontWeight:
+                                FontWeight
+                                    .w700,
+                              ),
+                            ),
+                          ),
+
+                        if (relativeTime
+                            .isNotEmpty)
+                          Row(
+                            mainAxisSize:
+                            MainAxisSize
+                                .min,
+                            children: [
+                              Icon(
+                                Icons
+                                    .access_time_rounded,
+                                size: 13,
+                                color: Colors
+                                    .grey
+                                    .shade500,
+                              ),
+                              const SizedBox(
+                                width: 4,
+                              ),
+                              Text(
+                                relativeTime,
+                                style: TextStyle(
+                                  color: Colors
+                                      .grey
+                                      .shade600,
+                                  fontSize: 10.5,
+                                  fontWeight:
+                                  FontWeight
+                                      .w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
+
+                    // =============================================
+                    // EXACT DATE/TIME
+                    // =============================================
+
+                    if (exactDate.isNotEmpty) ...[
+                      const SizedBox(
+                        height: 5,
+                      ),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons
+                                .calendar_today_outlined,
+                            size: 11,
+                            color: Colors
+                                .grey
+                                .shade500,
+                          ),
+                          const SizedBox(
+                            width: 4,
+                          ),
+                          Flexible(
+                            child: Text(
+                              exactDate,
+                              maxLines: 1,
+                              overflow:
+                              TextOverflow
+                                  .ellipsis,
+                              style: TextStyle(
+                                color: Colors
+                                    .grey
+                                    .shade500,
+                                fontSize: 9.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-
-      isThreeLine: false,
-
-      dense: true,
     );
   }
 }

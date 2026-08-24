@@ -1,7 +1,6 @@
-// lib/providers/notification_provider.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
 import '../main.dart';
 import '../services/fcm_service.dart';
 import '../services/api_service.dart';
@@ -15,23 +14,38 @@ class NotificationProvider extends ChangeNotifier {
   String? _error;
 
   List<Map<String, dynamic>> get notifications => _notifications;
+
   bool get isLoading => _isLoading;
+
   String? get error => _error;
 
   int get unreadCount {
-    return _notifications.where((n) => n['is_read'] == false).length;
+    return _notifications.where((notification) {
+      return notification['is_read'] == false ||
+          notification['is_read'] == 0 ||
+          notification['is_read'] == null;
+    }).length;
   }
 
   NotificationProvider() {
     _init();
   }
 
-  void _init() async {
+  // ================================================================
+  // INITIALIZE LOCAL NOTIFICATIONS
+  // ================================================================
+
+  Future<void> _init() async {
     const AndroidInitializationSettings android =
     AndroidInitializationSettings('@mipmap/ic_launcher');
-    const DarwinInitializationSettings ios = DarwinInitializationSettings();
-    const InitializationSettings settings =
-    InitializationSettings(android: android, iOS: ios);
+
+    const DarwinInitializationSettings ios =
+    DarwinInitializationSettings();
+
+    const InitializationSettings settings = InitializationSettings(
+      android: android,
+      iOS: ios,
+    );
 
     await _localNotifications.initialize(
       settings,
@@ -39,32 +53,39 @@ class NotificationProvider extends ChangeNotifier {
     );
   }
 
-  // Handle notification tap
+  // ================================================================
+  // HANDLE NOTIFICATION TAP
+  // ================================================================
+
   void _onNotificationTap(NotificationResponse response) {
     final payload = response.payload;
-    if (payload != null) {
-      // Use navigatorKey from main.dart
-      final context = navigatorKey.currentContext;
-      if (context != null) {
-        try {
-          // Parse payload and navigate
-          // For now, navigate to home
-          navigatorKey.currentState?.pushNamed('/home');
-        } catch (e) {
-          // If payload is not JSON, navigate to home
-          navigatorKey.currentState?.pushNamed('/home');
-        }
+
+    if (payload == null) {
+      return;
+    }
+
+    final context = navigatorKey.currentContext;
+
+    if (context != null) {
+      try {
+        navigatorKey.currentState?.pushNamed('/home');
+      } catch (e) {
+        debugPrint('Notification navigation error: $e');
       }
     }
   }
 
-  // Show local notification
+  // ================================================================
+  // SHOW LOCAL NOTIFICATION
+  // ================================================================
+
   Future<void> showLocalNotification({
     required String title,
     required String body,
     String? payload,
   }) async {
-    const AndroidNotificationDetails android = AndroidNotificationDetails(
+    const AndroidNotificationDetails android =
+    AndroidNotificationDetails(
       'fundi_channel',
       'NearbyFundi Notifications',
       channelDescription: 'Notifications from NearbyFundi',
@@ -76,7 +97,9 @@ class NotificationProvider extends ChangeNotifier {
       icon: '@mipmap/ic_launcher',
     );
 
-    const NotificationDetails platform = NotificationDetails(android: android);
+    const NotificationDetails platform = NotificationDetails(
+      android: android,
+    );
 
     await _localNotifications.show(
       DateTime.now().millisecondsSinceEpoch ~/ 1000,
@@ -87,15 +110,22 @@ class NotificationProvider extends ChangeNotifier {
     );
   }
 
-  // Initialize FCM
+  // ================================================================
+  // INITIALIZE FCM
+  // ================================================================
+
   Future<void> initFcm() async {
     await FcmService.init();
   }
 
-  // Load notifications from server
+  // ================================================================
+  // LOAD NOTIFICATIONS FROM SERVER
+  // ================================================================
+
   Future<void> loadNotifications() async {
     _isLoading = true;
     _error = null;
+
     notifyListeners();
 
     try {
@@ -103,71 +133,128 @@ class NotificationProvider extends ChangeNotifier {
       final response = await api.getNotifications();
 
       if (response.success && response.data != null) {
-        _notifications = List<Map<String, dynamic>>.from(response.data);
+        final data = response.data;
+
+        if (data is List) {
+          _notifications = data
+              .map<Map<String, dynamic>>(
+                (item) => Map<String, dynamic>.from(item),
+          )
+              .toList();
+        } else {
+          _notifications = [];
+        }
       } else {
         _error = response.message;
       }
     } catch (e) {
       _error = e.toString();
+
+      debugPrint(
+        'Error loading notifications: $e',
+      );
     } finally {
       _isLoading = false;
+
       notifyListeners();
     }
   }
 
-  // Mark notification as read
+  // ================================================================
+  // MARK SINGLE NOTIFICATION AS READ
+  // ================================================================
+
   Future<void> markAsRead(String notificationId) async {
     try {
       final api = ApiService();
-      final response = await api.markNotificationAsRead(notificationId);
+
+      final response =
+      await api.markNotificationAsRead(notificationId);
 
       if (response.success) {
-        final index = _notifications.indexWhere((n) => n['id'] == notificationId);
+        final index = _notifications.indexWhere(
+              (notification) =>
+          notification['id'].toString() ==
+              notificationId.toString(),
+        );
+
         if (index != -1) {
           _notifications[index]['is_read'] = true;
+          _notifications[index]['read_at'] =
+              DateTime.now().toIso8601String();
+
           notifyListeners();
         }
       }
     } catch (e) {
-      debugPrint('Error marking notification as read: $e');
+      debugPrint(
+        'Error marking notification as read: $e',
+      );
     }
   }
 
-  // Mark all notifications as read
+  // ================================================================
+  // MARK ALL AS READ
+  // ================================================================
+
   Future<void> markAllAsRead() async {
     try {
       final api = ApiService();
-      final response = await api.markAllNotificationsAsRead();
+
+      final response =
+      await api.markAllNotificationsAsRead();
 
       if (response.success) {
-        for (var notification in _notifications) {
+        for (final notification in _notifications) {
           notification['is_read'] = true;
+          notification['read_at'] =
+              DateTime.now().toIso8601String();
         }
+
         notifyListeners();
       }
     } catch (e) {
-      debugPrint('Error marking all notifications as read: $e');
+      debugPrint(
+        'Error marking all notifications as read: $e',
+      );
     }
   }
 
-  // Add notification locally (for testing or when receiving FCM)
-  void addLocalNotification(Map<String, dynamic> notification) {
-    _notifications.insert(0, notification);
+  // ================================================================
+  // ADD LOCAL NOTIFICATION
+  // ================================================================
+
+  void addLocalNotification(
+      Map<String, dynamic> notification,
+      ) {
+    _notifications.insert(
+      0,
+      notification,
+    );
+
     notifyListeners();
   }
 
-  // Clear all notifications
+  // ================================================================
+  // CLEAR ALL NOTIFICATIONS
+  // ================================================================
+
   Future<void> clearAll() async {
     try {
       final api = ApiService();
-      final response = await api.clearNotifications();
+
+      final response =
+      await api.clearNotifications();
 
       if (response.success) {
         _notifications.clear();
+
         notifyListeners();
       }
     } catch (e) {
-      debugPrint('Error clearing notifications: $e');
+      debugPrint(
+        'Error clearing notifications: $e',
+      );
     }
   }
 

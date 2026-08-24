@@ -93,13 +93,14 @@ flutter:
   uses-material-design: true
 
   assets:
-    # Directories
+    # Main NearbyFundi branding
     - assets/images/
-    - assets/audio/
 
-    # Specific Icons
+    # App icons
     - assets/icons/nearbylogo.png
-    - assets/icons/netsaf.png
+    - assets/icons/app_icon.png
+
+    # Chat icons
     - assets/icons/chat/chat_icon.svg
     - assets/icons/chat/audio_icon.svg
 
@@ -109,11 +110,11 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/icons/netsaf.png"
+  image_path: "assets/icons/app_icon.png"
 
   # Adaptive icon for Android
   adaptive_icon_background: "#006B5E"
-  adaptive_icon_foreground: "assets/icons/netsaf.png"
+  adaptive_icon_foreground: "assets/icons/app_icon.png"
   min_sdk_android: 21
 
   # Larger Icon Settings

@@ -1,8 +1,20 @@
 // ================================================================
 // FILE: lib/screens/home/nearby_screen.dart
-// Nearby Fundi - Refined UI/UX
+// Nearby Fundi - Refined UI/UX (cleaned + UAT fixes)
+//
+// Change log vs previous version (see UAT report for full detail):
+//  - Debounced + sequence-guarded place suggestion search
+//  - Safe numeric casts everywhere a map picker / API result is parsed
+//  - User-facing error feedback on search / route failures
+//  - Bounded-concurrency OSRM route fetching (was: 10 parallel requests)
+//  - Recommended-technician set computed once per build, not per row
+//  - Distance-sorted technician list sheet
+//  - Expandable search radius + retry CTA on empty results
+//  - Centralized magic numbers / colors / literal strings
+//  - Tooltips added to all icon buttons
 // ================================================================
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -41,6 +53,69 @@ class TechnicianRouteData {
 }
 
 // ================================================================
+// CONSTANTS
+// Centralizing tunables that were previously scattered as magic
+// numbers / literals throughout the widget.
+// ================================================================
+
+class _NearbyConstants {
+  _NearbyConstants._();
+
+  // Colors
+  static const Color primaryGreen = Color(0xFF006B5E);
+  static const Color lightGreen = Color(0xFF008C7A);
+  static const Color selectedColor = Color(0xFF1565C0);
+  static const Color locationRed = Color(0xFFD32F2F);
+  static const Color technicianGreen = Color(0xFF00897B);
+  static const Color distanceGreen = Color(0xFF2E7D32);
+  static const Color verifiedBlue = Color(0xFF1976D2);
+  static const LatLng defaultMapCenter = LatLng(-6.7924, 39.2083); // Dar es Salaam
+
+  // Behaviour tuning
+  static const int maxHistoryEntries = 10;
+  static const int recommendedCount = 2;
+  static const int maxRouteTargets = 10;
+  static const int routeFetchBatchSize = 4; // bounded concurrency for OSRM
+  static const int defaultRadiusKm = 20;
+  static const int maxRadiusKm = 100;
+  static const int radiusStepKm = 20;
+  static const Duration suggestionDebounce = Duration(milliseconds: 400);
+  static const Duration placeSearchTimeout = Duration(seconds: 6);
+  static const Duration routeSearchTimeout = Duration(seconds: 8);
+
+  static const String historyPrefsKey = 'location_search_history';
+}
+
+// TODO(i18n): these strings are UI copy that has no AppLocalizations key
+// yet. Centralized here so migrating them into app_localizations.dart is
+// a single, obvious pass instead of a scattered find-and-replace.
+class _Strings {
+  _Strings._();
+
+  static const filterByService = 'Filter by service...';
+  static const chooseOnMap = 'Choose location on map';
+  static const recommendedNearYou = 'Recommended • Near you';
+  static const recommendedReason = 'Recommended because this fundi is near you';
+  static const recentSearches = 'Recent searches';
+  static const clear = 'Clear';
+  static const findingRoutes = 'Finding best routes...';
+  static const searchForTechnicians = 'Search for technicians';
+  static const noTechniciansNearby = 'No technicians found nearby';
+  static const expandSearchRadius = 'Expand search radius';
+  static const you = 'You';
+  static const zoomIn = 'Zoom in';
+  static const zoomOut = 'Zoom out';
+  static const fitTechnicians = 'Fit technicians';
+  static const showList = 'Show technician list';
+  static const showFullMap = 'Show full-screen map';
+  static const clearFilters = 'Clear filters';
+  static const viewProfile = 'View Profile';
+  static const directions = 'Get directions';
+  static const couldNotOpenMaps = 'Could not open maps app.';
+  static const searchFailed = 'Search failed. Please check your connection and try again.';
+}
+
+// ================================================================
 // SCREEN
 // ================================================================
 
@@ -57,19 +132,14 @@ class _NearbyScreenState extends State<NearbyScreen>
   // Controllers
   // --------------------------------------------------------------
 
-  final TextEditingController _locationController =
-  TextEditingController();
-
+  final TextEditingController _locationController = TextEditingController();
   final TextEditingController _serviceSearchController =
   TextEditingController();
 
   final FocusNode _locationFocus = FocusNode();
 
-  final ScrollController _serviceChipScrollController =
-  ScrollController();
-
-  final ScrollController _categoryChipScrollController =
-  ScrollController();
+  final ScrollController _serviceChipScrollController = ScrollController();
+  final ScrollController _categoryChipScrollController = ScrollController();
 
   final MapController _mapController = MapController();
 
@@ -95,6 +165,8 @@ class _NearbyScreenState extends State<NearbyScreen>
   String _currentLocale = 'en';
   String _searchedArea = '';
 
+  int _searchRadiusKm = _NearbyConstants.defaultRadiusKm;
+
   // --------------------------------------------------------------
   // Data
   // --------------------------------------------------------------
@@ -102,30 +174,14 @@ class _NearbyScreenState extends State<NearbyScreen>
   final Map<int, TechnicianRouteData> _routesData = {};
 
   List<String> _searchHistory = [];
-
   List<Map<String, dynamic>> _placeSuggestions = [];
 
   bool _showSuggestions = false;
   bool _isLoadingSuggestions = false;
 
-  // ==============================================================
-  // COLORS
-  // ==============================================================
-
-  static const Color primaryGreen = Color(0xFF006B5E);
-  static const Color lightGreen = Color(0xFF008C7A);
-
-  // Selected/highlight color.
-  static const Color selectedColor = Color(0xFF1565C0);
-
-  // User/address marker.
-  static const Color locationRed = Color(0xFFD32F2F);
-
-  // Technician marker.
-  static const Color technicianGreen = Color(0xFF00897B);
-
-  // Distance/time.
-  static const Color distanceGreen = Color(0xFF2E7D32);
+  // Debounce + race-condition guard for place suggestions.
+  Timer? _suggestionDebounce;
+  int _suggestionRequestId = 0;
 
   // ==============================================================
   // INIT
@@ -146,12 +202,9 @@ class _NearbyScreenState extends State<NearbyScreen>
       if (!mounted) return;
 
       final settings = context.read<SettingsProvider>();
-
       _currentLocale = settings.locale;
 
-      context.read<ServiceProvider>().fetchServices(
-        locale: _currentLocale,
-      );
+      context.read<ServiceProvider>().fetchServices(locale: _currentLocale);
     });
   }
 
@@ -162,6 +215,7 @@ class _NearbyScreenState extends State<NearbyScreen>
   @override
   void dispose() {
     _pulseController.dispose();
+    _suggestionDebounce?.cancel();
 
     _locationController.dispose();
     _serviceSearchController.dispose();
@@ -179,12 +233,11 @@ class _NearbyScreenState extends State<NearbyScreen>
 
   Future<void> _loadSearchHistory() async {
     final prefs = await SharedPreferences.getInstance();
-
     if (!mounted) return;
 
     setState(() {
       _searchHistory =
-          prefs.getStringList('location_search_history') ?? [];
+          prefs.getStringList(_NearbyConstants.historyPrefsKey) ?? [];
     });
   }
 
@@ -192,24 +245,19 @@ class _NearbyScreenState extends State<NearbyScreen>
     if (place.trim().isEmpty) return;
 
     final prefs = await SharedPreferences.getInstance();
-
     final history =
-        prefs.getStringList('location_search_history') ?? [];
+        prefs.getStringList(_NearbyConstants.historyPrefsKey) ?? [];
 
     history.remove(place);
     history.insert(0, place);
 
-    if (history.length > 10) {
+    if (history.length > _NearbyConstants.maxHistoryEntries) {
       history.removeLast();
     }
 
-    await prefs.setStringList(
-      'location_search_history',
-      history,
-    );
+    await prefs.setStringList(_NearbyConstants.historyPrefsKey, history);
 
     if (!mounted) return;
-
     setState(() {
       _searchHistory = history;
     });
@@ -217,31 +265,42 @@ class _NearbyScreenState extends State<NearbyScreen>
 
   Future<void> _clearHistory() async {
     final prefs = await SharedPreferences.getInstance();
-
-    await prefs.remove('location_search_history');
+    await prefs.remove(_NearbyConstants.historyPrefsKey);
 
     if (!mounted) return;
-
     setState(() {
       _searchHistory = [];
     });
   }
 
   // ==============================================================
-  // PLACE SUGGESTIONS
+  // PLACE SUGGESTIONS (debounced + race-safe)
   // ==============================================================
 
-  Future<void> _fetchPlaceSuggestions(String query) async {
-    if (query.trim().length < 2) {
-      if (!mounted) return;
+  /// Called directly from the TextField's onChanged. Debounces network
+  /// calls so we don't fire a request per keystroke.
+  void _onLocationQueryChanged(String value) {
+    setState(() {}); // keeps clear/search button visibility in sync
 
+    _suggestionDebounce?.cancel();
+
+    if (value.trim().length < 2) {
       setState(() {
         _placeSuggestions = [];
         _showSuggestions = _searchHistory.isNotEmpty;
+        _isLoadingSuggestions = false;
       });
-
       return;
     }
+
+    _suggestionDebounce = Timer(
+      _NearbyConstants.suggestionDebounce,
+          () => _fetchPlaceSuggestions(value),
+    );
+  }
+
+  Future<void> _fetchPlaceSuggestions(String query) async {
+    final requestId = ++_suggestionRequestId;
 
     if (!mounted) return;
 
@@ -262,12 +321,11 @@ class _NearbyScreenState extends State<NearbyScreen>
 
       final response = await http.get(
         url,
-        headers: {
-          'User-Agent': 'NearbyFundi/1.0',
-        },
-      ).timeout(
-        const Duration(seconds: 6),
-      );
+        headers: {'User-Agent': 'NearbyFundi/1.0'},
+      ).timeout(_NearbyConstants.placeSearchTimeout);
+
+      // A newer request has since been issued — discard this stale result.
+      if (requestId != _suggestionRequestId) return;
 
       if (response.statusCode == 200) {
         final List<dynamic> data =
@@ -277,26 +335,15 @@ class _NearbyScreenState extends State<NearbyScreen>
 
         setState(() {
           _placeSuggestions = data.map((dynamic item) {
-            final Map<String, dynamic> value =
-            item as Map<String, dynamic>;
-
-            final display =
-                value['display_name']?.toString() ?? '';
-
-            final short =
-            display.split(',').take(3).join(',').trim();
+            final value = item as Map<String, dynamic>;
+            final display = value['display_name']?.toString() ?? '';
+            final short = display.split(',').take(3).join(',').trim();
 
             return {
               'name': short,
               'full': display,
-              'lat': double.tryParse(
-                value['lat']?.toString() ?? '',
-              ) ??
-                  0.0,
-              'lng': double.tryParse(
-                value['lon']?.toString() ?? '',
-              ) ??
-                  0.0,
+              'lat': double.tryParse(value['lat']?.toString() ?? '') ?? 0.0,
+              'lng': double.tryParse(value['lon']?.toString() ?? '') ?? 0.0,
             };
           }).toList();
         });
@@ -305,6 +352,7 @@ class _NearbyScreenState extends State<NearbyScreen>
       debugPrint('Place suggestion error: $e');
     }
 
+    if (requestId != _suggestionRequestId) return;
     if (!mounted) return;
 
     setState(() {
@@ -324,10 +372,7 @@ class _NearbyScreenState extends State<NearbyScreen>
       MaterialPageRoute(
         builder: (_) => MapLocationPickerScreen(
           initialCenter: techProvider.hasSearchOrigin
-              ? LatLng(
-            techProvider.searchLat!,
-            techProvider.searchLng!,
-          )
+              ? LatLng(techProvider.searchLat!, techProvider.searchLng!)
               : null,
         ),
       ),
@@ -336,12 +381,15 @@ class _NearbyScreenState extends State<NearbyScreen>
     if (result == null || !mounted) return;
 
     final name = result['name']?.toString() ?? '';
+    final lat = (result['lat'] as num?)?.toDouble();
+    final lng = (result['lng'] as num?)?.toDouble();
 
-    final lat = result['lat'] as double;
-    final lng = result['lng'] as double;
+    if (lat == null || lng == null) {
+      _showErrorSnackBar('Invalid location selected. Please try again.');
+      return;
+    }
 
     _locationController.text = name;
-
     await _saveToHistory(name);
 
     setState(() {
@@ -354,31 +402,34 @@ class _NearbyScreenState extends State<NearbyScreen>
 
     techProvider.clearTechnicians();
 
+    var searchSucceeded = true;
+
     try {
       await techProvider.searchByCoordinates(
         lat: lat,
         lng: lng,
         serviceId: _selectedServiceId,
         categoryId: _selectedCategoryId,
-        radius: 20,
-        search: _serviceSearchQuery.isNotEmpty
-            ? _serviceSearchQuery
-            : null,
+        radius: _searchRadiusKm,
+        search: _serviceSearchQuery.isNotEmpty ? _serviceSearchQuery : null,
         locale: _currentLocale,
       );
     } catch (e) {
       debugPrint('Coordinate search failed: $e');
 
-      await techProvider.searchByPlace(
-        place: name,
-        serviceId: _selectedServiceId,
-        categoryId: _selectedCategoryId,
-        radius: 20,
-        search: _serviceSearchQuery.isNotEmpty
-            ? _serviceSearchQuery
-            : null,
-        locale: _currentLocale,
-      );
+      try {
+        await techProvider.searchByPlace(
+          place: name,
+          serviceId: _selectedServiceId,
+          categoryId: _selectedCategoryId,
+          radius: _searchRadiusKm,
+          search: _serviceSearchQuery.isNotEmpty ? _serviceSearchQuery : null,
+          locale: _currentLocale,
+        );
+      } catch (e2) {
+        debugPrint('Fallback place search failed: $e2');
+        searchSucceeded = false;
+      }
     }
 
     if (!mounted) return;
@@ -386,6 +437,11 @@ class _NearbyScreenState extends State<NearbyScreen>
     setState(() {
       _isSearching = false;
     });
+
+    if (!searchSucceeded) {
+      _showErrorSnackBar(_Strings.searchFailed);
+      return;
+    }
 
     await _fetchRoutesForTechnicians();
   }
@@ -396,7 +452,6 @@ class _NearbyScreenState extends State<NearbyScreen>
 
   Future<void> _performSearch() async {
     final place = _locationController.text.trim();
-
     final l10n = AppLocalizations.of(context)!;
 
     if (place.isEmpty) {
@@ -407,7 +462,6 @@ class _NearbyScreenState extends State<NearbyScreen>
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
-
       return;
     }
 
@@ -422,22 +476,22 @@ class _NearbyScreenState extends State<NearbyScreen>
     await _saveToHistory(place);
 
     final techProvider = context.read<TechnicianProvider>();
-
     techProvider.clearTechnicians();
+
+    var searchSucceeded = true;
 
     try {
       await techProvider.searchByPlace(
         place: place,
         serviceId: _selectedServiceId,
         categoryId: _selectedCategoryId,
-        radius: 20,
-        search: _serviceSearchQuery.isNotEmpty
-            ? _serviceSearchQuery
-            : null,
+        radius: _searchRadiusKm,
+        search: _serviceSearchQuery.isNotEmpty ? _serviceSearchQuery : null,
         locale: _currentLocale,
       );
     } catch (e) {
       debugPrint('Search error: $e');
+      searchSucceeded = false;
     }
 
     if (!mounted) return;
@@ -448,7 +502,40 @@ class _NearbyScreenState extends State<NearbyScreen>
 
     _locationFocus.unfocus();
 
+    if (!searchSucceeded) {
+      _showErrorSnackBar(_Strings.searchFailed);
+      return;
+    }
+
     await _fetchRoutesForTechnicians();
+  }
+
+  /// Retries the last search with a larger radius. Used by the empty-state
+  /// CTA so a "no results" search isn't a dead end for the user.
+  Future<void> _retryWithLargerRadius() async {
+    if (_searchRadiusKm >= _NearbyConstants.maxRadiusKm) return;
+
+    setState(() {
+      _searchRadiusKm =
+          (_searchRadiusKm + _NearbyConstants.radiusStepKm)
+              .clamp(0, _NearbyConstants.maxRadiusKm);
+    });
+
+    if (_locationController.text.trim().isNotEmpty) {
+      await _performSearch();
+    }
+  }
+
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ),
+    );
   }
 
   // ==============================================================
@@ -458,26 +545,15 @@ class _NearbyScreenState extends State<NearbyScreen>
   Future<void> _fetchRoutesForTechnicians() async {
     final techProvider = context.read<TechnicianProvider>();
 
-    if (!techProvider.hasSearchOrigin) {
-      return;
-    }
+    if (!techProvider.hasSearchOrigin) return;
 
-    final origin = LatLng(
-      techProvider.searchLat!,
-      techProvider.searchLng!,
-    );
+    final origin = LatLng(techProvider.searchLat!, techProvider.searchLng!);
 
     final technicians = techProvider.technicians
-        .where(
-          (t) =>
-      t.latitude != null &&
-          t.longitude != null,
-    )
+        .where((t) => t.latitude != null && t.longitude != null)
         .toList();
 
-    if (technicians.isEmpty) {
-      return;
-    }
+    if (technicians.isEmpty) return;
 
     if (!mounted) return;
 
@@ -485,18 +561,18 @@ class _NearbyScreenState extends State<NearbyScreen>
       _isFetchingRoutes = true;
     });
 
+    final targets = technicians.take(_NearbyConstants.maxRouteTargets).toList();
     final Map<int, TechnicianRouteData> fetched = {};
 
-    final targets = technicians.take(10).toList();
+    // Bounded concurrency: the public OSRM demo server rate-limits/blocks
+    // callers that fire too many simultaneous requests. Batch instead of
+    // firing all N requests at once.
+    for (var i = 0; i < targets.length; i += _NearbyConstants.routeFetchBatchSize) {
+      final batch = targets.skip(i).take(_NearbyConstants.routeFetchBatchSize);
 
-    await Future.wait(
-      targets.map(
-            (tech) async {
-          final destination = LatLng(
-            tech.latitude!,
-            tech.longitude!,
-          );
-
+      await Future.wait(
+        batch.map((tech) async {
+          final destination = LatLng(tech.latitude!, tech.longitude!);
           final route = await _getOsrmRouteData(
             origin,
             destination,
@@ -506,9 +582,9 @@ class _NearbyScreenState extends State<NearbyScreen>
           if (route != null) {
             fetched[tech.id] = route;
           }
-        },
-      ),
-    );
+        }),
+      );
+    }
 
     if (!mounted) return;
 
@@ -533,40 +609,28 @@ class _NearbyScreenState extends State<NearbyScreen>
             '?overview=full&geometries=geojson',
       );
 
-      final response = await http.get(url).timeout(
-        const Duration(seconds: 8),
-      );
+      final response =
+      await http.get(url).timeout(_NearbyConstants.routeSearchTimeout);
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data =
-        jsonDecode(response.body) as Map<String, dynamic>;
-
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
         final routes = data['routes'];
 
         if (routes is List && routes.isNotEmpty) {
-          final route =
-          routes.first as Map<String, dynamic>;
-
-          final geometry =
-          route['geometry'] as Map<String, dynamic>;
-
-          final coordinates =
-          geometry['coordinates'] as List<dynamic>;
+          final route = routes.first as Map<String, dynamic>;
+          final geometry = route['geometry'] as Map<String, dynamic>;
+          final coordinates = geometry['coordinates'] as List<dynamic>;
 
           final points = coordinates.map<LatLng>((coord) {
             final values = coord as List<dynamic>;
-
             return LatLng(
               (values[1] as num).toDouble(),
               (values[0] as num).toDouble(),
             );
           }).toList();
 
-          final distanceMeters =
-          (route['distance'] as num).toDouble();
-
-          final durationSeconds =
-          (route['duration'] as num).toDouble();
+          final distanceMeters = (route['distance'] as num).toDouble();
+          final durationSeconds = (route['duration'] as num).toDouble();
 
           return TechnicianRouteData(
             points: points,
@@ -579,18 +643,19 @@ class _NearbyScreenState extends State<NearbyScreen>
       debugPrint('OSRM error: $e');
     }
 
+    // Fallback: straight-line distance with a conservative average speed
+    // estimate. This is clearly an estimate, not a routed ETA — surfaced
+    // to the user as "~" prefixed values in the UI.
     final straightKm = fallbackKm > 0
         ? fallbackKm
-        : const Distance().as(
-      LengthUnit.Kilometer,
-      origin,
-      destination,
-    );
+        : const Distance().as(LengthUnit.Kilometer, origin, destination);
+
+    const assumedAverageSpeedKmh = 30.0;
 
     return TechnicianRouteData(
       points: [origin, destination],
       distanceKm: straightKm,
-      durationMin: straightKm * 2,
+      durationMin: (straightKm / assumedAverageSpeedKmh) * 60,
     );
   }
 
@@ -611,16 +676,14 @@ class _NearbyScreenState extends State<NearbyScreen>
       _searchedArea = '';
       _showSuggestions = false;
       _placeSuggestions = [];
+      _searchRadiusKm = _NearbyConstants.defaultRadiusKm;
     });
 
     context.read<TechnicianProvider>().clearTechnicians();
 
     _locationFocus.unfocus();
 
-    _mapController.move(
-      const LatLng(-6.7924, 39.2083),
-      11,
-    );
+    _mapController.move(_NearbyConstants.defaultMapCenter, 11);
   }
 
   // ==============================================================
@@ -632,23 +695,11 @@ class _NearbyScreenState extends State<NearbyScreen>
 
     if (!techProvider.hasSearchOrigin) return;
 
-    final origin = LatLng(
-      techProvider.searchLat!,
-      techProvider.searchLng!,
-    );
+    final origin = LatLng(techProvider.searchLat!, techProvider.searchLng!);
 
     final techPoints = techProvider.technicians
-        .where(
-          (t) =>
-      t.latitude != null &&
-          t.longitude != null,
-    )
-        .map(
-          (t) => LatLng(
-        t.latitude!,
-        t.longitude!,
-      ),
-    )
+        .where((t) => t.latitude != null && t.longitude != null)
+        .map((t) => LatLng(t.latitude!, t.longitude!))
         .toList();
 
     if (techPoints.isEmpty) {
@@ -656,11 +707,7 @@ class _NearbyScreenState extends State<NearbyScreen>
       return;
     }
 
-    final all = <LatLng>[
-      origin,
-      ...techPoints,
-    ];
-
+    final all = <LatLng>[origin, ...techPoints];
     final bounds = LatLngBounds.fromPoints(all);
 
     _mapController.fitCamera(
@@ -675,69 +722,39 @@ class _NearbyScreenState extends State<NearbyScreen>
   // FILTER SERVICES
   // ==============================================================
 
-  List<Service> _getFilteredServices(
-      List<Service> services,
-      ) {
-    if (_serviceSearchQuery.trim().isEmpty) {
-      return services;
-    }
+  List<Service> _getFilteredServices(List<Service> services) {
+    if (_serviceSearchQuery.trim().isEmpty) return services;
 
-    final query =
-    _serviceSearchQuery.toLowerCase().trim();
+    final query = _serviceSearchQuery.toLowerCase().trim();
 
     return services
-        .where(
-          (service) => service.matchesSearch(
-        query,
-        _currentLocale,
-      ),
-    )
+        .where((service) => service.matchesSearch(query, _currentLocale))
         .toList();
   }
 
   List<ServiceCategory> _getCategoriesForSelectedService(
       ServiceProvider provider,
       ) {
-    if (_selectedServiceId == null) {
-      return [];
-    }
-
-    return provider.getCategoriesForService(
-      _selectedServiceId!,
-    );
+    if (_selectedServiceId == null) return [];
+    return provider.getCategoriesForService(_selectedServiceId!);
   }
 
   // ==============================================================
   // RECOMMENDED TECHNICIANS
+  //
+  // Previously recomputed (with a fresh sort) on every single list row
+  // and marker build via context.read() — O(n^2 log n) per frame. Now
+  // computed once per build and the resulting id set is threaded through
+  // to whichever widget needs it.
   // ==============================================================
 
-  List<Technician> _getRecommendedTechnicians(
-      List<Technician> technicians,
-      ) {
+  List<Technician> _getRecommendedTechnicians(List<Technician> technicians) {
     final valid = technicians
-        .where(
-          (t) =>
-      t.latitude != null &&
-          t.longitude != null,
-    )
-        .toList();
+        .where((t) => t.latitude != null && t.longitude != null)
+        .toList()
+      ..sort((a, b) => a.distanceKm.compareTo(b.distanceKm));
 
-    valid.sort(
-          (a, b) => a.distanceKm.compareTo(b.distanceKm),
-    );
-
-    return valid.take(2).toList();
-  }
-
-  bool _isRecommended(Technician tech) {
-    final provider = context.read<TechnicianProvider>();
-
-    final recommended =
-    _getRecommendedTechnicians(provider.technicians);
-
-    return recommended.any(
-          (item) => item.id == tech.id,
-    );
+    return valid.take(_NearbyConstants.recommendedCount).toList();
   }
 
   // ==============================================================
@@ -756,10 +773,7 @@ class _NearbyScreenState extends State<NearbyScreen>
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: Colors.white,
-        border: Border.all(
-          color: Colors.white,
-          width: 2,
-        ),
+        border: Border.all(color: Colors.white, width: 2),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.20),
@@ -771,17 +785,13 @@ class _NearbyScreenState extends State<NearbyScreen>
       child: ClipOval(
         child: tech.profilePhoto != null
             ? Image.network(
-          ImageUtils.getFullImageUrl(
-            tech.profilePhoto!,
-          ),
+          ImageUtils.getFullImageUrl(tech.profilePhoto!),
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) {
-            return Icon(
-              Icons.build_rounded,
-              size: iconSize,
-              color: Colors.grey.shade600,
-            );
-          },
+          errorBuilder: (_, __, ___) => Icon(
+            Icons.build_rounded,
+            size: iconSize,
+            color: Colors.grey.shade600,
+          ),
         )
             : Icon(
           Icons.build_rounded,
@@ -796,17 +806,12 @@ class _NearbyScreenState extends State<NearbyScreen>
   // RECOMMENDED PULSE
   // ==============================================================
 
-  Widget _buildRecommendationPulse(
-      Technician tech,
-      double size,
-      ) {
+  Widget _buildRecommendationPulse(Technician tech, double size) {
     return AnimatedBuilder(
       animation: _pulseController,
       builder: (context, child) {
         final value = _pulseController.value;
-
         final scale = 0.8 + (value * 0.45);
-
         final opacity = 0.40 * (1 - value);
 
         return Stack(
@@ -820,9 +825,8 @@ class _NearbyScreenState extends State<NearbyScreen>
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: primaryGreen.withOpacity(
-                      opacity.clamp(0.0, 1.0),
-                    ),
+                    color: _NearbyConstants.primaryGreen
+                        .withOpacity(opacity.clamp(0.0, 1.0)),
                     width: 3,
                   ),
                 ),
@@ -832,20 +836,16 @@ class _NearbyScreenState extends State<NearbyScreen>
               padding: const EdgeInsets.all(2),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: primaryGreen,
+                color: _NearbyConstants.primaryGreen,
                 boxShadow: [
                   BoxShadow(
-                    color: primaryGreen.withOpacity(0.35),
+                    color: _NearbyConstants.primaryGreen.withOpacity(0.35),
                     blurRadius: 14,
                     spreadRadius: 3,
                   ),
                 ],
               ),
-              child: _buildAvatar(
-                tech,
-                size: size,
-                iconSize: size * 0.48,
-              ),
+              child: _buildAvatar(tech, size: size, iconSize: size * 0.48),
             ),
           ],
         );
@@ -854,24 +854,28 @@ class _NearbyScreenState extends State<NearbyScreen>
   }
 
   // ==============================================================
-  // TECHNICIAN LIST
+  // TECHNICIAN LIST (bottom sheet)
   // ==============================================================
 
   void _showTechniciansList(
       BuildContext context,
       List<Technician> technicians,
+      Set<int> recommendedIds,
       ) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
+
+    // Sort by distance so the sheet order matches the "recommended = nearest"
+    // logic used on the map, instead of whatever order the API returned.
+    final sorted = [...technicians]
+      ..sort((a, b) => a.distanceKm.compareTo(b.distanceKm));
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: theme.colorScheme.surface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(26),
-        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
       ),
       builder: (_) {
         return DraggableScrollableSheet(
@@ -883,7 +887,6 @@ class _NearbyScreenState extends State<NearbyScreen>
             return Column(
               children: [
                 const SizedBox(height: 10),
-
                 Container(
                   width: 42,
                   height: 4,
@@ -892,47 +895,39 @@ class _NearbyScreenState extends State<NearbyScreen>
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
-
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    18,
-                    16,
-                    10,
-                    12,
-                  ),
+                  padding: const EdgeInsets.fromLTRB(18, 16, 10, 12),
                   child: Row(
                     children: [
                       Expanded(
                         child: Text(
-                          '${technicians.length} ${l10n.fundisFound}',
+                          '${sorted.length} ${l10n.fundisFound}',
                           style: theme.textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.w800,
                           ),
                         ),
                       ),
                       IconButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                        },
-                        icon: const Icon(
-                          Icons.close_rounded,
-                        ),
+                        tooltip: MaterialLocalizations.of(context)
+                            .closeButtonTooltip,
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close_rounded),
                       ),
                     ],
                   ),
                 ),
-
                 const Divider(height: 1),
-
                 Expanded(
                   child: ListView.builder(
                     controller: controller,
                     padding: const EdgeInsets.all(16),
-                    itemCount: technicians.length,
+                    itemCount: sorted.length,
                     itemBuilder: (_, index) {
+                      final tech = sorted[index];
                       return _buildListTile(
                         context,
-                        technicians[index],
+                        tech,
+                        recommendedIds.contains(tech.id),
                       );
                     },
                   ),
@@ -952,22 +947,14 @@ class _NearbyScreenState extends State<NearbyScreen>
   Widget _buildListTile(
       BuildContext context,
       Technician tech,
+      bool recommended,
       ) {
     final theme = Theme.of(context);
 
     final route = _routesData[tech.id];
-
-    final distance =
-        route?.distanceKm ?? tech.distanceKm;
-
-    final duration =
-        route?.durationMin;
-
-    final recommended =
-    _isRecommended(tech);
-
-    final selected =
-        _selectedTechnicianId == tech.id;
+    final distance = route?.distanceKm ?? tech.distanceKm;
+    final duration = route?.durationMin;
+    final selected = _selectedTechnicianId == tech.id;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -976,9 +963,9 @@ class _NearbyScreenState extends State<NearbyScreen>
         borderRadius: BorderRadius.circular(18),
         side: BorderSide(
           color: selected
-              ? selectedColor
+              ? _NearbyConstants.selectedColor
               : recommended
-              ? primaryGreen.withOpacity(0.35)
+              ? _NearbyConstants.primaryGreen.withOpacity(0.35)
               : Colors.transparent,
           width: selected ? 1.5 : 1,
         ),
@@ -991,7 +978,6 @@ class _NearbyScreenState extends State<NearbyScreen>
           });
 
           Navigator.pop(context);
-
           Navigator.pushNamed(
             context,
             AppRoutes.technicianDetail,
@@ -1001,21 +987,13 @@ class _NearbyScreenState extends State<NearbyScreen>
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Row(
-            crossAxisAlignment:
-            CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildAvatar(
-                tech,
-                size: 58,
-                iconSize: 28,
-              ),
-
+              _buildAvatar(tech, size: 58, iconSize: 28),
               const SizedBox(width: 12),
-
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                  CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
@@ -1023,71 +1001,53 @@ class _NearbyScreenState extends State<NearbyScreen>
                           child: Text(
                             tech.name,
                             maxLines: 1,
-                            overflow:
-                            TextOverflow.ellipsis,
-                            style: theme
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(
-                              fontWeight:
-                              FontWeight.w800,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
                         ),
-
                         if (tech.verified)
                           const Padding(
-                            padding:
-                            EdgeInsets.only(left: 5),
+                            padding: EdgeInsets.only(left: 5),
                             child: Icon(
                               Icons.verified_rounded,
-                              color: Color(0xFF1976D2),
+                              color: _NearbyConstants.verifiedBlue,
                               size: 18,
                             ),
                           ),
                       ],
                     ),
-
                     if (recommended)
-                      Padding(
-                        padding:
-                        const EdgeInsets.only(
-                          top: 4,
-                        ),
+                      const Padding(
+                        padding: EdgeInsets.only(top: 4),
                         child: Text(
-                          'Recommended • Near you',
+                          _Strings.recommendedNearYou,
                           style: TextStyle(
-                            color: primaryGreen,
+                            color: _NearbyConstants.primaryGreen,
                             fontSize: 11.5,
-                            fontWeight:
-                            FontWeight.w700,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
-
                     if (tech.area != null)
                       Padding(
-                        padding:
-                        const EdgeInsets.only(
-                          top: 5,
-                        ),
+                        padding: const EdgeInsets.only(top: 5),
                         child: Row(
                           children: [
                             const Icon(
                               Icons.location_on_rounded,
                               size: 16,
-                              color: locationRed,
+                              color: _NearbyConstants.locationRed,
                             ),
                             const SizedBox(width: 4),
                             Expanded(
                               child: Text(
                                 tech.area!,
                                 maxLines: 1,
-                                overflow:
-                                TextOverflow.ellipsis,
+                                overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  color:
-                                  theme.hintColor,
+                                  color: theme.hintColor,
                                   fontSize: 12.5,
                                 ),
                               ),
@@ -1095,17 +1055,14 @@ class _NearbyScreenState extends State<NearbyScreen>
                           ],
                         ),
                       ),
-
                     const SizedBox(height: 7),
-
                     Wrap(
                       spacing: 8,
                       runSpacing: 5,
                       children: [
                         if (tech.rating > 0)
                           Row(
-                            mainAxisSize:
-                            MainAxisSize.min,
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               const Icon(
                                 Icons.star_rounded,
@@ -1114,21 +1071,17 @@ class _NearbyScreenState extends State<NearbyScreen>
                               ),
                               const SizedBox(width: 3),
                               Text(
-                                tech.rating
-                                    .toStringAsFixed(1),
+                                tech.rating.toStringAsFixed(1),
                                 style: const TextStyle(
-                                  fontWeight:
-                                  FontWeight.w700,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ],
                           ),
-
                         _infoBadge(
                           Icons.directions_car_rounded,
                           '${distance.toStringAsFixed(1)} km',
                         ),
-
                         if (duration != null)
                           _infoBadge(
                             Icons.access_time_rounded,
@@ -1136,66 +1089,43 @@ class _NearbyScreenState extends State<NearbyScreen>
                           ),
                       ],
                     ),
-
                     if (tech.services.isNotEmpty)
                       Padding(
-                        padding:
-                        const EdgeInsets.only(
-                          top: 8,
-                        ),
+                        padding: const EdgeInsets.only(top: 8),
                         child: Wrap(
                           spacing: 5,
                           runSpacing: 5,
-                          children: tech.services
-                              .take(3)
-                              .map(
-                                (service) {
-                              return Container(
-                                padding:
-                                const EdgeInsets
-                                    .symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
+                          children: tech.services.take(3).map((service) {
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _NearbyConstants.primaryGreen
+                                    .withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                service,
+                                style: const TextStyle(
+                                  color: _NearbyConstants.primaryGreen,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w600,
                                 ),
-                                decoration:
-                                BoxDecoration(
-                                  color: primaryGreen
-                                      .withOpacity(
-                                    0.08,
-                                  ),
-                                  borderRadius:
-                                  BorderRadius
-                                      .circular(
-                                    10,
-                                  ),
-                                ),
-                                child: Text(
-                                  service,
-                                  style:
-                                  const TextStyle(
-                                    color:
-                                    primaryGreen,
-                                    fontSize: 10.5,
-                                    fontWeight:
-                                    FontWeight.w600,
-                                  ),
-                                ),
-                              );
-                            },
-                          )
-                              .toList(),
+                              ),
+                            );
+                          }).toList(),
                         ),
                       ),
                   ],
                 ),
               ),
-
               const SizedBox(width: 4),
-
               Icon(
                 Icons.chevron_right_rounded,
                 color: selected
-                    ? selectedColor
+                    ? _NearbyConstants.selectedColor
                     : Colors.grey.shade400,
               ),
             ],
@@ -1205,32 +1135,22 @@ class _NearbyScreenState extends State<NearbyScreen>
     );
   }
 
-  Widget _infoBadge(
-      IconData icon,
-      String text,
-      ) {
+  Widget _infoBadge(IconData icon, String text) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 7,
-        vertical: 4,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
       decoration: BoxDecoration(
-        color: distanceGreen.withOpacity(0.08),
+        color: _NearbyConstants.distanceGreen.withOpacity(0.08),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            size: 14,
-            color: distanceGreen,
-          ),
+          Icon(icon, size: 14, color: _NearbyConstants.distanceGreen),
           const SizedBox(width: 3),
           Text(
             text,
             style: const TextStyle(
-              color: distanceGreen,
+              color: _NearbyConstants.distanceGreen,
               fontSize: 11.5,
               fontWeight: FontWeight.w700,
             ),
@@ -1246,88 +1166,56 @@ class _NearbyScreenState extends State<NearbyScreen>
 
   @override
   Widget build(BuildContext context) {
-    final techProvider =
-    context.watch<TechnicianProvider>();
+    final techProvider = context.watch<TechnicianProvider>();
+    final serviceProvider = context.watch<ServiceProvider>();
+    final settings = context.watch<SettingsProvider>();
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
 
-    final serviceProvider =
-    context.watch<ServiceProvider>();
-
-    final settings =
-    context.watch<SettingsProvider>();
-
-    final l10n =
-    AppLocalizations.of(context)!;
-
-    final theme =
-    Theme.of(context);
-
-    final width =
-        MediaQuery.of(context).size.width;
-
-    final small =
-        width < 400;
+    final width = MediaQuery.of(context).size.width;
+    final small = width < 400;
 
     if (_currentLocale != settings.locale) {
       _currentLocale = settings.locale;
 
-      WidgetsBinding.instance.addPostFrameCallback(
-            (_) {
-          if (!mounted) return;
-
-          context
-              .read<ServiceProvider>()
-              .fetchServices(
-            locale: _currentLocale,
-          );
-        },
-      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        context.read<ServiceProvider>().fetchServices(locale: _currentLocale);
+      });
     }
 
     final services =
-    _getFilteredServices(
-      serviceProvider.localizedServices,
-    );
+    _getFilteredServices(serviceProvider.localizedServices);
+    final categories = _getCategoriesForSelectedService(serviceProvider);
 
-    final categories =
-    _getCategoriesForSelectedService(
-      serviceProvider,
-    );
+    // Computed once per build instead of per row/marker.
+    final validTechnicians = techProvider.technicians
+        .where((t) => t.latitude != null && t.longitude != null)
+        .toList();
+    final recommendedIds = _getRecommendedTechnicians(validTechnicians)
+        .map((t) => t.id)
+        .toSet();
 
     return Scaffold(
-      backgroundColor:
-      theme.scaffoldBackgroundColor,
+      backgroundColor: theme.scaffoldBackgroundColor,
 
       // ==========================================================
       // APP BAR
       // ==========================================================
-
       appBar: AppBar(
-        backgroundColor: primaryGreen,
+        backgroundColor: _NearbyConstants.primaryGreen,
         foregroundColor: Colors.white,
         elevation: 0,
-
         centerTitle: true,
-
         title: Text(
           l10n.findFundi,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w800,
-          ),
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
         ),
-
-        iconTheme: const IconThemeData(
-          color: Colors.white,
-        ),
-
-        actionsIconTheme:
-        const IconThemeData(
-          color: Colors.white,
-        ),
-
+        iconTheme: const IconThemeData(color: Colors.white),
+        actionsIconTheme: const IconThemeData(color: Colors.white),
         actions: [
           IconButton(
-            color: Colors.white,
+            tooltip: _isHeaderVisible ? 'Hide search panel' : 'Show search panel',
             icon: Icon(
               _isHeaderVisible
                   ? Icons.keyboard_arrow_up_rounded
@@ -1336,76 +1224,50 @@ class _NearbyScreenState extends State<NearbyScreen>
             ),
             onPressed: () {
               setState(() {
-                _isHeaderVisible =
-                !_isHeaderVisible;
+                _isHeaderVisible = !_isHeaderVisible;
               });
             },
           ),
-
           if (techProvider.technicians.isNotEmpty)
             IconButton(
-              color: Colors.white,
-              icon: const Icon(
-                Icons.list_rounded,
-                color: Colors.white,
+              tooltip: _Strings.showList,
+              icon: const Icon(Icons.list_rounded, color: Colors.white),
+              onPressed: () => _showTechniciansList(
+                context,
+                techProvider.technicians,
+                recommendedIds,
               ),
-              onPressed: () {
-                _showTechniciansList(
-                  context,
-                  techProvider.technicians,
-                );
-              },
             ),
-
           if (techProvider.technicians.isNotEmpty)
             IconButton(
-              color: Colors.white,
-              icon: const Icon(
-                Icons.fullscreen_rounded,
-                color: Colors.white,
-              ),
+              tooltip: _Strings.showFullMap,
+              icon: const Icon(Icons.fullscreen_rounded, color: Colors.white),
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                    const NearbyMapScreen(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const NearbyMapScreen()),
                 );
               },
             ),
-
-          if (_locationController.text.isNotEmpty ||
-              _selectedServiceId != null)
+          if (_locationController.text.isNotEmpty || _selectedServiceId != null)
             IconButton(
-              color: Colors.white,
-              icon: const Icon(
-                Icons.clear_all_rounded,
-                color: Colors.white,
-              ),
+              tooltip: _Strings.clearFilters,
+              icon: const Icon(Icons.clear_all_rounded, color: Colors.white),
               onPressed: _clearAllFilters,
             ),
-
           IconButton(
-            color: Colors.white,
+            tooltip: l10n.search,
             icon: techProvider.isLoading
                 ? const SizedBox(
               width: 20,
               height: 20,
-              child:
-              CircularProgressIndicator(
+              child: CircularProgressIndicator(
                 strokeWidth: 2,
                 color: Colors.white,
               ),
             )
-                : const Icon(
-              Icons.refresh_rounded,
-              color: Colors.white,
-            ),
-            onPressed:
-            techProvider.isLoading
-                ? null
-                : _performSearch,
+                : const Icon(Icons.refresh_rounded, color: Colors.white),
+            onPressed: techProvider.isLoading ? null : _performSearch,
           ),
         ],
       ),
@@ -1413,13 +1275,10 @@ class _NearbyScreenState extends State<NearbyScreen>
       // ==========================================================
       // BODY
       // ==========================================================
-
       body: Column(
         children: [
           AnimatedSwitcher(
-            duration:
-            const Duration(milliseconds: 250),
-
+            duration: const Duration(milliseconds: 250),
             child: _isHeaderVisible
                 ? _buildSearchPanel(
               context,
@@ -1430,21 +1289,12 @@ class _NearbyScreenState extends State<NearbyScreen>
               techProvider,
               small,
             )
-                : const SizedBox(
-              key: ValueKey(
-                'hidden-search',
-              ),
-            ),
+                : const SizedBox(key: ValueKey('hidden-search')),
           ),
-
           Expanded(
             child: Stack(
               children: [
-                _buildMapView(
-                  theme,
-                  techProvider,
-                ),
-
+                _buildMapView(theme, techProvider, recommendedIds),
                 Positioned(
                   right: 12,
                   bottom: 20,
@@ -1452,36 +1302,26 @@ class _NearbyScreenState extends State<NearbyScreen>
                     children: [
                       _MapControlButton(
                         icon: Icons.add,
-                        tooltip: 'Zoom in',
-                        onPressed: () {
-                          _zoomBy(1);
-                        },
+                        tooltip: _Strings.zoomIn,
+                        onPressed: () => _zoomBy(1),
                       ),
                       const SizedBox(height: 8),
                       _MapControlButton(
                         icon: Icons.remove,
-                        tooltip: 'Zoom out',
-                        onPressed: () {
-                          _zoomBy(-1);
-                        },
+                        tooltip: _Strings.zoomOut,
+                        onPressed: () => _zoomBy(-1),
                       ),
                       const SizedBox(height: 8),
                       _MapControlButton(
                         icon: Icons.my_location_rounded,
-                        tooltip: 'Fit technicians',
-                        onPressed:
-                        _updateMapBounds,
+                        tooltip: _Strings.fitTechnicians,
+                        onPressed: _updateMapBounds,
                       ),
                     ],
                   ),
                 ),
-
                 if (_isFetchingRoutes)
-                  Positioned(
-                    top: 12,
-                    left: 12,
-                    child: _routeLoadingBadge(),
-                  ),
+                  Positioned(top: 12, left: 12, child: _routeLoadingBadge()),
               ],
             ),
           ),
@@ -1504,15 +1344,8 @@ class _NearbyScreenState extends State<NearbyScreen>
       bool small,
       ) {
     return Container(
-      key: const ValueKey(
-        'visible-search',
-      ),
-      padding: EdgeInsets.fromLTRB(
-        14,
-        8,
-        14,
-        small ? 8 : 12,
-      ),
+      key: const ValueKey('visible-search'),
+      padding: EdgeInsets.fromLTRB(14, 8, 14, small ? 8 : 12),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         boxShadow: [
@@ -1528,23 +1361,16 @@ class _NearbyScreenState extends State<NearbyScreen>
           // --------------------------------------------------------
           // LOCATION SEARCH
           // --------------------------------------------------------
-
           Container(
             decoration: BoxDecoration(
               color: theme.colorScheme.surface,
-              borderRadius:
-              BorderRadius.circular(18),
-              border: Border.all(
-                color: theme.dividerColor
-                    .withOpacity(0.35),
-              ),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: theme.dividerColor.withOpacity(0.35)),
               boxShadow: [
                 BoxShadow(
-                  color:
-                  Colors.black.withOpacity(0.04),
+                  color: Colors.black.withOpacity(0.04),
                   blurRadius: 8,
-                  offset:
-                  const Offset(0, 2),
+                  offset: const Offset(0, 2),
                 ),
               ],
             ),
@@ -1552,179 +1378,108 @@ class _NearbyScreenState extends State<NearbyScreen>
               children: [
                 Expanded(
                   child: TextField(
-                    controller:
-                    _locationController,
-                    focusNode:
-                    _locationFocus,
-
-                    style: TextStyle(
-                      fontSize:
-                      small ? 14 : 15,
-                    ),
-
-                    decoration:
-                    InputDecoration(
-                      hintText:
-                      l10n.searchLocation,
-                      hintStyle: TextStyle(
-                        color: theme.hintColor,
-                      ),
-                      prefixIcon:
-                      const Icon(
+                    controller: _locationController,
+                    focusNode: _locationFocus,
+                    style: TextStyle(fontSize: small ? 14 : 15),
+                    decoration: InputDecoration(
+                      hintText: l10n.searchLocation,
+                      hintStyle: TextStyle(color: theme.hintColor),
+                      prefixIcon: const Icon(
                         Icons.search_rounded,
-                        color: primaryGreen,
+                        color: _NearbyConstants.primaryGreen,
                       ),
-
                       suffixIcon: Row(
-                        mainAxisSize:
-                        MainAxisSize.min,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (_locationController
-                              .text
-                              .isNotEmpty)
+                          if (_locationController.text.isNotEmpty)
                             IconButton(
-                              icon:
-                              const Icon(
-                                Icons.clear_rounded,
-                              ),
+                              tooltip: 'Clear',
+                              icon: const Icon(Icons.clear_rounded),
                               onPressed: () {
-                                _locationController
-                                    .clear();
+                                _locationController.clear();
+                                _suggestionDebounce?.cancel();
 
                                 setState(() {
-                                  _placeSuggestions =
-                                  [];
+                                  _placeSuggestions = [];
                                   _showSuggestions =
-                                      _searchHistory
-                                          .isNotEmpty;
+                                      _searchHistory.isNotEmpty;
                                 });
                               },
                             ),
-
                           Tooltip(
-                            message:
-                            'Choose location on map',
+                            message: _Strings.chooseOnMap,
                             child: IconButton(
-                              icon:
-                              const Icon(
+                              icon: const Icon(
                                 Icons.map_rounded,
-                                color:
-                                primaryGreen,
+                                color: _NearbyConstants.primaryGreen,
                               ),
-                              onPressed:
-                              _openMapPicker,
+                              onPressed: _openMapPicker,
                             ),
                           ),
                         ],
                       ),
-
-                      border:
-                      InputBorder.none,
-
+                      border: InputBorder.none,
                       contentPadding:
-                      const EdgeInsets
-                          .symmetric(
-                        vertical: 13,
-                      ),
+                      const EdgeInsets.symmetric(vertical: 13),
                     ),
-
-                    onChanged: (value) {
-                      setState(() {});
-                      _fetchPlaceSuggestions(
-                        value,
-                      );
-                    },
-
+                    onChanged: _onLocationQueryChanged,
                     onTap: () {
                       setState(() {
-                        _showSuggestions =
-                        true;
+                        _showSuggestions = true;
                       });
                     },
-
-                    onSubmitted: (_) {
-                      _performSearch();
-                    },
+                    onSubmitted: (_) => _performSearch(),
                   ),
                 ),
 
                 // --------------------------------------------------
                 // SEARCH BUTTON
                 // --------------------------------------------------
-
                 Container(
-                  margin:
-                  const EdgeInsets.all(4),
-                  decoration:
-                  BoxDecoration(
-                    gradient:
-                    const LinearGradient(
+                  margin: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
                       colors: [
-                        primaryGreen,
-                        lightGreen,
+                        _NearbyConstants.primaryGreen,
+                        _NearbyConstants.lightGreen,
                       ],
                     ),
-                    borderRadius:
-                    BorderRadius.circular(
-                      14,
-                    ),
+                    borderRadius: BorderRadius.circular(14),
                   ),
                   child: Material(
-                    color:
-                    Colors.transparent,
+                    color: Colors.transparent,
                     child: InkWell(
-                      borderRadius:
-                      BorderRadius.circular(
-                        14,
-                      ),
-                      onTap: _isSearching
-                          ? null
-                          : _performSearch,
+                      borderRadius: BorderRadius.circular(14),
+                      onTap: _isSearching ? null : _performSearch,
                       child: Padding(
-                        padding:
-                        EdgeInsets.symmetric(
-                          horizontal:
-                          small ? 12 : 15,
-                          vertical:
-                          small ? 11 : 12,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: small ? 12 : 15,
+                          vertical: small ? 11 : 12,
                         ),
                         child: _isSearching
                             ? const SizedBox(
                           width: 20,
                           height: 20,
-                          child:
-                          CircularProgressIndicator(
+                          child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color:
-                            Colors.white,
+                            color: Colors.white,
                           ),
                         )
                             : Row(
-                          mainAxisSize:
-                          MainAxisSize
-                              .min,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             const Icon(
-                              Icons
-                                  .search_rounded,
-                              color:
-                              Colors.white,
+                              Icons.search_rounded,
+                              color: Colors.white,
                               size: 19,
                             ),
                             if (!small) ...[
-                              const SizedBox(
-                                width: 4,
-                              ),
+                              const SizedBox(width: 4),
                               Text(
                                 l10n.search,
-                                style:
-                                const TextStyle(
-                                  color:
-                                  Colors
-                                      .white,
-                                  fontWeight:
-                                  FontWeight
-                                      .w700,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ],
@@ -1741,42 +1496,26 @@ class _NearbyScreenState extends State<NearbyScreen>
           // --------------------------------------------------------
           // SUGGESTIONS
           // --------------------------------------------------------
-
-          if (_showSuggestions)
-            _buildSuggestions(
-              context,
-              theme,
-            ),
+          if (_showSuggestions) _buildSuggestions(context, theme),
 
           // --------------------------------------------------------
           // SEARCH RESULT SUMMARY
           // --------------------------------------------------------
-
-          if (_searchedArea.isNotEmpty &&
-              techProvider.technicians.isNotEmpty)
+          if (_searchedArea.isNotEmpty && techProvider.technicians.isNotEmpty)
             Padding(
-              padding:
-              const EdgeInsets.only(top: 9),
+              padding: const EdgeInsets.only(top: 9),
               child: Container(
                 padding:
-                const EdgeInsets.symmetric(
-                  horizontal: 11,
-                  vertical: 7,
-                ),
-                decoration:
-                BoxDecoration(
-                  color: primaryGreen
-                      .withOpacity(0.07),
-                  borderRadius:
-                  BorderRadius.circular(
-                    14,
-                  ),
+                const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+                decoration: BoxDecoration(
+                  color: _NearbyConstants.primaryGreen.withOpacity(0.07),
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 child: Row(
                   children: [
                     const Icon(
                       Icons.location_on_rounded,
-                      color: locationRed,
+                      color: _NearbyConstants.locationRed,
                       size: 17,
                     ),
                     const SizedBox(width: 5),
@@ -1784,39 +1523,29 @@ class _NearbyScreenState extends State<NearbyScreen>
                       child: Text(
                         _searchedArea,
                         maxLines: 1,
-                        overflow:
-                        TextOverflow.ellipsis,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          color: primaryGreen,
-                          fontWeight:
-                          FontWeight.w700,
+                          color: _NearbyConstants.primaryGreen,
+                          fontWeight: FontWeight.w700,
                           fontSize: 12.5,
                         ),
                       ),
                     ),
                     Container(
-                      padding:
-                      const EdgeInsets
-                          .symmetric(
+                      padding: const EdgeInsets.symmetric(
                         horizontal: 8,
                         vertical: 3,
                       ),
-                      decoration:
-                      BoxDecoration(
-                        color: primaryGreen,
-                        borderRadius:
-                        BorderRadius.circular(
-                          10,
-                        ),
+                      decoration: BoxDecoration(
+                        color: _NearbyConstants.primaryGreen,
+                        borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
                         '${techProvider.technicians.length}',
-                        style:
-                        const TextStyle(
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 11,
-                          fontWeight:
-                          FontWeight.w800,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                     ),
@@ -1830,41 +1559,37 @@ class _NearbyScreenState extends State<NearbyScreen>
           // --------------------------------------------------------
           // SERVICE SEARCH
           // --------------------------------------------------------
-
           TextField(
-            controller:
-            _serviceSearchController,
+            controller: _serviceSearchController,
             decoration: InputDecoration(
-              hintText:
-              'Filter by service...',
-              prefixIcon:
-              const Icon(
+              hintText: _Strings.filterByService,
+              prefixIcon: const Icon(
                 Icons.build_rounded,
-                color: primaryGreen,
+                color: _NearbyConstants.primaryGreen,
               ),
+              suffixIcon: _serviceSearchQuery.isNotEmpty
+                  ? IconButton(
+                tooltip: 'Clear',
+                icon: const Icon(Icons.clear_rounded),
+                onPressed: () {
+                  _serviceSearchController.clear();
+                  setState(() {
+                    _serviceSearchQuery = '';
+                  });
+                },
+              )
+                  : null,
               filled: true,
-              fillColor: theme
-                  .colorScheme
-                  .surfaceContainerHighest,
-              border:
-              OutlineInputBorder(
-                borderRadius:
-                BorderRadius.circular(
-                  16,
-                ),
-                borderSide:
-                BorderSide.none,
+              fillColor: theme.colorScheme.surfaceContainerHighest,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide.none,
               ),
-              contentPadding:
-              const EdgeInsets
-                  .symmetric(
-                vertical: 11,
-              ),
+              contentPadding: const EdgeInsets.symmetric(vertical: 11),
             ),
             onChanged: (value) {
               setState(() {
-                _serviceSearchQuery =
-                    value;
+                _serviceSearchQuery = value;
               });
             },
           ),
@@ -1872,73 +1597,47 @@ class _NearbyScreenState extends State<NearbyScreen>
           // --------------------------------------------------------
           // SERVICES
           // --------------------------------------------------------
-
           if (services.isNotEmpty)
             Padding(
-              padding:
-              const EdgeInsets.only(top: 9),
+              padding: const EdgeInsets.only(top: 9),
               child: SizedBox(
                 height: 36,
                 child: ListView(
-                  controller:
-                  _serviceChipScrollController,
-                  scrollDirection:
-                  Axis.horizontal,
+                  controller: _serviceChipScrollController,
+                  scrollDirection: Axis.horizontal,
                   children: [
                     _buildServiceChip(
                       label: 'All',
                       icon: Icons.apps_rounded,
-                      isSelected:
-                      _selectedServiceId ==
-                          null,
+                      isSelected: _selectedServiceId == null,
                       onTap: () {
                         setState(() {
-                          _selectedServiceId =
-                          null;
-                          _selectedCategoryId =
-                          null;
+                          _selectedServiceId = null;
+                          _selectedCategoryId = null;
                         });
                       },
                       isSmallScreen: small,
                     ),
-
                     const SizedBox(width: 7),
+                    ...services.map((service) {
+                      final selected = _selectedServiceId == service.id;
 
-                    ...services.map(
-                          (service) {
-                        final selected =
-                            _selectedServiceId ==
-                                service.id;
-
-                        return Padding(
-                          padding:
-                          const EdgeInsets.only(
-                            right: 7,
-                          ),
-                          child:
-                          _buildServiceChip(
-                            label:
-                            service.name,
-                            isSelected:
-                            selected,
-                            onTap: () {
-                              setState(() {
-                                _selectedServiceId =
-                                selected
-                                    ? null
-                                    : service
-                                    .id;
-
-                                _selectedCategoryId =
-                                null;
-                              });
-                            },
-                            isSmallScreen:
-                            small,
-                          ),
-                        );
-                      },
-                    ),
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 7),
+                        child: _buildServiceChip(
+                          label: service.name,
+                          isSelected: selected,
+                          onTap: () {
+                            setState(() {
+                              _selectedServiceId =
+                              selected ? null : service.id;
+                              _selectedCategoryId = null;
+                            });
+                          },
+                          isSmallScreen: small,
+                        ),
+                      );
+                    }),
                   ],
                 ),
               ),
@@ -1947,50 +1646,32 @@ class _NearbyScreenState extends State<NearbyScreen>
           // --------------------------------------------------------
           // CATEGORIES
           // --------------------------------------------------------
-
           if (categories.isNotEmpty)
             Padding(
-              padding:
-              const EdgeInsets.only(top: 7),
+              padding: const EdgeInsets.only(top: 7),
               child: SizedBox(
                 height: 32,
                 child: ListView(
-                  controller:
-                  _categoryChipScrollController,
-                  scrollDirection:
-                  Axis.horizontal,
-                  children:
-                  categories.map(
-                        (category) {
-                      final selected =
-                          _selectedCategoryId ==
-                              category.id;
+                  controller: _categoryChipScrollController,
+                  scrollDirection: Axis.horizontal,
+                  children: categories.map((category) {
+                    final selected = _selectedCategoryId == category.id;
 
-                      return Padding(
-                        padding:
-                        const EdgeInsets.only(
-                          right: 7,
-                        ),
-                        child:
-                        _buildCategoryChip(
-                          label:
-                          category.name,
-                          isSelected:
-                          selected,
-                          onTap: () {
-                            setState(() {
-                              _selectedCategoryId =
-                              selected
-                                  ? null
-                                  : category.id;
-                            });
-                          },
-                          isSmallScreen:
-                          small,
-                        ),
-                      );
-                    },
-                  ).toList(),
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 7),
+                      child: _buildCategoryChip(
+                        label: category.name,
+                        isSelected: selected,
+                        onTap: () {
+                          setState(() {
+                            _selectedCategoryId =
+                            selected ? null : category.id;
+                          });
+                        },
+                        isSmallScreen: small,
+                      ),
+                    );
+                  }).toList(),
                 ),
               ),
             ),
@@ -2003,61 +1684,42 @@ class _NearbyScreenState extends State<NearbyScreen>
   // SUGGESTIONS
   // ==============================================================
 
-  Widget _buildSuggestions(
-      BuildContext context,
-      ThemeData theme,
-      ) {
+  Widget _buildSuggestions(BuildContext context, ThemeData theme) {
+    final showHistoryHeader =
+        _searchHistory.isNotEmpty && _placeSuggestions.isEmpty && !_isLoadingSuggestions;
+
     return Container(
-      constraints:
-      const BoxConstraints(
-        maxHeight: 250,
-      ),
-      margin:
-      const EdgeInsets.only(top: 2),
+      constraints: const BoxConstraints(maxHeight: 250),
+      margin: const EdgeInsets.only(top: 2),
       decoration: BoxDecoration(
-        color:
-        theme.colorScheme.surface,
-        borderRadius:
-        BorderRadius.circular(16),
-        border: Border.all(
-          color: theme.dividerColor
-              .withOpacity(0.25),
-        ),
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.dividerColor.withOpacity(0.25)),
       ),
       child: ListView(
         shrinkWrap: true,
         padding: EdgeInsets.zero,
         children: [
-          if (_searchHistory.isNotEmpty &&
-              _placeSuggestions.isEmpty)
+          if (showHistoryHeader)
             Padding(
-              padding:
-              const EdgeInsets.fromLTRB(
-                14,
-                9,
-                8,
-                4,
-              ),
+              padding: const EdgeInsets.fromLTRB(14, 9, 8, 4),
               child: Row(
                 children: [
                   Text(
-                    'Recent searches',
+                    _Strings.recentSearches,
                     style: TextStyle(
                       color: theme.hintColor,
-                      fontWeight:
-                      FontWeight.w700,
+                      fontWeight: FontWeight.w700,
                       fontSize: 12,
                     ),
                   ),
                   const Spacer(),
                   TextButton(
-                    onPressed:
-                    _clearHistory,
+                    onPressed: _clearHistory,
                     child: const Text(
-                      'Clear',
+                      _Strings.clear,
                       style: TextStyle(
-                        color:
-                        primaryGreen,
+                        color: _NearbyConstants.primaryGreen,
                         fontSize: 12,
                       ),
                     ),
@@ -2065,90 +1727,64 @@ class _NearbyScreenState extends State<NearbyScreen>
                 ],
               ),
             ),
-
-          ..._searchHistory.map(
-                (place) => ListTile(
-              dense: true,
-              leading: Icon(
-                Icons.history_rounded,
-                color: theme.hintColor,
-              ),
-              title: Text(
-                place,
-                maxLines: 1,
-                overflow:
-                TextOverflow.ellipsis,
-              ),
-              onTap: () {
-                _locationController.text =
-                    place;
-
-                setState(() {
-                  _showSuggestions =
-                  false;
-                });
-
-                _performSearch();
-              },
-            ),
-          ),
-
-          if (_isLoadingSuggestions)
-            const Padding(
-              padding:
-              EdgeInsets.all(15),
-              child: Center(
-                child:
-                CircularProgressIndicator(
-                  strokeWidth: 2,
-                ),
-              ),
-            ),
-
-          ..._placeSuggestions.map(
-                (suggestion) {
-              return ListTile(
+          if (showHistoryHeader)
+            ..._searchHistory.map(
+                  (place) => ListTile(
                 dense: true,
-                leading: const Icon(
-                  Icons.location_on_rounded,
-                  color: locationRed,
-                ),
+                leading: Icon(Icons.history_rounded, color: theme.hintColor),
                 title: Text(
-                  suggestion['name']
-                      .toString(),
+                  place,
                   maxLines: 1,
-                  overflow:
-                  TextOverflow.ellipsis,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                subtitle: Text(
-                  suggestion['full']
-                      .toString(),
-                  maxLines: 1,
-                  overflow:
-                  TextOverflow.ellipsis,
-                ),
-                onTap: () async {
-                  final name =
-                  suggestion['name']
-                      .toString();
-
-                  _locationController.text =
-                      name;
+                onTap: () {
+                  _locationController.text = place;
 
                   setState(() {
-                    _showSuggestions =
-                    false;
+                    _showSuggestions = false;
                   });
-
-                  await _saveToHistory(
-                    name,
-                  );
 
                   _performSearch();
                 },
-              );
-            },
-          ),
+              ),
+            ),
+          if (_isLoadingSuggestions)
+            const Padding(
+              padding: EdgeInsets.all(15),
+              child: Center(
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          ..._placeSuggestions.map((suggestion) {
+            return ListTile(
+              dense: true,
+              leading: const Icon(
+                Icons.location_on_rounded,
+                color: _NearbyConstants.locationRed,
+              ),
+              title: Text(
+                suggestion['name'].toString(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text(
+                suggestion['full'].toString(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              onTap: () async {
+                final name = suggestion['name'].toString();
+                _locationController.text = name;
+
+                setState(() {
+                  _showSuggestions = false;
+                });
+
+                await _saveToHistory(name);
+                _performSearch();
+              },
+            );
+          }),
         ],
       ),
     );
@@ -2161,95 +1797,60 @@ class _NearbyScreenState extends State<NearbyScreen>
   Widget _buildMapView(
       ThemeData theme,
       TechnicianProvider techProvider,
+      Set<int> recommendedIds,
       ) {
     if (!techProvider.hasSearchOrigin) {
       return _emptyMapState(
         theme,
         Icons.map_outlined,
-        'Search for technicians',
+        _Strings.searchForTechnicians,
       );
     }
 
-    final origin = LatLng(
-      techProvider.searchLat!,
-      techProvider.searchLng!,
-    );
+    final origin = LatLng(techProvider.searchLat!, techProvider.searchLng!);
 
-    final technicians =
-    techProvider.technicians
-        .where(
-          (t) =>
-      t.latitude != null &&
-          t.longitude != null,
-    )
+    final technicians = techProvider.technicians
+        .where((t) => t.latitude != null && t.longitude != null)
         .toList();
 
     if (technicians.isEmpty) {
       return _emptyMapState(
         theme,
         Icons.person_search_rounded,
-        'No technicians found nearby',
+        _Strings.noTechniciansNearby,
+        showExpandRadius: true,
       );
     }
 
-    final screenWidth =
-        MediaQuery.of(context).size.width;
-
-    final small =
-        screenWidth < 400;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final small = screenWidth < 400;
 
     // ------------------------------------------------------------
-    // Recommended technicians
+    // ROAD POLYLINES
     // ------------------------------------------------------------
-
-    final recommended =
-    _getRecommendedTechnicians(
-      technicians,
-    );
-
-    // ------------------------------------------------------------
-    // ROAD COLORS
-    // ------------------------------------------------------------
-
     final List<Polyline> polylines = [];
 
     for (final tech in technicians) {
-      final route =
-      _routesData[tech.id];
+      final route = _routesData[tech.id];
+      if (route == null || route.points.length < 2) continue;
 
-      if (route == null ||
-          route.points.length < 2) {
-        continue;
-      }
+      final selected = _selectedTechnicianId == tech.id;
 
-      final selected =
-          _selectedTechnicianId ==
-              tech.id;
-
-      // Outer road border.
       polylines.add(
         Polyline(
           points: route.points,
-          strokeWidth:
-          selected ? 10 : 8,
-          color: Colors.white.withOpacity(
-            0.85,
-          ),
+          strokeWidth: selected ? 10 : 8,
+          color: Colors.white.withOpacity(0.85),
         ),
       );
 
-      // Main road.
-      //
-      // Default = green.
-      // Selected = blue.
       polylines.add(
         Polyline(
           points: route.points,
-          strokeWidth:
-          selected ? 6.5 : 5.0,
+          strokeWidth: selected ? 6.5 : 5.0,
           color: selected
-              ? selectedColor
-              : technicianGreen,
+              ? _NearbyConstants.selectedColor
+              : _NearbyConstants.technicianGreen,
         ),
       );
     }
@@ -2257,409 +1858,238 @@ class _NearbyScreenState extends State<NearbyScreen>
     // ------------------------------------------------------------
     // TECHNICIAN MARKERS
     // ------------------------------------------------------------
+    final markers = technicians.map((tech) {
+      final route = _routesData[tech.id];
+      final distance = route?.distanceKm ?? tech.distanceKm;
+      final duration = route?.durationMin;
+      final selected = _selectedTechnicianId == tech.id;
+      final isRecommended = recommendedIds.contains(tech.id);
 
-    final markers =
-    technicians.map(
-          (tech) {
-        final route =
-        _routesData[tech.id];
+      return Marker(
+        point: LatLng(tech.latitude!, tech.longitude!),
+        width: small ? 126 : 142,
+        height: isRecommended
+            ? (small ? 156 : 175)
+            : (small ? 132 : 150),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            setState(() {
+              _selectedTechnicianId = selected ? null : tech.id;
+            });
 
-        final distance =
-            route?.distanceKm ??
-                tech.distanceKm;
-
-        final duration =
-            route?.durationMin;
-
-        final selected =
-            _selectedTechnicianId ==
-                tech.id;
-
-        final isRecommended =
-        recommended.any(
-              (item) =>
-          item.id == tech.id,
-        );
-
-        return Marker(
-          point: LatLng(
-            tech.latitude!,
-            tech.longitude!,
-          ),
-          width: small ? 126 : 142,
-          height: isRecommended
-              ? small
-              ? 156
-              : 175
-              : small
-              ? 132
-              : 150,
-          child: GestureDetector(
-            behavior:
-            HitTestBehavior.opaque,
-            onTap: () {
-              setState(() {
-                _selectedTechnicianId =
-                selected
-                    ? null
-                    : tech.id;
-              });
-
-              _showTechnicianModal(
-                context,
-                tech,
-                origin,
-              );
-            },
-            child: Column(
-              mainAxisSize:
-              MainAxisSize.min,
-              children: [
-                // ------------------------------------------------
-                // RECOMMENDED PULSE
-                // ------------------------------------------------
-
-                if (isRecommended)
-                  _buildRecommendationPulse(
+            _showTechnicianModal(context, tech, origin, isRecommended);
+          },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isRecommended)
+                _buildRecommendationPulse(tech, small ? 46 : 55)
+              else
+                Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: selected
+                          ? _NearbyConstants.selectedColor
+                          : Colors.white,
+                      width: 3,
+                    ),
+                  ),
+                  child: _buildAvatar(
                     tech,
-                    small ? 46 : 55,
-                  )
-                else
-                  Container(
-                    decoration:
-                    BoxDecoration(
-                      shape:
-                      BoxShape.circle,
-                      border: Border.all(
-                        color: selected
-                            ? selectedColor
-                            : Colors.white,
-                        width: 3,
-                      ),
-                    ),
-                    child:
-                    _buildAvatar(
-                      tech,
-                      size:
-                      small ? 46 : 55,
-                      iconSize:
-                      small ? 23 : 28,
-                    ),
+                    size: small ? 46 : 55,
+                    iconSize: small ? 23 : 28,
                   ),
-
-                const SizedBox(height: 4),
-
-                // ------------------------------------------------
-                // RECOMMENDATION LABEL
-                // ------------------------------------------------
-
-                if (isRecommended)
-                  Container(
-                    constraints:
-                    const BoxConstraints(
-                      maxWidth: 125,
-                    ),
-                    padding:
-                    const EdgeInsets
-                        .symmetric(
-                      horizontal: 7,
-                      vertical: 4,
-                    ),
-                    decoration:
-                    BoxDecoration(
-                      color: primaryGreen,
-                      borderRadius:
-                      BorderRadius
-                          .circular(
-                        10,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black
-                              .withOpacity(
-                            0.18,
-                          ),
-                          blurRadius: 5,
-                        ),
-                      ],
-                    ),
-                    child: const Row(
-                      mainAxisSize:
-                      MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons
-                              .near_me_rounded,
-                          color:
-                          Colors.white,
-                          size: 12,
-                        ),
-                        SizedBox(width: 3),
-                        Flexible(
-                          child: Text(
-                            'Recommended • Near you',
-                            maxLines: 1,
-                            overflow:
-                            TextOverflow
-                                .ellipsis,
-                            style:
-                            TextStyle(
-                              color:
-                              Colors.white,
-                              fontSize: 9.5,
-                              fontWeight:
-                              FontWeight
-                                  .w800,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                ),
+              const SizedBox(height: 4),
+              if (isRecommended)
+                Container(
+                  constraints: const BoxConstraints(maxWidth: 125),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 4,
                   ),
-
-                if (isRecommended)
-                  const SizedBox(height: 3),
-
-                // ------------------------------------------------
-                // ADDRESS
-                // ------------------------------------------------
-
-                if (tech.area != null &&
-                    tech.area!
-                        .trim()
-                        .isNotEmpty)
-                  Container(
-                    constraints:
-                    const BoxConstraints(
-                      maxWidth: 125,
-                    ),
-                    padding:
-                    const EdgeInsets
-                        .symmetric(
-                      horizontal: 6,
-                      vertical: 3,
-                    ),
-                    decoration:
-                    BoxDecoration(
-                      color: Colors.white,
-                      borderRadius:
-                      BorderRadius
-                          .circular(
-                        9,
+                  decoration: BoxDecoration(
+                    color: _NearbyConstants.primaryGreen,
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.18),
+                        blurRadius: 5,
                       ),
-                      border: Border.all(
-                        color:
-                        locationRed,
-                        width: 1,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black
-                              .withOpacity(
-                            0.12,
-                          ),
-                          blurRadius: 4,
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize:
-                      MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons
-                              .location_on_rounded,
-                          size: 11,
-                          color:
-                          locationRed,
-                        ),
-                        const SizedBox(
-                          width: 3,
-                        ),
-                        Flexible(
-                          child: Text(
-                            tech.area!,
-                            maxLines: 1,
-                            overflow:
-                            TextOverflow
-                                .ellipsis,
-                            style:
-                            const TextStyle(
-                              color:
-                              locationRed,
-                              fontSize: 9,
-                              fontWeight:
-                              FontWeight
-                                  .w700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                    ],
                   ),
-
-                const SizedBox(height: 3),
-
-                // ------------------------------------------------
-                // DISTANCE / TIME
-                // ------------------------------------------------
-
-                if (distance > 0)
-                  Container(
-                    padding:
-                    const EdgeInsets
-                        .symmetric(
-                      horizontal: 7,
-                      vertical: 4,
-                    ),
-                    decoration:
-                    BoxDecoration(
-                      color: Colors.white,
-                      borderRadius:
-                      BorderRadius
-                          .circular(
-                        12,
-                      ),
-                      border: Border.all(
-                        color:
-                        distanceGreen,
-                        width: 1.2,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black
-                              .withOpacity(
-                            0.12,
-                          ),
-                          blurRadius: 4,
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize:
-                      MainAxisSize.min,
-                      children: [
-                        Text(
-                          '${distance.toStringAsFixed(1)} km',
-                          style:
-                          const TextStyle(
-                            color:
-                            distanceGreen,
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.near_me_rounded, color: Colors.white, size: 12),
+                      SizedBox(width: 3),
+                      Flexible(
+                        child: Text(
+                          _Strings.recommendedNearYou,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white,
                             fontSize: 9.5,
-                            fontWeight:
-                            FontWeight
-                                .w800,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
-                        if (duration !=
-                            null) ...[
-                          const SizedBox(
-                            width: 4,
-                          ),
-                          const Text(
-                            '•',
-                            style:
-                            TextStyle(
-                              color:
-                              distanceGreen,
-                            ),
-                          ),
-                          const SizedBox(
-                            width: 3,
-                          ),
-                          const Icon(
-                            Icons
-                                .access_time_rounded,
-                            color:
-                            distanceGreen,
-                            size: 11,
-                          ),
-                          const SizedBox(
-                            width: 2,
-                          ),
-                          Text(
-                            '~${duration.toStringAsFixed(0)}m',
-                            style:
-                            const TextStyle(
-                              color:
-                              distanceGreen,
-                              fontSize: 9,
-                              fontWeight:
-                              FontWeight
-                                  .w800,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-              ],
-            ),
+                ),
+              if (isRecommended) const SizedBox(height: 3),
+              if (tech.area != null && tech.area!.trim().isNotEmpty)
+                Container(
+                  constraints: const BoxConstraints(maxWidth: 125),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(9),
+                    border: Border.all(
+                      color: _NearbyConstants.locationRed,
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.12),
+                        blurRadius: 4,
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.location_on_rounded,
+                        size: 11,
+                        color: _NearbyConstants.locationRed,
+                      ),
+                      const SizedBox(width: 3),
+                      Flexible(
+                        child: Text(
+                          tech.area!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: _NearbyConstants.locationRed,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 3),
+              if (distance > 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _NearbyConstants.distanceGreen,
+                      width: 1.2,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.12),
+                        blurRadius: 4,
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '${distance.toStringAsFixed(1)} km',
+                        style: const TextStyle(
+                          color: _NearbyConstants.distanceGreen,
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      if (duration != null) ...[
+                        const SizedBox(width: 4),
+                        const Text(
+                          '•',
+                          style: TextStyle(color: _NearbyConstants.distanceGreen),
+                        ),
+                        const SizedBox(width: 3),
+                        const Icon(
+                          Icons.access_time_rounded,
+                          color: _NearbyConstants.distanceGreen,
+                          size: 11,
+                        ),
+                        const SizedBox(width: 2),
+                        Text(
+                          '~${duration.toStringAsFixed(0)}m',
+                          style: const TextStyle(
+                            color: _NearbyConstants.distanceGreen,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+            ],
           ),
-        );
-      },
-    ).toList();
+        ),
+      );
+    }).toList();
 
     // ------------------------------------------------------------
     // USER MARKER
     // ------------------------------------------------------------
-
     final originMarker = Marker(
       point: origin,
       width: small ? 86 : 100,
       height: small ? 88 : 100,
       child: Column(
-        mainAxisSize:
-        MainAxisSize.min,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            decoration:
-            BoxDecoration(
-              shape:
-              BoxShape.circle,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: locationRed
-                      .withOpacity(
-                    0.35,
-                  ),
+                  color: _NearbyConstants.locationRed.withOpacity(0.35),
                   blurRadius: 12,
                   spreadRadius: 3,
                 ),
               ],
             ),
             child: Icon(
-              Icons
-                  .location_on_rounded,
-              color: locationRed,
-              size:
-              small ? 45 : 55,
+              Icons.location_on_rounded,
+              color: _NearbyConstants.locationRed,
+              size: small ? 45 : 55,
             ),
           ),
           const SizedBox(height: 1),
           Container(
-            padding:
-            const EdgeInsets
-                .symmetric(
-              horizontal: 7,
-              vertical: 3,
-            ),
-            decoration:
-            BoxDecoration(
-              color: locationRed,
-              borderRadius:
-              BorderRadius.circular(
-                9,
-              ),
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+            decoration: BoxDecoration(
+              color: _NearbyConstants.locationRed,
+              borderRadius: BorderRadius.circular(9),
             ),
             child: const Text(
-              'You',
+              _Strings.you,
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 10,
-                fontWeight:
-                FontWeight.w800,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ),
@@ -2670,69 +2100,42 @@ class _NearbyScreenState extends State<NearbyScreen>
     // ------------------------------------------------------------
     // MAP
     // ------------------------------------------------------------
-
     return FlutterMap(
-      mapController:
-      _mapController,
-
+      mapController: _mapController,
       options: MapOptions(
-        initialCenter:
-        origin,
+        initialCenter: origin,
         initialZoom: 13,
         minZoom: 4,
         maxZoom: 18,
-
         onTap: (_, __) {
-          if (_selectedTechnicianId !=
-              null) {
+          if (_selectedTechnicianId != null) {
             setState(() {
-              _selectedTechnicianId =
-              null;
+              _selectedTechnicianId = null;
             });
           }
 
           if (_showSuggestions) {
             setState(() {
-              _showSuggestions =
-              false;
+              _showSuggestions = false;
             });
-
             _locationFocus.unfocus();
           }
         },
       ),
-
       children: [
         TileLayer(
-          urlTemplate:
-          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          userAgentPackageName:
-          'com.example.nearbyfundi',
+          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          userAgentPackageName: 'com.example.nearbyfundi',
         ),
-
-        // Roads.
-        PolylineLayer(
-          polylines:
-          polylines,
-        ),
-
-        // Markers.
-        MarkerLayer(
-          markers: [
-            originMarker,
-            ...markers,
-          ],
-        ),
-
+        PolylineLayer(polylines: polylines),
+        MarkerLayer(markers: [originMarker, ...markers]),
         RichAttributionWidget(
           attributions: [
             TextSourceAttribution(
               '© OpenStreetMap contributors',
               onTap: () {
                 launchUrl(
-                  Uri.parse(
-                    'https://www.openstreetmap.org/copyright',
-                  ),
+                  Uri.parse('https://www.openstreetmap.org/copyright'),
                 );
               },
             ),
@@ -2749,35 +2152,23 @@ class _NearbyScreenState extends State<NearbyScreen>
   Widget _emptyMapState(
       ThemeData theme,
       IconData icon,
-      String message,
-      ) {
+      String message, {
+        bool showExpandRadius = false,
+      }) {
     return Container(
-      color: theme
-          .colorScheme
-          .surfaceContainerLowest,
-      alignment:
-      Alignment.center,
+      color: theme.colorScheme.surfaceContainerLowest,
+      alignment: Alignment.center,
       child: Column(
-        mainAxisSize:
-        MainAxisSize.min,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Container(
             width: 76,
             height: 76,
-            decoration:
-            BoxDecoration(
-              shape:
-              BoxShape.circle,
-              color: primaryGreen
-                  .withOpacity(
-                0.08,
-              ),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: _NearbyConstants.primaryGreen.withOpacity(0.08),
             ),
-            child: Icon(
-              icon,
-              size: 38,
-              color: primaryGreen,
-            ),
+            child: Icon(icon, size: 38, color: _NearbyConstants.primaryGreen),
           ),
           const SizedBox(height: 14),
           Text(
@@ -2785,10 +2176,28 @@ class _NearbyScreenState extends State<NearbyScreen>
             style: TextStyle(
               color: theme.hintColor,
               fontSize: 15,
-              fontWeight:
-              FontWeight.w600,
+              fontWeight: FontWeight.w600,
             ),
           ),
+          Text(
+            'Searching within $_searchRadiusKm km',
+            style: TextStyle(color: theme.hintColor, fontSize: 12.5),
+          ),
+          if (showExpandRadius &&
+              _searchRadiusKm < _NearbyConstants.maxRadiusKm) ...[
+            const SizedBox(height: 14),
+            OutlinedButton.icon(
+              onPressed: _retryWithLargerRadius,
+              icon: const Icon(Icons.add_location_alt_outlined, size: 18),
+              label: Text(
+                '${_Strings.expandSearchRadius} (+${_NearbyConstants.radiusStepKm} km)',
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _NearbyConstants.primaryGreen,
+                side: const BorderSide(color: _NearbyConstants.primaryGreen),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -2800,40 +2209,26 @@ class _NearbyScreenState extends State<NearbyScreen>
 
   Widget _routeLoadingBadge() {
     return Container(
-      padding:
-      const EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: 7,
-      ),
-      decoration:
-      BoxDecoration(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
         color: Colors.black87,
-        borderRadius:
-        BorderRadius.circular(
-          20,
-        ),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: const Row(
-        mainAxisSize:
-        MainAxisSize.min,
+        mainAxisSize: MainAxisSize.min,
         children: [
           SizedBox(
             width: 15,
             height: 15,
-            child:
-            CircularProgressIndicator(
-              strokeWidth: 2,
-              color: Colors.white,
-            ),
+            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
           ),
           SizedBox(width: 7),
           Text(
-            'Finding best routes...',
+            _Strings.findingRoutes,
             style: TextStyle(
               color: Colors.white,
               fontSize: 11.5,
-              fontWeight:
-              FontWeight.w600,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -2846,17 +2241,9 @@ class _NearbyScreenState extends State<NearbyScreen>
   // ==============================================================
 
   void _zoomBy(double amount) {
-    final camera =
-        _mapController.camera;
-
-    final zoom =
-    (camera.zoom + amount)
-        .clamp(4.0, 18.0);
-
-    _mapController.move(
-      camera.center,
-      zoom,
-    );
+    final camera = _mapController.camera;
+    final zoom = (camera.zoom + amount).clamp(4.0, 18.0);
+    _mapController.move(camera.center, zoom);
   }
 
   // ==============================================================
@@ -2867,193 +2254,109 @@ class _NearbyScreenState extends State<NearbyScreen>
       BuildContext context,
       Technician tech,
       LatLng origin,
+      bool recommended,
       ) {
-    final theme =
-    Theme.of(context);
+    final theme = Theme.of(context);
+    final width = MediaQuery.of(context).size.width;
+    final small = width < 400;
 
-    final width =
-        MediaQuery.of(context).size.width;
-
-    final small =
-        width < 400;
-
-    final route =
-    _routesData[tech.id];
-
-    final distance =
-        route?.distanceKm ??
-            tech.distanceKm;
-
-    final duration =
-        route?.durationMin;
-
-    final recommended =
-    _isRecommended(tech);
+    final route = _routesData[tech.id];
+    final distance = route?.distanceKm ?? tech.distanceKm;
+    final duration = route?.durationMin;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor:
-      theme.colorScheme.surface,
-      shape:
-      const RoundedRectangleBorder(
-        borderRadius:
-        BorderRadius.vertical(
-          top: Radius.circular(26),
-        ),
+      backgroundColor: theme.colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
       ),
       builder: (sheetContext) {
         return SafeArea(
           child: SingleChildScrollView(
-            padding:
-            EdgeInsets.fromLTRB(
-              small ? 16 : 20,
-              12,
-              small ? 16 : 20,
-              18,
-            ),
+            padding: EdgeInsets.fromLTRB(small ? 16 : 20, 12, small ? 16 : 20, 18),
             child: Column(
-              mainAxisSize:
-              MainAxisSize.min,
-              crossAxisAlignment:
-              CrossAxisAlignment
-                  .start,
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Center(
                   child: Container(
                     width: 42,
                     height: 4,
-                    decoration:
-                    BoxDecoration(
-                      color: Colors.grey
-                          .shade400,
-                      borderRadius:
-                      BorderRadius
-                          .circular(
-                        4,
-                      ),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade400,
+                      borderRadius: BorderRadius.circular(4),
                     ),
                   ),
                 ),
-
-                const SizedBox(
-                    height: 18),
+                const SizedBox(height: 18),
 
                 // ------------------------------------------------
                 // HEADER
                 // ------------------------------------------------
-
                 Row(
                   children: [
                     _buildAvatar(
                       tech,
-                      size:
-                      small ? 56 : 64,
-                      iconSize:
-                      small ? 28 : 32,
+                      size: small ? 56 : 64,
+                      iconSize: small ? 28 : 32,
                     ),
-
-                    const SizedBox(
-                        width: 13),
-
+                    const SizedBox(width: 13),
                     Expanded(
                       child: Column(
-                        crossAxisAlignment:
-                        CrossAxisAlignment
-                            .start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
                             children: [
                               Expanded(
-                                child:
-                                Text(
+                                child: Text(
                                   tech.name,
-                                  maxLines:
-                                  1,
-                                  overflow:
-                                  TextOverflow
-                                      .ellipsis,
-                                  style: theme
-                                      .textTheme
-                                      .titleLarge
-                                      ?.copyWith(
-                                    fontWeight:
-                                    FontWeight
-                                        .w800,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.w800,
                                   ),
                                 ),
                               ),
-
-                              if (tech
-                                  .verified)
+                              if (tech.verified)
                                 const Icon(
-                                  Icons
-                                      .verified_rounded,
-                                  color:
-                                  Color(
-                                    0xFF1976D2,
-                                  ),
+                                  Icons.verified_rounded,
+                                  color: _NearbyConstants.verifiedBlue,
                                   size: 19,
                                 ),
                             ],
                           ),
-
                           if (recommended)
                             const Padding(
-                              padding:
-                              EdgeInsets
-                                  .only(
-                                top: 3,
-                              ),
+                              padding: EdgeInsets.only(top: 3),
                               child: Text(
-                                'Recommended because this fundi is near you',
-                                style:
-                                TextStyle(
-                                  color:
-                                  primaryGreen,
-                                  fontSize:
-                                  11.5,
-                                  fontWeight:
-                                  FontWeight
-                                      .w700,
+                                _Strings.recommendedReason,
+                                style: TextStyle(
+                                  color: _NearbyConstants.primaryGreen,
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ),
-
-                          if (tech.area !=
-                              null)
+                          if (tech.area != null)
                             Padding(
-                              padding:
-                              const EdgeInsets
-                                  .only(
-                                top: 4,
-                              ),
+                              padding: const EdgeInsets.only(top: 4),
                               child: Row(
                                 children: [
                                   const Icon(
-                                    Icons
-                                        .location_on_rounded,
-                                    color:
-                                    locationRed,
+                                    Icons.location_on_rounded,
+                                    color: _NearbyConstants.locationRed,
                                     size: 16,
                                   ),
-                                  const SizedBox(
-                                      width: 4),
+                                  const SizedBox(width: 4),
                                   Expanded(
-                                    child:
-                                    Text(
+                                    child: Text(
                                       tech.area!,
-                                      maxLines:
-                                      1,
-                                      overflow:
-                                      TextOverflow
-                                          .ellipsis,
-                                      style:
-                                      TextStyle(
-                                        color: theme
-                                            .hintColor,
-                                        fontSize:
-                                        12.5,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: theme.hintColor,
+                                        fontSize: 12.5,
                                       ),
                                     ),
                                   ),
@@ -3063,270 +2366,146 @@ class _NearbyScreenState extends State<NearbyScreen>
                         ],
                       ),
                     ),
-
                     IconButton(
-                      onPressed: () {
-                        Navigator.pop(
-                          sheetContext,
-                        );
-                      },
-                      icon: const Icon(
-                        Icons
-                            .close_rounded,
-                      ),
+                      tooltip:
+                      MaterialLocalizations.of(context).closeButtonTooltip,
+                      onPressed: () => Navigator.pop(sheetContext),
+                      icon: const Icon(Icons.close_rounded),
                     ),
                   ],
                 ),
 
-                const SizedBox(
-                    height: 15),
+                const SizedBox(height: 15),
 
                 // ------------------------------------------------
                 // DISTANCE CARD
                 // ------------------------------------------------
-
                 Container(
                   width: double.infinity,
-                  padding:
-                  const EdgeInsets.all(
-                    13,
-                  ),
-                  decoration:
-                  BoxDecoration(
-                    color:
-                    distanceGreen
-                        .withOpacity(
-                      0.07,
-                    ),
-                    borderRadius:
-                    BorderRadius
-                        .circular(
-                      15,
-                    ),
+                  padding: const EdgeInsets.all(13),
+                  decoration: BoxDecoration(
+                    color: _NearbyConstants.distanceGreen.withOpacity(0.07),
+                    borderRadius: BorderRadius.circular(15),
                     border: Border.all(
-                      color:
-                      distanceGreen
-                          .withOpacity(
-                        0.18,
-                      ),
+                      color: _NearbyConstants.distanceGreen.withOpacity(0.18),
                     ),
                   ),
                   child: Row(
                     children: [
                       _modalInfo(
-                        Icons
-                            .directions_car_rounded,
+                        Icons.directions_car_rounded,
                         '${distance.toStringAsFixed(1)} km',
                       ),
-
-                      const SizedBox(
-                          width: 18),
-
-                      if (duration !=
-                          null)
+                      const SizedBox(width: 18),
+                      if (duration != null)
                         _modalInfo(
-                          Icons
-                              .access_time_rounded,
+                          Icons.access_time_rounded,
                           '~${duration.toStringAsFixed(0)} min',
                         ),
                     ],
                   ),
                 ),
 
-                const SizedBox(
-                    height: 14),
-
-                // ------------------------------------------------
-                // RATING
-                // ------------------------------------------------
+                const SizedBox(height: 14),
 
                 if (tech.rating > 0)
                   Row(
                     children: [
-                      const Icon(
-                        Icons
-                            .star_rounded,
-                        color:
-                        Colors.amber,
-                        size: 20,
-                      ),
-                      const SizedBox(
-                          width: 4),
+                      const Icon(Icons.star_rounded, color: Colors.amber, size: 20),
+                      const SizedBox(width: 4),
                       Text(
-                        tech.rating
-                            .toStringAsFixed(
-                          1,
-                        ),
-                        style: const TextStyle(
-                          fontWeight:
-                          FontWeight.w800,
-                        ),
+                        tech.rating.toStringAsFixed(1),
+                        style: const TextStyle(fontWeight: FontWeight.w800),
                       ),
                     ],
                   ),
 
-                const SizedBox(
-                    height: 13),
-
-                // ------------------------------------------------
-                // SERVICES
-                // ------------------------------------------------
+                const SizedBox(height: 13),
 
                 if (tech.services.isNotEmpty)
                   Wrap(
                     spacing: 7,
                     runSpacing: 7,
-                    children: tech.services
-                        .map(
-                          (service) {
-                        return Container(
-                          padding:
-                          const EdgeInsets
-                              .symmetric(
-                            horizontal: 10,
-                            vertical: 6,
+                    children: tech.services.map((service) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _NearbyConstants.primaryGreen.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(11),
+                        ),
+                        child: Text(
+                          service,
+                          style: const TextStyle(
+                            color: _NearbyConstants.primaryGreen,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
                           ),
-                          decoration:
-                          BoxDecoration(
-                            color:
-                            primaryGreen
-                                .withOpacity(
-                              0.08,
-                            ),
-                            borderRadius:
-                            BorderRadius
-                                .circular(
-                              11,
-                            ),
-                          ),
-                          child:
-                          Text(
-                            service,
-                            style:
-                            const TextStyle(
-                              color:
-                              primaryGreen,
-                              fontSize:
-                              11.5,
-                              fontWeight:
-                              FontWeight
-                                  .w600,
-                            ),
-                          ),
-                        );
-                      },
-                    )
-                        .toList(),
+                        ),
+                      );
+                    }).toList(),
                   ),
 
-                const SizedBox(
-                    height: 18),
+                const SizedBox(height: 18),
 
                 // ------------------------------------------------
                 // BUTTONS
                 // ------------------------------------------------
-
                 Row(
                   children: [
                     Expanded(
-                      child:
-                      ElevatedButton(
+                      child: ElevatedButton(
                         onPressed: () {
-                          Navigator.pop(
-                            sheetContext,
-                          );
-
+                          Navigator.pop(sheetContext);
                           Navigator.pushNamed(
                             context,
-                            AppRoutes
-                                .technicianDetail,
-                            arguments:
-                            tech.id,
+                            AppRoutes.technicianDetail,
+                            arguments: tech.id,
                           );
                         },
-                        style:
-                        ElevatedButton
-                            .styleFrom(
-                          backgroundColor:
-                          primaryGreen,
-                          foregroundColor:
-                          Colors.white,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _NearbyConstants.primaryGreen,
+                          foregroundColor: Colors.white,
                           elevation: 0,
-                          padding:
-                          const EdgeInsets
-                              .symmetric(
-                            vertical: 15,
-                          ),
-                          shape:
-                          RoundedRectangleBorder(
-                            borderRadius:
-                            BorderRadius
-                                .circular(
-                              13,
-                            ),
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(13),
                           ),
                         ),
                         child: const Text(
-                          'View Profile',
-                          style:
-                          TextStyle(
-                            fontWeight:
-                            FontWeight
-                                .w700,
-                          ),
+                          _Strings.viewProfile,
+                          style: TextStyle(fontWeight: FontWeight.w700),
                         ),
                       ),
                     ),
-
-                    if (tech.latitude !=
-                        null &&
-                        tech.longitude !=
-                            null) ...[
-                      const SizedBox(
-                          width: 10),
-
+                    if (tech.latitude != null && tech.longitude != null) ...[
+                      const SizedBox(width: 10),
                       SizedBox(
                         height: 52,
                         width: 54,
-                        child:
-                        OutlinedButton(
+                        child: OutlinedButton(
                           onPressed: () {
                             _openDirectionsInGoogleMaps(
                               context,
-                              origin:
-                              origin,
-                              destination:
-                              LatLng(
-                                tech.latitude!,
-                                tech.longitude!,
-                              ),
+                              origin: origin,
+                              destination: LatLng(tech.latitude!, tech.longitude!),
                             );
                           },
-                          style:
-                          OutlinedButton
-                              .styleFrom(
-                            foregroundColor:
-                            selectedColor,
-                            side:
-                            const BorderSide(
-                              color:
-                              selectedColor,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: _NearbyConstants.selectedColor,
+                            side: const BorderSide(
+                              color: _NearbyConstants.selectedColor,
                             ),
-                            shape:
-                            RoundedRectangleBorder(
-                              borderRadius:
-                              BorderRadius
-                                  .circular(
-                                13,
-                              ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(13),
                             ),
-                            padding:
-                            EdgeInsets.zero,
+                            padding: EdgeInsets.zero,
                           ),
-                          child:
-                          const Icon(
-                            Icons
-                                .directions_rounded,
+                          child: const Tooltip(
+                            message: _Strings.directions,
+                            child: Icon(Icons.directions_rounded),
                           ),
                         ),
                       ),
@@ -3341,29 +2520,17 @@ class _NearbyScreenState extends State<NearbyScreen>
     );
   }
 
-  Widget _modalInfo(
-      IconData icon,
-      String value,
-      ) {
+  Widget _modalInfo(IconData icon, String value) {
     return Row(
-      mainAxisSize:
-      MainAxisSize.min,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(
-          icon,
-          color:
-          distanceGreen,
-          size: 18,
-        ),
+        Icon(icon, color: _NearbyConstants.distanceGreen, size: 18),
         const SizedBox(width: 5),
         Text(
           value,
-          style:
-          const TextStyle(
-            color:
-            distanceGreen,
-            fontWeight:
-            FontWeight.w800,
+          style: const TextStyle(
+            color: _NearbyConstants.distanceGreen,
+            fontWeight: FontWeight.w800,
             fontSize: 13,
           ),
         ),
@@ -3375,8 +2542,7 @@ class _NearbyScreenState extends State<NearbyScreen>
   // GOOGLE MAPS
   // ==============================================================
 
-  Future<void>
-  _openDirectionsInGoogleMaps(
+  Future<void> _openDirectionsInGoogleMaps(
       BuildContext context, {
         required LatLng origin,
         required LatLng destination,
@@ -3390,35 +2556,18 @@ class _NearbyScreenState extends State<NearbyScreen>
 
     try {
       final launched =
-      await launchUrl(
-        url,
-        mode:
-        LaunchMode.externalApplication,
-      );
+      await launchUrl(url, mode: LaunchMode.externalApplication);
 
-      if (!launched &&
-          context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Could not open maps app.',
-            ),
-          ),
+      if (!launched && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(_Strings.couldNotOpenMaps)),
         );
       }
     } catch (e) {
       if (!context.mounted) return;
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Could not open maps app.',
-          ),
-        ),
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(_Strings.couldNotOpenMaps)),
       );
     }
   }
@@ -3434,79 +2583,46 @@ class _NearbyScreenState extends State<NearbyScreen>
     required VoidCallback onTap,
     required bool isSmallScreen,
   }) {
+    final theme = Theme.of(context);
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius:
-        BorderRadius.circular(
-          18,
-        ),
+        borderRadius: BorderRadius.circular(18),
         onTap: onTap,
         child: Container(
-          padding:
-          EdgeInsets.symmetric(
-            horizontal:
-            isSmallScreen ? 10 : 13,
-            vertical:
-            isSmallScreen ? 5 : 6,
+          padding: EdgeInsets.symmetric(
+            horizontal: isSmallScreen ? 10 : 13,
+            vertical: isSmallScreen ? 5 : 6,
           ),
-          decoration:
-          BoxDecoration(
+          decoration: BoxDecoration(
             color: isSelected
-                ? primaryGreen
-                : Theme.of(context)
-                .colorScheme
-                .surfaceContainerHighest,
-            borderRadius:
-            BorderRadius.circular(
-              18,
-            ),
+                ? _NearbyConstants.primaryGreen
+                : theme.colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(18),
             border: Border.all(
               color: isSelected
-                  ? primaryGreen
-                  : Theme.of(context)
-                  .dividerColor
-                  .withOpacity(
-                0.25,
-              ),
+                  ? _NearbyConstants.primaryGreen
+                  : theme.dividerColor.withOpacity(0.25),
             ),
           ),
           child: Row(
-            mainAxisSize:
-            MainAxisSize.min,
+            mainAxisSize: MainAxisSize.min,
             children: [
               if (icon != null) ...[
                 Icon(
                   icon,
-                  size:
-                  isSmallScreen
-                      ? 12
-                      : 14,
-                  color: isSelected
-                      ? Colors.white
-                      : Theme.of(context)
-                      .hintColor,
+                  size: isSmallScreen ? 12 : 14,
+                  color: isSelected ? Colors.white : theme.hintColor,
                 ),
-                const SizedBox(
-                    width: 4),
+                const SizedBox(width: 4),
               ],
               Text(
                 label,
-                style:
-                TextStyle(
-                  color: isSelected
-                      ? Colors.white
-                      : Theme.of(context)
-                      .colorScheme
-                      .onSurface,
-                  fontSize:
-                  isSmallScreen
-                      ? 10
-                      : 11.5,
-                  fontWeight:
-                  isSelected
-                      ? FontWeight.w700
-                      : FontWeight.w500,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : theme.colorScheme.onSurface,
+                  fontSize: isSmallScreen ? 10 : 11.5,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                 ),
               ),
             ],
@@ -3526,78 +2642,48 @@ class _NearbyScreenState extends State<NearbyScreen>
     required VoidCallback onTap,
     required bool isSmallScreen,
   }) {
-    final theme =
-    Theme.of(context);
+    final theme = Theme.of(context);
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius:
-        BorderRadius.circular(
-          14,
-        ),
+        borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Container(
-          padding:
-          EdgeInsets.symmetric(
-            horizontal:
-            isSmallScreen ? 9 : 12,
-            vertical:
-            isSmallScreen ? 4 : 5,
+          padding: EdgeInsets.symmetric(
+            horizontal: isSmallScreen ? 9 : 12,
+            vertical: isSmallScreen ? 4 : 5,
           ),
-          decoration:
-          BoxDecoration(
+          decoration: BoxDecoration(
             color: isSelected
-                ? primaryGreen
-                .withOpacity(
-              0.10,
-            )
+                ? _NearbyConstants.primaryGreen.withOpacity(0.10)
                 : Colors.transparent,
-            borderRadius:
-            BorderRadius.circular(
-              14,
-            ),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: isSelected
-                  ? primaryGreen
-                  : theme.dividerColor
-                  .withOpacity(
-                0.25,
-              ),
+                  ? _NearbyConstants.primaryGreen
+                  : theme.dividerColor.withOpacity(0.25),
             ),
           ),
           child: Row(
-            mainAxisSize:
-            MainAxisSize.min,
+            mainAxisSize: MainAxisSize.min,
             children: [
               if (isSelected) ...[
                 const Icon(
-                  Icons
-                      .check_circle_rounded,
-                  color:
-                  primaryGreen,
+                  Icons.check_circle_rounded,
+                  color: _NearbyConstants.primaryGreen,
                   size: 12,
                 ),
-                const SizedBox(
-                    width: 4),
+                const SizedBox(width: 4),
               ],
               Text(
                 label,
-                style:
-                TextStyle(
+                style: TextStyle(
                   color: isSelected
-                      ? primaryGreen
-                      : theme
-                      .colorScheme
-                      .onSurface,
-                  fontSize:
-                  isSmallScreen
-                      ? 10
-                      : 11,
-                  fontWeight:
-                  isSelected
-                      ? FontWeight.w700
-                      : FontWeight.w500,
+                      ? _NearbyConstants.primaryGreen
+                      : theme.colorScheme.onSurface,
+                  fontSize: isSmallScreen ? 10 : 11,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                 ),
               ),
             ],
@@ -3612,8 +2698,7 @@ class _NearbyScreenState extends State<NearbyScreen>
 // MAP CONTROL
 // ================================================================
 
-class _MapControlButton
-    extends StatelessWidget {
+class _MapControlButton extends StatelessWidget {
   final IconData icon;
   final String tooltip;
   final VoidCallback onPressed;
@@ -3625,26 +2710,15 @@ class _MapControlButton
   });
 
   @override
-  Widget build(
-      BuildContext context,
-      ) {
+  Widget build(BuildContext context) {
     return Material(
-      color: Theme.of(context)
-          .colorScheme
-          .surface,
-      shape:
-      const CircleBorder(),
+      color: Theme.of(context).colorScheme.surface,
+      shape: const CircleBorder(),
       elevation: 4,
       child: IconButton(
         tooltip: tooltip,
         onPressed: onPressed,
-        icon: Icon(
-          icon,
-          color:
-          _NearbyScreenState
-              .primaryGreen,
-          size: 21,
-        ),
+        icon: Icon(icon, color: _NearbyConstants.primaryGreen, size: 21),
       ),
     );
   }
