@@ -2180,7 +2180,7 @@ class _NearbyScreenState extends State<NearbyScreen>
             ),
           ),
           Text(
-            'Searching within $_searchRadiusKm km',
+            'Within your area.',
             style: TextStyle(color: theme.hintColor, fontSize: 12.5),
           ),
           if (showExpandRadius &&

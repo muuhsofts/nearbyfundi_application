@@ -17,6 +17,8 @@ class ChatListScreen extends StatefulWidget {
 }
 
 class _ChatListScreenState extends State<ChatListScreen> {
+  bool _isInitialized = false;
+
   @override
   void initState() {
     super.initState();
@@ -24,28 +26,32 @@ class _ChatListScreenState extends State<ChatListScreen> {
   }
 
   Future<void> _initializeChat() async {
+    if (_isInitialized) return;
+
     final authProvider = context.read<AuthProvider>();
     final chatProvider = context.read<ChatProvider>();
 
     final user = authProvider.user;
     final token = authProvider.token;
 
-    if (user != null && token != null) {
+    if (user != null && token != null && !_isInitialized) {
+      _isInitialized = true;
+
+      // ✅ FIX: Use user.profilePhoto instead of user.profilePhoto
       final chatUser = ChatUser(
         id: user.id,
         name: user.name,
         email: user.email,
         phone: user.phone,
-        avatar: null,
-        isOnline: false,
-        lastSeen: null,
-        fcmToken: null,
+        avatar: user.profilePhoto, // ✅ Now available
       );
 
       chatProvider.initialize(
         token: token,
         currentUser: chatUser,
       );
+
+      await chatProvider.refreshConversations();
     }
   }
 
@@ -58,14 +64,14 @@ class _ChatListScreenState extends State<ChatListScreen> {
       appBar: AppBar(
         title: Text(
           l10n.chat,
-          style: TextStyle(
+          style: const TextStyle(
             fontWeight: FontWeight.bold,
-            color: theme.colorScheme.onPrimary,
+            color: Colors.white,
           ),
         ),
         backgroundColor: theme.primaryColor,
-        foregroundColor: theme.colorScheme.onPrimary,
-        elevation: 0.5,
+        foregroundColor: Colors.white,
+        elevation: 0,
         actions: [
           Consumer<ChatProvider>(
             builder: (context, chatProvider, child) {
@@ -73,8 +79,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.refresh),
-                    onPressed: () {
-                      chatProvider.refreshConversations();
+                    onPressed: () async {
+                      await chatProvider.refreshConversations();
                     },
                   ),
                   if (chatProvider.totalUnread > 0)
@@ -88,14 +94,16 @@ class _ChatListScreenState extends State<ChatListScreen> {
                           shape: BoxShape.circle,
                         ),
                         constraints: const BoxConstraints(
-                          minWidth: 16,
-                          minHeight: 16,
+                          minWidth: 18,
+                          minHeight: 18,
                         ),
                         child: Text(
-                          chatProvider.totalUnread > 9 ? '9+' : '${chatProvider.totalUnread}',
+                          chatProvider.totalUnread > 99
+                              ? '99+'
+                              : '${chatProvider.totalUnread}',
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 9,
+                            fontSize: 10,
                             fontWeight: FontWeight.bold,
                           ),
                           textAlign: TextAlign.center,
@@ -111,67 +119,105 @@ class _ChatListScreenState extends State<ChatListScreen> {
       body: Consumer<ChatProvider>(
         builder: (context, chatProvider, child) {
           if (chatProvider.isLoading && chatProvider.conversations.isEmpty) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(
+              child: CircularProgressIndicator(),
+            );
           }
 
           if (chatProvider.conversations.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.chat_outlined,
-                    size: 80,
-                    color: Colors.grey.shade300,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    l10n.noConversationsYet,
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: Colors.grey.shade600,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    l10n.startChattingWithFundis,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey.shade500,
-                    ),
-                  ),
-                ],
-              ),
-            );
+            return _buildEmptyState(context);
           }
 
           return RefreshIndicator(
             onRefresh: () => chatProvider.refreshConversations(),
             child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 8,
+              ),
               itemCount: chatProvider.conversations.length,
               itemBuilder: (context, index) {
                 final conversation = chatProvider.conversations[index];
                 return _ConversationTile(
                   conversation: conversation,
-                  onTap: () {
-                    Navigator.push(
+                  onTap: () async {
+                    await Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) =>
-                            ChatScreen(conversation: conversation),
+                        builder: (context) => ChatScreen(
+                          conversation: conversation,
+                        ),
                       ),
-                    ).then((_) {
-                      chatProvider.refreshConversations();
-                    });
+                    );
+                    await chatProvider.refreshConversations();
                   },
                 );
               },
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 100,
+            height: 100,
+            decoration: BoxDecoration(
+              color: theme.primaryColor.withOpacity(0.08),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.chat_outlined,
+              size: 50,
+              color: theme.primaryColor.withOpacity(0.6),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            l10n.noConversationsYet,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: theme.textTheme.titleLarge?.color,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            l10n.startChattingWithFundis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 14,
+              color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+            ),
+          ),
+          const SizedBox(height: 24),
+          OutlinedButton.icon(
+            onPressed: () {
+              // Navigate to nearby screen
+              Navigator.pop(context);
+            },
+            icon: const Icon(Icons.search_rounded),
+            label: const Text('Find Technicians'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: 12,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -188,38 +234,44 @@ class _ConversationTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final hasUnread = conversation.unreadCount > 0;
 
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(14),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        margin: const EdgeInsets.only(bottom: 4),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 12,
+        ),
+        margin: const EdgeInsets.only(bottom: 6),
         decoration: BoxDecoration(
-          color: conversation.unreadCount > 0
-              ? theme.primaryColor.withOpacity(0.05)
+          color: hasUnread
+              ? theme.primaryColor.withOpacity(0.06)
               : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
         ),
         child: Row(
           children: [
+            // Avatar
             CircleAvatar(
               radius: 28,
-              backgroundColor: Colors.grey.shade300,
+              backgroundColor: theme.primaryColor.withOpacity(0.1),
               child: Text(
                 conversation.otherParty.name.isNotEmpty
                     ? conversation.otherParty.name[0].toUpperCase()
                     : '?',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: Colors.grey,
+                  color: theme.primaryColor,
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 14),
+            // Content
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -231,18 +283,24 @@ class _ConversationTile extends StatelessWidget {
                           conversation.otherParty.name,
                           style: TextStyle(
                             fontSize: 16,
-                            fontWeight: conversation.unreadCount > 0
+                            fontWeight: hasUnread
                                 ? FontWeight.w700
                                 : FontWeight.w500,
+                            color: hasUnread
+                                ? theme.textTheme.titleMedium?.color
+                                : theme.textTheme.titleMedium?.color
+                                ?.withOpacity(0.8),
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       Text(
-                        _formatTime(conversation.lastMessageAt, l10n),
+                        conversation.getFormattedLastMessageTime(),
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.grey.shade500,
+                          color: isDark
+                              ? Colors.grey.shade500
+                              : Colors.grey.shade600,
                         ),
                       ),
                     ],
@@ -252,13 +310,13 @@ class _ConversationTile extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          conversation.lastMessage?.content ?? l10n.noMessagesYet,
+                          conversation.getLastMessageDisplay(),
                           style: TextStyle(
                             fontSize: 14,
-                            color: conversation.unreadCount > 0
-                                ? Colors.black87
-                                : Colors.grey.shade600,
-                            fontWeight: conversation.unreadCount > 0
+                            color: hasUnread
+                                ? (isDark ? Colors.white70 : Colors.black87)
+                                : (isDark ? Colors.grey.shade500 : Colors.grey.shade600),
+                            fontWeight: hasUnread
                                 ? FontWeight.w600
                                 : FontWeight.normal,
                           ),
@@ -269,18 +327,21 @@ class _ConversationTile extends StatelessWidget {
                       if (conversation.unreadCount > 0) ...[
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
-                            color: Colors.blue,
-                            shape: BoxShape.circle,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: theme.primaryColor,
+                            borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
-                            conversation.unreadCount > 9
-                                ? '9+'
+                            conversation.unreadCount > 99
+                                ? '99+'
                                 : '${conversation.unreadCount}',
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 10,
+                              fontSize: 12,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -295,26 +356,5 @@ class _ConversationTile extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  String _formatTime(String? dateTime, AppLocalizations l10n) {
-    if (dateTime == null) return '';
-    try {
-      final DateTime parsed = DateTime.parse(dateTime);
-      final now = DateTime.now();
-      final difference = now.difference(parsed);
-
-      if (difference.inDays > 0) {
-        return '${difference.inDays}d';
-      } else if (difference.inHours > 0) {
-        return '${difference.inHours}h';
-      } else if (difference.inMinutes > 0) {
-        return '${difference.inMinutes}m';
-      } else {
-        return l10n.justNow;
-      }
-    } catch (_) {
-      return '';
-    }
   }
 }

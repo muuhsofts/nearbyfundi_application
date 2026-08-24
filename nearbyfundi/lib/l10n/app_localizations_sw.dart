@@ -24,10 +24,10 @@ class AppLocalizationsSw extends AppLocalizations {
   String get blog => 'Blogu';
 
   @override
-  String get requests => 'Maombi ';
+  String get requests => 'Maombi';
 
   @override
-  String get myRequests => 'Maombi ';
+  String get myRequests => 'Maombi';
 
   @override
   String get profile => 'Profaili';
@@ -553,13 +553,13 @@ class AppLocalizationsSw extends AppLocalizations {
   String get noConversationsYet => 'Hakuna mazungumzo bado';
 
   @override
-  String get startChattingWithFundis => 'Anza kuzungumza na fundi karibu nawe';
+  String get startChattingWithFundis => 'Anza kuzungumza na mafundi karibu nawe';
 
   @override
   String get noMessagesYet => 'Hakuna ujumbe bado';
 
   @override
-  String get sayHelloToStart => 'Sema hello kuanza mazungumzo!';
+  String get sayHelloToStart => 'Sema hello kuanza mazungumzo';
 
   @override
   String get typeAMessage => 'Andika ujumbe...';
@@ -577,7 +577,13 @@ class AppLocalizationsSw extends AppLocalizations {
   String get messageDeleted => 'Ujumbe umefutwa';
 
   @override
-  String get failedToSend => 'Imeshindwa kutuma';
+  String get deleteMessage => 'Futa Ujumbe';
+
+  @override
+  String get areYouSureDeleteMessage => 'Una uhakika unataka kufuta ujumbe huu?';
+
+  @override
+  String get failedToSend => 'Imeshindwa kutuma ujumbe';
 
   @override
   String get failedToSendImage => 'Imeshindwa kutuma picha';
@@ -587,6 +593,42 @@ class AppLocalizationsSw extends AppLocalizations {
 
   @override
   String get voiceRecordingComingSoon => 'Kurekodi sauti inakuja hivi karibuni!';
+
+  @override
+  String get messageReactionAdded => 'Mwitikio umeongezwa';
+
+  @override
+  String get messageReactionRemoved => 'Mwitikio umeondolewa';
+
+  @override
+  String get typing => 'Anaandika...';
+
+  @override
+  String get download => 'Pakua';
+
+  @override
+  String get fileDownloaded => 'Faili imepakuliwa';
+
+  @override
+  String get fileDownloadFailed => 'Imeshindwa kupakua faili';
+
+  @override
+  String get conversationDeleted => 'Mazungumzo yamefutwa';
+
+  @override
+  String get areYouSureDeleteConversation => 'Una uhakika unataka kufuta mazungumzo haya?';
+
+  @override
+  String get noInternetConnection => 'Hakuna muunganisho wa mtandao';
+
+  @override
+  String get connecting => 'Inaunganisha...';
+
+  @override
+  String get disconnected => 'Imeondolewa';
+
+  @override
+  String get reconnecting => 'Inaunganisha tena...';
 
   @override
   String get noContent => 'Hakuna maudhui.';
@@ -697,4 +739,7 @@ class AppLocalizationsSw extends AppLocalizations {
 
   @override
   String get privacyPolicy => 'Sera ya Faragha';
+
+  @override
+  String get send => 'Tuma';
 }

@@ -24,7 +24,7 @@ class ChatUser {
   factory ChatUser.fromJson(Map<String, dynamic> json) {
     return ChatUser(
       id: json['id'] ?? 0,
-      name: json['name'] ?? '',
+      name: json['name'] ?? 'Unknown User',
       email: json['email'] ?? '',
       phone: json['phone'],
       avatar: json['profile_photo'] ?? json['avatar'],
@@ -46,4 +46,36 @@ class ChatUser {
       'fcm_device_token': fcmToken,
     };
   }
+
+  ChatUser copyWith({
+    int? id,
+    String? name,
+    String? email,
+    String? phone,
+    String? avatar,
+    bool? isOnline,
+    String? lastSeen,
+    String? fcmToken,
+  }) {
+    return ChatUser(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      email: email ?? this.email,
+      phone: phone ?? this.phone,
+      avatar: avatar ?? this.avatar,
+      isOnline: isOnline ?? this.isOnline,
+      lastSeen: lastSeen ?? this.lastSeen,
+      fcmToken: fcmToken ?? this.fcmToken,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+          other is ChatUser &&
+              runtimeType == other.runtimeType &&
+              id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
 }

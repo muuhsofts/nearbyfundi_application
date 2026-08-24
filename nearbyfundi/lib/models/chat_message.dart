@@ -62,6 +62,24 @@ class ChatMessage {
   bool get isVoice => messageType == 'voice';
   bool get isVideo => messageType == 'video';
 
+  String getDisplayMessage() {
+    if (content != null && content!.isNotEmpty) {
+      return content!;
+    }
+    switch (messageType) {
+      case 'image':
+        return '📷 Image';
+      case 'video':
+        return '🎬 Video';
+      case 'voice':
+        return '🎤 Voice message';
+      case 'file':
+        return '📎 ${file?.name ?? 'File'}';
+      default:
+        return 'Message';
+    }
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -81,6 +99,42 @@ class ChatMessage {
       'voice_duration': voiceDuration,
     };
   }
+
+  ChatMessage copyWith({
+    int? id,
+    int? conversationId,
+    int? senderId,
+    String? senderName,
+    String? senderType,
+    int? receiverId,
+    String? messageType,
+    String? content,
+    bool? isRead,
+    String? readAt,
+    bool? isDelivered,
+    String? deliveredAt,
+    String? createdAt,
+    ChatFile? file,
+    int? voiceDuration,
+  }) {
+    return ChatMessage(
+      id: id ?? this.id,
+      conversationId: conversationId ?? this.conversationId,
+      senderId: senderId ?? this.senderId,
+      senderName: senderName ?? this.senderName,
+      senderType: senderType ?? this.senderType,
+      receiverId: receiverId ?? this.receiverId,
+      messageType: messageType ?? this.messageType,
+      content: content ?? this.content,
+      isRead: isRead ?? this.isRead,
+      readAt: readAt ?? this.readAt,
+      isDelivered: isDelivered ?? this.isDelivered,
+      deliveredAt: deliveredAt ?? this.deliveredAt,
+      createdAt: createdAt ?? this.createdAt,
+      file: file ?? this.file,
+      voiceDuration: voiceDuration ?? this.voiceDuration,
+    );
+  }
 }
 
 class ChatFile {
@@ -89,16 +143,25 @@ class ChatFile {
   final int? size;
   final String? mimeType;
   final String? extension;
+  final String? thumbnailUrl;
 
-  ChatFile({this.url, this.name, this.size, this.mimeType, this.extension});
+  ChatFile({
+    this.url,
+    this.name,
+    this.size,
+    this.mimeType,
+    this.extension,
+    this.thumbnailUrl,
+  });
 
   factory ChatFile.fromJson(Map<String, dynamic> json) {
     return ChatFile(
-      url: json['url'],
-      name: json['name'],
-      size: json['size'],
-      mimeType: json['mime_type'],
-      extension: json['extension'],
+      url: json['url'] ?? json['file_url'],
+      name: json['name'] ?? json['file_name'],
+      size: json['size'] ?? json['file_size'],
+      mimeType: json['mime_type'] ?? json['file_mime_type'],
+      extension: json['extension'] ?? json['file_extension'],
+      thumbnailUrl: json['thumbnail_url'] ?? json['thumbnail_path'],
     );
   }
 
@@ -109,6 +172,26 @@ class ChatFile {
       'size': size,
       'mime_type': mimeType,
       'extension': extension,
+      'thumbnail_url': thumbnailUrl,
     };
+  }
+
+  bool get isImage {
+    return mimeType?.startsWith('image/') ?? false;
+  }
+
+  bool get isVideo {
+    return mimeType?.startsWith('video/') ?? false;
+  }
+
+  bool get isAudio {
+    return mimeType?.startsWith('audio/') ?? false;
+  }
+
+  String get formattedSize {
+    if (size == null) return '';
+    if (size! < 1024) return '$size B';
+    if (size! < 1024 * 1024) return '${(size! / 1024).toStringAsFixed(1)} KB';
+    return '${(size! / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 }

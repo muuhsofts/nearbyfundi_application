@@ -1,22 +1,27 @@
 // lib/screens/chat/chat_screen.dart
 
 import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:file_picker/file_picker.dart';  // ADD THIS IMPORT
-import '../../providers/chat_provider.dart';
+import 'package:provider/provider.dart';
+
+import '../../l10n/app_localizations.dart';
 import '../../models/chat_conversation.dart';
 import '../../models/chat_message.dart';
-import '../../l10n/app_localizations.dart';
+import '../../providers/chat_provider.dart';
 import 'widgets/message_bubble.dart';
 import 'widgets/typing_indicator.dart';
 
 class ChatScreen extends StatefulWidget {
   final ChatConversation conversation;
 
-  const ChatScreen({super.key, required this.conversation});
+  const ChatScreen({
+    super.key,
+    required this.conversation,
+  });
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -25,56 +30,162 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final FocusNode _focusNode = FocusNode();
 
-  bool _isTyping = false;
   bool _isSending = false;
+  bool _isLoadingMore = false;
+  int _currentOffset = 0;
+  bool _hasMoreMessages = true;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadMessages();
-      _markConversationAsRead();
-    });
+
+    _loadMessages();
+    _markConversationAsRead();
+    _subscribeToUser();
   }
 
   @override
   void dispose() {
     _textController.dispose();
     _scrollController.dispose();
+    _focusNode.dispose();
+
+    _unsubscribeFromUser();
+
     super.dispose();
   }
 
+  // ============================================================
+  // LOAD MESSAGES
+  // ============================================================
+
   Future<void> _loadMessages() async {
-    final provider = context.read<ChatProvider>();
-    await provider.getMessages(conversationId: widget.conversation.id);
-    _scrollToBottom();
+    try {
+      final provider = context.read<ChatProvider>();
+
+      await provider.getMessages(
+        conversationId: widget.conversation.id,
+        limit: 50,
+        offset: 0,
+      );
+
+      if (!mounted) return;
+
+      _currentOffset = 50;
+      _hasMoreMessages = true;
+
+      _scrollToBottom();
+    } catch (e) {
+      debugPrint('Error loading messages: $e');
+    }
   }
+
+  Future<void> _loadMoreMessages() async {
+    if (_isLoadingMore || !_hasMoreMessages) {
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingMore = true;
+    });
+
+    try {
+      final provider = context.read<ChatProvider>();
+
+      final messages = await provider.getMessages(
+        conversationId: widget.conversation.id,
+        limit: 50,
+        offset: _currentOffset,
+      );
+
+      if (messages.length < 50) {
+        _hasMoreMessages = false;
+      }
+
+      _currentOffset += messages.length;
+    } catch (e) {
+      debugPrint('Error loading more messages: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingMore = false;
+        });
+      }
+    }
+  }
+
+  // ============================================================
+  // SCROLL
+  // ============================================================
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
+      if (!_scrollController.hasClients) {
+        return;
       }
+
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
     });
   }
 
+  // ============================================================
+  // READ STATUS
+  // ============================================================
+
   Future<void> _markConversationAsRead() async {
-    await context
-        .read<ChatProvider>()
-        .markConversationAsRead(widget.conversation.id);
+    try {
+      await context.read<ChatProvider>().markConversationAsRead(
+        widget.conversation.id,
+      );
+    } catch (e) {
+      debugPrint('Error marking conversation as read: $e');
+    }
   }
+
+  // ============================================================
+  // USER SUBSCRIPTION
+  // ============================================================
+
+  void _subscribeToUser() {
+    context.read<ChatProvider>().subscribeToUser(
+      widget.conversation.otherParty.id,
+    );
+  }
+
+  void _unsubscribeFromUser() {
+    context.read<ChatProvider>().unsubscribeFromUser(
+      widget.conversation.otherParty.id,
+    );
+  }
+
+  // ============================================================
+  // SEND TEXT MESSAGE
+  // ============================================================
 
   Future<void> _sendMessage() async {
     final text = _textController.text.trim();
-    if (text.isEmpty || _isSending) return;
+
+    if (text.isEmpty || _isSending) {
+      return;
+    }
 
     _textController.clear();
-    setState(() => _isSending = true);
+
+    if (mounted) {
+      setState(() {
+        _isSending = true;
+      });
+    }
 
     try {
       await context.read<ChatProvider>().sendMessage(
@@ -82,368 +193,742 @@ class _ChatScreenState extends State<ChatScreen> {
         content: text,
         messageType: 'text',
       );
+
       _scrollToBottom();
-      await _sendTypingStatus(false);
     } catch (e) {
-      if (mounted) {
-        final l10n = AppLocalizations.of(context)!;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${l10n.failedToSend}: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+      if (!mounted) {
+        return;
       }
+
+      final l10n = AppLocalizations.of(context)!;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${l10n.failedToSend}: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     } finally {
       if (mounted) {
-        setState(() => _isSending = false);
+        setState(() {
+          _isSending = false;
+        });
       }
     }
   }
 
+  // ============================================================
+  // TYPING STATUS
+  // ============================================================
+
   Future<void> _sendTypingStatus(bool typing) async {
-    if (_isTyping != typing) {
-      _isTyping = typing;
+    try {
       await context.read<ChatProvider>().sendTypingStatus(
         conversationId: widget.conversation.id,
         typing: typing,
       );
+    } catch (e) {
+      debugPrint('Typing status error: $e');
     }
   }
 
+  // ============================================================
+  // IMAGE PICKER
+  // ============================================================
 
   Future<void> _pickImage() async {
-    final picker = ImagePicker();
-    final image = await picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 80,
-    );
-    if (image != null) {
-      setState(() => _isSending = true);
-      try {
-        await context.read<ChatProvider>().sendMessage(
-          conversationId: widget.conversation.id,
-          file: File(image.path),
-          messageType: 'image',
-          content: '📷 Image',
-        );
-        _scrollToBottom();
-      } catch (e) {
-        if (mounted) {
-          final l10n = AppLocalizations.of(context)!;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('${l10n.failedToSendImage}: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      } finally {
-        if (mounted) {
-          setState(() => _isSending = false);
-        }
+    if (_isSending) {
+      return;
+    }
+
+    try {
+      final picker = ImagePicker();
+
+      final image = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+      );
+
+      if (image == null) {
+        return;
       }
+
+      await _sendFile(
+        File(image.path),
+        'image',
+        '📷 Image',
+      );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      final l10n = AppLocalizations.of(context)!;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${l10n.failedToSendFile}: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
+  // ============================================================
+  // FILE PICKER
+  // ============================================================
+
   Future<void> _pickFile() async {
+    if (_isSending) {
+      return;
+    }
+
     try {
-      // For version 10.3.10, we use FilePicker.platform.pickFiles
       final result = await FilePicker.platform.pickFiles(
         allowMultiple: false,
         type: FileType.any,
       );
-      if (result != null && result.files.isNotEmpty) {
-        final file = File(result.files.first.path!);
-        setState(() => _isSending = true);
-        try {
-          await context.read<ChatProvider>().sendMessage(
-            conversationId: widget.conversation.id,
-            file: file,
-            messageType: 'file',
-            content: '📎 ${result.files.first.name}',
-          );
-          _scrollToBottom();
-        } catch (e) {
-          if (mounted) {
-            final l10n = AppLocalizations.of(context)!;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('${l10n.failedToSendFile}: $e'),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-        } finally {
-          if (mounted) {
-            setState(() => _isSending = false);
-          }
-        }
+
+      if (result == null || result.files.isEmpty) {
+        return;
       }
+
+      final selectedFile = result.files.first;
+
+      if (selectedFile.path == null || selectedFile.path!.isEmpty) {
+        return;
+      }
+
+      final file = File(selectedFile.path!);
+
+      await _sendFile(
+        file,
+        'file',
+        '📎 ${selectedFile.name}',
+      );
     } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      final l10n = AppLocalizations.of(context)!;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${l10n.failedToSendFile}: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // ============================================================
+  // SEND FILE
+  // ============================================================
+
+  Future<void> _sendFile(
+      File file,
+      String type,
+      String content,
+      ) async {
+    if (_isSending) {
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _isSending = true;
+      });
+    }
+
+    try {
+      await context.read<ChatProvider>().sendMessage(
+        conversationId: widget.conversation.id,
+        file: file,
+        messageType: type,
+        content: content,
+      );
+
+      _scrollToBottom();
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      final l10n = AppLocalizations.of(context)!;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${l10n.failedToSendFile}: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
       if (mounted) {
-        final l10n = AppLocalizations.of(context)!;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${l10n.failedToSendFile}: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        setState(() {
+          _isSending = false;
+        });
       }
     }
   }
 
-  Future<void> _pickVoice() async {
-    // Note: For voice recording, you'd typically use a recording package
-    // This is a placeholder - you can implement actual voice recording
-    // using packages like record, flutter_sound, etc.
-    final l10n = AppLocalizations.of(context)!;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(l10n.voiceRecordingComingSoon),
-        backgroundColor: Colors.grey,
-      ),
-    );
-  }
+  // ============================================================
+  // MESSAGE OPTIONS
+  // ============================================================
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final l10n = AppLocalizations.of(context)!;
-    final screenWidth = MediaQuery.of(context).size.width;
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: [
-            CircleAvatar(
-              radius: screenWidth > 600 ? 20 : 18,
-              backgroundColor: theme.primaryColor.withOpacity(0.1),
-              child: Text(
-                widget.conversation.otherParty.name[0].toUpperCase(),
-                style: TextStyle(color: theme.primaryColor),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.conversation.otherParty.name,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                if (widget.conversation.otherParty.isOnline)
-                  Text(
-                    l10n.online,
-                    style: const TextStyle(fontSize: 12, color: Colors.green),
-                  ),
-              ],
-            ),
-          ],
-        ),
-        backgroundColor: theme.primaryColor,
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.more_vert),
-            onPressed: () {
-              // Show options (clear chat, view profile, etc.)
-            },
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: Consumer<ChatProvider>(
-              builder: (context, provider, child) {
-                if (provider.isLoading && provider.currentMessages.isEmpty) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                if (provider.currentMessages.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.chat_bubble_outline,
-                            size: 60, color: Colors.grey),
-                        const SizedBox(height: 16),
-                        Text(
-                          l10n.noMessagesYet,
-                          style: const TextStyle(color: Colors.grey),
-                        ),
-                        Text(
-                          l10n.sayHelloToStart,
-                          style: const TextStyle(color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                return ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  reverse: true,
-                  itemCount: provider.currentMessages.length,
-                  itemBuilder: (context, index) {
-                    final message = provider.currentMessages[
-                    provider.currentMessages.length - 1 - index];
-                    // Fixed: Determine if current user by comparing sender ID with current user
-                    // We'll use a different approach - pass isCurrentUser from provider
-                    final isCurrentUser = message.senderType == 'customer';
-
-                    return MessageBubble(
-                      message: message,
-                      isCurrentUser: isCurrentUser,
-                      onLongPress: () {
-                        _showMessageOptions(context, message);
-                      },
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-          Consumer<ChatProvider>(
-            builder: (context, provider, child) {
-              if (provider.isTyping) {
-                return const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: TypingIndicator(),
-                );
-              }
-              return const SizedBox.shrink();
-            },
-          ),
-          _buildMessageInput(context),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMessageInput(BuildContext context) {
-    final theme = Theme.of(context);
-    final l10n = AppLocalizations.of(context)!;
-    final screenWidth = MediaQuery.of(context).size.width;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.2),
-            blurRadius: 4,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // Photo button
-          IconButton(
-            icon: Icon(Icons.photo, color: theme.primaryColor, size: screenWidth > 600 ? 28 : 24),
-            onPressed: _isSending ? null : _pickImage,
-          ),
-          // Attachment button
-          IconButton(
-            icon: Icon(Icons.attach_file, color: theme.primaryColor, size: screenWidth > 600 ? 28 : 24),
-            onPressed: _isSending ? null : _pickFile,
-          ),
-          // Voice button (optional)
-          IconButton(
-            icon: Icon(Icons.mic, color: theme.primaryColor, size: screenWidth > 600 ? 28 : 24),
-            onPressed: _isSending ? null : _pickVoice,
-          ),
-          Expanded(
-            child: TextField(
-              controller: _textController,
-              onChanged: (text) {
-                setState(() {});
-                _sendTypingStatus(text.isNotEmpty);
-              },
-              decoration: InputDecoration(
-                hintText: l10n.typeAMessage,
-                hintStyle: theme.textTheme.bodySmall,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(24),
-                  borderSide: BorderSide.none,
-                ),
-                fillColor: Colors.grey.shade100,
-                filled: true,
-                contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              ),
-            ),
-          ),
-          IconButton(
-            icon: _isSending
-                ? const SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-                : Icon(
-              Icons.send,
-              color: _textController.text.trim().isNotEmpty
-                  ? theme.primaryColor
-                  : Colors.grey,
-              size: screenWidth > 600 ? 28 : 24,
-            ),
-            onPressed:
-            _textController.text.trim().isNotEmpty && !_isSending
-                ? _sendMessage
-                : null,
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showMessageOptions(BuildContext context, ChatMessage message) {
+  void _showMessageOptions(
+      BuildContext context,
+      ChatMessage message,
+      ) {
     final l10n = AppLocalizations.of(context)!;
 
     showModalBottomSheet(
       context: context,
-      builder: (context) {
-        return Wrap(
-          children: [
-            if (message.content != null && message.content!.isNotEmpty)
-              ListTile(
-                leading: const Icon(Icons.content_copy),
-                title: Text(l10n.copy),
-                onTap: () {
-                  Navigator.pop(context);
-                  if (message.content != null) {
-                    Clipboard.setData(ClipboardData(text: message.content!));
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(20),
+        ),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              if (message.content != null &&
+                  message.content!.trim().isNotEmpty)
+                ListTile(
+                  leading: const Icon(
+                    Icons.content_copy_outlined,
+                  ),
+                  title: Text(l10n.copy),
+                  onTap: () async {
+                    Navigator.pop(sheetContext);
+
+                    await Clipboard.setData(
+                      ClipboardData(
+                        text: message.content!,
+                      ),
+                    );
+
+                    if (!mounted) {
+                      return;
+                    }
+
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(l10n.messageCopied),
                         backgroundColor: Colors.green,
                       ),
                     );
-                  }
+                  },
+                ),
+
+              ListTile(
+                leading: const Icon(
+                  Icons.delete_outline,
+                  color: Colors.red,
+                ),
+                title: Text(
+                  l10n.delete,
+                  style: const TextStyle(
+                    color: Colors.red,
+                  ),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+
+                  _confirmDeleteMessage(
+                    context,
+                    message,
+                  );
                 },
               ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline),
-              title: Text(l10n.delete),
-              onTap: () {
-                Navigator.pop(context);
-                context.read<ChatProvider>().deleteMessage(message.id);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(l10n.messageDeleted),
-                    backgroundColor: Colors.green,
-                  ),
-                );
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ============================================================
+  // DELETE MESSAGE CONFIRMATION
+  // ============================================================
+
+  void _confirmDeleteMessage(
+      BuildContext context,
+      ChatMessage message,
+      ) {
+    final l10n = AppLocalizations.of(context)!;
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(l10n.deleteMessage),
+          content: Text(
+            l10n.areYouSureDeleteMessage,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
               },
+              child: Text(l10n.cancel),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(dialogContext);
+
+                try {
+                  await context
+                      .read<ChatProvider>()
+                      .deleteMessage(message.id);
+
+                  if (!mounted) {
+                    return;
+                  }
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(l10n.messageDeleted),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                } catch (e) {
+                  if (!mounted) {
+                    return;
+                  }
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('$e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.red,
+              ),
+              child: Text(l10n.delete),
             ),
           ],
         );
       },
+    );
+  }
+
+  // ============================================================
+  // BUILD
+  // ============================================================
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
+
+    return Scaffold(
+      appBar: AppBar(
+        titleSpacing: 8,
+        title: Row(
+          children: [
+            CircleAvatar(
+              radius: 20,
+              backgroundColor: Colors.white.withOpacity(0.15),
+              child: Text(
+                widget.conversation.otherParty.name.isNotEmpty
+                    ? widget.conversation.otherParty.name[0]
+                    .toUpperCase()
+                    : '?',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.conversation.otherParty.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      fontSize: 16,
+                    ),
+                  ),
+                  Consumer<ChatProvider>(
+                    builder: (
+                        context,
+                        provider,
+                        child,
+                        ) {
+                      if (provider.isTyping) {
+                        return Text(
+                          l10n.typing,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Colors.greenAccent,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        );
+                      }
+
+                      if (widget
+                          .conversation
+                          .otherParty
+                          .isOnline) {
+                        return Text(
+                          l10n.online,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Colors.greenAccent,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        );
+                      }
+
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: theme.primaryColor,
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
+
+      body: Column(
+        children: [
+          // ======================================================
+          // MESSAGES
+          // ======================================================
+
+          Expanded(
+            child: Consumer<ChatProvider>(
+              builder: (
+                  context,
+                  provider,
+                  child,
+                  ) {
+                if (provider.isLoading &&
+                    provider.currentMessages.isEmpty) {
+                  return const Center(
+                    child: CircularProgressIndicator(),
+                  );
+                }
+
+                if (provider.currentMessages.isEmpty) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisAlignment:
+                        MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 90,
+                            height: 90,
+                            decoration: BoxDecoration(
+                              color: theme.primaryColor
+                                  .withOpacity(0.08),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.chat_bubble_outline,
+                              size: 48,
+                              color: theme.primaryColor,
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          Text(
+                            l10n.noMessagesYet,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            l10n.sayHelloToStart,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                return NotificationListener<
+                    ScrollNotification>(
+                  onNotification: (notification) {
+                    if (notification.metrics.pixels <= 0 &&
+                        !_isLoadingMore &&
+                        _hasMoreMessages) {
+                      _loadMoreMessages();
+                    }
+
+                    return false;
+                  },
+                  child: ListView.builder(
+                    controller: _scrollController,
+                    reverse: true,
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 8,
+                      horizontal: 8,
+                    ),
+                    itemCount:
+                    provider.currentMessages.length +
+                        (_isLoadingMore ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (_isLoadingMore &&
+                          index ==
+                              provider.currentMessages.length) {
+                        return const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Center(
+                            child: SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+
+                      final message = provider.currentMessages[
+                      provider.currentMessages.length -
+                          1 -
+                          index];
+
+                      final isCurrentUser =
+                          message.senderId ==
+                              provider.currentUser?.id;
+
+                      // IMPORTANT:
+                      // No onReaction parameter here.
+                      // Your current MessageBubble does not define it.
+                      return MessageBubble(
+                        message: message,
+                        isCurrentUser: isCurrentUser,
+                        onLongPress: () {
+                          _showMessageOptions(
+                            context,
+                            message,
+                          );
+                        },
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+
+          // ======================================================
+          // TYPING INDICATOR
+          // ======================================================
+
+          Consumer<ChatProvider>(
+            builder: (
+                context,
+                provider,
+                child,
+                ) {
+              if (!provider.isTyping) {
+                return const SizedBox.shrink();
+              }
+
+              return const Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
+                child: TypingIndicator(),
+              );
+            },
+          ),
+
+          // ======================================================
+          // MESSAGE INPUT
+          // ======================================================
+
+          _buildMessageInput(context),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // MESSAGE INPUT
+  // ============================================================
+
+  Widget _buildMessageInput(
+      BuildContext context,
+      ) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
+
+    final screenWidth =
+        MediaQuery.of(context).size.width;
+
+    final isTablet = screenWidth > 600;
+
+    final hasText =
+        _textController.text.trim().isNotEmpty;
+
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 8,
+          vertical: 6,
+        ),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            // --------------------------------------------------
+            // IMAGE
+            // --------------------------------------------------
+
+            IconButton(
+              tooltip: 'Photo',
+              icon: Icon(
+                Icons.photo_outlined,
+                color: _isSending
+                    ? Colors.grey
+                    : theme.primaryColor,
+                size: isTablet ? 28 : 24,
+              ),
+              onPressed:
+              _isSending ? null : _pickImage,
+            ),
+
+            // --------------------------------------------------
+            // FILE
+            // --------------------------------------------------
+
+            IconButton(
+              tooltip: 'Attach file',
+              icon: Icon(
+                Icons.attach_file,
+                color: _isSending
+                    ? Colors.grey
+                    : theme.primaryColor,
+                size: isTablet ? 28 : 24,
+              ),
+              onPressed:
+              _isSending ? null : _pickFile,
+            ),
+
+            // --------------------------------------------------
+            // TEXT FIELD
+            // --------------------------------------------------
+
+            Expanded(
+              child: TextField(
+                controller: _textController,
+                focusNode: _focusNode,
+                maxLines: 5,
+                minLines: 1,
+                textCapitalization:
+                TextCapitalization.sentences,
+                onChanged: (text) {
+                  setState(() {});
+
+                  _sendTypingStatus(
+                    text.trim().isNotEmpty,
+                  );
+                },
+                decoration: InputDecoration(
+                  hintText: l10n.typeAMessage,
+                  hintStyle:
+                  theme.textTheme.bodyMedium?.copyWith(
+                    color: Colors.grey.shade500,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius:
+                    BorderRadius.circular(24),
+                    borderSide: BorderSide.none,
+                  ),
+                  fillColor: theme
+                      .colorScheme
+                      .surfaceContainerHighest,
+                  filled: true,
+                  contentPadding:
+                  const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(width: 4),
+
+            // --------------------------------------------------
+            // SEND
+            // --------------------------------------------------
+
+            Material(
+              color: hasText && !_isSending
+                  ? theme.primaryColor
+                  : Colors.grey.shade300,
+              shape: const CircleBorder(),
+              child: IconButton(
+                tooltip: 'Send',
+                icon: _isSending
+                    ? const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child:
+                  CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    valueColor:
+                    AlwaysStoppedAnimation<
+                        Color>(
+                      Colors.white,
+                    ),
+                  ),
+                )
+                    : const Icon(
+                  Icons.send_rounded,
+                  color: Colors.white,
+                ),
+                onPressed:
+                hasText && !_isSending
+                    ? _sendMessage
+                    : null,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

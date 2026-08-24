@@ -24,10 +24,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get blog => 'Blog';
 
   @override
-  String get requests => ' Requests';
+  String get requests => 'Requests';
 
   @override
-  String get myRequests => ' Requests';
+  String get myRequests => 'Requests';
 
   @override
   String get profile => 'Profile';
@@ -553,13 +553,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get noConversationsYet => 'No conversations yet';
 
   @override
-  String get startChattingWithFundis => 'Start chatting with fundis near you';
+  String get startChattingWithFundis => 'Start chatting with technicians near you';
 
   @override
   String get noMessagesYet => 'No messages yet';
 
   @override
-  String get sayHelloToStart => 'Say hello to start chatting!';
+  String get sayHelloToStart => 'Say hello to start chatting';
 
   @override
   String get typeAMessage => 'Type a message...';
@@ -577,7 +577,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get messageDeleted => 'Message deleted';
 
   @override
-  String get failedToSend => 'Failed to send';
+  String get deleteMessage => 'Delete Message';
+
+  @override
+  String get areYouSureDeleteMessage => 'Are you sure you want to delete this message?';
+
+  @override
+  String get failedToSend => 'Failed to send message';
 
   @override
   String get failedToSendImage => 'Failed to send image';
@@ -587,6 +593,42 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get voiceRecordingComingSoon => 'Voice recording coming soon!';
+
+  @override
+  String get messageReactionAdded => 'Reaction added';
+
+  @override
+  String get messageReactionRemoved => 'Reaction removed';
+
+  @override
+  String get typing => 'Typing...';
+
+  @override
+  String get download => 'Download';
+
+  @override
+  String get fileDownloaded => 'File downloaded';
+
+  @override
+  String get fileDownloadFailed => 'Failed to download file';
+
+  @override
+  String get conversationDeleted => 'Conversation deleted';
+
+  @override
+  String get areYouSureDeleteConversation => 'Are you sure you want to delete this conversation?';
+
+  @override
+  String get noInternetConnection => 'No internet connection';
+
+  @override
+  String get connecting => 'Connecting...';
+
+  @override
+  String get disconnected => 'Disconnected';
+
+  @override
+  String get reconnecting => 'Reconnecting...';
 
   @override
   String get noContent => 'No content available.';
@@ -697,4 +739,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get privacyPolicy => 'Privacy Policy';
+
+  @override
+  String get send => 'Send';
 }

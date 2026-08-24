@@ -128,13 +128,13 @@ abstract class AppLocalizations {
   /// No description provided for @requests.
   ///
   /// In en, this message translates to:
-  /// **' Requests'**
+  /// **'Requests'**
   String get requests;
 
   /// No description provided for @myRequests.
   ///
   /// In en, this message translates to:
-  /// **' Requests'**
+  /// **'Requests'**
   String get myRequests;
 
   /// No description provided for @profile.
@@ -1178,7 +1178,7 @@ abstract class AppLocalizations {
   /// No description provided for @startChattingWithFundis.
   ///
   /// In en, this message translates to:
-  /// **'Start chatting with fundis near you'**
+  /// **'Start chatting with technicians near you'**
   String get startChattingWithFundis;
 
   /// No description provided for @noMessagesYet.
@@ -1190,7 +1190,7 @@ abstract class AppLocalizations {
   /// No description provided for @sayHelloToStart.
   ///
   /// In en, this message translates to:
-  /// **'Say hello to start chatting!'**
+  /// **'Say hello to start chatting'**
   String get sayHelloToStart;
 
   /// No description provided for @typeAMessage.
@@ -1223,10 +1223,22 @@ abstract class AppLocalizations {
   /// **'Message deleted'**
   String get messageDeleted;
 
+  /// No description provided for @deleteMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete Message'**
+  String get deleteMessage;
+
+  /// No description provided for @areYouSureDeleteMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to delete this message?'**
+  String get areYouSureDeleteMessage;
+
   /// No description provided for @failedToSend.
   ///
   /// In en, this message translates to:
-  /// **'Failed to send'**
+  /// **'Failed to send message'**
   String get failedToSend;
 
   /// No description provided for @failedToSendImage.
@@ -1246,6 +1258,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Voice recording coming soon!'**
   String get voiceRecordingComingSoon;
+
+  /// No description provided for @messageReactionAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Reaction added'**
+  String get messageReactionAdded;
+
+  /// No description provided for @messageReactionRemoved.
+  ///
+  /// In en, this message translates to:
+  /// **'Reaction removed'**
+  String get messageReactionRemoved;
+
+  /// No description provided for @typing.
+  ///
+  /// In en, this message translates to:
+  /// **'Typing...'**
+  String get typing;
+
+  /// No description provided for @download.
+  ///
+  /// In en, this message translates to:
+  /// **'Download'**
+  String get download;
+
+  /// No description provided for @fileDownloaded.
+  ///
+  /// In en, this message translates to:
+  /// **'File downloaded'**
+  String get fileDownloaded;
+
+  /// No description provided for @fileDownloadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to download file'**
+  String get fileDownloadFailed;
+
+  /// No description provided for @conversationDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation deleted'**
+  String get conversationDeleted;
+
+  /// No description provided for @areYouSureDeleteConversation.
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to delete this conversation?'**
+  String get areYouSureDeleteConversation;
+
+  /// No description provided for @noInternetConnection.
+  ///
+  /// In en, this message translates to:
+  /// **'No internet connection'**
+  String get noInternetConnection;
+
+  /// No description provided for @connecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting...'**
+  String get connecting;
+
+  /// No description provided for @disconnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnected'**
+  String get disconnected;
+
+  /// No description provided for @reconnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Reconnecting...'**
+  String get reconnecting;
 
   /// No description provided for @noContent.
   ///
@@ -1462,6 +1546,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Privacy Policy'**
   String get privacyPolicy;
+
+  /// No description provided for @send.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get send;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {
