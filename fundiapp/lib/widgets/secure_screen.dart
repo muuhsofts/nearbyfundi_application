@@ -1,9 +1,10 @@
 // lib/widgets/secure_screen.dart
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+
 import '../services/security_service.dart';
 
-/// A wrapper widget that prevents screenshots and screen recording
+/// Wraps any screen and optionally blocks screenshots / recording.
 class SecureScreen extends StatefulWidget {
   final Widget child;
   final bool preventScreenshot;
@@ -18,14 +19,15 @@ class SecureScreen extends StatefulWidget {
   State<SecureScreen> createState() => _SecureScreenState();
 }
 
-class _SecureScreenState extends State<SecureScreen> with WidgetsBindingObserver {
+class _SecureScreenState extends State<SecureScreen>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     if (widget.preventScreenshot) {
       SecurityService.enableSecureScreen();
     }
-    WidgetsBinding.instance.addObserver(this);
   }
 
   @override
@@ -38,15 +40,25 @@ class _SecureScreenState extends State<SecureScreen> with WidgetsBindingObserver
   }
 
   @override
+  void didUpdateWidget(covariant SecureScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.preventScreenshot != widget.preventScreenshot) {
+      if (widget.preventScreenshot) {
+        SecurityService.enableSecureScreen();
+      } else {
+        SecurityService.disableSecureScreen();
+      }
+    }
+  }
+
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed && widget.preventScreenshot) {
+      // Re-apply after resume (some OEMs clear FLAG_SECURE)
       SecurityService.enableSecureScreen();
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    return widget.child;
-  }
+  Widget build(BuildContext context) => widget.child;
 }

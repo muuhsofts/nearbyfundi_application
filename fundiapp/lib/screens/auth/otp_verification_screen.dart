@@ -1,7 +1,11 @@
 // lib/screens/auth/otp_verification_screen.dart
+
 import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
+
 import '../../config/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../config/app_routes.dart';
@@ -45,8 +49,12 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
   @override
   void dispose() {
-    for (var c in _otpControllers) c.dispose();
-    for (var f in _focusNodes) f.dispose();
+    for (var c in _otpControllers) {
+      c.dispose();
+    }
+    for (var f in _focusNodes) {
+      f.dispose();
+    }
     _timer?.cancel();
     super.dispose();
   }
@@ -76,14 +84,14 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       );
       return;
     }
+
     final auth = context.read<AuthProvider>();
     auth.clearError();
-    final success = await auth.verifyOtp(widget.email, _otp);
 
+    final success = await auth.verifyOtp(widget.email, _otp);
     if (!mounted) return;
 
     if (success) {
-      // ✅ Save technician data if this is part of registration
       if (widget.redirectToStep2 && widget.technicianId != null) {
         await StorageService.saveTechnicianId(widget.technicianId!);
         await StorageService.saveTechnicianEmail(widget.email);
@@ -93,9 +101,10 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
           arguments: widget.technicianId,
         );
       } else {
-        // Normal login flow
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) Navigator.pushReplacementNamed(context, AppRoutes.home);
+          if (mounted) {
+            Navigator.pushReplacementNamed(context, AppRoutes.home);
+          }
         });
       }
     } else if (auth.errorMessage != null) {
@@ -118,8 +127,8 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     auth.clearError();
 
     final success = await auth.resendOtp(widget.email);
-
     if (!mounted) return;
+
     setState(() => _isResending = false);
 
     if (success) {
@@ -155,51 +164,73 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 24),
                   Container(
-                    width: 80,
-                    height: 80,
+                    width: 88,
+                    height: 88,
+                    padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          theme.colorScheme.primary,
-                          theme.colorScheme.primary.withOpacity(0.7),
-                        ],
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(22),
+                      boxShadow: [
+                        BoxShadow(
+                          color: theme.primaryColor.withOpacity(0.12),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                      border: Border.all(
+                        color: theme.dividerColor.withOpacity(0.4),
                       ),
-                      borderRadius: BorderRadius.circular(24),
                     ),
-                    child: const Icon(Icons.verified_rounded, size: 40, color: Colors.white),
+                    child: SvgPicture.asset(
+                      'assets/icons/nearbyfundi-logo.svg',
+                      fit: BoxFit.contain,
+                    ),
                   ),
                   const SizedBox(height: 24),
                   Text(
                     l10n.verificationCode,
-                    style: theme.textTheme.displayMedium?.copyWith(fontWeight: FontWeight.w800),
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     '${l10n.enterCodeSent}\n${widget.email}',
                     textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyMedium,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.hintColor,
+                      height: 1.4,
+                    ),
                   ),
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 36),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: List.generate(
                       6,
                           (i) => SizedBox(
-                        width: 48,
+                        width: 46,
                         child: TextFormField(
                           controller: _otpControllers[i],
                           focusNode: _focusNodes[i],
                           textAlign: TextAlign.center,
                           keyboardType: TextInputType.number,
                           maxLength: 1,
-                          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                          ),
                           decoration: InputDecoration(
                             counterText: '',
-                            contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                            contentPadding:
+                            const EdgeInsets.symmetric(vertical: 14),
+                            filled: true,
+                            fillColor: theme.colorScheme.surface,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
                           onChanged: (val) {
                             if (val.isNotEmpty && i < 5) {
@@ -224,7 +255,9 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                       ),
                       const SizedBox(width: 8),
                       GestureDetector(
-                        onTap: _resendCountdown > 0 || _isResending ? null : _resendOtp,
+                        onTap: _resendCountdown > 0 || _isResending
+                            ? null
+                            : _resendOtp,
                         child: Text(
                           _isResending
                               ? 'Sending...'
@@ -247,7 +280,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                     onPressed: _handleVerify,
                     isLoading: auth.isLoading,
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
                   TextButton(
                     onPressed: () => Navigator.pop(context),
                     child: Text(

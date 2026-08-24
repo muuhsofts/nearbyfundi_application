@@ -3,22 +3,12 @@ class PortfolioItem {
   final String image;
   final String? description;
   final DateTime? createdAt;
-  final String? instagram;
-  final String? facebook;
-  final String? tiktok;
-  final String? twitter;
-  final String? telegram;
 
   PortfolioItem({
     required this.id,
     required this.image,
     this.description,
     this.createdAt,
-    this.instagram,
-    this.facebook,
-    this.tiktok,
-    this.twitter,
-    this.telegram,
   });
 
   factory PortfolioItem.fromJson(Map<String, dynamic> json) {
@@ -30,11 +20,6 @@ class PortfolioItem {
       createdAt: data['created_at'] != null
           ? DateTime.parse(data['created_at'])
           : null,
-      instagram: data['instagram'] ?? data['social_links']?['instagram'],
-      facebook: data['facebook'] ?? data['social_links']?['facebook'],
-      tiktok: data['tiktok'] ?? data['social_links']?['tiktok'],
-      twitter: data['twitter'] ?? data['social_links']?['twitter'],
-      telegram: data['telegram'] ?? data['social_links']?['telegram'],
     );
   }
 
@@ -43,10 +28,5 @@ class PortfolioItem {
     'image': image,
     'description': description,
     'created_at': createdAt?.toIso8601String(),
-    'instagram': instagram,
-    'facebook': facebook,
-    'tiktok': tiktok,
-    'twitter': twitter,
-    'telegram': telegram,
   };
 }

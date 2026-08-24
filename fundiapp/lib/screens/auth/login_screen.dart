@@ -1,6 +1,6 @@
-// lib/screens/auth/login_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import '../../config/app_theme.dart';
 import '../../providers/auth_provider.dart';
@@ -25,12 +25,10 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
-
   bool _obscurePassword = true;
   bool _termsAccepted = false;
   bool _rememberMe = false;
   bool _isEmailLogin = true;
-
   late final List<Country> _countries;
   late Country _selectedCountry;
 
@@ -78,6 +76,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     final auth = context.read<AuthProvider>();
     auth.clearError();
+
     final success = await auth.login(identifier, _passwordController.text.trim());
 
     if (!mounted) return;
@@ -105,338 +104,380 @@ class _LoginScreenState extends State<LoginScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'NETSAF FUNDI APP',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white),
-        ),
-        centerTitle: true,
-        elevation: 0,
-        backgroundColor: theme.primaryColor,
-        foregroundColor: Colors.white,
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: Consumer<AuthProvider>(
         builder: (context, auth, _) => LoadingOverlay(
           isLoading: auth.isLoading,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 120,
-                      height: 120,
+          child: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 20),
+
+                    // ────────────── LARGE LOGO (NO CARD) ──────────────
+                    Center(
+                      child: SvgPicture.asset(
+                        'assets/icons/nearbyfundi-logo.svg',
+                        width: 140,
+                        height: 140,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    Text(
+                      l10n.welcomeBack,
+                      style: theme.textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.6,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      l10n.signInManage,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.hintColor,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+
+                    const SizedBox(height: 32),
+
+                    // Toggle
+                    Container(
+                      height: 52,
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
+                        color: theme.colorScheme.surfaceVariant.withOpacity(0.4),
+                        borderRadius: BorderRadius.circular(16),
                       ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: Image.asset(
-                          'assets/icons/netsaf.png',
-                          width: 120,
-                          height: 120,
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    l10n.welcomeBack,
-                    style: theme.textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: theme.colorScheme.onSurface,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    l10n.signInManage,
-                    style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 40),
-
-                  SegmentedButton<String>(
-                    segments: const [
-                      ButtonSegment(value: 'email', label: Text('Email')),
-                      ButtonSegment(value: 'phone', label: Text('Phone')),
-                    ],
-                    selected: {_isEmailLogin ? 'email' : 'phone'},
-                    onSelectionChanged: (Set<String> newSelection) {
-                      setState(() {
-                        _isEmailLogin = newSelection.first == 'email';
-                      });
-                    },
-                    style: SegmentedButton.styleFrom(
-                      backgroundColor: theme.colorScheme.surface,
-                      selectedBackgroundColor: theme.primaryColor.withOpacity(0.15),
-                      selectedForegroundColor: theme.primaryColor,
-                      foregroundColor: theme.hintColor,
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      side: BorderSide.none,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  if (_isEmailLogin)
-                    _buildField(
-                      context,
-                      label: l10n.emailAddress,
-                      child: TextFormField(
-                        controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
-                        decoration: _inputDecoration(
-                          context,
-                          hintText: 'you@example.com',
-                          prefixIcon: Icons.email_outlined,
-                        ),
-                        validator: (v) =>
-                        v != null && v.contains('@') ? null : 'Enter a valid email address',
-                      ),
-                    )
-                  else
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildFieldLabel('Phone Number'),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            CountryPicker(
-                              selectedCountry: _selectedCountry,
-                              onChanged: (country) => setState(() => _selectedCountry = country),
-                              countries: _countries,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: TextFormField(
-                                controller: _phoneController,
-                                keyboardType: TextInputType.phone,
-                                decoration: _inputDecoration(
-                                  context,
-                                  hintText: '712345678',
-                                  prefixIcon: Icons.phone_outlined,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => setState(() => _isEmailLogin = true),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 220),
+                                margin: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: _isEmailLogin
+                                      ? theme.primaryColor
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: _isEmailLogin
+                                      ? [
+                                    BoxShadow(
+                                      color: theme.primaryColor.withOpacity(0.3),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 3),
+                                    )
+                                  ]
+                                      : null,
                                 ),
-                                validator: (v) {
-                                  if (v == null || v.trim().isEmpty) {
-                                    return 'Enter your phone number';
-                                  }
-                                  final digits = v.trim().replaceAll(RegExp(r'[^0-9]'), '');
-                                  if (digits.length < 7 || digits.length > 15) {
-                                    return 'Phone number must be 7–15 digits';
-                                  }
-                                  return null;
-                                },
+                                alignment: Alignment.center,
+                                child: Text(
+                                  'Email',
+                                  style: TextStyle(
+                                    color: _isEmailLogin
+                                        ? Colors.white
+                                        : theme.hintColor,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                               ),
                             ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  const SizedBox(height: 20),
-
-                  _buildFieldLabel(l10n.password),
-                  const SizedBox(height: 6),
-                  TextFormField(
-                    controller: _passwordController,
-                    obscureText: _obscurePassword,
-                    decoration: _inputDecoration(
-                      context,
-                      hintText: 'Enter your password',
-                      prefixIcon: Icons.lock_outline_rounded,
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                          color: theme.hintColor,
-                          size: 20,
-                        ),
-                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                      ),
-                    ),
-                    validator: (v) =>
-                    v != null && v.length >= 6 ? null : 'Password must be at least 6 characters',
-                  ),
-                  const SizedBox(height: 8),
-
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: Checkbox(
-                              value: _rememberMe,
-                              onChanged: (value) => setState(() => _rememberMe = value ?? false),
-                              activeColor: theme.primaryColor,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
                           ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Remember me',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.hintColor,
-                              fontWeight: FontWeight.w500,
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => setState(() => _isEmailLogin = false),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 220),
+                                margin: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: !_isEmailLogin
+                                      ? theme.primaryColor
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: !_isEmailLogin
+                                      ? [
+                                    BoxShadow(
+                                      color: theme.primaryColor.withOpacity(0.3),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 3),
+                                    )
+                                  ]
+                                      : null,
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  'Phone',
+                                  style: TextStyle(
+                                    color: !_isEmailLogin
+                                        ? Colors.white
+                                        : theme.hintColor,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         ],
                       ),
-                      TextButton(
-                        onPressed: () => Navigator.pushNamed(context, AppRoutes.forgot),
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          minimumSize: const Size(0, 30),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Email / Phone
+                    if (_isEmailLogin)
+                      TextFormField(
+                        controller: _emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: _decoration(
+                          context,
+                          hint: 'you@example.com',
+                          icon: Icons.email_outlined,
                         ),
-                        child: Text(
-                          l10n.forgotPassword,
-                          style: TextStyle(
-                            color: theme.primaryColor,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
+                        validator: (v) =>
+                        v != null && v.contains('@') ? null : 'Enter a valid email',
+                      )
+                    else
+                      Row(
+                        children: [
+                          CountryPicker(
+                            selectedCountry: _selectedCountry,
+                            onChanged: (c) => setState(() => _selectedCountry = c),
+                            countries: _countries,
                           ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: TextFormField(
+                              controller: _phoneController,
+                              keyboardType: TextInputType.phone,
+                              decoration: _decoration(
+                                context,
+                                hint: '712345678',
+                                icon: Icons.phone_outlined,
+                              ),
+                              validator: (v) {
+                                if (v == null || v.trim().isEmpty) {
+                                  return 'Enter phone number';
+                                }
+                                final digits =
+                                v.trim().replaceAll(RegExp(r'[^0-9]'), '');
+                                if (digits.length < 7 || digits.length > 15) {
+                                  return '7–15 digits required';
+                                }
+                                return null;
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+
+                    const SizedBox(height: 16),
+
+                    // Password
+                    TextFormField(
+                      controller: _passwordController,
+                      obscureText: _obscurePassword,
+                      decoration: _decoration(
+                        context,
+                        hint: 'Password',
+                        icon: Icons.lock_outline_rounded,
+                        suffix: IconButton(
+                          icon: Icon(
+                            _obscurePassword
+                                ? Icons.visibility_off_rounded
+                                : Icons.visibility_rounded,
+                            size: 22,
+                            color: theme.hintColor,
+                          ),
+                          onPressed: () =>
+                              setState(() => _obscurePassword = !_obscurePassword),
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
+                      validator: (v) =>
+                      v != null && v.length >= 6 ? null : 'Min 6 characters',
+                    ),
 
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: Checkbox(
-                          value: _termsAccepted,
-                          onChanged: (value) => setState(() => _termsAccepted = value ?? false),
+                    const SizedBox(height: 12),
+
+                    // Remember + Forgot
+                    Row(
+                      children: [
+                        Checkbox(
+                          value: _rememberMe,
+                          onChanged: (v) => setState(() => _rememberMe = v ?? false),
                           activeColor: theme.primaryColor,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: RichText(
-                          text: TextSpan(
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurface.withOpacity(0.8),
-                              height: 1.4,
+                        Text(
+                          'Remember me',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                        const Spacer(),
+                        TextButton(
+                          onPressed: () =>
+                              Navigator.pushNamed(context, AppRoutes.forgot),
+                          child: Text(
+                            l10n.forgotPassword,
+                            style: TextStyle(
+                              color: theme.primaryColor,
+                              fontWeight: FontWeight.w600,
                             ),
-                            children: [
-                              const TextSpan(text: 'I agree to the '),
-                              TextSpan(
-                                text: 'Terms & Conditions',
-                                style: TextStyle(
-                                  color: theme.primaryColor,
-                                  fontWeight: FontWeight.w700,
-                                  decoration: TextDecoration.underline,
-                                  decorationColor: theme.primaryColor.withOpacity(0.4),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    // Terms
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Checkbox(
+                          value: _termsAccepted,
+                          onChanged: (v) =>
+                              setState(() => _termsAccepted = v ?? false),
+                          activeColor: theme.primaryColor,
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: RichText(
+                              text: TextSpan(
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurface.withOpacity(0.75),
                                 ),
-                                recognizer: TapGestureRecognizer()
-                                  ..onTap = () => Navigator.pushNamed(context, AppRoutes.terms),
-                              ),
-                              const TextSpan(text: ' and '),
-                              TextSpan(
-                                text: 'Privacy Policy',
-                                style: TextStyle(
-                                  color: theme.primaryColor,
-                                  fontWeight: FontWeight.w700,
-                                  decoration: TextDecoration.underline,
-                                  decorationColor: theme.primaryColor.withOpacity(0.4),
-                                ),
-                                recognizer: TapGestureRecognizer()
-                                  ..onTap = () {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Privacy Policy page coming soon'),
-                                        behavior: SnackBarBehavior.floating,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.all(Radius.circular(12)),
-                                        ),
+                                children: [
+                                  const TextSpan(text: 'I agree to the '),
+                                  TextSpan(
+                                    text: 'Terms & Conditions',
+                                    style: TextStyle(
+                                      color: theme.primaryColor,
+                                      fontWeight: FontWeight.w700,
+                                      decoration: TextDecoration.underline,
+                                    ),
+                                    recognizer: TapGestureRecognizer()
+                                      ..onTap = () => Navigator.pushNamed(
+                                        context,
+                                        AppRoutes.terms,
                                       ),
-                                    );
-                                  },
+                                  ),
+                                  const TextSpan(text: ' and '),
+                                  TextSpan(
+                                    text: 'Privacy Policy',
+                                    style: TextStyle(
+                                      color: theme.primaryColor,
+                                      fontWeight: FontWeight.w700,
+                                      decoration: TextDecoration.underline,
+                                    ),
+                                    recognizer: TapGestureRecognizer()
+                                      ..onTap = () {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                                'Privacy Policy page coming soon'),
+                                            behavior: SnackBarBehavior.floating,
+                                          ),
+                                        );
+                                      },
+                                  ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 28),
+                      ],
+                    ),
 
-                  CustomButton(
-                    text: l10n.signIn,
-                    onPressed: _handleLogin,
-                    isLoading: auth.isLoading,
-                  ),
-                  const SizedBox(height: 20),
+                    const SizedBox(height: 28),
 
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        l10n.dontHaveAccount,
-                        style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
-                      ),
-                      TextButton(
-                        // ✅ Resume logic
-                        onPressed: () async {
-                          final storedId = await StorageService.getTechnicianId();
-                          if (storedId != null) {
-                            final auth = context.read<AuthProvider>();
-                            final step = await auth.getRegistrationStep(storedId);
-                            if (step != null) {
-                              switch (step) {
-                                case 1:
-                                  Navigator.pushNamed(context, AppRoutes.registerStep1);
-                                  break;
-                                case 2:
-                                  Navigator.pushNamed(context, AppRoutes.registerStep2, arguments: storedId);
-                                  break;
-                                case 3:
-                                  Navigator.pushNamed(context, AppRoutes.registerStep3, arguments: storedId);
-                                  break;
-                                case 4:
-                                  Navigator.pushNamed(context, AppRoutes.registerStep4, arguments: storedId);
-                                  break;
-                                default:
-                                  Navigator.pushNamed(context, AppRoutes.registerStep1);
+                    CustomButton(
+                      text: l10n.signIn,
+                      onPressed: _handleLogin,
+                      isLoading: auth.isLoading,
+                    ),
+
+                    const SizedBox(height: 28),
+
+                    // Sign up
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          l10n.dontHaveAccount,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.hintColor,
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () async {
+                            final storedId =
+                            await StorageService.getTechnicianId();
+                            if (storedId != null) {
+                              final auth = context.read<AuthProvider>();
+                              final step =
+                              await auth.getRegistrationStep(storedId);
+                              if (step != null) {
+                                switch (step) {
+                                  case 1:
+                                    Navigator.pushNamed(
+                                        context, AppRoutes.registerStep1);
+                                    break;
+                                  case 2:
+                                    Navigator.pushNamed(
+                                      context,
+                                      AppRoutes.registerStep2,
+                                      arguments: storedId,
+                                    );
+                                    break;
+                                  case 3:
+                                    Navigator.pushNamed(
+                                      context,
+                                      AppRoutes.registerStep3,
+                                      arguments: storedId,
+                                    );
+                                    break;
+                                  case 4:
+                                    Navigator.pushNamed(
+                                      context,
+                                      AppRoutes.registerStep4,
+                                      arguments: storedId,
+                                    );
+                                    break;
+                                  default:
+                                    Navigator.pushNamed(
+                                        context, AppRoutes.registerStep1);
+                                }
+                                return;
+                              } else {
+                                await StorageService.clearTechnicianData();
                               }
-                              return;
-                            } else {
-                              // Completed or invalid – clear and start fresh
-                              await StorageService.clearTechnicianData();
                             }
-                          }
-                          // No pending registration – start fresh
-                          Navigator.pushNamed(context, AppRoutes.registerStep1);
-                        },
-                        child: Text(
-                          l10n.signUp,
-                          style: TextStyle(
-                            color: theme.primaryColor,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
+                            Navigator.pushNamed(
+                                context, AppRoutes.registerStep1);
+                          },
+                          child: Text(
+                            l10n.signUp,
+                            style: TextStyle(
+                              color: theme.primaryColor,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -445,67 +486,36 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildFieldLabel(String label) {
-    return Text(
-      label.toUpperCase(),
-      style: TextStyle(
-        fontSize: 11,
-        fontWeight: FontWeight.w700,
-        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-        letterSpacing: 0.8,
+  InputDecoration _decoration(
+      BuildContext context, {
+        required String hint,
+        required IconData icon,
+        Widget? suffix,
+      }) {
+    final theme = Theme.of(context);
+    return InputDecoration(
+      hintText: hint,
+      prefixIcon: Icon(icon, color: theme.primaryColor.withOpacity(0.8)),
+      suffixIcon: suffix,
+      filled: true,
+      fillColor: theme.colorScheme.surface,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: theme.dividerColor.withOpacity(0.3)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: theme.primaryColor, width: 1.8),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: Colors.red),
       ),
     );
   }
-
-  Widget _buildField(BuildContext context, {required String label, required Widget child}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildFieldLabel(label),
-        const SizedBox(height: 6),
-        child,
-      ],
-    );
-  }
-}
-
-InputDecoration _inputDecoration(
-    BuildContext context, {
-      required String hintText,
-      required IconData prefixIcon,
-      Widget? suffixIcon,
-    }) {
-  final theme = Theme.of(context);
-  return InputDecoration(
-    hintText: hintText,
-    hintStyle: theme.textTheme.bodyMedium?.copyWith(
-      color: theme.hintColor.withOpacity(0.7),
-      fontWeight: FontWeight.w400,
-    ),
-    prefixIcon: Icon(prefixIcon, color: theme.primaryColor.withOpacity(0.7), size: 20),
-    suffixIcon: suffixIcon,
-    filled: true,
-    fillColor: theme.colorScheme.surface,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(14),
-      borderSide: BorderSide(color: Colors.grey.shade300, width: 0.8),
-    ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(14),
-      borderSide: BorderSide(color: Colors.grey.shade300, width: 0.8),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(14),
-      borderSide: BorderSide(color: theme.primaryColor, width: 1.8),
-    ),
-    errorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(14),
-      borderSide: const BorderSide(color: Colors.red, width: 1.2),
-    ),
-    focusedErrorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(14),
-      borderSide: const BorderSide(color: Colors.red, width: 1.8),
-    ),
-  );
 }

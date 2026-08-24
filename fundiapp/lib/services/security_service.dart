@@ -1,35 +1,36 @@
 // lib/services/security_service.dart
+
 import 'package:flutter/services.dart';
 
 class SecurityService {
-  static const MethodChannel _channel = MethodChannel('com.netsaf.security');
+  // Must match MainActivity SECURITY_CHANNEL
+  static const MethodChannel _channel = MethodChannel('com.fundapp.security');
 
-  /// Enable secure screen (prevent screenshots)
+  /// Prevent screenshots / screen recording (Android FLAG_SECURE)
   static Future<void> enableSecureScreen() async {
     try {
       await _channel.invokeMethod('enableSecureScreen');
-    } catch (e) {
-      // Fallback - use system channel
-      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    } catch (_) {
+      // Platform channel missing (e.g. iOS / web) — no-op
     }
   }
 
-  /// Disable secure screen (allow screenshots)
+  /// Allow screenshots again
   static Future<void> disableSecureScreen() async {
     try {
       await _channel.invokeMethod('disableSecureScreen');
-    } catch (e) {
-      // Fallback
+    } catch (_) {
+      // no-op
     }
   }
 
-  /// Check if secure screen is enabled
+  /// Whether FLAG_SECURE is currently set
   static Future<bool> isSecureScreenEnabled() async {
     try {
-      final result = await _channel.invokeMethod('isSecureScreenEnabled');
-      return result ?? true;
-    } catch (e) {
-      return true;
+      final result = await _channel.invokeMethod<bool>('isSecureScreenEnabled');
+      return result ?? false;
+    } catch (_) {
+      return false;
     }
   }
 }

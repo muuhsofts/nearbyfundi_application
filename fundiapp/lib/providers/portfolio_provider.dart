@@ -64,19 +64,6 @@ class PortfolioProvider extends ChangeNotifier {
     return false;
   }
 
-  Future<bool> updateSocialLinks(int id, Map<String, dynamic> socialLinks) async {
-    _setLoading(true);
-    final res = await _api.updatePortfolioSocialLinks(id, socialLinks);
-    if (res.success) {
-      await loadPortfolio();
-      _setLoading(false);
-      return true;
-    }
-    _error = res.message;
-    _setLoading(false);
-    return false;
-  }
-
   void _setLoading(bool value) {
     _isLoading = value;
     if (value) _error = null;

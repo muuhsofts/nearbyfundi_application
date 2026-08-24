@@ -15,7 +15,7 @@ plugins {
 }
 
 android {
-    namespace = "com.netsaf.fundapp"
+    namespace = "com.fundapp"
     compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
@@ -26,7 +26,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.netsaf.fundapp"
+        applicationId = "com.fundapp"
         minSdk = flutter.minSdkVersion
         targetSdk = 36
         versionCode = flutter.versionCode
@@ -48,14 +48,12 @@ android {
             isMinifyEnabled = false
             isShrinkResources = false
         }
-
         getByName("release") {
             signingConfig = if (keystorePropertiesFile.exists()) {
                 signingConfigs.getByName("release")
             } else {
                 signingConfigs.getByName("debug")
             }
-
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -66,7 +64,6 @@ android {
     }
 }
 
-// Modern Kotlin Compiler Options syntax replacing 'kotlinOptions'
 kotlin {
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_17)

@@ -4,8 +4,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../models/portfolio.dart';
 import '../../providers/portfolio_provider.dart';
 import '../../config/app_theme.dart';
@@ -125,35 +123,56 @@ class _FundiPortfolioScreenState extends State<FundiPortfolioScreen> {
         backgroundColor: AppTheme.primary,
         elevation: 0,
       ),
-      body: provider.isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : provider.items.isEmpty
-          ? _buildEmptyState(context)
-          : Column(
-        children: [
-          _buildSearchBar(context),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: () =>
-                  context.read<PortfolioProvider>().loadPortfolio(),
-              child: ListView.builder(
-                padding: const EdgeInsets.only(bottom: 16),
-                itemCount: filteredItems.length,
-                itemBuilder: (ctx, i) {
-                  final item = filteredItems[i];
-                  return _PortfolioPostCard(
-                    item: item,
-                    onImageTap: () =>
-                        _showImageDialog(context, item.image),
-                    onEdit: () =>
-                        _showPortfolioForm(context, item: item),
-                    onDelete: () => _deleteItem(context, item.id),
-                  );
-                },
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          // Same widget type (GridView) at every width — only the column
+          // math changes. Swapping between ListView <-> GridView on resize
+          // is what caused the "Null check operator used on a null value"
+          // crash in RenderViewportBase.hitTestChildren: the old viewport
+          // gets disposed mid-gesture while the gesture arena still holds a
+          // pointer route to it.
+          final isWide = constraints.maxWidth >= 700;
+          final maxExtent = isWide ? 420.0 : constraints.maxWidth;
+          final aspectRatio = isWide ? 0.82 : 1.35;
+
+          return provider.isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : provider.items.isEmpty
+              ? _buildEmptyState(context)
+              : Column(
+            children: [
+              _buildSearchBar(context),
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: () =>
+                      context.read<PortfolioProvider>().loadPortfolio(),
+                  child: GridView.builder(
+                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
+                    gridDelegate:
+                    SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: maxExtent,
+                      mainAxisSpacing: 8,
+                      crossAxisSpacing: 8,
+                      childAspectRatio: aspectRatio,
+                    ),
+                    itemCount: filteredItems.length,
+                    itemBuilder: (ctx, i) {
+                      final item = filteredItems[i];
+                      return _PortfolioPostCard(
+                        item: item,
+                        onImageTap: () =>
+                            _showImageDialog(context, item.image),
+                        onEdit: () =>
+                            _showPortfolioForm(context, item: item),
+                        onDelete: () => _deleteItem(context, item.id),
+                      );
+                    },
+                  ),
+                ),
               ),
-            ),
-          ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -247,11 +266,6 @@ class _FundiPortfolioScreenState extends State<FundiPortfolioScreen> {
   void _showPortfolioForm(BuildContext context, {PortfolioItem? item}) {
     final formKey = GlobalKey<FormState>();
     final descController = TextEditingController(text: item?.description ?? '');
-    final igController = TextEditingController(text: item?.instagram ?? '');
-    final fbController = TextEditingController(text: item?.facebook ?? '');
-    final ttController = TextEditingController(text: item?.tiktok ?? '');
-    final twController = TextEditingController(text: item?.twitter ?? '');
-    final tgController = TextEditingController(text: item?.telegram ?? '');
     String? imagePath;
     final picker = ImagePicker();
     final l10n = AppLocalizations.of(context)!;
@@ -416,56 +430,6 @@ class _FundiPortfolioScreenState extends State<FundiPortfolioScreen> {
                           hintText: 'Tell us about this project...',
                         ),
                       ),
-                      const SizedBox(height: 20),
-
-                      // Social Links Header
-                      Row(
-                        children: [
-                          Icon(Icons.share_rounded,
-                              color: AppTheme.primary, size: 20),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Social Media Links (optional)',
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: AppTheme.primary,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Social Inputs
-                      _buildSocialInput(
-                        'Instagram',
-                        igController,
-                        FontAwesomeIcons.instagram,
-                        Colors.pink,
-                      ),
-                      _buildSocialInput(
-                        'Facebook',
-                        fbController,
-                        FontAwesomeIcons.facebook,
-                        Colors.blue.shade700,
-                      ),
-                      _buildSocialInput(
-                        'TikTok',
-                        ttController,
-                        FontAwesomeIcons.tiktok,
-                        Colors.black,
-                      ),
-                      _buildSocialInput(
-                        'Twitter',
-                        twController,
-                        FontAwesomeIcons.twitter,
-                        Colors.blue.shade400,
-                      ),
-                      _buildSocialInput(
-                        'Telegram',
-                        tgController,
-                        FontAwesomeIcons.telegram,
-                        Colors.lightBlue,
-                      ),
                       const SizedBox(height: 32),
 
                       // Action Buttons
@@ -510,21 +474,6 @@ class _FundiPortfolioScreenState extends State<FundiPortfolioScreen> {
 
                                 final Map<String, dynamic> payload = {
                                   'description': descController.text.trim(),
-                                  'instagram': igController.text.trim().isEmpty
-                                      ? null
-                                      : igController.text.trim(),
-                                  'facebook': fbController.text.trim().isEmpty
-                                      ? null
-                                      : fbController.text.trim(),
-                                  'tiktok': ttController.text.trim().isEmpty
-                                      ? null
-                                      : ttController.text.trim(),
-                                  'twitter': twController.text.trim().isEmpty
-                                      ? null
-                                      : twController.text.trim(),
-                                  'telegram': tgController.text.trim().isEmpty
-                                      ? null
-                                      : tgController.text.trim(),
                                 };
 
                                 if (imagePath != null) {
@@ -543,25 +492,6 @@ class _FundiPortfolioScreenState extends State<FundiPortfolioScreen> {
                                       item.description) {
                                     updateData['description'] =
                                     payload['description'];
-                                  }
-                                  if (payload['instagram'] != item.instagram) {
-                                    updateData['instagram'] =
-                                    payload['instagram'];
-                                  }
-                                  if (payload['facebook'] != item.facebook) {
-                                    updateData['facebook'] =
-                                    payload['facebook'];
-                                  }
-                                  if (payload['tiktok'] != item.tiktok) {
-                                    updateData['tiktok'] = payload['tiktok'];
-                                  }
-                                  if (payload['twitter'] != item.twitter) {
-                                    updateData['twitter'] =
-                                    payload['twitter'];
-                                  }
-                                  if (payload['telegram'] != item.telegram) {
-                                    updateData['telegram'] =
-                                    payload['telegram'];
                                   }
 
                                   if (updateData.isEmpty) {
@@ -606,50 +536,6 @@ class _FundiPortfolioScreenState extends State<FundiPortfolioScreen> {
           },
         );
       },
-    );
-  }
-
-  // ────────────────────────────────────────────────
-  // SOCIAL INPUT HELPER
-  // ────────────────────────────────────────────────
-  Widget _buildSocialInput(
-      String label,
-      TextEditingController controller,
-      dynamic icon,
-      Color color,
-      ) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: TextFormField(
-        controller: controller,
-        style: Theme.of(context).textTheme.bodyMedium,
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: TextStyle(color: color, fontWeight: FontWeight.w600),
-          prefixIcon: Container(
-            margin: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: FaIcon(icon, size: 18, color: color),
-          ),
-          filled: true,
-          fillColor: const Color(0xFFF2F4F8),
-          contentPadding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: color, width: 2),
-          ),
-          hintText: 'Enter your $label URL',
-          hintStyle: Theme.of(context).textTheme.bodySmall,
-        ),
-      ),
     );
   }
 
@@ -768,29 +654,6 @@ class _PortfolioPostCardState extends State<_PortfolioPostCard> {
     return 'Just now';
   }
 
-  Future<void> _launchUrl(String? url) async {
-    if (url == null || url.isEmpty) return;
-    final Uri uri = Uri.parse(url);
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (!await launchUrl(uri, mode: LaunchMode.platformDefault)) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Could not open link')),
-          );
-        }
-      }
-    }
-  }
-
-  Widget _buildSocialIcon(dynamic icon, String? url, Color color) {
-    if (url == null || url.isEmpty) return const SizedBox.shrink();
-
-    return IconButton(
-      icon: FaIcon(icon, color: color, size: 20),
-      onPressed: () => _launchUrl(url),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -844,18 +707,20 @@ class _PortfolioPostCardState extends State<_PortfolioPostCard> {
           ),
 
           if (widget.item.image.isNotEmpty)
-            GestureDetector(
-              onTap: widget.onImageTap,
-              child: Image.network(
-                ImageUtils.getFullImageUrl(widget.item.image),
-                width: double.infinity,
-                height: 220,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  height: 180,
-                  color: theme.colorScheme.surface,
-                  child: const Center(
-                      child: Icon(Icons.broken_image, size: 48)),
+            Expanded(
+              child: GestureDetector(
+                onTap: widget.onImageTap,
+                child: ClipRRect(
+                  child: Image.network(
+                    ImageUtils.getFullImageUrl(widget.item.image),
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: theme.colorScheme.surface,
+                      child: const Center(
+                          child: Icon(Icons.broken_image, size: 48)),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -891,40 +756,6 @@ class _PortfolioPostCardState extends State<_PortfolioPostCard> {
                 ],
               ),
             ),
-
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                _buildSocialIcon(
-                  FontAwesomeIcons.instagram,
-                  widget.item.instagram,
-                  Colors.pink,
-                ),
-                _buildSocialIcon(
-                  FontAwesomeIcons.facebook,
-                  widget.item.facebook,
-                  Colors.blue.shade700,
-                ),
-                _buildSocialIcon(
-                  FontAwesomeIcons.tiktok,
-                  widget.item.tiktok,
-                  Colors.black,
-                ),
-                _buildSocialIcon(
-                  FontAwesomeIcons.twitter,
-                  widget.item.twitter,
-                  Colors.blue.shade400,
-                ),
-                _buildSocialIcon(
-                  FontAwesomeIcons.telegram,
-                  widget.item.telegram,
-                  Colors.lightBlue,
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );

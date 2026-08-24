@@ -1,6 +1,9 @@
 // lib/screens/auth/reset_password_screen.dart
+
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
+
 import '../../config/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../config/app_routes.dart';
@@ -10,6 +13,7 @@ import '../../l10n/app_localizations.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
   final String email;
+
   const ResetPasswordScreen({super.key, required this.email});
 
   @override
@@ -34,14 +38,17 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
   Future<void> _handleReset() async {
     if (!_formKey.currentState!.validate()) return;
+
     final auth = context.read<AuthProvider>();
     auth.clearError();
+
     final success = await auth.resetPassword(
       widget.email,
       _otpController.text.trim(),
       _passwordController.text.trim(),
     );
     if (!mounted) return;
+
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -75,34 +82,47 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 24),
                   Container(
-                    width: 80,
-                    height: 80,
+                    width: 88,
+                    height: 88,
+                    padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          theme.colorScheme.primary,
-                          theme.colorScheme.primary.withOpacity(0.7),
-                        ],
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(22),
+                      boxShadow: [
+                        BoxShadow(
+                          color: theme.primaryColor.withOpacity(0.12),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                      border: Border.all(
+                        color: theme.dividerColor.withOpacity(0.4),
                       ),
-                      borderRadius: BorderRadius.circular(24),
                     ),
-                    child: const Icon(Icons.lock_reset_rounded, size: 40, color: Colors.white),
+                    child: SvgPicture.asset(
+                      'assets/icons/nearbyfundi-logo.svg',
+                      fit: BoxFit.contain,
+                    ),
                   ),
                   const SizedBox(height: 24),
                   Text(
                     l10n.resetPassword,
-                    style: theme.textTheme.displayMedium?.copyWith(fontWeight: FontWeight.w800),
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     '${l10n.otpSentTo} ${widget.email}',
-                    style: theme.textTheme.bodyMedium,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.hintColor,
+                    ),
                   ),
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 36),
                   Form(
                     key: _formKey,
                     child: Column(
@@ -113,52 +133,99 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                           keyboardType: TextInputType.number,
                           maxLength: 6,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, letterSpacing: 8),
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 8,
+                          ),
                           decoration: InputDecoration(
                             hintText: '------',
-                            hintStyle: const TextStyle(letterSpacing: 8, fontSize: 20),
+                            hintStyle: const TextStyle(
+                              letterSpacing: 8,
+                              fontSize: 20,
+                            ),
                             counterText: '',
-                            prefixIcon: Icon(Icons.pin_rounded, color: theme.colorScheme.primary),
+                            prefixIcon: Icon(
+                              Icons.pin_rounded,
+                              color: theme.colorScheme.primary,
+                            ),
+                            filled: true,
+                            fillColor: theme.colorScheme.surface,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
                           ),
-                          validator: (v) => v != null && v.length == 6 ? null : 'Enter 6-digit OTP',
+                          validator: (v) => v != null && v.length == 6
+                              ? null
+                              : 'Enter 6-digit OTP',
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 18),
                         TextFormField(
                           controller: _passwordController,
                           obscureText: _obscurePass,
                           decoration: InputDecoration(
                             hintText: l10n.newPassword,
-                            prefixIcon: Icon(Icons.lock_outline_rounded, color: theme.colorScheme.primary),
+                            prefixIcon: Icon(
+                              Icons.lock_outline_rounded,
+                              color: theme.colorScheme.primary,
+                            ),
                             suffixIcon: IconButton(
-                              icon: Icon(_obscurePass ? Icons.visibility_off : Icons.visibility),
-                              onPressed: () => setState(() => _obscurePass = !_obscurePass),
+                              icon: Icon(
+                                _obscurePass
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
+                              ),
+                              onPressed: () => setState(
+                                    () => _obscurePass = !_obscurePass,
+                              ),
+                            ),
+                            filled: true,
+                            fillColor: theme.colorScheme.surface,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
                             ),
                           ),
-                          validator: (v) =>
-                          v != null && v.length >= 8 ? null : 'Password must be at least 8 characters',
+                          validator: (v) => v != null && v.length >= 8
+                              ? null
+                              : 'Password must be at least 8 characters',
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 18),
                         TextFormField(
                           controller: _confirmController,
                           obscureText: _obscureConfirm,
                           decoration: InputDecoration(
                             hintText: l10n.confirmPassword,
-                            prefixIcon: Icon(Icons.lock_outline_rounded, color: theme.colorScheme.primary),
+                            prefixIcon: Icon(
+                              Icons.lock_outline_rounded,
+                              color: theme.colorScheme.primary,
+                            ),
                             suffixIcon: IconButton(
-                              icon: Icon(_obscureConfirm ? Icons.visibility_off : Icons.visibility),
-                              onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                              icon: Icon(
+                                _obscureConfirm
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
+                              ),
+                              onPressed: () => setState(
+                                    () => _obscureConfirm = !_obscureConfirm,
+                              ),
+                            ),
+                            filled: true,
+                            fillColor: theme.colorScheme.surface,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
                             ),
                           ),
-                          validator: (v) =>
-                          v == _passwordController.text ? null : 'Passwords do not match',
+                          validator: (v) => v == _passwordController.text
+                              ? null
+                              : 'Passwords do not match',
                         ),
-                        const SizedBox(height: 32),
+                        const SizedBox(height: 28),
                         CustomButton(
                           text: l10n.resetPasswordButton,
                           onPressed: _handleReset,
                           isLoading: auth.isLoading,
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 16),
                         TextButton(
                           onPressed: () => Navigator.pop(context),
                           child: Text(

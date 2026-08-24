@@ -1,6 +1,6 @@
 // lib/models/technician.dart
 
-import 'package:netsaf_fund_app/models/portfolio.dart';
+import 'package:fundi_app/models/portfolio.dart';
 
 /// Handles the pivot price data from backend
 class TechnicianServicePrice {

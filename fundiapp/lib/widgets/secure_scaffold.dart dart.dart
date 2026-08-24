@@ -1,8 +1,10 @@
 // lib/widgets/secure_scaffold.dart
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+
 import '../services/security_service.dart';
 
+/// Scaffold that always enables secure screen while visible.
 class SecureScaffold extends StatefulWidget {
   final PreferredSizeWidget? appBar;
   final Widget? body;
@@ -39,12 +41,13 @@ class SecureScaffold extends StatefulWidget {
   State<SecureScaffold> createState() => _SecureScaffoldState();
 }
 
-class _SecureScaffoldState extends State<SecureScaffold> with WidgetsBindingObserver {
+class _SecureScaffoldState extends State<SecureScaffold>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    SecurityService.enableSecureScreen();
     WidgetsBinding.instance.addObserver(this);
+    SecurityService.enableSecureScreen();
   }
 
   @override
@@ -56,7 +59,6 @@ class _SecureScaffoldState extends State<SecureScaffold> with WidgetsBindingObse
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       SecurityService.enableSecureScreen();
     }

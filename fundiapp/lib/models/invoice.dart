@@ -1,6 +1,6 @@
 // lib/models/invoice.dart
 
-import 'package:netsaf_fund_app/models/rate_card.dart';
+import 'package:fundi_app/models/rate_card.dart';
 
 class Invoice {
   final int id;
