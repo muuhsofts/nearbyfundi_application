@@ -31,7 +31,7 @@ class RequestController extends BaseApiController
     }
 
     // ============================================================
-    // PRIVATE HELPERS (existing)
+    // PRIVATE HELPERS
     // ============================================================
 
     private function logRequestAction(
@@ -61,27 +61,14 @@ class RequestController extends BaseApiController
     private function createNotification(int $userId, string $title, string $body, string $type, array $data = []): void
     {
         try {
-            $sanitizedData = [];
-            foreach ($data as $key => $value) {
-                if ($value === null) {
-                    $sanitizedData[$key] = '';
-                } elseif (is_int($value) || is_float($value)) {
-                    $sanitizedData[$key] = (string) $value;
-                } elseif (is_bool($value)) {
-                    $sanitizedData[$key] = $value ? 'true' : 'false';
-                } elseif (is_array($value) || is_object($value)) {
-                    $sanitizedData[$key] = json_encode($value);
-                } else {
-                    $sanitizedData[$key] = (string) $value;
-                }
-            }
+            $sanitizedData = $this->sanitizeData($data);
 
             Notification::create([
                 'user_id' => $userId,
-                'title' => $title,
-                'body' => $body,
-                'type' => $type,
-                'data' => $sanitizedData,
+                'title'   => $title,
+                'body'    => $body,
+                'type'    => $type,
+                'data'    => $sanitizedData,
                 'is_read' => false,
             ]);
         } catch (\Exception $e) {
@@ -108,22 +95,42 @@ class RequestController extends BaseApiController
         return $sanitized;
     }
 
-    // ============================================================
-    // NEW PRIVATE HELPERS (Phase 2)
-    // ============================================================
-
     /**
-     * Send push and database notification to customer about request status change
+     * Send push + DB notification to customer about request status change
      */
-    private function notifyCustomer(ServiceRequest $request, string $event): void
+    private function notifyCustomer(ServiceRequest $request, string $event, ?string $customTitle = null, ?string $customBody = null): void
     {
-        $title = 'Request Update';
-        $body = "Your request #{$request->id} is now: " . str_replace('_', ' ', $event);
-        $data = ['request_id' => $request->id, 'status' => $event];
+        $titles = [
+            'on_the_way'   => 'Technician On The Way',
+            'arrived'      => 'Technician Arrived',
+            'accepted'     => 'Request Accepted',
+            'rejected'     => 'Request Rejected',
+            'in_progress'  => 'Request In Progress',
+            'completed'    => 'Request Completed',
+            'cancelled'    => 'Request Cancelled',
+        ];
+
+        $bodies = [
+            'on_the_way'  => 'Your fundi is on the way to your location.',
+            'arrived'     => 'Your fundi has arrived at your location.',
+            'accepted'    => 'Your request has been accepted.',
+            'rejected'    => 'Sorry, your request has been rejected.',
+            'in_progress' => 'Your request is now in progress.',
+            'completed'   => 'Your request has been completed.',
+            'cancelled'   => 'Your request has been cancelled.',
+        ];
+
+        $title = $customTitle ?? ($titles[$event] ?? 'Request Update');
+        $body  = $customBody  ?? ($bodies[$event]  ?? "Your request #{$request->id} is now: " . str_replace('_', ' ', $event));
+        $data  = [
+            'request_id' => $request->id,
+            'status'     => $event,
+            'type'       => 'request_' . $event,
+        ];
 
         try {
             if ($request->customer) {
-                $this->fcm->sendToUser($request->customer, $title, $body, $data);
+                $this->fcm->sendToUser($request->customer, $title, $body, $this->sanitizeData($data));
                 $this->createNotification(
                     $request->customer_id,
                     $title,
@@ -145,11 +152,22 @@ class RequestController extends BaseApiController
         $earthRadius = 6371; // km
         $dLat = deg2rad($lat2 - $lat1);
         $dLon = deg2rad($lon2 - $lon1);
-        $a = sin($dLat/2) * sin($dLat/2) +
+        $a = sin($dLat / 2) * sin($dLat / 2) +
              cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
-             sin($dLon/2) * sin($dLon/2);
-        $c = 2 * atan2(sqrt($a), sqrt(1-$a));
+             sin($dLon / 2) * sin($dLon / 2);
+        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
         return $earthRadius * $c;
+    }
+
+    /**
+     * Check if the authenticated fundi owns this request
+     */
+    private function isAssignedFundi($user, ServiceRequest $serviceRequest): bool
+    {
+        return $user
+            && $user->hasRole('FUNDI')
+            && $user->technician
+            && (int) $user->technician->id === (int) $serviceRequest->technician_id;
     }
 
     // ============================================================
@@ -163,7 +181,7 @@ class RequestController extends BaseApiController
     public function getServicesWithCategories(Request $request)
     {
         try {
-            $services = Service::with(['categories' => function($query) {
+            $services = Service::with(['categories' => function ($query) {
                 $query->select('service_categories.service_categoryID', 'category_name', 'slug')
                       ->orderBy('category_name', 'asc');
             }])
@@ -171,17 +189,17 @@ class RequestController extends BaseApiController
             ->orderBy('name', 'asc')
             ->get();
 
-            $data = $services->map(function($service) {
+            $data = $services->map(function ($service) {
                 return [
-                    'id' => $service->id,
+                    'id'   => $service->id,
                     'name' => $service->name,
-                    'categories' => $service->categories->map(function($category) {
+                    'categories' => $service->categories->map(function ($category) {
                         return [
-                            'id' => $category->service_categoryID,
+                            'id'   => $category->service_categoryID,
                             'name' => $category->category_name,
                             'slug' => $category->slug,
                         ];
-                    })
+                    }),
                 ];
             });
 
@@ -200,41 +218,41 @@ class RequestController extends BaseApiController
     {
         try {
             $validated = $request->validate([
-                'service_id' => 'required|exists:services,id',
+                'service_id'  => 'required|exists:services,id',
                 'category_id' => 'nullable|exists:service_categories,service_categoryID',
             ]);
 
             $query = \App\Models\Technician::with(['user', 'services'])
-                ->whereHas('user', function($q) {
+                ->whereHas('user', function ($q) {
                     $q->where('is_active', true);
                 })
                 ->where('verified', true);
 
-            $query->whereHas('services', function($q) use ($validated) {
+            $query->whereHas('services', function ($q) use ($validated) {
                 $q->where('service_id', $validated['service_id']);
             });
 
             if (!empty($validated['category_id'])) {
-                $query->whereHas('services.categories', function($q) use ($validated) {
+                $query->whereHas('services.categories', function ($q) use ($validated) {
                     $q->where('service_categoryID', $validated['category_id']);
                 });
             }
 
             $technicians = $query->get();
 
-            $data = $technicians->map(function($technician) {
+            $data = $technicians->map(function ($technician) {
                 return [
-                    'id' => $technician->id,
-                    'name' => $technician->user->name ?? 'Unknown',
-                    'email' => $technician->user->email ?? null,
-                    'phone' => $technician->user->phone ?? null,
+                    'id'            => $technician->id,
+                    'name'          => $technician->user->name ?? 'Unknown',
+                    'email'         => $technician->user->email ?? null,
+                    'phone'         => $technician->user->phone ?? null,
                     'profile_photo' => $technician->profile_photo ? url($technician->profile_photo) : null,
-                    'area' => $technician->area,
-                    'rating' => (float) ($technician->rating ?? 0),
-                    'is_online' => (bool) ($technician->is_online ?? false),
-                    'services' => $technician->services->map(function($service) {
+                    'area'          => $technician->area,
+                    'rating'        => (float) ($technician->rating ?? 0),
+                    'is_online'     => (bool) ($technician->is_online ?? false),
+                    'services'      => $technician->services->map(function ($service) {
                         return [
-                            'id' => $service->id,
+                            'id'   => $service->id,
                             'name' => $service->name,
                         ];
                     }),
@@ -251,7 +269,7 @@ class RequestController extends BaseApiController
     }
 
     /**
-     * CUSTOMER: Create a new request with service and category
+     * CUSTOMER: Create a new request
      * POST /v4/requests
      */
     public function store(Request $request)
@@ -279,8 +297,8 @@ class RequestController extends BaseApiController
                 }
                 if (!$service->hasCategory($data['category_id'])) {
                     Log::warning('Category not associated with service', [
-                        'service_id' => $data['service_id'],
-                        'category_id' => $data['category_id']
+                        'service_id'  => $data['service_id'],
+                        'category_id' => $data['category_id'],
                     ]);
                     return $this->errorResponse(
                         'The selected category is not associated with this service.',
@@ -291,7 +309,7 @@ class RequestController extends BaseApiController
 
             $existing = ServiceRequest::where('customer_id', $user->id)
                 ->where('technician_id', $data['technician_id'])
-                ->whereIn('status', ['pending', 'accepted', 'in_progress'])
+                ->whereIn('status', ['pending', 'accepted', 'on_the_way', 'arrived', 'in_progress'])
                 ->first();
 
             if ($existing) {
@@ -325,8 +343,8 @@ class RequestController extends BaseApiController
             }
 
             try {
-                if ($serviceRequest->technician && 
-                    $serviceRequest->technician->user && 
+                if ($serviceRequest->technician &&
+                    $serviceRequest->technician->user &&
                     $serviceRequest->technician->user->email) {
                     Mail::to($serviceRequest->technician->user->email)
                         ->send(new RequestCreatedMail($serviceRequest));
@@ -338,35 +356,35 @@ class RequestController extends BaseApiController
             try {
                 if ($serviceRequest->technician && $serviceRequest->technician->user) {
                     $technicianUser = $serviceRequest->technician->user;
-                    $serviceName = $serviceRequest->service->name ?? 'Service';
-                    $categoryName = $serviceRequest->category->category_name ?? '';
+                    $serviceName    = $serviceRequest->service->name ?? 'Service';
+                    $categoryName   = $serviceRequest->category->category_name ?? '';
 
                     $this->fcm->sendToUser(
                         $technicianUser,
                         'New Service Request',
-                        "You have a new request for {$serviceName}" . ($categoryName ? " ({$categoryName})" : ""),
+                        "You have a new request for {$serviceName}" . ($categoryName ? " ({$categoryName})" : ''),
                         $this->sanitizeData([
-                            'request_id' => $serviceRequest->id,
-                            'type' => 'new_request',
+                            'request_id'    => $serviceRequest->id,
+                            'type'          => 'new_request',
                             'customer_name' => $user->name ?? 'Customer',
-                            'service_name' => $serviceName,
+                            'service_name'  => $serviceName,
                             'category_name' => $categoryName,
-                            'description' => $serviceRequest->description,
+                            'description'   => $serviceRequest->description,
                         ])
                     );
 
                     $this->createNotification(
                         $technicianUser->id,
                         'New Service Request',
-                        "You have a new request for {$serviceName}" . ($categoryName ? " ({$categoryName})" : "") . " from {$user->name}",
+                        "You have a new request for {$serviceName}" . ($categoryName ? " ({$categoryName})" : '') . " from {$user->name}",
                         'new_request',
                         [
-                            'request_id' => $serviceRequest->id,
-                            'customer_id' => $user->id,
+                            'request_id'    => $serviceRequest->id,
+                            'customer_id'   => $user->id,
                             'customer_name' => $user->name,
-                            'service_name' => $serviceName,
+                            'service_name'  => $serviceName,
                             'category_name' => $categoryName,
-                            'description' => $serviceRequest->description,
+                            'description'   => $serviceRequest->description,
                         ]
                     );
                 }
@@ -386,58 +404,65 @@ class RequestController extends BaseApiController
             $this->logAudit('create_request', 'request', $serviceRequest->id, "Customer {$user->id} created request");
 
             return $this->created($this->formatSingleRequest($serviceRequest), 'Request submitted successfully.');
-            
         } catch (\Illuminate\Validation\ValidationException $e) {
             return $this->validationError($e->errors());
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Error creating request: ' . $e->getMessage(), [
                 'user_id' => $request->user()->id ?? 'unknown',
-                'data' => $request->all()
+                'data'    => $request->all(),
             ]);
             return $this->errorResponse('Failed to create request. Please try again.', 500);
         }
     }
 
     /**
-     * Update request status (UPDATED to allow on_the_way & arrived)
+     * Update request status
      * PATCH /v4/requests/{id}/status
      */
     public function updateStatus(Request $request, $id)
     {
         try {
             $serviceRequest = ServiceRequest::with(['technician.user', 'customer'])->findOrFail($id);
-            $user = $request->user();
-            $newStatus = $request->status;
-            $oldStatus = $serviceRequest->status;
+            $user           = $request->user();
+            $newStatus      = $request->status;
+            $oldStatus      = $serviceRequest->status;
 
             if (!$user) {
                 return $this->forbidden('User not authenticated.');
             }
 
             $allowed = false;
-            
+
             if ($user->hasRole('FUNDI')) {
+                // Must be the assigned fundi
+                if (!$this->isAssignedFundi($user, $serviceRequest)) {
+                    return $this->forbidden('You are not assigned to this request.');
+                }
+
+                // Valid transitions for fundi
                 if (in_array($newStatus, ['accepted', 'rejected']) && $oldStatus === 'pending') {
                     $allowed = true;
                 }
-                if ($newStatus === 'completed' && in_array($oldStatus, ['accepted', 'in_progress'])) {
-                    $allowed = true;
-                }
-                if ($newStatus === 'in_progress' && $oldStatus === 'accepted') {
-                    $allowed = true;
-                }
-                // NEW: allow technician to set on_the_way and arrived
                 if ($newStatus === 'on_the_way' && $oldStatus === 'accepted') {
                     $allowed = true;
                 }
                 if ($newStatus === 'arrived' && $oldStatus === 'on_the_way') {
                     $allowed = true;
                 }
+                if ($newStatus === 'in_progress' && in_array($oldStatus, ['accepted', 'on_the_way', 'arrived'])) {
+                    $allowed = true;
+                }
+                if ($newStatus === 'completed' && in_array($oldStatus, ['accepted', 'on_the_way', 'arrived', 'in_progress'])) {
+                    $allowed = true;
+                }
             } elseif ($user->hasRole('CUSTOMER') && $newStatus === 'cancelled' && $oldStatus === 'pending') {
+                if ((int) $user->id !== (int) $serviceRequest->customer_id) {
+                    return $this->forbidden('You can only cancel your own requests.');
+                }
                 $allowed = true;
             } elseif ($user->can('requests.status.update')) {
-                $allowed = true;
+                $allowed = true; // Admin / staff
             }
 
             if (!$allowed) {
@@ -470,7 +495,10 @@ class RequestController extends BaseApiController
             $this->handleStatusChange($serviceRequest, $newStatus);
             $this->logAudit('update_request_status', 'request', $id, "Status changed to {$newStatus}");
 
-            return $this->successResponse($serviceRequest, 'Status updated successfully.');
+            return $this->successResponse(
+                $this->formatSingleRequest($serviceRequest->fresh(['customer', 'technician.user', 'service', 'category'])),
+                'Status updated successfully.'
+            );
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->notFound('Request not found.');
         } catch (\Exception $e) {
@@ -481,7 +509,7 @@ class RequestController extends BaseApiController
     }
 
     /**
-     * Handle status change – updated to include on_the_way and arrived
+     * Handle status change side-effects
      */
     private function handleStatusChange(ServiceRequest $serviceRequest, string $newStatus): void
     {
@@ -516,7 +544,7 @@ class RequestController extends BaseApiController
         }
     }
 
-    // ----- Individual status handlers (existing + new) -----
+    // ----- Individual status handlers -----
 
     private function handleAccepted(ServiceRequest $serviceRequest): void
     {
@@ -529,28 +557,29 @@ class RequestController extends BaseApiController
         }
 
         try {
+            $techName = $serviceRequest->technician->user->name ?? 'the fundi';
             if ($serviceRequest->customer) {
                 $this->fcm->sendToUser(
                     $serviceRequest->customer,
                     'Request Accepted',
-                    "Your request has been accepted by {$serviceRequest->technician->user->name}.",
+                    "Your request has been accepted by {$techName}.",
                     $this->sanitizeData([
-                        'request_id' => $serviceRequest->id,
-                        'status' => 'accepted',
-                        'type' => 'request_accepted',
-                        'technician_name' => $serviceRequest->technician->user->name,
+                        'request_id'       => $serviceRequest->id,
+                        'status'           => 'accepted',
+                        'type'             => 'request_accepted',
+                        'technician_name'  => $techName,
                     ])
                 );
 
                 $this->createNotification(
                     $serviceRequest->customer_id,
                     'Request Accepted',
-                    "Your request has been accepted by {$serviceRequest->technician->user->name}",
+                    "Your request has been accepted by {$techName}",
                     'request_accepted',
                     [
-                        'request_id' => $serviceRequest->id,
-                        'technician_id' => $serviceRequest->technician_id,
-                        'technician_name' => $serviceRequest->technician->user->name,
+                        'request_id'      => $serviceRequest->id,
+                        'technician_id'   => $serviceRequest->technician_id,
+                        'technician_name' => $techName,
                     ]
                 );
             }
@@ -566,22 +595,20 @@ class RequestController extends BaseApiController
                 $this->fcm->sendToUser(
                     $serviceRequest->customer,
                     'Request Rejected',
-                    "Sorry, your request has been rejected.",
+                    'Sorry, your request has been rejected.',
                     $this->sanitizeData([
                         'request_id' => $serviceRequest->id,
-                        'status' => 'rejected',
-                        'type' => 'request_rejected',
+                        'status'     => 'rejected',
+                        'type'       => 'request_rejected',
                     ])
                 );
 
                 $this->createNotification(
                     $serviceRequest->customer_id,
                     'Request Rejected',
-                    "Your request has been rejected",
+                    'Your request has been rejected',
                     'request_rejected',
-                    [
-                        'request_id' => $serviceRequest->id,
-                    ]
+                    ['request_id' => $serviceRequest->id]
                 );
             }
         } catch (\Exception $e) {
@@ -593,24 +620,27 @@ class RequestController extends BaseApiController
     {
         try {
             if ($serviceRequest->technician && $serviceRequest->technician->user) {
+                $techUser = $serviceRequest->technician->user;
+
                 $this->fcm->sendToUser(
-                    $serviceRequest->technician->user,
+                    $techUser,
                     'Request Cancelled',
                     "Customer cancelled request #{$serviceRequest->id}.",
                     $this->sanitizeData([
                         'request_id' => $serviceRequest->id,
-                        'status' => 'cancelled',
-                        'type' => 'request_cancelled',
+                        'status'     => 'cancelled',
+                        'type'       => 'request_cancelled',
                     ])
                 );
 
+                // Fixed: notify the user account of the technician, not the technician_id
                 $this->createNotification(
-                    $serviceRequest->technician_id,
+                    $techUser->id,
                     'Request Cancelled',
                     "Customer cancelled request #{$serviceRequest->id}",
                     'request_cancelled',
                     [
-                        'request_id' => $serviceRequest->id,
+                        'request_id'    => $serviceRequest->id,
                         'customer_name' => $serviceRequest->customer->name ?? 'Customer',
                     ]
                 );
@@ -627,22 +657,20 @@ class RequestController extends BaseApiController
                 $this->fcm->sendToUser(
                     $serviceRequest->customer,
                     'Request In Progress',
-                    "Your request is now in progress.",
+                    'Your request is now in progress.',
                     $this->sanitizeData([
                         'request_id' => $serviceRequest->id,
-                        'status' => 'in_progress',
-                        'type' => 'request_in_progress',
+                        'status'     => 'in_progress',
+                        'type'       => 'request_in_progress',
                     ])
                 );
 
                 $this->createNotification(
                     $serviceRequest->customer_id,
                     'Request In Progress',
-                    "Your request is now in progress",
+                    'Your request is now in progress',
                     'request_in_progress',
-                    [
-                        'request_id' => $serviceRequest->id,
-                    ]
+                    ['request_id' => $serviceRequest->id]
                 );
             }
         } catch (\Exception $e) {
@@ -661,28 +689,29 @@ class RequestController extends BaseApiController
         }
 
         try {
+            $techName = $serviceRequest->technician->user->name ?? 'the fundi';
             if ($serviceRequest->customer) {
                 $this->fcm->sendToUser(
                     $serviceRequest->customer,
                     'Request Completed',
-                    "Your request has been completed by {$serviceRequest->technician->user->name}.",
+                    "Your request has been completed by {$techName}.",
                     $this->sanitizeData([
-                        'request_id' => $serviceRequest->id,
-                        'status' => 'completed',
-                        'type' => 'request_completed',
-                        'technician_name' => $serviceRequest->technician->user->name,
+                        'request_id'      => $serviceRequest->id,
+                        'status'          => 'completed',
+                        'type'            => 'request_completed',
+                        'technician_name' => $techName,
                     ])
                 );
 
                 $this->createNotification(
                     $serviceRequest->customer_id,
                     'Request Completed',
-                    "Your request has been completed by {$serviceRequest->technician->user->name}",
+                    "Your request has been completed by {$techName}",
                     'request_completed',
                     [
-                        'request_id' => $serviceRequest->id,
-                        'technician_id' => $serviceRequest->technician_id,
-                        'technician_name' => $serviceRequest->technician->user->name,
+                        'request_id'      => $serviceRequest->id,
+                        'technician_id'   => $serviceRequest->technician_id,
+                        'technician_name' => $techName,
                     ]
                 );
             }
@@ -691,25 +720,36 @@ class RequestController extends BaseApiController
         }
     }
 
-    // NEW handlers for on_the_way and arrived
     private function handleOnTheWay(ServiceRequest $serviceRequest): void
     {
-        $this->notifyCustomer($serviceRequest, 'on_the_way');
+        $techName = $serviceRequest->technician->user->name ?? 'Your fundi';
+        $this->notifyCustomer(
+            $serviceRequest,
+            'on_the_way',
+            'Technician On The Way',
+            "{$techName} is on the way to your location."
+        );
     }
 
     private function handleArrived(ServiceRequest $serviceRequest): void
     {
-        $this->notifyCustomer($serviceRequest, 'arrived');
+        $techName = $serviceRequest->technician->user->name ?? 'Your fundi';
+        $this->notifyCustomer(
+            $serviceRequest,
+            'arrived',
+            'Technician Arrived',
+            "{$techName} has arrived at your location."
+        );
     }
 
     /**
-     * Cancel a request (customer only)
+     * Cancel a request (customer only, pending only)
      */
     public function cancel($id, Request $request)
     {
         try {
-            $serviceRequest = ServiceRequest::findOrFail($id);
-            $user = $request->user();
+            $serviceRequest = ServiceRequest::with(['technician.user', 'customer'])->findOrFail($id);
+            $user           = $request->user();
 
             if (!$user) {
                 return $this->forbidden('User not authenticated.');
@@ -721,7 +761,7 @@ class RequestController extends BaseApiController
 
             DB::beginTransaction();
 
-            $oldStatus = $serviceRequest->status;
+            $oldStatus              = $serviceRequest->status;
             $serviceRequest->status = 'cancelled';
             $serviceRequest->save();
 
@@ -745,7 +785,10 @@ class RequestController extends BaseApiController
             $this->handleCancelled($serviceRequest);
             $this->logAudit('cancel_request', 'request', $id, 'Request cancelled by customer');
 
-            return $this->successResponse($serviceRequest, 'Request cancelled successfully.');
+            return $this->successResponse(
+                $this->formatSingleRequest($serviceRequest),
+                'Request cancelled successfully.'
+            );
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->notFound('Request not found.');
         } catch (\Exception $e) {
@@ -757,8 +800,6 @@ class RequestController extends BaseApiController
 
     /**
      * Get authenticated user's requests (customer or technician)
-     * 
-     * UPDATED: eager loads 'review' relationship for the current user.
      */
     public function myRequests(Request $request)
     {
@@ -776,7 +817,7 @@ class RequestController extends BaseApiController
                     'technician.user',
                     'service',
                     'category',
-                    'review'                   // ← eager load the review
+                    'review',
                 ])
                     ->where('customer_id', $user->id)
                     ->latest()
@@ -785,8 +826,18 @@ class RequestController extends BaseApiController
             } elseif ($user->hasRole('FUNDI')) {
                 $technician = $user->technician;
                 if (!$technician) {
-                    return $this->successResponse(['data' => [], 'pagination' => ['total' => 0, 'per_page' => $perPage, 'current_page' => 1, 'last_page' => 1]], 'No requests found');
+                    return $this->successResponse([
+                        'data'       => [],
+                        'pagination' => [
+                            'total'        => 0,
+                            'per_page'     => $perPage,
+                            'current_page' => 1,
+                            'last_page'    => 1,
+                        ],
+                    ], 'No requests found');
                 }
+
+                // Include customer (with phone) for Fundi app
                 $requests = ServiceRequest::with(['customer', 'service', 'category'])
                     ->where('technician_id', $technician->id)
                     ->latest()
@@ -819,9 +870,15 @@ class RequestController extends BaseApiController
                 return $this->forbidden('Unauthorized. You need requests.view permission.');
             }
 
-            $query = ServiceRequest::with(['customer', 'technician.user', 'service', 'category', 'logs' => function($q) {
-                $q->latest()->limit(5);
-            }]);
+            $query = ServiceRequest::with([
+                'customer',
+                'technician.user',
+                'service',
+                'category',
+                'logs' => function ($q) {
+                    $q->latest()->limit(5);
+                },
+            ]);
 
             if ($request->filled('status')) {
                 $query->where('status', $request->status);
@@ -846,14 +903,14 @@ class RequestController extends BaseApiController
             }
             if ($request->filled('search')) {
                 $search = $request->search;
-                $query->where(function($q) use ($search) {
+                $query->where(function ($q) use ($search) {
                     $q->where('description', 'like', "%{$search}%")
-                      ->orWhereHas('customer', function($cq) use ($search) {
+                      ->orWhereHas('customer', function ($cq) use ($search) {
                           $cq->where('name', 'like', "%{$search}%")
                             ->orWhere('email', 'like', "%{$search}%")
                             ->orWhere('phone', 'like', "%{$search}%");
                       })
-                      ->orWhereHas('technician.user', function($tq) use ($search) {
+                      ->orWhereHas('technician.user', function ($tq) use ($search) {
                           $tq->where('name', 'like', "%{$search}%")
                             ->orWhere('email', 'like', "%{$search}%")
                             ->orWhere('phone', 'like', "%{$search}%");
@@ -869,9 +926,9 @@ class RequestController extends BaseApiController
             }
             $query->orderBy($sortField, $sortOrder);
 
-            $perPage = $request->input('per_page', 20);
+            $perPage  = $request->input('per_page', 20);
             $requests = $query->paginate($perPage);
-            $data = $this->formatRequests($requests);
+            $data     = $this->formatRequests($requests);
 
             return $this->successResponse($data, 'Requests retrieved successfully');
         } catch (\Exception $e) {
@@ -890,7 +947,14 @@ class RequestController extends BaseApiController
                 return $this->forbidden('Unauthorized. You need requests.view permission.');
             }
 
-            $serviceRequest = ServiceRequest::with(['customer', 'technician.user', 'service', 'category', 'logs.user'])->findOrFail($id);
+            $serviceRequest = ServiceRequest::with([
+                'customer',
+                'technician.user',
+                'service',
+                'category',
+                'logs.user',
+            ])->findOrFail($id);
+
             $data = $this->formatSingleRequest($serviceRequest);
 
             return $this->successResponse($data, 'Request retrieved successfully');
@@ -913,12 +977,12 @@ class RequestController extends BaseApiController
             }
 
             $serviceRequest = ServiceRequest::findOrFail($id);
-            
+
             DB::beginTransaction();
             RequestLog::where('request_id', $id)->delete();
             $serviceRequest->delete();
             DB::commit();
-            
+
             $this->logAudit('delete_request', 'request', $id, "Deleted request ID: $id");
             return $this->successResponse(null, 'Request deleted successfully.');
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
@@ -940,7 +1004,11 @@ class RequestController extends BaseApiController
                 return $this->forbidden('Unauthorized. You need requests.view permission.');
             }
 
-            $logs = RequestLog::where('request_id', $requestId)->with('user')->orderBy('created_at', 'desc')->get();
+            $logs = RequestLog::where('request_id', $requestId)
+                ->with('user')
+                ->orderBy('created_at', 'desc')
+                ->get();
+
             return $this->successResponse($logs, 'Request logs retrieved successfully');
         } catch (\Exception $e) {
             Log::error('Error fetching request logs: ' . $e->getMessage());
@@ -959,16 +1027,18 @@ class RequestController extends BaseApiController
             }
 
             $stats = [
-                'total' => ServiceRequest::count(),
-                'pending' => ServiceRequest::where('status', 'pending')->count(),
-                'accepted' => ServiceRequest::where('status', 'accepted')->count(),
-                'rejected' => ServiceRequest::where('status', 'rejected')->count(),
-                'cancelled' => ServiceRequest::where('status', 'cancelled')->count(),
+                'total'       => ServiceRequest::count(),
+                'pending'     => ServiceRequest::where('status', 'pending')->count(),
+                'accepted'    => ServiceRequest::where('status', 'accepted')->count(),
+                'on_the_way'  => ServiceRequest::where('status', 'on_the_way')->count(),
+                'arrived'     => ServiceRequest::where('status', 'arrived')->count(),
                 'in_progress' => ServiceRequest::where('status', 'in_progress')->count(),
-                'completed' => ServiceRequest::where('status', 'completed')->count(),
-                'today' => ServiceRequest::whereDate('created_at', today())->count(),
-                'this_week' => ServiceRequest::whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()])->count(),
-                'this_month' => ServiceRequest::whereMonth('created_at', now()->month)->count(),
+                'completed'   => ServiceRequest::where('status', 'completed')->count(),
+                'rejected'    => ServiceRequest::where('status', 'rejected')->count(),
+                'cancelled'   => ServiceRequest::where('status', 'cancelled')->count(),
+                'today'       => ServiceRequest::whereDate('created_at', today())->count(),
+                'this_week'   => ServiceRequest::whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()])->count(),
+                'this_month'  => ServiceRequest::whereMonth('created_at', now()->month)->count(),
             ];
 
             return $this->successResponse($stats, 'Request statistics retrieved successfully');
@@ -991,16 +1061,17 @@ class RequestController extends BaseApiController
             }
 
             $perPage = $request->input('per_page', 15);
-            $status = $request->input('status');
+            $status  = $request->input('status');
 
-            $query = ServiceRequest::with(['technician.user', 'service', 'category'])->where('customer_id', $user->id);
+            $query = ServiceRequest::with(['technician.user', 'service', 'category'])
+                ->where('customer_id', $user->id);
 
             if ($status) {
                 $query->where('status', $status);
             }
 
             $requests = $query->latest()->paginate($perPage);
-            $data = $this->formatRequests($requests);
+            $data     = $this->formatRequests($requests, $user->id);
 
             return $this->successResponse($data, 'Customer requests retrieved successfully');
         } catch (\Exception $e) {
@@ -1023,20 +1094,29 @@ class RequestController extends BaseApiController
 
             $technician = $user->technician;
             if (!$technician) {
-                return $this->successResponse(['data' => [], 'pagination' => ['total' => 0, 'per_page' => 15, 'current_page' => 1, 'last_page' => 1]], 'No requests found');
+                return $this->successResponse([
+                    'data'       => [],
+                    'pagination' => [
+                        'total'        => 0,
+                        'per_page'     => 15,
+                        'current_page' => 1,
+                        'last_page'    => 1,
+                    ],
+                ], 'No requests found');
             }
 
             $perPage = $request->input('per_page', 15);
-            $status = $request->input('status');
+            $status  = $request->input('status');
 
-            $query = ServiceRequest::with(['customer', 'service', 'category'])->where('technician_id', $technician->id);
+            $query = ServiceRequest::with(['customer', 'service', 'category'])
+                ->where('technician_id', $technician->id);
 
             if ($status) {
                 $query->where('status', $status);
             }
 
             $requests = $query->latest()->paginate($perPage);
-            $data = $this->formatRequests($requests);
+            $data     = $this->formatRequests($requests);
 
             return $this->successResponse($data, 'Technician requests retrieved successfully');
         } catch (\Exception $e) {
@@ -1046,7 +1126,7 @@ class RequestController extends BaseApiController
     }
 
     // ============================================================
-    // NEW: TRACKING METHODS (Phase 2)
+    // TRACKING METHODS
     // ============================================================
 
     /**
@@ -1055,66 +1135,112 @@ class RequestController extends BaseApiController
      */
     public function markOnTheWay(Request $request, $id)
     {
-        $serviceRequest = ServiceRequest::findOrFail($id);
-        $user = $request->user();
+        try {
+            $serviceRequest = ServiceRequest::with(['technician.user', 'customer'])->findOrFail($id);
+            $user           = $request->user();
 
-        if (!$user->technician || $user->technician->id !== $serviceRequest->technician_id) {
-            return $this->forbidden('You are not the technician assigned to this request.');
+            if (!$this->isAssignedFundi($user, $serviceRequest)) {
+                return $this->forbidden('You are not the technician assigned to this request.');
+            }
+
+            if ($serviceRequest->status !== 'accepted') {
+                return $this->errorResponse('Request must be accepted first.', 422);
+            }
+
+            DB::beginTransaction();
+
+            $oldStatus              = $serviceRequest->status;
+            $serviceRequest->status = 'on_the_way';
+            $serviceRequest->save();
+
+            DB::commit();
+
+            try {
+                event(new RequestStatusUpdated($serviceRequest));
+            } catch (\Exception $e) {
+                Log::error('Failed to dispatch RequestStatusUpdated event: ' . $e->getMessage());
+            }
+
+            $this->handleOnTheWay($serviceRequest);
+
+            $this->logRequestAction(
+                $serviceRequest->id,
+                $user->id,
+                'on_the_way',
+                $oldStatus,
+                'on_the_way',
+                'Technician is on the way'
+            );
+            $this->logAudit('mark_on_the_way', 'request', $serviceRequest->id, 'Technician marked on the way');
+
+            return $this->successResponse(
+                $this->formatSingleRequest($serviceRequest->fresh(['customer', 'technician.user', 'service', 'category'])),
+                'Now on the way.'
+            );
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return $this->notFound('Request not found.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error marking on the way: ' . $e->getMessage());
+            return $this->errorResponse('Failed to update status. Please try again.', 500);
         }
-
-        if ($serviceRequest->status !== ServiceRequest::STATUS_ACCEPTED) {
-            return $this->errorResponse('Request must be accepted first.', 422);
-        }
-
-        $serviceRequest->status = ServiceRequest::STATUS_ON_THE_WAY;
-        $serviceRequest->save();
-
-        $this->handleOnTheWay($serviceRequest);
-        $this->logRequestAction(
-            $serviceRequest->id,
-            $user->id,
-            'on_the_way',
-            ServiceRequest::STATUS_ACCEPTED,
-            ServiceRequest::STATUS_ON_THE_WAY,
-            'Technician is on the way'
-        );
-        $this->logAudit('mark_on_the_way', 'request', $serviceRequest->id, 'Technician marked on the way');
-
-        return $this->successResponse($serviceRequest, 'Now on the way.');
     }
 
     /**
-     * Technician marks request as "Arrived" (manual)
+     * Technician marks request as "Arrived"
      * PATCH /v4/requests/{id}/arrive
      */
     public function markArrived(Request $request, $id)
     {
-        $serviceRequest = ServiceRequest::findOrFail($id);
-        $user = $request->user();
+        try {
+            $serviceRequest = ServiceRequest::with(['technician.user', 'customer'])->findOrFail($id);
+            $user           = $request->user();
 
-        if (!$user->technician || $user->technician->id !== $serviceRequest->technician_id) {
-            return $this->forbidden('You are not the technician assigned to this request.');
+            if (!$this->isAssignedFundi($user, $serviceRequest)) {
+                return $this->forbidden('You are not the technician assigned to this request.');
+            }
+
+            if ($serviceRequest->status !== 'on_the_way') {
+                return $this->errorResponse('Must be on the way first.', 422);
+            }
+
+            DB::beginTransaction();
+
+            $oldStatus              = $serviceRequest->status;
+            $serviceRequest->status = 'arrived';
+            $serviceRequest->save();
+
+            DB::commit();
+
+            try {
+                event(new RequestStatusUpdated($serviceRequest));
+            } catch (\Exception $e) {
+                Log::error('Failed to dispatch RequestStatusUpdated event: ' . $e->getMessage());
+            }
+
+            $this->handleArrived($serviceRequest);
+
+            $this->logRequestAction(
+                $serviceRequest->id,
+                $user->id,
+                'arrived',
+                $oldStatus,
+                'arrived',
+                'Technician arrived'
+            );
+            $this->logAudit('mark_arrived', 'request', $serviceRequest->id, 'Technician marked arrived');
+
+            return $this->successResponse(
+                $this->formatSingleRequest($serviceRequest->fresh(['customer', 'technician.user', 'service', 'category'])),
+                'Arrived at location.'
+            );
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return $this->notFound('Request not found.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error marking arrived: ' . $e->getMessage());
+            return $this->errorResponse('Failed to update status. Please try again.', 500);
         }
-
-        if ($serviceRequest->status !== ServiceRequest::STATUS_ON_THE_WAY) {
-            return $this->errorResponse('Must be on the way first.', 422);
-        }
-
-        $serviceRequest->status = ServiceRequest::STATUS_ARRIVED;
-        $serviceRequest->save();
-
-        $this->handleArrived($serviceRequest);
-        $this->logRequestAction(
-            $serviceRequest->id,
-            $user->id,
-            'arrived',
-            ServiceRequest::STATUS_ON_THE_WAY,
-            ServiceRequest::STATUS_ARRIVED,
-            'Technician arrived'
-        );
-        $this->logAudit('mark_arrived', 'request', $serviceRequest->id, 'Technician marked arrived');
-
-        return $this->successResponse($serviceRequest, 'Arrived at location.');
     }
 
     /**
@@ -1123,134 +1249,127 @@ class RequestController extends BaseApiController
      */
     public function trackingData($id)
     {
-        $request = ServiceRequest::with('technician')->findOrFail($id);
+        try {
+            $request = ServiceRequest::with('technician')->findOrFail($id);
 
-        $customerLat = $request->latitude;
-        $customerLng = $request->longitude;
-        $techLat = $request->technician->latitude;
-        $techLng = $request->technician->longitude;
+            $customerLat = $request->latitude ?? null;
+            $customerLng = $request->longitude ?? null;
+            $techLat     = $request->technician->latitude ?? null;
+            $techLng     = $request->technician->longitude ?? null;
 
-        $distance = null;
-        $eta = null;
-        if ($customerLat && $customerLng && $techLat && $techLng) {
-            $distance = $this->haversineDistance($customerLat, $customerLng, $techLat, $techLng);
-            // Estimate ETA: assume average speed 30 km/h => 2 min per km
-            $etaMinutes = $distance * 2;
-            $eta = now()->addMinutes($etaMinutes)->toIso8601String();
+            $distance = null;
+            $eta      = null;
+
+            if ($customerLat && $customerLng && $techLat && $techLng) {
+                $distance   = $this->haversineDistance($customerLat, $customerLng, $techLat, $techLng);
+                $etaMinutes = $distance * 2; // ~30 km/h average
+                $eta        = now()->addMinutes($etaMinutes)->toIso8601String();
+            }
+
+            return $this->successResponse([
+                'technician_location' => [
+                    'lat' => $techLat !== null ? (float) $techLat : null,
+                    'lng' => $techLng !== null ? (float) $techLng : null,
+                ],
+                'customer_location' => [
+                    'lat' => $customerLat !== null ? (float) $customerLat : null,
+                    'lng' => $customerLng !== null ? (float) $customerLng : null,
+                ],
+                'status'       => $request->status,
+                'distance_km'  => $distance !== null ? round($distance, 2) : null,
+                'eta'          => $eta,
+                'last_updated' => $request->technician->location_updated_at?->toIso8601String(),
+            ], 'Tracking data retrieved.');
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return $this->notFound('Request not found.');
+        } catch (\Exception $e) {
+            Log::error('Error fetching tracking data: ' . $e->getMessage());
+            return $this->errorResponse('Failed to fetch tracking data.', 500);
         }
-
-        return $this->successResponse([
-            'technician_location' => [
-                'lat' => $techLat ? (float) $techLat : null,
-                'lng' => $techLng ? (float) $techLng : null,
-            ],
-            'customer_location' => [
-                'lat' => $customerLat ? (float) $customerLat : null,
-                'lng' => $customerLng ? (float) $customerLng : null,
-            ],
-            'status' => $request->status,
-            'distance_km' => $distance ? round($distance, 2) : null,
-            'eta' => $eta,
-            'last_updated' => $request->technician->location_updated_at?->toIso8601String(),
-        ], 'Tracking data retrieved.');
     }
 
     // ============================================================
     // PRIVATE FORMATTING HELPERS
     // ============================================================
 
-    /**
-     * Format a paginated request collection.
-     *
-     * @param mixed $requests
-     * @param int|null $userId Optional user ID for 'has_review' flag.
-     * @return array
-     */
     private function formatRequests($requests, ?int $userId = null): array
     {
-        $data = $requests->map(function($request) use ($userId) {
+        $data = $requests->map(function ($request) use ($userId) {
             return $this->formatSingleRequest($request, $userId);
         });
 
         return [
-            'data' => $data,
+            'data'       => $data,
             'pagination' => [
-                'total' => $requests->total(),
-                'per_page' => $requests->perPage(),
+                'total'        => $requests->total(),
+                'per_page'     => $requests->perPage(),
                 'current_page' => $requests->currentPage(),
-                'last_page' => $requests->lastPage(),
-            ]
+                'last_page'    => $requests->lastPage(),
+            ],
         ];
     }
 
-    /**
-     * Format a single request.
-     *
-     * @param mixed $request
-     * @param int|null $userId Optional user ID to check for existing review.
-     * @return array
-     */
     private function formatSingleRequest($request, ?int $userId = null): array
     {
         $data = [
-            'id' => $request->id,
+            'id'          => $request->id,
             'description' => $request->description,
-            'status' => $request->status,
-            'created_at' => $request->created_at,
-            'updated_at' => $request->updated_at,
-            'customer' => $request->customer ? [
-                'id' => $request->customer->id,
-                'name' => $request->customer->name,
+            'status'      => $request->status,
+            'created_at'  => $request->created_at,
+            'updated_at'  => $request->updated_at,
+            'customer'    => $request->customer ? [
+                'id'    => $request->customer->id,
+                'name'  => $request->customer->name,
                 'email' => $request->customer->email,
-                'phone' => $request->customer->phone,
+                'phone' => $request->customer->phone, // ← phone included
             ] : null,
-            'technician' => $request->technician ? [
-                'id' => $request->technician->id,
-                'name' => $request->technician->user->name ?? null,
-                'email' => $request->technician->user->email ?? null,
-                'phone' => $request->technician->user->phone ?? null,
-                'profile_photo' => $request->technician->profile_photo 
-                    ? url($request->technician->profile_photo) 
+            'technician'  => $request->technician ? [
+                'id'            => $request->technician->id,
+                'name'          => $request->technician->user->name ?? null,
+                'email'         => $request->technician->user->email ?? null,
+                'phone'         => $request->technician->user->phone ?? null,
+                'profile_photo' => $request->technician->profile_photo
+                    ? url($request->technician->profile_photo)
                     : null,
-                'area' => $request->technician->area,
-                'rating' => (float) ($request->technician->rating ?? 0),
+                'area'      => $request->technician->area,
+                'rating'    => (float) ($request->technician->rating ?? 0),
                 'is_online' => (bool) ($request->technician->is_online ?? false),
             ] : null,
-            'service' => $request->service ? [
-                'id' => $request->service->id,
+            'service'     => $request->service ? [
+                'id'   => $request->service->id,
                 'name' => $request->service->name,
             ] : null,
-            'category' => $request->category ? [
-                'id' => $request->category->service_categoryID,
+            'category'    => $request->category ? [
+                'id'   => $request->category->service_categoryID,
                 'name' => $request->category->category_name,
                 'slug' => $request->category->slug,
             ] : null,
-            'logs' => $request->logs ? $request->logs->map(function($log) {
+            'logs'        => $request->logs ? $request->logs->map(function ($log) {
                 return [
-                    'id' => $log->id,
-                    'action' => $log->action,
+                    'id'         => $log->id,
+                    'action'     => $log->action,
                     'old_status' => $log->old_status,
                     'new_status' => $log->new_status,
-                    'notes' => $log->notes,
+                    'notes'      => $log->notes,
                     'created_at' => $log->created_at,
-                    'user' => $log->user ? [
-                        'id' => $log->user->id,
+                    'user'       => $log->user ? [
+                        'id'   => $log->user->id,
                         'name' => $log->user->name,
                     ] : null,
                 ];
             }) : [],
         ];
 
-        // --- Add has_review flag ---
-        // If a user ID is provided, check if a review exists for that customer.
-        // Otherwise, fallback to the authenticated user (if any) or false.
         if ($userId !== null) {
-            $hasReview = $request->review()->where('customer_id', $userId)->exists();
+            $hasReview = $request->relationLoaded('review')
+                ? ($request->review !== null)
+                : $request->review()->where('customer_id', $userId)->exists();
         } elseif (auth()->check()) {
             $hasReview = $request->review()->where('customer_id', auth()->id())->exists();
         } else {
             $hasReview = false;
         }
+
         $data['has_review'] = $hasReview;
 
         return $data;
