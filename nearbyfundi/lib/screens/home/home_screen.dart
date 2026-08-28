@@ -1,8 +1,8 @@
-// lib/screens/home/home_screen.dart
-
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
+import '../../config/app_theme.dart';
 import '../../providers/post_provider.dart';
 import '../../providers/request_provider.dart';
 import '../../providers/chat_provider.dart';
@@ -26,15 +26,41 @@ class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<HomeScreen> createState() =>
+      _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState
+    extends State<HomeScreen> {
+  // ================================================================
+  // CURRENT TAB
+  // ================================================================
+
   int _currentIndex = 0;
+
+  // ================================================================
+  // SCREENS
+  // ================================================================
 
   late final List<Widget> _screens;
 
+  // ================================================================
+  // LOCALE
+  // ================================================================
+
   String _currentLocale = 'en';
+
+  // ================================================================
+  // RESPONSIVE BREAKPOINTS
+  // ================================================================
+
+  static const double _tabletBreakpoint = 700;
+
+  static const double _desktopBreakpoint = 1100;
+
+  // ================================================================
+  // INIT
+  // ================================================================
 
   @override
   void initState() {
@@ -48,18 +74,23 @@ class _HomeScreenState extends State<HomeScreen> {
       ProfileScreen(),
     ];
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) {
       if (!mounted) return;
 
-      final settings = context.read<SettingsProvider>();
+      final settings =
+      context.read<SettingsProvider>();
 
       _currentLocale = settings.locale;
 
-      context.read<ServiceProvider>().fetchServices(
+      context
+          .read<ServiceProvider>()
+          .fetchServices(
         locale: _currentLocale,
       );
 
       _loadNotifications();
+
       _initializeChat();
     });
   }
@@ -69,10 +100,14 @@ class _HomeScreenState extends State<HomeScreen> {
   // ================================================================
 
   void _initializeChat() {
-    final authProvider = context.read<AuthProvider>();
-    final chatProvider = context.read<ChatProvider>();
+    final authProvider =
+    context.read<AuthProvider>();
+
+    final chatProvider =
+    context.read<ChatProvider>();
 
     final user = authProvider.user;
+
     final token = authProvider.token;
 
     if (user != null && token != null) {
@@ -106,11 +141,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ================================================================
-  // REFRESH CURRENT SCREEN
+  // REFRESH
   // ================================================================
 
   Future<void> _refreshCurrentScreen() async {
-    final l10n = AppLocalizations.of(context)!;
+    final l10n =
+    AppLocalizations.of(context)!;
 
     try {
       switch (_currentIndex) {
@@ -123,7 +159,9 @@ class _HomeScreenState extends State<HomeScreen> {
         case 1:
           await context
               .read<PostProvider>()
-              .fetchPosts(refresh: true);
+              .fetchPosts(
+            refresh: true,
+          );
           break;
 
         case 2:
@@ -152,8 +190,10 @@ class _HomeScreenState extends State<HomeScreen> {
       final settings =
       context.read<SettingsProvider>();
 
-      if (_currentLocale != settings.locale) {
-        _currentLocale = settings.locale;
+      if (_currentLocale !=
+          settings.locale) {
+        _currentLocale =
+            settings.locale;
 
         await context
             .read<ServiceProvider>()
@@ -164,7 +204,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
         SnackBar(
           content: Row(
             children: [
@@ -174,14 +215,23 @@ class _HomeScreenState extends State<HomeScreen> {
                 size: 20,
               ),
               const SizedBox(width: 10),
-              Text(l10n.refreshed),
+              Expanded(
+                child: Text(
+                  l10n.refreshed,
+                ),
+              ),
             ],
           ),
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 1),
-          backgroundColor: const Color(0xFF006B5E),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+          behavior:
+          SnackBarBehavior.floating,
+          duration:
+          const Duration(seconds: 1),
+          backgroundColor:
+          AppTheme.primaryColor,
+          shape:
+          RoundedRectangleBorder(
+            borderRadius:
+            BorderRadius.circular(12),
           ),
         ),
       );
@@ -192,7 +242,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
         SnackBar(
           content: Row(
             children: [
@@ -208,11 +259,16 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
-          behavior: SnackBarBehavior.floating,
+          behavior:
+          SnackBarBehavior.floating,
           backgroundColor:
-          Theme.of(context).colorScheme.error,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+          Theme.of(context)
+              .colorScheme
+              .error,
+          shape:
+          RoundedRectangleBorder(
+            borderRadius:
+            BorderRadius.circular(12),
           ),
         ),
       );
@@ -224,9 +280,11 @@ class _HomeScreenState extends State<HomeScreen> {
   // ================================================================
 
   void _showPartnershipsComingSoon() {
-    final theme = Theme.of(context);
+    final theme =
+    Theme.of(context);
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    ScaffoldMessenger.of(context)
+        .showSnackBar(
       SnackBar(
         content: Row(
           children: [
@@ -239,34 +297,45 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Text(
                 'Partnerships Coming Soon! 🚀',
                 style: TextStyle(
-                  fontWeight: FontWeight.w600,
+                  fontWeight:
+                  FontWeight.w600,
                 ),
               ),
             ),
           ],
         ),
-        backgroundColor: theme.primaryColor,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
+        backgroundColor:
+        theme.primaryColor,
+        behavior:
+        SnackBarBehavior.floating,
+        shape:
+        RoundedRectangleBorder(
+          borderRadius:
+          BorderRadius.circular(14),
         ),
-        duration: const Duration(seconds: 2),
+        duration:
+        const Duration(seconds: 2),
       ),
     );
   }
 
   // ================================================================
-  // NOTIFICATION SHEET
+  // NOTIFICATIONS
   // ================================================================
 
-  void _showNotifications(BuildContext context) {
-    final theme = Theme.of(context);
-    final l10n = AppLocalizations.of(context)!;
+  void _showNotifications(
+      BuildContext context) {
+    final theme =
+    Theme.of(context);
+
+    final l10n =
+    AppLocalizations.of(context)!;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor:
+      Colors.transparent,
       builder: (ctx) {
         return DraggableScrollableSheet(
           initialChildSize: 0.78,
@@ -279,48 +348,44 @@ class _HomeScreenState extends State<HomeScreen> {
               ) {
             return Container(
               decoration: BoxDecoration(
-                color: theme.colorScheme.surface,
+                color:
+                theme.colorScheme.surface,
                 borderRadius:
-                const BorderRadius.vertical(
+                const BorderRadius
+                    .vertical(
                   top: Radius.circular(28),
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color:
-                    Colors.black.withOpacity(0.18),
-                    blurRadius: 20,
-                    offset: const Offset(0, -5),
-                  ),
-                ],
               ),
               child: Column(
                 children: [
-                  // =================================================
+                  const SizedBox(
+                    height: 10,
+                  ),
+
                   // HANDLE
-                  // =================================================
-
-                  const SizedBox(height: 10),
-
                   Container(
                     width: 42,
                     height: 4,
-                    decoration: BoxDecoration(
+                    decoration:
+                    BoxDecoration(
                       color: theme
                           .colorScheme
                           .onSurface
-                          .withOpacity(0.18),
+                          .withOpacity(
+                        0.18,
+                      ),
                       borderRadius:
-                      BorderRadius.circular(20),
+                      BorderRadius.circular(
+                        20,
+                      ),
                     ),
                   ),
 
-                  // =================================================
                   // HEADER
-                  // =================================================
-
                   Padding(
                     padding:
-                    const EdgeInsets.fromLTRB(
+                    const EdgeInsets
+                        .fromLTRB(
                       20,
                       18,
                       12,
@@ -341,31 +406,42 @@ class _HomeScreenState extends State<HomeScreen> {
                             Container(
                               width: 46,
                               height: 46,
-                              decoration: BoxDecoration(
+                              decoration:
+                              BoxDecoration(
                                 color: theme
                                     .primaryColor
-                                    .withOpacity(0.10),
-                                shape: BoxShape.circle,
+                                    .withOpacity(
+                                  0.10,
+                                ),
+                                shape:
+                                BoxShape
+                                    .circle,
                               ),
                               child: Icon(
                                 Icons
                                     .notifications_rounded,
                                 color:
-                                theme.primaryColor,
+                                theme
+                                    .primaryColor,
                               ),
                             ),
 
-                            const SizedBox(width: 12),
+                            const SizedBox(
+                              width: 12,
+                            ),
 
                             Expanded(
-                              child: Column(
+                              child:
+                              Column(
                                 crossAxisAlignment:
                                 CrossAxisAlignment
                                     .start,
                                 children: [
                                   Text(
-                                    l10n.notifications,
-                                    style: theme
+                                    l10n
+                                        .notifications,
+                                    style:
+                                    theme
                                         .textTheme
                                         .titleLarge
                                         ?.copyWith(
@@ -374,50 +450,40 @@ class _HomeScreenState extends State<HomeScreen> {
                                           .w700,
                                     ),
                                   ),
-                                  if (unread > 0)
-                                    Text(
-                                      '$unread unread notification${unread == 1 ? '' : 's'}',
-                                      style: theme
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(
-                                        color: theme
-                                            .primaryColor,
-                                        fontWeight:
-                                        FontWeight
-                                            .w500,
-                                      ),
-                                    )
-                                  else
-                                    Text(
-                                      'You are all caught up',
-                                      style: theme
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(
-                                        color: Colors
-                                            .grey
-                                            .shade600,
-                                      ),
+                                  Text(
+                                    unread >
+                                        0
+                                        ? '$unread unread notification${unread == 1 ? '' : 's'}'
+                                        : 'You are all caught up',
+                                    style:
+                                    theme
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                      color:
+                                      unread >
+                                          0
+                                          ? theme
+                                          .primaryColor
+                                          : Colors
+                                          .grey,
                                     ),
+                                  ),
                                 ],
                               ),
                             ),
 
                             if (unread > 0)
                               TextButton(
-                                onPressed: () async {
+                                onPressed:
+                                    () async {
                                   await provider
                                       .markAllAsRead();
                                 },
-                                child: Text(
-                                  l10n.markAllAsRead,
-                                  style: TextStyle(
-                                    color:
-                                    theme.primaryColor,
-                                    fontWeight:
-                                    FontWeight.w600,
-                                  ),
+                                child:
+                                Text(
+                                  l10n
+                                      .markAllAsRead,
                                 ),
                               ),
                           ],
@@ -428,14 +494,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   Divider(
                     height: 1,
-                    color: theme.dividerColor
-                        .withOpacity(0.4),
+                    color: theme
+                        .dividerColor
+                        .withOpacity(
+                      0.4,
+                    ),
                   ),
 
-                  // =================================================
                   // LIST
-                  // =================================================
-
                   Expanded(
                     child: Consumer<
                         NotificationProvider>(
@@ -444,53 +510,30 @@ class _HomeScreenState extends State<HomeScreen> {
                           provider,
                           child,
                           ) {
-                        if (provider.isLoading) {
+                        if (provider
+                            .isLoading) {
                           return Center(
-                            child: Column(
-                              mainAxisAlignment:
-                              MainAxisAlignment.center,
-                              children: [
-                                SizedBox(
-                                  width: 30,
-                                  height: 30,
-                                  child:
-                                  CircularProgressIndicator(
-                                    strokeWidth: 2.5,
-                                    color: theme
-                                        .primaryColor,
-                                  ),
-                                ),
-                                const SizedBox(
-                                  height: 14,
-                                ),
-                                Text(
-                                  'Loading notifications...',
-                                  style: theme
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.copyWith(
-                                    color: Colors
-                                        .grey
-                                        .shade600,
-                                  ),
-                                ),
-                              ],
+                            child:
+                            CircularProgressIndicator(
+                              color: theme
+                                  .primaryColor,
                             ),
                           );
                         }
 
-                        if (provider.notifications
+                        if (provider
+                            .notifications
                             .isEmpty) {
                           return _EmptyNotifications(
                             theme: theme,
-                            title:
-                            l10n.noNotificationsYet,
+                            title: l10n
+                                .noNotificationsYet,
                           );
                         }
 
                         return RefreshIndicator(
-                          color:
-                          theme.primaryColor,
+                          color: theme
+                              .primaryColor,
                           onRefresh: provider
                               .loadNotifications,
                           child:
@@ -506,13 +549,18 @@ class _HomeScreenState extends State<HomeScreen> {
                               30,
                             ),
                             itemCount: provider
-                                .notifications.length,
+                                .notifications
+                                .length,
                             itemBuilder:
-                                (context, index) {
+                                (
+                                context,
+                                index,
+                                ) {
                               final notification =
                               provider
                                   .notifications[
-                              index];
+                              index
+                              ];
 
                               return Padding(
                                 padding:
@@ -526,12 +574,14 @@ class _HomeScreenState extends State<HomeScreen> {
                                   notification,
                                   locale:
                                   _currentLocale,
-                                  onTap: () async {
+                                  onTap:
+                                      () async {
                                     final id =
                                     notification[
                                     'id'];
 
-                                    if (id != null) {
+                                    if (id !=
+                                        null) {
                                       await provider
                                           .markAsRead(
                                         id.toString(),
@@ -575,7 +625,9 @@ class _HomeScreenState extends State<HomeScreen> {
       Map<String, dynamic> notification,
       ) {
     final type =
-        notification['type']?.toString() ?? '';
+        notification['type']
+            ?.toString() ??
+            '';
 
     if (type == 'chat_message') {
       setState(() {
@@ -592,68 +644,83 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _currentIndex = 2;
       });
-      return;
     }
   }
 
   // ================================================================
-  // DRAWER
+  // LEFT DRAWER
   // ================================================================
 
   Widget _buildDrawer(
       BuildContext context,
       ThemeData theme,
-      bool isDark,
       ) {
     return Drawer(
-      backgroundColor: theme.colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.only(
+      backgroundColor:
+      theme.colorScheme.surface,
+      width: 320,
+      shape:
+      const RoundedRectangleBorder(
+        borderRadius:
+        BorderRadius.only(
           topRight: Radius.circular(28),
-          bottomRight: Radius.circular(28),
+          bottomRight:
+          Radius.circular(28),
         ),
       ),
       child: SafeArea(
         child: Column(
           children: [
-            // =======================================================
-            // DRAWER HEADER
-            // =======================================================
-
             Container(
-              margin: const EdgeInsets.all(14),
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
+              margin:
+              const EdgeInsets.all(14),
+              padding:
+              const EdgeInsets.all(20),
+              decoration:
+              const BoxDecoration(
+                gradient:
+                LinearGradient(
                   colors: [
-                    Color(0xFF006B5E),
-                    Color(0xFF004D40),
+                    AppTheme.primaryColor,
+                    AppTheme.primaryDark,
                   ],
-                  begin: Alignment.topLeft,
+                  begin:
+                  Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius:
-                BorderRadius.circular(22),
+                BorderRadius.all(
+                  Radius.circular(22),
+                ),
               ),
               child: Column(
                 crossAxisAlignment:
-                CrossAxisAlignment.start,
+                CrossAxisAlignment
+                    .start,
                 children: [
                   Row(
                     children: [
                       Container(
                         width: 52,
                         height: 52,
-                        decoration: BoxDecoration(
+                        decoration:
+                        BoxDecoration(
                           color: Colors.white
-                              .withOpacity(0.15),
+                              .withOpacity(
+                            0.15,
+                          ),
                           borderRadius:
-                          BorderRadius.circular(16),
+                          BorderRadius
+                              .circular(
+                            16,
+                          ),
                         ),
-                        child: const Icon(
+                        child:
+                        const Icon(
                           Icons
                               .handyman_rounded,
-                          color: Colors.white,
+                          color:
+                          Colors.white,
                           size: 28,
                         ),
                       ),
@@ -662,35 +729,48 @@ class _HomeScreenState extends State<HomeScreen> {
 
                       IconButton(
                         onPressed: () {
-                          Navigator.pop(context);
+                          Navigator.pop(
+                              context);
                         },
-                        icon: const Icon(
-                          Icons.close_rounded,
-                          color: Colors.white,
+                        icon:
+                        const Icon(
+                          Icons
+                              .close_rounded,
+                          color:
+                          Colors.white,
                         ),
                       ),
                     ],
                   ),
 
-                  const SizedBox(height: 18),
+                  const SizedBox(
+                    height: 18,
+                  ),
 
-                  const Text(
+                  Text(
                     'NearbyFundi',
-                    style: TextStyle(
-                      color: Colors.white,
+                    style:
+                    GoogleFonts.nunito(
+                      color:
+                      Colors.white,
                       fontSize: 22,
                       fontWeight:
-                      FontWeight.w700,
+                      FontWeight.w800,
                     ),
                   ),
 
-                  const SizedBox(height: 4),
+                  const SizedBox(
+                    height: 4,
+                  ),
 
                   Text(
                     'Find trusted technicians near you',
-                    style: TextStyle(
+                    style:
+                    GoogleFonts.nunito(
                       color: Colors.white
-                          .withOpacity(0.78),
+                          .withOpacity(
+                        0.78,
+                      ),
                       fontSize: 13,
                     ),
                   ),
@@ -698,77 +778,45 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-            // =======================================================
-            // MENU
-            // =======================================================
-
             Expanded(
               child: ListView(
                 padding:
-                const EdgeInsets.symmetric(
+                const EdgeInsets
+                    .symmetric(
                   horizontal: 12,
                 ),
                 children: [
                   _DrawerItem(
                     icon: Icons
                         .handshake_rounded,
-                    title: 'Partnerships',
+                    title:
+                    'Partnerships',
                     color:
                     theme.primaryColor,
                     onTap: () {
-                      Navigator.pop(context);
+                      Navigator.pop(
+                          context);
+
                       _showPartnershipsComingSoon();
-                    },
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  Padding(
-                    padding:
-                    const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 8,
-                    ),
-                    child: Text(
-                      'MORE',
-                      style: theme
-                          .textTheme
-                          .labelSmall
-                          ?.copyWith(
-                        color: Colors.grey.shade500,
-                        fontWeight:
-                        FontWeight.w700,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                  ),
-
-                  _DrawerItem(
-                    icon: Icons.more_horiz_rounded,
-                    title: 'Others',
-                    color: Colors.grey,
-                    onTap: () {
-                      Navigator.pop(context);
                     },
                   ),
                 ],
               ),
             ),
 
-            // =======================================================
-            // FOOTER
-            // =======================================================
-
             Padding(
               padding:
-              const EdgeInsets.all(18),
+              const EdgeInsets.all(
+                18,
+              ),
               child: Text(
                 'NearbyFundi',
                 style: theme
                     .textTheme
                     .bodySmall
                     ?.copyWith(
-                  color: Colors.grey.shade500,
+                  color:
+                  Colors.grey.shade500,
                 ),
               ),
             ),
@@ -779,396 +827,645 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ================================================================
+  // NAVIGATION DESTINATIONS
+  // ================================================================
+
+  List<NavigationRailDestination>
+  _railDestinations(
+      AppLocalizations l10n,
+      ChatProvider chatProvider,
+      ) {
+    return [
+      NavigationRailDestination(
+        icon: const Icon(
+          Icons.home_outlined,
+        ),
+        selectedIcon: const Icon(
+          Icons.home_rounded,
+        ),
+        label: Text(
+          l10n.nearby,
+        ),
+      ),
+
+      NavigationRailDestination(
+        icon: const Icon(
+          Icons.article_outlined,
+        ),
+        selectedIcon: const Icon(
+          Icons.article_rounded,
+        ),
+        label: Text(
+          l10n.blog,
+        ),
+      ),
+
+      NavigationRailDestination(
+        icon: const Icon(
+          Icons.list_alt_outlined,
+        ),
+        selectedIcon: const Icon(
+          Icons.list_alt_rounded,
+        ),
+        label: Text(
+          l10n.requests,
+        ),
+      ),
+
+      NavigationRailDestination(
+        icon: _ChatIcon(
+          unread:
+          chatProvider.totalUnread,
+          active: false,
+        ),
+        selectedIcon: _ChatIcon(
+          unread:
+          chatProvider.totalUnread,
+          active: true,
+        ),
+        label: Text(
+          l10n.chat,
+        ),
+      ),
+
+      NavigationRailDestination(
+        icon: const Icon(
+          Icons.person_outline,
+        ),
+        selectedIcon: const Icon(
+          Icons.person_rounded,
+        ),
+        label: Text(
+          l10n.profile,
+        ),
+      ),
+    ];
+  }
+
+  // ================================================================
+  // LARGE SCREEN NAVIGATION
+  // ================================================================
+
+  Widget _buildLargeNavigation(
+      ThemeData theme,
+      AppLocalizations l10n,
+      ChatProvider chatProvider,
+      ) {
+    return Container(
+      decoration: BoxDecoration(
+        color: theme
+            .colorScheme
+            .surface,
+        border: Border(
+          right: BorderSide(
+            color: theme.dividerColor
+                .withOpacity(0.35),
+          ),
+        ),
+      ),
+      child: NavigationRail(
+        selectedIndex:
+        _currentIndex,
+
+        onDestinationSelected:
+            (index) {
+          if (_currentIndex ==
+              index) {
+            return;
+          }
+
+          setState(() {
+            _currentIndex = index;
+          });
+        },
+
+        labelType:
+        NavigationRailLabelType.all,
+
+        minWidth: 82,
+
+        groupAlignment: -0.75,
+
+        destinations:
+        _railDestinations(
+          l10n,
+          chatProvider,
+        ),
+      ),
+    );
+  }
+
+  // ================================================================
+  // APP BAR
+  // ================================================================
+
+  PreferredSizeWidget _buildAppBar(
+      ThemeData theme,
+      AppLocalizations l10n,
+      bool largeScreen,
+      ) {
+    return AppBar(
+      backgroundColor:
+      AppTheme.primaryColor,
+      foregroundColor:
+      Colors.white,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+
+      automaticallyImplyLeading:
+      !largeScreen,
+
+      iconTheme:
+      const IconThemeData(
+        color: Colors.white,
+      ),
+
+      titleSpacing: largeScreen
+          ? 20
+          : 8,
+
+      title: Row(
+        mainAxisSize:
+        MainAxisSize.min,
+        children: [
+          Container(
+            width: largeScreen
+                ? 40
+                : 38,
+            height: largeScreen
+                ? 40
+                : 38,
+            decoration:
+            BoxDecoration(
+              color: Colors.white
+                  .withOpacity(0.14),
+              borderRadius:
+              BorderRadius.circular(
+                11,
+              ),
+            ),
+            child:
+            const Icon(
+              Icons
+                  .handyman_rounded,
+              color:
+              Colors.white,
+              size: 22,
+            ),
+          ),
+
+          const SizedBox(
+            width: 10,
+          ),
+
+          Flexible(
+            child: Text(
+              l10n.appTitle,
+              maxLines: 1,
+              overflow:
+              TextOverflow.ellipsis,
+              style:
+              GoogleFonts.nunito(
+                fontSize:
+                largeScreen
+                    ? 20
+                    : 19,
+                fontWeight:
+                FontWeight.w800,
+                color:
+                Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
+
+      actions: [
+        // REFRESH
+        IconButton(
+          onPressed:
+          _refreshCurrentScreen,
+          tooltip: l10n.refresh,
+          icon:
+          const Icon(
+            Icons.refresh_rounded,
+            size: 24,
+          ),
+        ),
+
+        // NOTIFICATIONS
+        Consumer<
+            NotificationProvider>(
+          builder: (
+              context,
+              provider,
+              child,
+              ) {
+            final unread =
+                provider.unreadCount;
+
+            return IconButton(
+              onPressed: () =>
+                  _showNotifications(
+                    context,
+                  ),
+              tooltip:
+              l10n.notifications,
+              icon: Stack(
+                clipBehavior:
+                Clip.none,
+                children: [
+                  const Icon(
+                    Icons
+                        .notifications_outlined,
+                    size: 26,
+                  ),
+
+                  if (unread > 0)
+                    Positioned(
+                      right: -5,
+                      top: -5,
+                      child:
+                      Container(
+                        constraints:
+                        const BoxConstraints(
+                          minWidth: 18,
+                          minHeight: 18,
+                        ),
+                        padding:
+                        const EdgeInsets
+                            .symmetric(
+                          horizontal: 4,
+                        ),
+                        decoration:
+                        const BoxDecoration(
+                          color: Colors.red,
+                          shape:
+                          BoxShape.circle,
+                        ),
+                        alignment:
+                        Alignment.center,
+                        child: Text(
+                          unread > 9
+                              ? '9+'
+                              : '$unread',
+                          style:
+                          const TextStyle(
+                            color: Colors
+                                .white,
+                            fontSize: 9,
+                            fontWeight:
+                            FontWeight
+                                .w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
+
+        const SizedBox(
+          width: 4,
+        ),
+      ],
+    );
+  }
+
+  // ================================================================
   // BUILD
   // ================================================================
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+      BuildContext context,
+      ) {
     final l10n =
     AppLocalizations.of(context)!;
 
-    final theme = Theme.of(context);
+    final theme =
+    Theme.of(context);
 
     final isDark =
-        theme.brightness == Brightness.dark;
+        theme.brightness ==
+            Brightness.dark;
 
     final settings =
-    context.watch<SettingsProvider>();
+    context.watch<
+        SettingsProvider>();
 
-    if (_currentLocale != settings.locale) {
-      _currentLocale = settings.locale;
+    // ==============================================================
+    // LANGUAGE CHANGE
+    // ==============================================================
+
+    if (_currentLocale !=
+        settings.locale) {
+      _currentLocale =
+          settings.locale;
 
       WidgetsBinding.instance
-          .addPostFrameCallback((_) {
-        if (!mounted) return;
+          .addPostFrameCallback(
+            (_) {
+          if (!mounted) return;
 
-        context
-            .read<ServiceProvider>()
-            .fetchServices(
-          locale: _currentLocale,
-        );
-      });
+          context
+              .read<ServiceProvider>()
+              .fetchServices(
+            locale:
+            _currentLocale,
+          );
+        },
+      );
     }
 
-    return Scaffold(
-      // ============================================================
-      // LEFT DRAWER
-      // ============================================================
+    return LayoutBuilder(
+      builder: (
+          context,
+          constraints,
+          ) {
+        final width =
+            constraints.maxWidth;
 
-      drawer: _buildDrawer(
-        context,
-        theme,
-        isDark,
-      ),
+        final largeScreen =
+            width >=
+                _tabletBreakpoint;
 
-      // ============================================================
-      // RIGHT DRAWER
-      // ============================================================
+        final veryLarge =
+            width >=
+                _desktopBreakpoint;
 
-      endDrawer: Drawer(
-        backgroundColor:
-        theme.colorScheme.surface,
-        child: const SizedBox.shrink(),
-      ),
-
-      // ============================================================
-      // APP BAR
-      // ============================================================
-
-      appBar: AppBar(
-        backgroundColor:
-        const Color(0xFF006B5E),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-
-        iconTheme:
-        const IconThemeData(
-          color: Colors.white,
-        ),
-
-        titleSpacing: 8,
-
-        title: Row(
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: Colors.white
-                    .withOpacity(0.14),
-                borderRadius:
-                BorderRadius.circular(11),
-              ),
-              child: const Icon(
-                Icons.handyman_rounded,
-                color: Colors.white,
-                size: 22,
-              ),
-            ),
-
-            const SizedBox(width: 10),
-
-            Text(
-              l10n.appTitle,
-              style: const TextStyle(
-                fontSize: 19,
-                fontWeight:
-                FontWeight.w700,
-                color: Colors.white,
-              ),
-            ),
-          ],
-        ),
-
-        actions: [
+        return Scaffold(
           // ========================================================
-          // REFRESH
+          // LEFT DRAWER ONLY
           // ========================================================
 
-          IconButton(
-            onPressed: _refreshCurrentScreen,
-            tooltip: l10n.refresh,
-            icon: const Icon(
-              Icons.refresh_rounded,
-              size: 25,
-            ),
+          drawer: largeScreen
+              ? null
+              : _buildDrawer(
+            context,
+            theme,
           ),
 
           // ========================================================
-          // NOTIFICATIONS
+          // NO RIGHT DRAWER
           // ========================================================
 
-          Consumer<NotificationProvider>(
-            builder: (
-                context,
-                notificationProvider,
-                child,
-                ) {
-              final unreadCount =
-                  notificationProvider
-                      .unreadCount;
+          // endDrawer intentionally removed.
 
-              return IconButton(
-                onPressed: () =>
-                    _showNotifications(context),
-                tooltip: l10n.notifications,
-                icon: Stack(
-                  clipBehavior:
-                  Clip.none,
-                  children: [
-                    const Icon(
-                      Icons
-                          .notifications_outlined,
-                      size: 26,
+          // ========================================================
+          // APP BAR
+          // ========================================================
+
+          appBar:
+          _buildAppBar(
+            theme,
+            l10n,
+            largeScreen,
+          ),
+
+          // ========================================================
+          // BODY
+          // ========================================================
+
+          body: Row(
+            children: [
+              // ====================================================
+              // LARGE SCREEN NAVIGATION
+              // ====================================================
+
+              if (largeScreen)
+                Consumer<ChatProvider>(
+                  builder: (
+                      context,
+                      chatProvider,
+                      child,
+                      ) {
+                    return _buildLargeNavigation(
+                      theme,
+                      l10n,
+                      chatProvider,
+                    );
+                  },
+                ),
+
+              // ====================================================
+              // CONTENT
+              // ====================================================
+
+              Expanded(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints:
+                    BoxConstraints(
+                      maxWidth:
+                      veryLarge
+                          ? 1400
+                          : double.infinity,
                     ),
-
-                    if (unreadCount > 0)
-                      Positioned(
-                        right: -5,
-                        top: -5,
-                        child: Container(
-                          constraints:
-                          const BoxConstraints(
-                            minWidth: 18,
-                            minHeight: 18,
-                          ),
-                          padding:
-                          const EdgeInsets
-                              .symmetric(
-                            horizontal: 4,
-                          ),
-                          decoration:
-                          const BoxDecoration(
-                            color: Colors.red,
-                            shape:
-                            BoxShape.circle,
-                          ),
-                          alignment:
-                          Alignment.center,
-                          child: Text(
-                            unreadCount > 9
-                                ? '9+'
-                                : '$unreadCount',
-                            style:
-                            const TextStyle(
-                              color: Colors.white,
-                              fontSize: 9,
-                              fontWeight:
-                              FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
+                    child:
+                    RefreshIndicator(
+                      onRefresh:
+                      _refreshCurrentScreen,
+                      color:
+                      theme.primaryColor,
+                      backgroundColor:
+                      theme
+                          .colorScheme
+                          .surface,
+                      child: _screens[
+                      _currentIndex],
+                    ),
+                  ),
                 ),
-              );
-            },
+              ),
+            ],
           ),
 
           // ========================================================
-          // MORE
+          // MOBILE BOTTOM NAVIGATION
           // ========================================================
 
-          Builder(
-            builder: (ctx) {
-              return IconButton(
-                onPressed: () {
-                  Scaffold.of(ctx)
-                      .openEndDrawer();
-                },
-                tooltip: 'More Options',
-                icon: const Icon(
-                  Icons.more_vert_rounded,
-                  size: 26,
-                ),
-              );
-            },
+          bottomNavigationBar:
+          largeScreen
+              ? null
+              : _buildBottomNavigation(
+            theme,
+            l10n,
+            isDark,
           ),
+        );
+      },
+    );
+  }
 
-          const SizedBox(width: 4),
+  // ================================================================
+  // MOBILE BOTTOM NAVIGATION
+  // ================================================================
+
+  Widget _buildBottomNavigation(
+      ThemeData theme,
+      AppLocalizations l10n,
+      bool isDark,
+      ) {
+    return Container(
+      decoration: BoxDecoration(
+        color:
+        theme.colorScheme.surface,
+        border: Border(
+          top: BorderSide(
+            color: isDark
+                ? Colors.grey.shade800
+                : Colors.grey.shade200,
+            width: 0.6,
+          ),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black
+                .withOpacity(
+              isDark
+                  ? 0.25
+                  : 0.07,
+            ),
+            blurRadius: 15,
+            offset:
+            const Offset(0, -4),
+          ),
         ],
       ),
+      child: SafeArea(
+        top: false,
+        child: Consumer<ChatProvider>(
+          builder: (
+              context,
+              chatProvider,
+              child,
+              ) {
+            return BottomNavigationBar(
+              currentIndex:
+              _currentIndex,
 
-      // ============================================================
-      // BODY
-      // ============================================================
+              onTap: (index) {
+                if (_currentIndex ==
+                    index) {
+                  return;
+                }
 
-      body: RefreshIndicator(
-        onRefresh: _refreshCurrentScreen,
-        color: theme.primaryColor,
-        backgroundColor:
-        theme.colorScheme.surface,
-        child: _screens[_currentIndex],
-      ),
+                setState(() {
+                  _currentIndex =
+                      index;
+                });
+              },
 
-      // ============================================================
-      // BOTTOM NAVIGATION
-      // ============================================================
+              type:
+              BottomNavigationBarType
+                  .fixed,
 
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surface,
-          border: Border(
-            top: BorderSide(
-              color: isDark
-                  ? Colors.grey.shade800
-                  : Colors.grey.shade200,
-              width: 0.6,
-            ),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black
-                  .withOpacity(
-                isDark ? 0.25 : 0.07,
+              backgroundColor:
+              theme.colorScheme
+                  .surface,
+
+              elevation: 0,
+
+              selectedItemColor:
+              theme.primaryColor,
+
+              unselectedItemColor:
+              isDark
+                  ? Colors.grey.shade500
+                  : Colors.grey.shade600,
+
+              selectedFontSize: 11,
+
+              unselectedFontSize: 11,
+
+              selectedLabelStyle:
+              GoogleFonts.nunito(
+                fontWeight:
+                FontWeight.w700,
               ),
-              blurRadius: 15,
-              offset: const Offset(0, -4),
-            ),
-          ],
-        ),
-        child: SafeArea(
-          top: false,
-          child: Consumer<ChatProvider>(
-            builder: (
-                context,
-                chatProvider,
-                child,
-                ) {
-              return BottomNavigationBar(
-                currentIndex:
-                _currentIndex,
 
-                onTap: (index) {
-                  if (_currentIndex ==
-                      index) {
-                    return;
-                  }
+              unselectedLabelStyle:
+              GoogleFonts.nunito(
+                fontWeight:
+                FontWeight.w500,
+              ),
 
-                  setState(() {
-                    _currentIndex =
-                        index;
-                  });
-                },
-
-                type:
-                BottomNavigationBarType
-                    .fixed,
-
-                backgroundColor:
-                theme.colorScheme.surface,
-
-                elevation: 0,
-
-                selectedItemColor:
-                theme.primaryColor,
-
-                unselectedItemColor:
-                isDark
-                    ? Colors.grey.shade500
-                    : Colors.grey.shade600,
-
-                selectedFontSize: 11,
-
-                unselectedFontSize: 11,
-
-                selectedLabelStyle:
-                const TextStyle(
-                  fontWeight:
-                  FontWeight.w600,
+              items: [
+                BottomNavigationBarItem(
+                  icon:
+                  const Icon(
+                    Icons.home_outlined,
+                  ),
+                  activeIcon:
+                  const Icon(
+                    Icons.home_rounded,
+                  ),
+                  label:
+                  l10n.nearby,
                 ),
 
-                items: [
-                  // =================================================
-                  // NEARBY
-                  // =================================================
-
-                  BottomNavigationBarItem(
-                    icon: const Icon(
-                      Icons
-                          .home_outlined,
-                    ),
-                    activeIcon:
-                    const Icon(
-                      Icons.home_rounded,
-                    ),
-                    label: l10n.nearby,
+                BottomNavigationBarItem(
+                  icon:
+                  const Icon(
+                    Icons.article_outlined,
                   ),
-
-                  // =================================================
-                  // BLOG
-                  // =================================================
-
-                  BottomNavigationBarItem(
-                    icon: const Icon(
-                      Icons
-                          .article_outlined,
-                    ),
-                    activeIcon:
-                    const Icon(
-                      Icons
-                          .article_rounded,
-                    ),
-                    label: l10n.blog,
+                  activeIcon:
+                  const Icon(
+                    Icons.article_rounded,
                   ),
+                  label:
+                  l10n.blog,
+                ),
 
-                  // =================================================
-                  // REQUESTS
-                  // =================================================
-
-                  BottomNavigationBarItem(
-                    icon: const Icon(
-                      Icons
-                          .list_alt_outlined,
-                    ),
-                    activeIcon:
-                    const Icon(
-                      Icons
-                          .list_alt_rounded,
-                    ),
-                    label: l10n.requests,
+                BottomNavigationBarItem(
+                  icon:
+                  const Icon(
+                    Icons.list_alt_outlined,
                   ),
-
-                  // =================================================
-                  // CHAT
-                  // =================================================
-
-                  BottomNavigationBarItem(
-                    icon: _ChatIcon(
-                      unread:
-                      chatProvider
-                          .totalUnread,
-                      active: false,
-                    ),
-                    activeIcon: _ChatIcon(
-                      unread:
-                      chatProvider
-                          .totalUnread,
-                      active: true,
-                    ),
-                    label: l10n.chat,
+                  activeIcon:
+                  const Icon(
+                    Icons.list_alt_rounded,
                   ),
+                  label:
+                  l10n.requests,
+                ),
 
-                  // =================================================
-                  // PROFILE
-                  // =================================================
-
-                  BottomNavigationBarItem(
-                    icon: const Icon(
-                      Icons
-                          .person_outline,
-                    ),
-                    activeIcon:
-                    const Icon(
-                      Icons.person_rounded,
-                    ),
-                    label: l10n.profile,
+                BottomNavigationBarItem(
+                  icon: _ChatIcon(
+                    unread:
+                    chatProvider
+                        .totalUnread,
+                    active: false,
                   ),
-                ],
-              );
-            },
-          ),
+                  activeIcon:
+                  _ChatIcon(
+                    unread:
+                    chatProvider
+                        .totalUnread,
+                    active: true,
+                  ),
+                  label:
+                  l10n.chat,
+                ),
+
+                BottomNavigationBarItem(
+                  icon:
+                  const Icon(
+                    Icons.person_outline,
+                  ),
+                  activeIcon:
+                  const Icon(
+                    Icons.person_rounded,
+                  ),
+                  label:
+                  l10n.profile,
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -1179,7 +1476,8 @@ class _HomeScreenState extends State<HomeScreen> {
 // DRAWER ITEM
 // ==================================================================
 
-class _DrawerItem extends StatelessWidget {
+class _DrawerItem
+    extends StatelessWidget {
   final IconData icon;
   final String title;
   final Color color;
@@ -1193,7 +1491,9 @@ class _DrawerItem extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+      BuildContext context,
+      ) {
     final theme =
     Theme.of(context);
 
@@ -1207,7 +1507,9 @@ class _DrawerItem extends StatelessWidget {
         shape:
         RoundedRectangleBorder(
           borderRadius:
-          BorderRadius.circular(14),
+          BorderRadius.circular(
+            14,
+          ),
         ),
         contentPadding:
         const EdgeInsets.symmetric(
@@ -1217,10 +1519,16 @@ class _DrawerItem extends StatelessWidget {
         leading: Container(
           width: 42,
           height: 42,
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.09),
+          decoration:
+          BoxDecoration(
+            color:
+            color.withOpacity(
+              0.09,
+            ),
             borderRadius:
-            BorderRadius.circular(12),
+            BorderRadius.circular(
+              12,
+            ),
           ),
           child: Icon(
             icon,
@@ -1230,18 +1538,17 @@ class _DrawerItem extends StatelessWidget {
         ),
         title: Text(
           title,
-          style: theme
-              .textTheme
-              .bodyLarge
+          style:
+          theme.textTheme.bodyLarge
               ?.copyWith(
             fontWeight:
             FontWeight.w600,
           ),
         ),
         trailing: Icon(
-          Icons
-              .chevron_right_rounded,
-          color: Colors.grey.shade500,
+          Icons.chevron_right_rounded,
+          color:
+          Colors.grey.shade500,
         ),
       ),
     );
@@ -1252,7 +1559,8 @@ class _DrawerItem extends StatelessWidget {
 // CHAT ICON
 // ==================================================================
 
-class _ChatIcon extends StatelessWidget {
+class _ChatIcon
+    extends StatelessWidget {
   final int unread;
   final bool active;
 
@@ -1262,9 +1570,12 @@ class _ChatIcon extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+      BuildContext context,
+      ) {
     return Stack(
-      clipBehavior: Clip.none,
+      clipBehavior:
+      Clip.none,
       children: [
         Icon(
           active
@@ -1285,13 +1596,15 @@ class _ChatIcon extends StatelessWidget {
                 minHeight: 15,
               ),
               padding:
-              const EdgeInsets.symmetric(
+              const EdgeInsets
+                  .symmetric(
                 horizontal: 3,
               ),
               decoration:
               const BoxDecoration(
                 color: Colors.red,
-                shape: BoxShape.circle,
+                shape:
+                BoxShape.circle,
               ),
               alignment:
               Alignment.center,
@@ -1301,7 +1614,8 @@ class _ChatIcon extends StatelessWidget {
                     : '$unread',
                 style:
                 const TextStyle(
-                  color: Colors.white,
+                  color:
+                  Colors.white,
                   fontSize: 8,
                   fontWeight:
                   FontWeight.w800,
@@ -1329,11 +1643,15 @@ class _EmptyNotifications
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(
+      BuildContext context,
+      ) {
     return Center(
       child: Padding(
         padding:
-        const EdgeInsets.all(32),
+        const EdgeInsets.all(
+          32,
+        ),
         child: Column(
           mainAxisAlignment:
           MainAxisAlignment.center,
@@ -1341,11 +1659,15 @@ class _EmptyNotifications
             Container(
               width: 90,
               height: 90,
-              decoration: BoxDecoration(
+              decoration:
+              BoxDecoration(
                 color: theme
                     .primaryColor
-                    .withOpacity(0.08),
-                shape: BoxShape.circle,
+                    .withOpacity(
+                  0.08,
+                ),
+                shape:
+                BoxShape.circle,
               ),
               child: Icon(
                 Icons
@@ -1356,11 +1678,14 @@ class _EmptyNotifications
               ),
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(
+              height: 20,
+            ),
 
             Text(
               title,
-              textAlign: TextAlign.center,
+              textAlign:
+              TextAlign.center,
               style: theme
                   .textTheme
                   .titleMedium
@@ -1370,11 +1695,14 @@ class _EmptyNotifications
               ),
             ),
 
-            const SizedBox(height: 8),
+            const SizedBox(
+              height: 8,
+            ),
 
             Text(
               'We will notify you when there is something new.',
-              textAlign: TextAlign.center,
+              textAlign:
+              TextAlign.center,
               style: theme
                   .textTheme
                   .bodySmall
@@ -1397,8 +1725,11 @@ class _EmptyNotifications
 
 class _NotificationTile
     extends StatelessWidget {
-  final Map<String, dynamic> notification;
+  final Map<String, dynamic>
+  notification;
+
   final VoidCallback onTap;
+
   final String locale;
 
   const _NotificationTile({
@@ -1459,16 +1790,14 @@ class _NotificationTile
             .check_circle_outline_rounded;
 
       case 'request_rejected':
-        return Icons
-            .cancel_outlined;
+        return Icons.cancel_outlined;
 
       case 'request_in_progress':
         return Icons
             .hourglass_top_rounded;
 
       case 'request_completed':
-        return Icons
-            .task_alt_rounded;
+        return Icons.task_alt_rounded;
 
       default:
         return Icons
@@ -1507,7 +1836,7 @@ class _NotificationTile
   }
 
   // ================================================================
-  // FORMAT DATE TIME
+  // DATE TIME
   // ================================================================
 
   String _formatCreatedAt(
@@ -1525,7 +1854,8 @@ class _NotificationTile
       );
 
       if (dateTime.isUtc) {
-        dateTime = dateTime.toLocal();
+        dateTime =
+            dateTime.toLocal();
       }
 
       final day = dateTime.day
@@ -1548,7 +1878,8 @@ class _NotificationTile
           .toString()
           .padLeft(2, '0');
 
-      final minute = dateTime.minute
+      final minute =
+      dateTime.minute
           .toString()
           .padLeft(2, '0');
 
@@ -1585,7 +1916,8 @@ class _NotificationTile
       );
 
       if (dateTime.isUtc) {
-        dateTime = dateTime.toLocal();
+        dateTime =
+            dateTime.toLocal();
       }
 
       final now = DateTime.now();
@@ -1598,17 +1930,11 @@ class _NotificationTile
       }
 
       if (difference.inMinutes < 60) {
-        final minutes =
-            difference.inMinutes;
-
-        return '$minutes min ago';
+        return '${difference.inMinutes} min ago';
       }
 
       if (difference.inHours < 24) {
-        final hours =
-            difference.inHours;
-
-        return '$hours hr ago';
+        return '${difference.inHours} hr ago';
       }
 
       if (difference.inDays == 1) {
@@ -1619,7 +1945,9 @@ class _NotificationTile
         return '${difference.inDays} days ago';
       }
 
-      return _formatCreatedAt(value);
+      return _formatCreatedAt(
+        value,
+      );
     } catch (_) {
       return '';
     }
@@ -1683,48 +2011,64 @@ class _NotificationTile
       child: InkWell(
         onTap: onTap,
         borderRadius:
-        BorderRadius.circular(16),
+        BorderRadius.circular(
+          16,
+        ),
         child: AnimatedContainer(
           duration:
           const Duration(
             milliseconds: 200,
           ),
           padding:
-          const EdgeInsets.all(13),
-          decoration: BoxDecoration(
+          const EdgeInsets.all(
+            13,
+          ),
+          decoration:
+          BoxDecoration(
             color: isRead
                 ? theme
                 .colorScheme
                 .surface
-                : theme
-                .primaryColor
-                .withOpacity(0.055),
+                : theme.primaryColor
+                .withOpacity(
+              0.055,
+            ),
             borderRadius:
-            BorderRadius.circular(16),
+            BorderRadius.circular(
+              16,
+            ),
             border: Border.all(
               color: isRead
-                  ? theme.dividerColor
-                  .withOpacity(0.30)
-                  : theme.primaryColor
-                  .withOpacity(0.16),
+                  ? theme
+                  .dividerColor
+                  .withOpacity(
+                0.30,
+              )
+                  : theme
+                  .primaryColor
+                  .withOpacity(
+                0.16,
+              ),
             ),
           ),
           child: Row(
             crossAxisAlignment:
-            CrossAxisAlignment.start,
+            CrossAxisAlignment
+                .start,
             children: [
-              // =====================================================
               // ICON
-              // =====================================================
-
               Container(
                 width: 46,
                 height: 46,
-                decoration: BoxDecoration(
+                decoration:
+                BoxDecoration(
                   color: iconColor
-                      .withOpacity(0.10),
+                      .withOpacity(
+                    0.10,
+                  ),
                   borderRadius:
-                  BorderRadius.circular(
+                  BorderRadius
+                      .circular(
                     14,
                   ),
                 ),
@@ -1735,24 +2079,21 @@ class _NotificationTile
                 ),
               ),
 
-              const SizedBox(width: 12),
+              const SizedBox(
+                width: 12,
+              ),
 
-              // =====================================================
               // CONTENT
-              // =====================================================
-
               Expanded(
                 child: Column(
                   crossAxisAlignment:
-                  CrossAxisAlignment.start,
+                  CrossAxisAlignment
+                      .start,
                   children: [
-                    // =============================================
-                    // TITLE + UNREAD DOT
-                    // =============================================
-
                     Row(
                       crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                      CrossAxisAlignment
+                          .start,
                       children: [
                         Expanded(
                           child: Text(
@@ -1761,10 +2102,15 @@ class _NotificationTile
                             overflow:
                             TextOverflow
                                 .ellipsis,
-                            style: TextStyle(
-                              fontSize: 14.5,
-                              height: 1.25,
-                              fontWeight: isRead
+                            style:
+                            GoogleFonts
+                                .nunito(
+                              fontSize:
+                              14.5,
+                              height:
+                              1.25,
+                              fontWeight:
+                              isRead
                                   ? FontWeight
                                   .w500
                                   : FontWeight
@@ -1788,15 +2134,12 @@ class _NotificationTile
                               color: theme
                                   .primaryColor,
                               shape:
-                              BoxShape.circle,
+                              BoxShape
+                                  .circle,
                             ),
                           ),
                       ],
                     ),
-
-                    // =============================================
-                    // BODY
-                    // =============================================
 
                     if (body.isNotEmpty) ...[
                       const SizedBox(
@@ -1806,7 +2149,8 @@ class _NotificationTile
                         body,
                         maxLines: 2,
                         overflow:
-                        TextOverflow.ellipsis,
+                        TextOverflow
+                            .ellipsis,
                         style: theme
                             .textTheme
                             .bodySmall
@@ -1827,10 +2171,6 @@ class _NotificationTile
                       height: 8,
                     ),
 
-                    // =============================================
-                    // TYPE + TIME
-                    // =============================================
-
                     Wrap(
                       spacing: 8,
                       runSpacing: 5,
@@ -1848,7 +2188,8 @@ class _NotificationTile
                             ),
                             decoration:
                             BoxDecoration(
-                              color: iconColor
+                              color:
+                              iconColor
                                   .withOpacity(
                                 0.08,
                               ),
@@ -1862,10 +2203,13 @@ class _NotificationTile
                               _getTypeLabel(
                                 type,
                               ),
-                              style: TextStyle(
+                              style:
+                              GoogleFonts
+                                  .nunito(
                                 color:
                                 iconColor,
-                                fontSize: 10,
+                                fontSize:
+                                10,
                                 fontWeight:
                                 FontWeight
                                     .w700,
@@ -1893,11 +2237,14 @@ class _NotificationTile
                               ),
                               Text(
                                 relativeTime,
-                                style: TextStyle(
+                                style:
+                                GoogleFonts
+                                    .nunito(
                                   color: Colors
                                       .grey
                                       .shade600,
-                                  fontSize: 10.5,
+                                  fontSize:
+                                  10.5,
                                   fontWeight:
                                   FontWeight
                                       .w500,
@@ -1908,11 +2255,8 @@ class _NotificationTile
                       ],
                     ),
 
-                    // =============================================
-                    // EXACT DATE/TIME
-                    // =============================================
-
-                    if (exactDate.isNotEmpty) ...[
+                    if (exactDate
+                        .isNotEmpty) ...[
                       const SizedBox(
                         height: 5,
                       ),
@@ -1936,11 +2280,14 @@ class _NotificationTile
                               overflow:
                               TextOverflow
                                   .ellipsis,
-                              style: TextStyle(
+                              style:
+                              GoogleFonts
+                                  .nunito(
                                 color: Colors
                                     .grey
                                     .shade500,
-                                fontSize: 9.5,
+                                fontSize:
+                                9.5,
                               ),
                             ),
                           ),

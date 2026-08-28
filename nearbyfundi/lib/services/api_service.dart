@@ -99,13 +99,11 @@ class ApiService {
   Future<ApiResponse> login(String identifier, String password) =>
       _post('/v1/auth/login', data: {'email': identifier, 'password': password});
 
-  /// ─── NEW: Google login ──────────────────────────────────────────────
   Future<ApiResponse> loginWithGoogle(String idToken, {String? fcmToken}) async {
     final body = <String, dynamic>{
       'id_token': idToken,
       if (fcmToken != null && fcmToken.isNotEmpty) 'fcm_token': fcmToken,
     };
-
     return _post('/v1/auth/google', data: body);
   }
 
@@ -158,7 +156,7 @@ class ApiService {
   Future<ApiResponse> deleteAccount() => _delete('/v1/auth/account');
 
   // ═══════════════════════════════════════════════════════════════════════
-  //  SERVICES WITH CATEGORIES (V11) - WITH LANGUAGE SUPPORT
+  //  SERVICES WITH CATEGORIES (V11)
   // ═══════════════════════════════════════════════════════════════════════
 
   Future<ApiResponse> getServicesWithCategories({String locale = 'en'}) =>
@@ -197,7 +195,7 @@ class ApiService {
       _get('/v4/request-services', query: {'locale': locale});
 
   // ═══════════════════════════════════════════════════════════════════════
-  //  TECHNICIANS (Customer side) - V1 - WITH LANGUAGE SUPPORT
+  //  TECHNICIANS (Customer side) - V1
   // ═══════════════════════════════════════════════════════════════════════
 
   Future<ApiResponse> getNearbyTechnicians({
@@ -274,11 +272,6 @@ class ApiService {
     return _post('/v2/technicians/profile/photo', data: formData);
   }
 
-  // ============================================================
-  //  NEW: TECHNICIAN SERVICE PRICE MANAGEMENT (V2)
-  // ============================================================
-
-  /// Update technician's service prices (min/max)
   Future<ApiResponse> updateServicePrices(Map<String, dynamic> pricesData) =>
       _put('/v2/technicians/service-prices', data: pricesData);
 
@@ -355,11 +348,9 @@ class ApiService {
       _put('/v3/portfolios/$id/social-links', data: socialLinks);
 
   // ═══════════════════════════════════════════════════════════════════════
-  //  REQUESTS (Booking) - V4 (UPDATED to include location)
+  //  REQUESTS (Booking) - V4
   // ═══════════════════════════════════════════════════════════════════════
 
-  /// Create a new service request (customer)
-  /// Optionally include latitude & longitude for the customer's location.
   Future<ApiResponse> createRequest({
     required int technicianId,
     required int serviceId,
@@ -384,22 +375,14 @@ class ApiService {
   Future<ApiResponse> cancelRequest(int id) =>
       _delete('/v4/requests/$id/cancel');
 
-  // ============================================================
-  //  NEW: REQUEST TRACKING (V4) – customer & technician
-  // ============================================================
-
-  /// Mark request as "on the way" (technician only)
   Future<ApiResponse> markOnTheWay(int requestId) =>
       _patch('/v4/requests/$requestId/on-the-way');
 
-  /// Mark request as "arrived" (technician only)
   Future<ApiResponse> markArrived(int requestId) =>
       _patch('/v4/requests/$requestId/arrive');
 
-  /// Get live tracking data (customer can view)
-  /// Uses the dedicated tracking endpoint: /tracking/{requestId}
   Future<ApiResponse> getTrackingData(int requestId) =>
-      _get('/tracking/$requestId');  // ✅ NEW ROUTE
+      _get('/tracking/$requestId');
 
   // ═══════════════════════════════════════════════════════════════════════
   //  BLOG (Posts, Comments, Likes) - V1 & V5
@@ -420,10 +403,6 @@ class ApiService {
       _post('/v5/posts/$postId/comments', data: {'comment': comment});
 
   Future<ApiResponse> deleteComment(int id) => _delete('/v5/comments/$id');
-
-  // ═══════════════════════════════════════════════════════════════════════
-  //  BLOG POSTS CRUD (Technicians only) - V5
-  // ═══════════════════════════════════════════════════════════════════════
 
   Future<ApiResponse> createPost({
     required String title,
@@ -627,7 +606,7 @@ class ApiService {
       _delete('/v14/chat/conversations/$conversationId');
 
   // ═══════════════════════════════════════════════════════════════════════
-  //  NOTIFICATION ENDPOINTS (V15)
+  //  NOTIFICATION ENDPOINTS (V15) - FIXED
   // ═══════════════════════════════════════════════════════════════════════
 
   Future<ApiResponse> getNotifications() =>
@@ -636,6 +615,7 @@ class ApiService {
   Future<ApiResponse> getUnreadNotificationCount() =>
       _get('/v15/notifications/unread-count');
 
+  // ✅ FIXED: Positional parameter
   Future<ApiResponse> markNotificationAsRead(String notificationId) =>
       _put('/v15/notifications/$notificationId/read');
 
@@ -728,15 +708,13 @@ class ApiService {
   Future<ApiResponse> getActiveCategoriesDropdown({String locale = 'en'}) =>
       _get('/v17/service-categories/dropdown/active', query: {'locale': locale});
 
-  // ============================================================
-  //  NEW: V18 – REVIEWS & PRIVACY POLICY (Phase 2)
-  // ============================================================
+  // ═══════════════════════════════════════════════════════════════════════
+  //  REVIEWS & PRIVACY POLICY (V18)
+  // ═══════════════════════════════════════════════════════════════════════
 
-  /// Get all reviews for a technician (public)
   Future<ApiResponse> getTechnicianReviews(int technicianId) =>
       _get('/v18/technicians/$technicianId/reviews');
 
-  /// Submit a review for a completed request (customer only)
   Future<ApiResponse> submitReview({
     required int requestId,
     required int rating,
@@ -747,15 +725,11 @@ class ApiService {
     if (comment != null) 'comment': comment,
   });
 
-  /// Get privacy policy (public)
   Future<ApiResponse> getPrivacyPolicy() =>
       _get('/v18/privacy-policy');
 
   // ═══════════════════════════════════════════════════════════════════════
   //  PRIVATE HELPERS
-  //  (Only change vs. the original file: diagnostic logging, gated behind
-  //  kDebugMode so it is a no-op / stripped in release & production builds.
-  //  No behavior, no return values, no method signatures were changed.)
   // ═══════════════════════════════════════════════════════════════════════
 
   void _logRequest(String method, String path, {Map<String, dynamic>? query}) {
@@ -780,34 +754,16 @@ class ApiService {
       if (data is Map) {
         debugPrint('   body(json): $data');
       } else if (data is String) {
-        // Truncate to avoid flooding logcat with a full HTML/error page.
         final preview = data.length > 500 ? '${data.substring(0, 500)}…' : data;
         debugPrint('   body(non-json, first 500 chars): $preview');
       } else if (data != null) {
         debugPrint('   body(unexpected type ${data.runtimeType}): $data');
       } else {
-        debugPrint('   body: null (likely no response reached the server)');
+        debugPrint('   body: null');
       }
     }
   }
 
-  /// Turns a raw Dio [Response] into an [ApiResponse].
-  ///
-  /// Normally `res.data` is already a decoded `Map<String, dynamic>` because
-  /// the server sent `Content-Type: application/json` and Dio auto-parsed
-  /// it. If the server sends a 200 with the *body* of JSON but something
-  /// (a stray PHP warning/notice, whitespace, an accidental echo before the
-  /// json_encode, etc.) corrupts the `Content-Type` or leading bytes, Dio
-  /// leaves `res.data` as a raw String instead of throwing — so this used to
-  /// blow up one line later as `type 'String' is not a subtype of type
-  /// 'Map<String, dynamic>'`, which then got swallowed by the generic
-  /// "Network error" fallback in [_handleError] because it isn't a
-  /// [DioException].
-  ///
-  /// This helper: (1) logs the raw body whenever it isn't already a Map, so
-  /// the real cause is visible in logcat, and (2) tries a manual
-  /// [jsonDecode] as a safety net in case the payload is valid JSON that
-  /// merely arrived with the wrong Content-Type header.
   ApiResponse _parseResponse(String method, String path, Response res) {
     final data = res.data;
 
@@ -818,24 +774,18 @@ class ApiService {
     if (data is String) {
       if (kDebugMode) {
         final preview = data.length > 800 ? '${data.substring(0, 800)}…' : data;
-        debugPrint('⚠️  $method $path returned 200 but body was a String, '
-            'not JSON (Content-Type: ${res.headers.value('content-type')}).');
+        debugPrint('⚠️  $method $path returned 200 but body was a String');
         debugPrint('   raw body (first 800 chars): $preview');
       }
-      // Safety net: maybe it really is JSON, just mislabeled.
       try {
         final decoded = jsonDecode(data);
         if (decoded is Map<String, dynamic>) {
           if (kDebugMode) {
-            debugPrint('   ↳ recovered: body WAS valid JSON despite the '
-                'wrong Content-Type header. Fix the header server-side.');
+            debugPrint('   ↳ recovered: body WAS valid JSON');
           }
           return ApiResponse.fromJson(decoded);
         }
-      } catch (_) {
-        // Not valid JSON at all — genuinely broken output (e.g. HTML error
-        // page, PHP notice printed before json_encode, etc).
-      }
+      } catch (_) {}
     }
 
     return ApiResponse(

@@ -6,18 +6,14 @@ import 'package:flutter_svg/flutter_svg.dart';
 class Assets {
   Assets._();
 
-  static const AssetGenImage appIcon = AssetGenImage(
-    'assets/icons/app_icon.png',
-  );
-  static const SvgGenImage audioIcon = SvgGenImage(
-    'assets/icons/chat/audio_icon.svg',
-  );
-  static const SvgGenImage chatIcon = SvgGenImage(
-    'assets/icons/chat/chat_icon.svg',
-  );
-  static const AssetGenImage nearbylogo = AssetGenImage(
-    'assets/icons/nearbylogo.png',
-  );
+  static const AssetGenImage appIcon =
+      AssetGenImage('assets/icons/app_icon.png');
+  static const SvgGenImage audioIcon =
+      SvgGenImage('assets/icons/chat/audio_icon.svg');
+  static const SvgGenImage chatIcon =
+      SvgGenImage('assets/icons/chat/chat_icon.svg');
+  static const AssetGenImage nearbylogo =
+      AssetGenImage('assets/icons/nearbylogo.png');
   static const $AssetsAssetsGen assets = $AssetsAssetsGen();
 }
 
@@ -30,19 +26,15 @@ class $AssetsAssetsGen {
 class $AssetsImagesGen {
   const $AssetsImagesGen();
 
-  final AssetGenImage backimg = const AssetGenImage(
-    'assets/images/backimg.jpg',
-  );
-  final AssetGenImage googleLogo = const AssetGenImage(
-    'assets/images/google_logo.png',
-  );
+  final AssetGenImage backimg =
+      const AssetGenImage('assets/images/backimg.jpg');
+  final AssetGenImage googleLogo =
+      const AssetGenImage('assets/images/google_logo.png');
   final AssetGenImage home = const AssetGenImage('assets/images/home.jpg');
-  final SvgGenImage nearbyfundiLogo = const SvgGenImage(
-    'assets/images/nearbyfundi-logo.svg',
-  );
-  final AssetGenImage nearbyfundiImage = const AssetGenImage(
-    'assets/images/nearbyfundi_image.jpg',
-  );
+  final SvgGenImage nearbyfundiLogo =
+      const SvgGenImage('assets/images/nearbyfundi-logo.svg');
+  final AssetGenImage nearbyfundiImage =
+      const AssetGenImage('assets/images/nearbyfundi_image.jpg');
 }
 
 class AssetGenImage {
@@ -106,8 +98,15 @@ class AssetGenImage {
     );
   }
 
-  ImageProvider provider({AssetBundle? bundle, String? package}) {
-    return AssetImage(_assetName, bundle: bundle, package: package);
+  ImageProvider provider({
+    AssetBundle? bundle,
+    String? package,
+  }) {
+    return AssetImage(
+      _assetName,
+      bundle: bundle,
+      package: package,
+    );
   }
 
   Widget custom({

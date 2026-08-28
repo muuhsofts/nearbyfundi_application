@@ -1,9 +1,9 @@
 // onboarding_screen.dart
-import 'dart:math' as math;
+// Fully Responsive Onboarding Screen - Supports all screen sizes with scrolling
 
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-
 import '../config/app_routes.dart';
 import '../l10n/app_localizations.dart';
 
@@ -20,11 +20,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   static const Color darkGreen = Color(0xFF003D35);
   static const Color accentGreen = Color(0xFF00B894);
 
-  static const String logoPath =
-      'assets/images/nearbyfundi-logo.svg';
+  static const String logoPath = 'assets/images/nearbyfundi-logo.svg';
 
   final PageController _pageController = PageController();
-
   int _currentPage = 0;
 
   late AnimationController _backgroundController;
@@ -115,10 +113,110 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
+  // ================================================================
+  // RESPONSIVE HELPERS
+  // ================================================================
+
+  bool _isMobile(BuildContext context) {
+    return MediaQuery.of(context).size.width < 480;
+  }
+
+  bool _isTablet(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    return width >= 480 && width < 1024;
+  }
+
+  bool _isDesktop(BuildContext context) {
+    return MediaQuery.of(context).size.width >= 1024;
+  }
+
+  double _getVisualSize(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final height = MediaQuery.of(context).size.height;
+    final baseSize = width < height ? width : height;
+
+    if (_isDesktop(context)) {
+      return baseSize * 0.45;
+    } else if (_isTablet(context)) {
+      return baseSize * 0.40;
+    } else {
+      return baseSize * 0.55;
+    }
+  }
+
+  EdgeInsets _getPadding(BuildContext context) {
+    if (_isDesktop(context)) {
+      return const EdgeInsets.symmetric(horizontal: 80, vertical: 20);
+    } else if (_isTablet(context)) {
+      return const EdgeInsets.symmetric(horizontal: 40, vertical: 16);
+    }
+    return const EdgeInsets.symmetric(horizontal: 24, vertical: 8);
+  }
+
+  // Helper to get spacing values
+  double _getVerticalSpacing(BuildContext context) {
+    if (_isDesktop(context)) {
+      return 30.0;
+    } else if (_isTablet(context)) {
+      return 24.0;
+    }
+    return 16.0;
+  }
+
+  double _getBottomSpacing(BuildContext context) {
+    if (_isDesktop(context)) {
+      return 20.0;
+    } else if (_isTablet(context)) {
+      return 16.0;
+    }
+    return 10.0;
+  }
+
+  // Helper to get floating icon sizes
+  double _getFloatingIconSize(BuildContext context) {
+    if (_isDesktop(context)) {
+      return 72.0;
+    } else if (_isTablet(context)) {
+      return 64.0;
+    }
+    return 55.0;
+  }
+
+  double _getFloatingIconSizeSmall(BuildContext context) {
+    if (_isDesktop(context)) {
+      return 62.0;
+    } else if (_isTablet(context)) {
+      return 56.0;
+    }
+    return 48.0;
+  }
+
+  double _getIconSize(BuildContext context) {
+    if (_isDesktop(context)) {
+      return 36.0;
+    } else if (_isTablet(context)) {
+      return 32.0;
+    }
+    return 26.0;
+  }
+
+  double _getBadgeSize(BuildContext context) {
+    if (_isDesktop(context)) {
+      return 56.0;
+    } else if (_isTablet(context)) {
+      return 50.0;
+    }
+    return 44.0;
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final size = MediaQuery.sizeOf(context);
+    final size = MediaQuery.of(context).size;
+    final isDesktop = _isDesktop(context);
+    final isTablet = _isTablet(context);
+    final visualSize = _getVisualSize(context);
+    final padding = _getPadding(context);
 
     return Scaffold(
       backgroundColor: darkGreen,
@@ -139,12 +237,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                   Color(0xFF006B5E),
                   Color(0xFF00483F),
                 ],
-                stops: [
-                  0.0,
-                  0.35,
-                  0.70,
-                  1.0,
-                ],
+                stops: [0.0, 0.35, 0.70, 1.0],
               ),
             ),
           ),
@@ -153,34 +246,24 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           AnimatedBuilder(
             animation: _backgroundController,
             builder: (context, child) {
-              final value =
-                  _backgroundController.value * math.pi * 2;
+              final value = _backgroundController.value * math.pi * 2;
 
               return Stack(
                 children: [
                   Positioned(
                     top: -120 + math.sin(value) * 25,
                     right: -100 + math.cos(value) * 20,
-                    child: _buildGlow(
-                      340,
-                      0.09,
-                    ),
+                    child: _buildGlow(340.0, 0.09),
                   ),
                   Positioned(
                     bottom: -150 + math.cos(value) * 30,
                     left: -100 + math.sin(value) * 25,
-                    child: _buildGlow(
-                      380,
-                      0.07,
-                    ),
+                    child: _buildGlow(380.0, 0.07),
                   ),
                   Positioned(
                     top: size.height * 0.45,
                     right: -130,
-                    child: _buildGlow(
-                      250,
-                      0.045,
-                    ),
+                    child: _buildGlow(250.0, 0.045),
                   ),
                 ],
               );
@@ -199,26 +282,26 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 // ====================================================
 
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    24,
-                    18,
-                    24,
-                    8,
+                  padding: EdgeInsets.fromLTRB(
+                    padding.left,
+                    isDesktop ? 24.0 : 18.0,
+                    padding.right,
+                    8.0,
                   ),
                   child: Row(
                     children: [
-                      // Small logo
+                      // Logo
                       Container(
-                        width: 48,
-                        height: 48,
-                        padding: const EdgeInsets.all(9),
+                        width: isDesktop ? 56.0 : 48.0,
+                        height: isDesktop ? 56.0 : 48.0,
+                        padding: EdgeInsets.all(isDesktop ? 11.0 : 9.0),
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(15),
+                          borderRadius: BorderRadius.circular(isDesktop ? 18.0 : 15.0),
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withOpacity(0.15),
-                              blurRadius: 20,
+                              blurRadius: 20.0,
                               offset: const Offset(0, 8),
                             ),
                           ],
@@ -229,28 +312,27 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                         ),
                       ),
 
-                      const SizedBox(width: 12),
+                      SizedBox(width: isDesktop ? 16.0 : 12.0),
 
-                      const Expanded(
+                      Expanded(
                         child: Column(
-                          crossAxisAlignment:
-                          CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               'NearbyFundi',
                               style: TextStyle(
                                 color: Colors.white,
-                                fontSize: 19,
+                                fontSize: isDesktop ? 24.0 : (isTablet ? 21.0 : 19.0),
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: -0.3,
                               ),
                             ),
-                            SizedBox(height: 2),
+                            const SizedBox(height: 2),
                             Text(
                               'FIND • CONNECT • GET IT DONE',
                               style: TextStyle(
                                 color: Colors.white54,
-                                fontSize: 8,
+                                fontSize: isDesktop ? 11.0 : (isTablet ? 9.0 : 8.0),
                                 fontWeight: FontWeight.w700,
                                 letterSpacing: 1.4,
                               ),
@@ -259,21 +341,21 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                         ),
                       ),
 
-                      // Skip
+                      // Skip button
                       if (_currentPage != _items.length - 1)
                         TextButton(
                           onPressed: _skip,
                           style: TextButton.styleFrom(
                             foregroundColor: Colors.white70,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isDesktop ? 20.0 : 12.0,
+                              vertical: isDesktop ? 12.0 : 8.0,
                             ),
                           ),
                           child: Text(
                             l10n.skip,
-                            style: const TextStyle(
-                              fontSize: 13,
+                            style: TextStyle(
+                              fontSize: isDesktop ? 16.0 : (isTablet ? 14.0 : 13.0),
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -283,7 +365,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 ),
 
                 // ====================================================
-                // PAGE VIEW
+                // PAGE VIEW (Scrollable)
                 // ====================================================
 
                 Expanded(
@@ -298,6 +380,16 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                         primaryGreen: primaryGreen,
                         accentGreen: accentGreen,
                         logoPath: logoPath,
+                        visualSize: visualSize,
+                        isDesktop: isDesktop,
+                        isTablet: isTablet,
+                        padding: padding,
+                        verticalSpacing: _getVerticalSpacing(context),
+                        bottomSpacing: _getBottomSpacing(context),
+                        floatingIconSize: _getFloatingIconSize(context),
+                        floatingIconSizeSmall: _getFloatingIconSizeSmall(context),
+                        iconSize: _getIconSize(context),
+                        badgeSize: _getBadgeSize(context),
                       );
                     },
                   ),
@@ -308,33 +400,27 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 // ====================================================
 
                 Padding(
-                  padding: const EdgeInsets.only(
-                    bottom: 20,
+                  padding: EdgeInsets.only(
+                    bottom: isDesktop ? 24.0 : 20.0,
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: List.generate(
                       _items.length,
                           (index) {
-                        final active =
-                            _currentPage == index;
+                        final active = _currentPage == index;
 
                         return AnimatedContainer(
-                          duration: const Duration(
-                            milliseconds: 350,
-                          ),
+                          duration: const Duration(milliseconds: 350),
                           curve: Curves.easeOut,
-                          margin: const EdgeInsets.symmetric(
-                            horizontal: 4,
-                          ),
-                          width: active ? 32 : 8,
-                          height: 7,
+                          margin: const EdgeInsets.symmetric(horizontal: 4.0),
+                          width: active ? (isDesktop ? 40.0 : 32.0) : (isDesktop ? 10.0 : 8.0),
+                          height: isDesktop ? 9.0 : 7.0,
                           decoration: BoxDecoration(
                             color: active
                                 ? Colors.white
                                 : Colors.white.withOpacity(0.25),
-                            borderRadius:
-                            BorderRadius.circular(20),
+                            borderRadius: BorderRadius.circular(20.0),
                           ),
                         );
                       },
@@ -347,24 +433,17 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 // ====================================================
 
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    24,
-                    0,
-                    24,
-                    24,
+                  padding: EdgeInsets.fromLTRB(
+                    padding.left,
+                    0.0,
+                    padding.right,
+                    isDesktop ? 32.0 : 24.0,
                   ),
                   child: AnimatedSwitcher(
-                    duration: const Duration(
-                      milliseconds: 300,
-                    ),
-                    child: _currentPage ==
-                        _items.length - 1
-                        ? _buildGetStartedButton(
-                      l10n,
-                    )
-                        : _buildNextButton(
-                      l10n,
-                    ),
+                    duration: const Duration(milliseconds: 300),
+                    child: _currentPage == _items.length - 1
+                        ? _buildGetStartedButton(l10n, isDesktop)
+                        : _buildNextButton(l10n, isDesktop),
                   ),
                 ),
               ],
@@ -376,16 +455,14 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 
   // ================================================================
-  // NEXT BUTTON
+  // NEXT BUTTON (Responsive)
   // ================================================================
 
-  Widget _buildNextButton(
-      AppLocalizations l10n,
-      ) {
+  Widget _buildNextButton(AppLocalizations l10n, bool isDesktop) {
     return SizedBox(
       key: const ValueKey('next'),
       width: double.infinity,
-      height: 58,
+      height: isDesktop ? 68.0 : 58.0,
       child: ElevatedButton(
         onPressed: _nextPage,
         style: ElevatedButton.styleFrom(
@@ -394,24 +471,24 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           elevation: 8,
           shadowColor: Colors.black.withOpacity(0.20),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(isDesktop ? 22.0 : 18.0),
           ),
         ),
-        child: const Row(
+        child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
               'Continue',
               style: TextStyle(
-                fontSize: 17,
+                fontSize: isDesktop ? 20.0 : 17.0,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 0.1,
               ),
             ),
-            SizedBox(width: 10),
+            SizedBox(width: isDesktop ? 14.0 : 10.0),
             Icon(
               Icons.arrow_forward_rounded,
-              size: 23,
+              size: isDesktop ? 28.0 : 23.0,
             ),
           ],
         ),
@@ -420,16 +497,14 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 
   // ================================================================
-  // GET STARTED
+  // GET STARTED (Responsive)
   // ================================================================
 
-  Widget _buildGetStartedButton(
-      AppLocalizations l10n,
-      ) {
+  Widget _buildGetStartedButton(AppLocalizations l10n, bool isDesktop) {
     return SizedBox(
       key: const ValueKey('started'),
       width: double.infinity,
-      height: 58,
+      height: isDesktop ? 68.0 : 58.0,
       child: ElevatedButton(
         onPressed: _getStarted,
         style: ElevatedButton.styleFrom(
@@ -438,7 +513,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           elevation: 8,
           shadowColor: Colors.black.withOpacity(0.20),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(isDesktop ? 22.0 : 18.0),
           ),
         ),
         child: Row(
@@ -446,16 +521,16 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           children: [
             Text(
               l10n.getStarted,
-              style: const TextStyle(
-                fontSize: 17,
+              style: TextStyle(
+                fontSize: isDesktop ? 20.0 : 17.0,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 0.1,
               ),
             ),
-            const SizedBox(width: 10),
-            const Icon(
+            SizedBox(width: isDesktop ? 14.0 : 10.0),
+            Icon(
               Icons.arrow_forward_rounded,
-              size: 23,
+              size: isDesktop ? 28.0 : 23.0,
             ),
           ],
         ),
@@ -467,10 +542,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   // GLOW
   // ================================================================
 
-  Widget _buildGlow(
-      double size,
-      double opacity,
-      ) {
+  Widget _buildGlow(double size, double opacity) {
     return Container(
       width: size,
       height: size,
@@ -488,7 +560,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 }
 
 // ==================================================================
-// ONBOARDING PAGE
+// ONBOARDING PAGE (Fully Responsive + Scrollable)
 // ==================================================================
 
 class _OnboardingPage extends StatelessWidget {
@@ -497,6 +569,16 @@ class _OnboardingPage extends StatelessWidget {
   final Color primaryGreen;
   final Color accentGreen;
   final String logoPath;
+  final double visualSize;
+  final bool isDesktop;
+  final bool isTablet;
+  final EdgeInsets padding;
+  final double verticalSpacing;
+  final double bottomSpacing;
+  final double floatingIconSize;
+  final double floatingIconSizeSmall;
+  final double iconSize;
+  final double badgeSize;
 
   const _OnboardingPage({
     required this.item,
@@ -504,10 +586,23 @@ class _OnboardingPage extends StatelessWidget {
     required this.primaryGreen,
     required this.accentGreen,
     required this.logoPath,
+    required this.visualSize,
+    required this.isDesktop,
+    required this.isTablet,
+    required this.padding,
+    required this.verticalSpacing,
+    required this.bottomSpacing,
+    required this.floatingIconSize,
+    required this.floatingIconSizeSmall,
+    required this.iconSize,
+    required this.badgeSize,
   });
 
   @override
   Widget build(BuildContext context) {
+    final fontSize = _getFontSize();
+    final screenHeight = MediaQuery.of(context).size.height;
+
     return AnimatedBuilder(
       animation: animation,
       builder: (context, child) {
@@ -516,134 +611,165 @@ class _OnboardingPage extends StatelessWidget {
           curve: Curves.easeOut,
         ).value;
 
-        final slide =
-            (1 - animation.value) * 35;
+        final slide = (1 - animation.value) * 35;
 
         return Opacity(
           opacity: fade,
           child: Transform.translate(
             offset: Offset(0, slide),
-            child: child,
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(
+                padding.left,
+                verticalSpacing,
+                padding.right,
+                bottomSpacing,
+              ),
+              physics: const BouncingScrollPhysics(),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: screenHeight * 0.65,
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // ========================================================
+                    // VISUAL AREA (Responsive size)
+                    // ========================================================
+
+                    _buildVisual(context),
+
+                    SizedBox(height: isDesktop ? 40.0 : (isTablet ? 34.0 : 30.0)),
+
+                    // ========================================================
+                    // TITLE (Responsive)
+                    // ========================================================
+
+                    Text(
+                      item.title,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: isDesktop ? 44.0 : (isTablet ? 36.0 : 28.0),
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.8,
+                        height: 1.1,
+                      ),
+                    ),
+
+                    SizedBox(height: isDesktop ? 20.0 : (isTablet ? 16.0 : 14.0)),
+
+                    // Green accent
+                    Container(
+                      width: isDesktop ? 56.0 : 42.0,
+                      height: isDesktop ? 5.0 : 4.0,
+                      decoration: BoxDecoration(
+                        color: accentGreen,
+                        borderRadius: BorderRadius.circular(20.0),
+                      ),
+                    ),
+
+                    SizedBox(height: isDesktop ? 24.0 : (isTablet ? 20.0 : 18.0)),
+
+                    // ========================================================
+                    // DESCRIPTION (Responsive)
+                    // ========================================================
+
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: isDesktop ? 600.0 : (isTablet ? 500.0 : 360.0),
+                      ),
+                      child: Text(
+                        item.description,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.78),
+                          fontSize: fontSize,
+                          height: 1.55,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ),
+
+                    SizedBox(height: isDesktop ? 32.0 : (isTablet ? 28.0 : 24.0)),
+
+                    // ========================================================
+                    // BENEFITS (Responsive layout)
+                    // ========================================================
+
+                    Wrap(
+                      spacing: isDesktop ? 16.0 : 10.0,
+                      runSpacing: 10.0,
+                      alignment: WrapAlignment.center,
+                      children: [
+                        _Benefit(
+                          icon: Icons.verified_rounded,
+                          text: 'Verified',
+                          isDesktop: isDesktop,
+                        ),
+                        _Benefit(
+                          icon: Icons.star_rounded,
+                          text: 'Trusted',
+                          isDesktop: isDesktop,
+                        ),
+                        _Benefit(
+                          icon: Icons.bolt_rounded,
+                          text: 'Fast',
+                          isDesktop: isDesktop,
+                        ),
+                        if (isDesktop) ...[
+                          _Benefit(
+                            icon: Icons.security_rounded,
+                            text: 'Secure',
+                            isDesktop: isDesktop,
+                          ),
+                          _Benefit(
+                            icon: Icons.support_rounded,
+                            text: '24/7',
+                            isDesktop: isDesktop,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         );
       },
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          24,
-          12,
-          24,
-          8,
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // ========================================================
-            // VISUAL AREA
-            // ========================================================
-
-            _buildVisual(),
-
-            const SizedBox(height: 34),
-
-            // ========================================================
-            // TITLE
-            // ========================================================
-
-            Text(
-              item.title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 32,
-                fontWeight: FontWeight.w900,
-                letterSpacing: -0.8,
-                height: 1.1,
-              ),
-            ),
-
-            const SizedBox(height: 14),
-
-            // Green accent
-            Container(
-              width: 42,
-              height: 4,
-              decoration: BoxDecoration(
-                color: accentGreen,
-                borderRadius: BorderRadius.circular(20),
-              ),
-            ),
-
-            const SizedBox(height: 18),
-
-            // ========================================================
-            // DESCRIPTION
-            // ========================================================
-
-            ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: 360,
-              ),
-              child: Text(
-                item.description,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.78),
-                  fontSize: 16,
-                  height: 1.55,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // ========================================================
-            // BENEFITS
-            // ========================================================
-
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _Benefit(
-                  icon: Icons.verified_rounded,
-                  text: 'Verified',
-                ),
-                const SizedBox(width: 10),
-                _Benefit(
-                  icon: Icons.star_rounded,
-                  text: 'Trusted',
-                ),
-                const SizedBox(width: 10),
-                _Benefit(
-                  icon: Icons.bolt_rounded,
-                  text: 'Fast',
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
     );
   }
 
-  Widget _buildVisual() {
+  double _getFontSize() {
+    if (isDesktop) {
+      return 20.0;
+    } else if (isTablet) {
+      return 18.0;
+    }
+    return 16.0;
+  }
+
+  Widget _buildVisual(BuildContext context) {
+    final size = visualSize;
+
     return SizedBox(
-      width: 290,
-      height: 290,
+      width: size,
+      height: size,
       child: Stack(
         alignment: Alignment.center,
         children: [
           // Outer glow
           Container(
-            width: 290,
-            height: 290,
+            width: size,
+            height: size,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
                   color: accentGreen.withOpacity(0.14),
-                  blurRadius: 70,
-                  spreadRadius: 5,
+                  blurRadius: size * 0.24,
+                  spreadRadius: 5.0,
                 ),
               ],
             ),
@@ -651,44 +777,44 @@ class _OnboardingPage extends StatelessWidget {
 
           // Outer ring
           Container(
-            width: 270,
-            height: 270,
+            width: size * 0.93,
+            height: size * 0.93,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: Colors.white.withOpacity(0.045),
               border: Border.all(
                 color: Colors.white.withOpacity(0.10),
-                width: 1,
+                width: 1.0,
               ),
             ),
           ),
 
           // Middle ring
           Container(
-            width: 225,
-            height: 225,
+            width: size * 0.78,
+            height: size * 0.78,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: Colors.white.withOpacity(0.07),
               border: Border.all(
                 color: Colors.white.withOpacity(0.10),
-                width: 1,
+                width: 1.0,
               ),
             ),
           ),
 
           // Logo background
           Container(
-            width: 175,
-            height: 175,
-            padding: const EdgeInsets.all(27),
+            width: size * 0.60,
+            height: size * 0.60,
+            padding: EdgeInsets.all(size * 0.09),
             decoration: BoxDecoration(
               color: Colors.white,
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.20),
-                  blurRadius: 35,
+                  blurRadius: size * 0.12,
                   offset: const Offset(0, 15),
                 ),
               ],
@@ -701,46 +827,50 @@ class _OnboardingPage extends StatelessWidget {
 
           // Feature icon
           Positioned(
-            right: 20,
-            top: 38,
+            right: size * 0.08,
+            top: size * 0.13,
             child: _FloatingIcon(
               icon: item.icon,
               primaryGreen: primaryGreen,
+              size: floatingIconSize,
+              iconSize: iconSize,
             ),
           ),
 
           // Secondary icon
           Positioned(
-            left: 22,
-            bottom: 40,
+            left: size * 0.08,
+            bottom: size * 0.14,
             child: _FloatingIcon(
               icon: item.icon2,
               primaryGreen: primaryGreen,
+              size: floatingIconSizeSmall,
+              iconSize: iconSize - 4.0,
               small: true,
             ),
           ),
 
           // Location badge
           Positioned(
-            right: 5,
-            bottom: 38,
+            right: size * 0.02,
+            bottom: size * 0.13,
             child: Container(
-              width: 48,
-              height: 48,
+              width: badgeSize,
+              height: badgeSize,
               decoration: BoxDecoration(
                 color: accentGreen,
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
                     color: accentGreen.withOpacity(0.35),
-                    blurRadius: 18,
+                    blurRadius: badgeSize * 0.35,
                   ),
                 ],
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.check_rounded,
                 color: Colors.white,
-                size: 27,
+                size: badgeSize * 0.56,
               ),
             ),
           ),
@@ -751,24 +881,26 @@ class _OnboardingPage extends StatelessWidget {
 }
 
 // ==================================================================
-// FLOATING ICON
+// FLOATING ICON (Responsive)
 // ==================================================================
 
 class _FloatingIcon extends StatelessWidget {
   final IconData icon;
   final Color primaryGreen;
+  final double size;
+  final double iconSize;
   final bool small;
 
   const _FloatingIcon({
     required this.icon,
     required this.primaryGreen,
+    required this.size,
+    required this.iconSize,
     this.small = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final size = small ? 55.0 : 64.0;
-
     return Container(
       width: size,
       height: size,
@@ -778,7 +910,7 @@ class _FloatingIcon extends StatelessWidget {
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.18),
-            blurRadius: 22,
+            blurRadius: size * 0.35,
             offset: const Offset(0, 9),
           ),
         ],
@@ -786,35 +918,37 @@ class _FloatingIcon extends StatelessWidget {
       child: Icon(
         icon,
         color: primaryGreen,
-        size: small ? 26 : 31,
+        size: iconSize,
       ),
     );
   }
 }
 
 // ==================================================================
-// BENEFIT
+// BENEFIT (Responsive)
 // ==================================================================
 
 class _Benefit extends StatelessWidget {
   final IconData icon;
   final String text;
+  final bool isDesktop;
 
   const _Benefit({
     required this.icon,
     required this.text,
+    this.isDesktop = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 11,
-        vertical: 7,
+      padding: EdgeInsets.symmetric(
+        horizontal: isDesktop ? 16.0 : 11.0,
+        vertical: isDesktop ? 10.0 : 7.0,
       ),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(isDesktop ? 24.0 : 20.0),
         border: Border.all(
           color: Colors.white.withOpacity(0.09),
         ),
@@ -825,14 +959,14 @@ class _Benefit extends StatelessWidget {
           Icon(
             icon,
             color: Colors.white70,
-            size: 14,
+            size: isDesktop ? 18.0 : 14.0,
           ),
-          const SizedBox(width: 5),
+          SizedBox(width: isDesktop ? 8.0 : 5.0),
           Text(
             text,
-            style: const TextStyle(
+            style: TextStyle(
               color: Colors.white70,
-              fontSize: 11,
+              fontSize: isDesktop ? 14.0 : 11.0,
               fontWeight: FontWeight.w600,
             ),
           ),

@@ -1,15 +1,21 @@
-// widgets/safe_youtube_embed.dart
+// ================================================================
+// FILE: lib/widgets/safe_youtube_embed.dart
+// NearbyFundi - Safe YouTube Video Embed
+// ================================================================
+
 import 'package:flutter/material.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
 class SafeYoutubeEmbed extends StatefulWidget {
   final String videoUrl;
   final double height;
+  final bool autoPlay;
 
   const SafeYoutubeEmbed({
     super.key,
     required this.videoUrl,
     this.height = 220,
+    this.autoPlay = false,
   });
 
   @override
@@ -18,47 +24,11 @@ class SafeYoutubeEmbed extends StatefulWidget {
 
 class _SafeYoutubeEmbedState extends State<SafeYoutubeEmbed> {
   YoutubePlayerController? _controller;
+
   String? _videoId;
-  bool _isLoading = true;
   String? _errorMessage;
 
-  String? _extractVideoId(String input) {
-    // Try built-in converter first
-    String? id = YoutubePlayer.convertUrlToId(input);
-
-    // Fallback: manual regex
-    if (id == null || id.isEmpty) {
-      final regExp = RegExp(
-        r'(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([^&\n?#]+)',
-        caseSensitive: false,
-      );
-      final match = regExp.firstMatch(input);
-      if (match != null && match.groupCount >= 1) {
-        id = match.group(1);
-      }
-    }
-
-    // Handle iframe embed
-    if (id == null || id.isEmpty) {
-      final iframeRegex = RegExp(r'src="([^"]+)"');
-      final match = iframeRegex.firstMatch(input);
-      if (match != null) {
-        final url = match.group(1);
-        if (url != null) {
-          return _extractVideoId(url);
-        }
-      }
-    }
-
-    if (id != null && id.isNotEmpty) {
-      id = id.split('?')[0].split('#')[0];
-      if (id.length >= 11) {
-        return id.substring(0, 11);
-      }
-    }
-
-    return id;
-  }
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -66,107 +36,319 @@ class _SafeYoutubeEmbedState extends State<SafeYoutubeEmbed> {
     _initializePlayer();
   }
 
+  // ==============================================================
+  // EXTRACT YOUTUBE VIDEO ID
+  // ==============================================================
+
+  String? _extractVideoId(String input) {
+    final value = input.trim();
+
+    if (value.isEmpty) {
+      return null;
+    }
+
+    // ------------------------------------------------------------
+    // 1. Try youtube_player_flutter built-in converter
+    // ------------------------------------------------------------
+
+    String? videoId;
+
+    try {
+      videoId = YoutubePlayer.convertUrlToId(value);
+    } catch (_) {
+      videoId = null;
+    }
+
+    if (_isValidVideoId(videoId)) {
+      return videoId;
+    }
+
+    // ------------------------------------------------------------
+    // 2. Handle iframe HTML
+    // ------------------------------------------------------------
+
+    final iframeMatch = RegExp(
+      r'''src\s*=\s*["']([^"']+)["']''',
+      caseSensitive: false,
+    ).firstMatch(value);
+
+    if (iframeMatch != null) {
+      final iframeUrl = iframeMatch.group(1);
+
+      if (iframeUrl != null && iframeUrl.isNotEmpty) {
+        final extractedId = _extractVideoId(iframeUrl);
+
+        if (_isValidVideoId(extractedId)) {
+          return extractedId;
+        }
+      }
+    }
+
+    // ------------------------------------------------------------
+    // 3. Manual fallback
+    // ------------------------------------------------------------
+
+    final patterns = <RegExp>[
+      // https://www.youtube.com/watch?v=VIDEO_ID
+      RegExp(
+        r'(?:youtube\.com/watch\?v=)([A-Za-z0-9_-]{11})',
+        caseSensitive: false,
+      ),
+
+      // https://youtu.be/VIDEO_ID
+      RegExp(
+        r'(?:youtu\.be/)([A-Za-z0-9_-]{11})',
+        caseSensitive: false,
+      ),
+
+      // https://www.youtube.com/embed/VIDEO_ID
+      RegExp(
+        r'(?:youtube\.com/embed/)([A-Za-z0-9_-]{11})',
+        caseSensitive: false,
+      ),
+
+      // https://www.youtube.com/shorts/VIDEO_ID
+      RegExp(
+        r'(?:youtube\.com/shorts/)([A-Za-z0-9_-]{11})',
+        caseSensitive: false,
+      ),
+
+      // https://www.youtube.com/v/VIDEO_ID
+      RegExp(
+        r'(?:youtube\.com/v/)([A-Za-z0-9_-]{11})',
+        caseSensitive: false,
+      ),
+
+      // Generic v= fallback
+      RegExp(
+        r'[?&]v=([A-Za-z0-9_-]{11})',
+        caseSensitive: false,
+      ),
+    ];
+
+    for (final pattern in patterns) {
+      final match = pattern.firstMatch(value);
+
+      if (match != null) {
+        final id = match.group(1);
+
+        if (_isValidVideoId(id)) {
+          return id;
+        }
+      }
+    }
+
+    // ------------------------------------------------------------
+    // 4. If input itself looks like a YouTube ID
+    // ------------------------------------------------------------
+
+    if (_isValidVideoId(value)) {
+      return value;
+    }
+
+    return null;
+  }
+
+  // ==============================================================
+  // VALIDATE VIDEO ID
+  // ==============================================================
+
+  bool _isValidVideoId(String? id) {
+    if (id == null || id.isEmpty) {
+      return false;
+    }
+
+    return RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(id);
+  }
+
+  // ==============================================================
+  // INITIALIZE PLAYER
+  // ==============================================================
+
   void _initializePlayer() {
     try {
       final videoId = _extractVideoId(widget.videoUrl);
 
-      if (videoId != null && videoId.isNotEmpty) {
-        _videoId = videoId;
-        _controller = YoutubePlayerController(
-          initialVideoId: videoId,
-          flags: const YoutubePlayerFlags(
-            autoPlay: false,
-            mute: false,
-            enableCaption: true,
-            isLive: false,
-            loop: false,
-            disableDragSeek: false,
-            forceHD: false,
-            useHybridComposition: true,
-          ),
-        );
+      if (!_isValidVideoId(videoId)) {
+        if (!mounted) return;
 
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-            _errorMessage = null;
-          });
-        }
-      } else {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-            _errorMessage = 'Could not extract video ID';
-          });
-        }
-      }
-    } catch (e) {
-      if (mounted) {
         setState(() {
           _isLoading = false;
-          _errorMessage = 'Error loading video';
+          _videoId = null;
+          _errorMessage = 'Could not extract YouTube video ID';
         });
+
+        return;
       }
+
+      _videoId = videoId;
+
+      _controller = YoutubePlayerController(
+        initialVideoId: videoId!,
+        flags: YoutubePlayerFlags(
+          autoPlay: widget.autoPlay,
+          mute: false,
+          enableCaption: true,
+          controlsVisibleAtStart: true,
+        ),
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+        _errorMessage = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+        _videoId = null;
+        _errorMessage = 'Unable to load video';
+      });
     }
   }
+
+  // ==============================================================
+  // RETRY
+  // ==============================================================
+
+  void _retry() {
+    _controller?.dispose();
+    _controller = null;
+
+    if (!mounted) return;
+
+    setState(() {
+      _isLoading = true;
+      _videoId = null;
+      _errorMessage = null;
+    });
+
+    _initializePlayer();
+  }
+
+  // ==============================================================
+  // DISPOSE
+  // ==============================================================
 
   @override
   void dispose() {
     _controller?.dispose();
+    _controller = null;
+
     super.dispose();
   }
+
+  // ==============================================================
+  // BUILD
+  // ==============================================================
 
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return Container(
-        height: widget.height,
-        color: Colors.black,
-        child: const Center(
-          child: CircularProgressIndicator(color: Colors.white),
-        ),
-      );
+      return _buildLoadingWidget();
     }
 
-    if (_videoId == null || _controller == null) {
-      return Container(
-        height: widget.height,
-        color: Colors.grey.shade900,
+    if (_controller == null || !_isValidVideoId(_videoId)) {
+      return _buildErrorWidget();
+    }
+
+    return _buildPlayerWidget();
+  }
+
+  // ==============================================================
+  // LOADING
+  // ==============================================================
+
+  Widget _buildLoadingWidget() {
+    return SizedBox(
+      height: widget.height,
+      width: double.infinity,
+      child: const ColoredBox(
+        color: Colors.black,
         child: Center(
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Colors.white,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ==============================================================
+  // ERROR
+  // ==============================================================
+
+  Widget _buildErrorWidget() {
+    return Container(
+      height: widget.height,
+      width: double.infinity,
+      color: Colors.grey.shade900,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.play_circle_outline, color: Colors.grey.shade600, size: 48),
-              const SizedBox(height: 8),
+              Icon(
+                Icons.play_circle_outline,
+                color: Colors.grey.shade600,
+                size: 48,
+              ),
+              const SizedBox(height: 10),
               Text(
                 _errorMessage ?? 'Video unavailable',
-                style: const TextStyle(color: Colors.grey),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.grey.shade400,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: _retry,
+                child: const Text(
+                  'Retry',
+                  style: TextStyle(
+                    color: Colors.blue,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ],
           ),
         ),
-      );
+      ),
+    );
+  }
+
+  // ==============================================================
+  // PLAYER
+  // ==============================================================
+
+  Widget _buildPlayerWidget() {
+    final controller = _controller;
+
+    if (controller == null) {
+      return _buildErrorWidget();
     }
 
-    return Container(
+    return SizedBox(
       height: widget.height,
       width: double.infinity,
-      color: Colors.black,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: YoutubePlayer(
-          controller: _controller!,
+          controller: controller,
           showVideoProgressIndicator: true,
           progressIndicatorColor: Colors.red,
-          progressColors: const ProgressBarColors(
-            playedColor: Colors.red,
-            handleColor: Colors.redAccent,
-            backgroundColor: Colors.grey,
-            bufferedColor: Colors.grey,
-          ),
-          onReady: () {
-            debugPrint('✅ YouTube Player ready');
-          },
         ),
       ),
     );

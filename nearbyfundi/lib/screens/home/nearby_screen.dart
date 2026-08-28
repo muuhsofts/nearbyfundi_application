@@ -1,22 +1,9 @@
-// ================================================================
 // FILE: lib/screens/home/nearby_screen.dart
-// Nearby Fundi - Refined UI/UX (cleaned + UAT fixes)
-//
-// Change log vs previous version (see UAT report for full detail):
-//  - Debounced + sequence-guarded place suggestion search
-//  - Safe numeric casts everywhere a map picker / API result is parsed
-//  - User-facing error feedback on search / route failures
-//  - Bounded-concurrency OSRM route fetching (was: 10 parallel requests)
-//  - Recommended-technician set computed once per build, not per row
-//  - Distance-sorted technician list sheet
-//  - Expandable search radius + retry CTA on empty results
-//  - Centralized magic numbers / colors / literal strings
-//  - Tooltips added to all icon buttons
+// Nearby Fundi - Refined UI/UX with Enhanced Responsiveness
 // ================================================================
 
 import 'dart:async';
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -24,7 +11,6 @@ import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 import '../../models/service.dart';
 import '../../models/technician.dart';
 import '../../providers/technician_provider.dart';
@@ -53,9 +39,49 @@ class TechnicianRouteData {
 }
 
 // ================================================================
+// RESPONSIVE CONSTANTS
+// ================================================================
+
+class _ResponsiveConstants {
+  _ResponsiveConstants._();
+
+  static const double mobileBreakpoint = 480;
+  static const double tabletBreakpoint = 768;
+  static const double desktopBreakpoint = 1024;
+
+  static const double smallPadding = 8.0;
+  static const double mediumPadding = 14.0;
+  static const double largePadding = 20.0;
+
+  static const double smallFontSize = 10.0;
+  static const double mediumFontSize = 12.0;
+  static const double largeFontSize = 14.0;
+  static const double extraLargeFontSize = 16.0;
+
+  static const double smallAvatarSize = 38.0;
+  static const double mediumAvatarSize = 46.0;
+  static const double largeAvatarSize = 55.0;
+  static const double extraLargeAvatarSize = 64.0;
+
+  static const double smallIconSize = 18.0;
+  static const double mediumIconSize = 21.0;
+  static const double largeIconSize = 28.0;
+
+  static const double smallMarkerWidth = 100.0;
+  static const double mediumMarkerWidth = 126.0;
+  static const double largeMarkerWidth = 142.0;
+
+  static const double smallMarkerHeight = 130.0;
+  static const double mediumMarkerHeight = 156.0;
+  static const double largeMarkerHeight = 175.0;
+
+  static const int mobileColumns = 1;
+  static const int tabletColumns = 2;
+  static const int desktopColumns = 3;
+}
+
+// ================================================================
 // CONSTANTS
-// Centralizing tunables that were previously scattered as magic
-// numbers / literals throughout the widget.
 // ================================================================
 
 class _NearbyConstants {
@@ -69,13 +95,13 @@ class _NearbyConstants {
   static const Color technicianGreen = Color(0xFF00897B);
   static const Color distanceGreen = Color(0xFF2E7D32);
   static const Color verifiedBlue = Color(0xFF1976D2);
-  static const LatLng defaultMapCenter = LatLng(-6.7924, 39.2083); // Dar es Salaam
+  static const LatLng defaultMapCenter = LatLng(-6.7924, 39.2083);
 
   // Behaviour tuning
   static const int maxHistoryEntries = 10;
   static const int recommendedCount = 2;
   static const int maxRouteTargets = 10;
-  static const int routeFetchBatchSize = 4; // bounded concurrency for OSRM
+  static const int routeFetchBatchSize = 4;
   static const int defaultRadiusKm = 20;
   static const int maxRadiusKm = 100;
   static const int radiusStepKm = 20;
@@ -86,9 +112,6 @@ class _NearbyConstants {
   static const String historyPrefsKey = 'location_search_history';
 }
 
-// TODO(i18n): these strings are UI copy that has no AppLocalizations key
-// yet. Centralized here so migrating them into app_localizations.dart is
-// a single, obvious pass instead of a scattered find-and-replace.
 class _Strings {
   _Strings._();
 
@@ -116,6 +139,66 @@ class _Strings {
 }
 
 // ================================================================
+// RESPONSIVE HELPER
+// ================================================================
+
+class ResponsiveHelper {
+  static bool isMobile(BuildContext context) {
+    return MediaQuery.of(context).size.width < _ResponsiveConstants.mobileBreakpoint;
+  }
+
+  static bool isTablet(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    return width >= _ResponsiveConstants.mobileBreakpoint &&
+        width < _ResponsiveConstants.desktopBreakpoint;
+  }
+
+  static bool isDesktop(BuildContext context) {
+    return MediaQuery.of(context).size.width >= _ResponsiveConstants.desktopBreakpoint;
+  }
+
+  static double getPadding(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    if (width < _ResponsiveConstants.mobileBreakpoint) {
+      return _ResponsiveConstants.smallPadding;
+    } else if (width < _ResponsiveConstants.desktopBreakpoint) {
+      return _ResponsiveConstants.mediumPadding;
+    }
+    return _ResponsiveConstants.largePadding;
+  }
+
+  static double getFontSize(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    if (width < _ResponsiveConstants.mobileBreakpoint) {
+      return _ResponsiveConstants.smallFontSize;
+    } else if (width < _ResponsiveConstants.desktopBreakpoint) {
+      return _ResponsiveConstants.mediumFontSize;
+    }
+    return _ResponsiveConstants.largeFontSize;
+  }
+
+  static int getGridColumns(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    if (width < _ResponsiveConstants.mobileBreakpoint) {
+      return _ResponsiveConstants.mobileColumns;
+    } else if (width < _ResponsiveConstants.desktopBreakpoint) {
+      return _ResponsiveConstants.tabletColumns;
+    }
+    return _ResponsiveConstants.desktopColumns;
+  }
+
+  static double getAvatarSize(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    if (width < _ResponsiveConstants.mobileBreakpoint) {
+      return _ResponsiveConstants.smallAvatarSize;
+    } else if (width < _ResponsiveConstants.desktopBreakpoint) {
+      return _ResponsiveConstants.mediumAvatarSize;
+    }
+    return _ResponsiveConstants.largeAvatarSize;
+  }
+}
+
+// ================================================================
 // SCREEN
 // ================================================================
 
@@ -133,14 +216,10 @@ class _NearbyScreenState extends State<NearbyScreen>
   // --------------------------------------------------------------
 
   final TextEditingController _locationController = TextEditingController();
-  final TextEditingController _serviceSearchController =
-  TextEditingController();
-
+  final TextEditingController _serviceSearchController = TextEditingController();
   final FocusNode _locationFocus = FocusNode();
-
   final ScrollController _serviceChipScrollController = ScrollController();
   final ScrollController _categoryChipScrollController = ScrollController();
-
   final MapController _mapController = MapController();
 
   // --------------------------------------------------------------
@@ -179,7 +258,6 @@ class _NearbyScreenState extends State<NearbyScreen>
   bool _showSuggestions = false;
   bool _isLoadingSuggestions = false;
 
-  // Debounce + race-condition guard for place suggestions.
   Timer? _suggestionDebounce;
   int _suggestionRequestId = 0;
 
@@ -274,13 +352,11 @@ class _NearbyScreenState extends State<NearbyScreen>
   }
 
   // ==============================================================
-  // PLACE SUGGESTIONS (debounced + race-safe)
+  // PLACE SUGGESTIONS
   // ==============================================================
 
-  /// Called directly from the TextField's onChanged. Debounces network
-  /// calls so we don't fire a request per keystroke.
   void _onLocationQueryChanged(String value) {
-    setState(() {}); // keeps clear/search button visibility in sync
+    setState(() {});
 
     _suggestionDebounce?.cancel();
 
@@ -324,7 +400,6 @@ class _NearbyScreenState extends State<NearbyScreen>
         headers: {'User-Agent': 'NearbyFundi/1.0'},
       ).timeout(_NearbyConstants.placeSearchTimeout);
 
-      // A newer request has since been issued — discard this stale result.
       if (requestId != _suggestionRequestId) return;
 
       if (response.statusCode == 200) {
@@ -510,8 +585,6 @@ class _NearbyScreenState extends State<NearbyScreen>
     await _fetchRoutesForTechnicians();
   }
 
-  /// Retries the last search with a larger radius. Used by the empty-state
-  /// CTA so a "no results" search isn't a dead end for the user.
   Future<void> _retryWithLargerRadius() async {
     if (_searchRadiusKm >= _NearbyConstants.maxRadiusKm) return;
 
@@ -564,9 +637,6 @@ class _NearbyScreenState extends State<NearbyScreen>
     final targets = technicians.take(_NearbyConstants.maxRouteTargets).toList();
     final Map<int, TechnicianRouteData> fetched = {};
 
-    // Bounded concurrency: the public OSRM demo server rate-limits/blocks
-    // callers that fire too many simultaneous requests. Batch instead of
-    // firing all N requests at once.
     for (var i = 0; i < targets.length; i += _NearbyConstants.routeFetchBatchSize) {
       final batch = targets.skip(i).take(_NearbyConstants.routeFetchBatchSize);
 
@@ -643,9 +713,6 @@ class _NearbyScreenState extends State<NearbyScreen>
       debugPrint('OSRM error: $e');
     }
 
-    // Fallback: straight-line distance with a conservative average speed
-    // estimate. This is clearly an estimate, not a routed ETA — surfaced
-    // to the user as "~" prefixed values in the UI.
     final straightKm = fallbackKm > 0
         ? fallbackKm
         : const Distance().as(LengthUnit.Kilometer, origin, destination);
@@ -713,7 +780,7 @@ class _NearbyScreenState extends State<NearbyScreen>
     _mapController.fitCamera(
       CameraFit.bounds(
         bounds: bounds,
-        padding: const EdgeInsets.all(70),
+        padding: EdgeInsets.all(ResponsiveHelper.getPadding(context) * 5),
       ),
     );
   }
@@ -741,11 +808,6 @@ class _NearbyScreenState extends State<NearbyScreen>
 
   // ==============================================================
   // RECOMMENDED TECHNICIANS
-  //
-  // Previously recomputed (with a fresh sort) on every single list row
-  // and marker build via context.read() — O(n^2 log n) per frame. Now
-  // computed once per build and the resulting id set is threaded through
-  // to whichever widget needs it.
   // ==============================================================
 
   List<Technician> _getRecommendedTechnicians(List<Technician> technicians) {
@@ -763,12 +825,15 @@ class _NearbyScreenState extends State<NearbyScreen>
 
   Widget _buildAvatar(
       Technician tech, {
-        double size = 56,
-        double iconSize = 28,
+        double? size,
+        double? iconSize,
       }) {
+    final contextSize = size ?? ResponsiveHelper.getAvatarSize(context);
+    final contextIconSize = iconSize ?? contextSize * 0.5;
+
     return Container(
-      width: size,
-      height: size,
+      width: contextSize,
+      height: contextSize,
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
@@ -789,13 +854,13 @@ class _NearbyScreenState extends State<NearbyScreen>
           fit: BoxFit.cover,
           errorBuilder: (_, __, ___) => Icon(
             Icons.build_rounded,
-            size: iconSize,
+            size: contextIconSize,
             color: Colors.grey.shade600,
           ),
         )
             : Icon(
           Icons.build_rounded,
-          size: iconSize,
+          size: contextIconSize,
           color: Colors.grey.shade600,
         ),
       ),
@@ -864,9 +929,9 @@ class _NearbyScreenState extends State<NearbyScreen>
       ) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
+    final isTablet = ResponsiveHelper.isTablet(context);
+    final isDesktop = ResponsiveHelper.isDesktop(context);
 
-    // Sort by distance so the sheet order matches the "recommended = nearest"
-    // logic used on the map, instead of whatever order the API returned.
     final sorted = [...technicians]
       ..sort((a, b) => a.distanceKm.compareTo(b.distanceKm));
 
@@ -879,11 +944,13 @@ class _NearbyScreenState extends State<NearbyScreen>
       ),
       builder: (_) {
         return DraggableScrollableSheet(
-          initialChildSize: 0.78,
-          minChildSize: 0.45,
-          maxChildSize: 0.95,
+          initialChildSize: isDesktop ? 0.6 : (isTablet ? 0.7 : 0.78),
+          minChildSize: isDesktop ? 0.3 : (isTablet ? 0.4 : 0.45),
+          maxChildSize: isDesktop ? 0.85 : (isTablet ? 0.9 : 0.95),
           expand: false,
           builder: (context, controller) {
+            final columns = ResponsiveHelper.getGridColumns(context);
+
             return Column(
               children: [
                 const SizedBox(height: 10),
@@ -896,7 +963,12 @@ class _NearbyScreenState extends State<NearbyScreen>
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 16, 10, 12),
+                  padding: EdgeInsets.fromLTRB(
+                    ResponsiveHelper.getPadding(context),
+                    16,
+                    ResponsiveHelper.getPadding(context),
+                    12,
+                  ),
                   child: Row(
                     children: [
                       Expanded(
@@ -904,6 +976,7 @@ class _NearbyScreenState extends State<NearbyScreen>
                           '${sorted.length} ${l10n.fundisFound}',
                           style: theme.textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.w800,
+                            fontSize: ResponsiveHelper.isMobile(context) ? 18 : 22,
                           ),
                         ),
                       ),
@@ -918,9 +991,32 @@ class _NearbyScreenState extends State<NearbyScreen>
                 ),
                 const Divider(height: 1),
                 Expanded(
-                  child: ListView.builder(
+                  child: columns > 1
+                      ? Padding(
+                    padding: EdgeInsets.all(ResponsiveHelper.getPadding(context)),
+                    child: GridView.builder(
+                      controller: controller,
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: columns,
+                        crossAxisSpacing: ResponsiveHelper.getPadding(context),
+                        mainAxisSpacing: ResponsiveHelper.getPadding(context),
+                        childAspectRatio: isDesktop ? 1.2 : 1.0,
+                      ),
+                      itemCount: sorted.length,
+                      itemBuilder: (_, index) {
+                        final tech = sorted[index];
+                        return _buildListTile(
+                          context,
+                          tech,
+                          recommendedIds.contains(tech.id),
+                          isGrid: true,
+                        );
+                      },
+                    ),
+                  )
+                      : ListView.builder(
                     controller: controller,
-                    padding: const EdgeInsets.all(16),
+                    padding: EdgeInsets.all(ResponsiveHelper.getPadding(context)),
                     itemCount: sorted.length,
                     itemBuilder: (_, index) {
                       final tech = sorted[index];
@@ -947,14 +1043,149 @@ class _NearbyScreenState extends State<NearbyScreen>
   Widget _buildListTile(
       BuildContext context,
       Technician tech,
-      bool recommended,
-      ) {
+      bool recommended, {
+        bool isGrid = false,
+      }) {
     final theme = Theme.of(context);
+    final isTablet = ResponsiveHelper.isTablet(context);
+    final isDesktop = ResponsiveHelper.isDesktop(context);
+    final fontSize = ResponsiveHelper.getFontSize(context);
 
     final route = _routesData[tech.id];
     final distance = route?.distanceKm ?? tech.distanceKm;
     final duration = route?.durationMin;
     final selected = _selectedTechnicianId == tech.id;
+
+    if (isGrid) {
+      return Card(
+        margin: const EdgeInsets.all(4),
+        elevation: selected ? 5 : 1,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: BorderSide(
+            color: selected
+                ? _NearbyConstants.selectedColor
+                : recommended
+                ? _NearbyConstants.primaryGreen.withOpacity(0.35)
+                : Colors.transparent,
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () {
+            setState(() {
+              _selectedTechnicianId = tech.id;
+            });
+
+            Navigator.pop(context);
+            Navigator.pushNamed(
+              context,
+              AppRoutes.technicianDetail,
+              arguments: tech.id,
+            );
+          },
+          child: Padding(
+            padding: EdgeInsets.all(ResponsiveHelper.getPadding(context)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildAvatar(
+                  tech,
+                  size: ResponsiveHelper.getAvatarSize(context) * 0.8,
+                  iconSize: ResponsiveHelper.getAvatarSize(context) * 0.4,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  tech.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    fontSize: isDesktop ? 16 : (isTablet ? 14 : 12),
+                  ),
+                ),
+                if (tech.area != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 3),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.location_on_rounded,
+                          size: fontSize + 2,
+                          color: _NearbyConstants.locationRed,
+                        ),
+                        const SizedBox(width: 3),
+                        Expanded(
+                          child: Text(
+                            tech.area!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: theme.hintColor,
+                              fontSize: fontSize,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 5),
+                Wrap(
+                  spacing: 5,
+                  runSpacing: 5,
+                  alignment: WrapAlignment.center,
+                  children: [
+                    if (tech.rating > 0)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.star_rounded,
+                            color: Colors.amber,
+                            size: 14,
+                          ),
+                          const SizedBox(width: 2),
+                          Text(
+                            tech.rating.toStringAsFixed(1),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    _infoBadge(
+                      Icons.directions_car_rounded,
+                      '${distance.toStringAsFixed(1)} km',
+                    ),
+                    if (duration != null)
+                      _infoBadge(
+                        Icons.access_time_rounded,
+                        '~${duration.toStringAsFixed(0)}m',
+                      ),
+                  ],
+                ),
+                if (recommended)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      _Strings.recommendedNearYou,
+                      style: TextStyle(
+                        color: _NearbyConstants.primaryGreen,
+                        fontSize: fontSize,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -989,7 +1220,11 @@ class _NearbyScreenState extends State<NearbyScreen>
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildAvatar(tech, size: 58, iconSize: 28),
+              _buildAvatar(
+                tech,
+                size: ResponsiveHelper.isMobile(context) ? 48.0 : 58.0,
+                iconSize: ResponsiveHelper.isMobile(context) ? 24.0 : 28.0,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -1173,7 +1408,9 @@ class _NearbyScreenState extends State<NearbyScreen>
     final theme = Theme.of(context);
 
     final width = MediaQuery.of(context).size.width;
-    final small = width < 400;
+    final small = width < _ResponsiveConstants.mobileBreakpoint;
+    final isTablet = ResponsiveHelper.isTablet(context);
+    final isDesktop = ResponsiveHelper.isDesktop(context);
 
     if (_currentLocale != settings.locale) {
       _currentLocale = settings.locale;
@@ -1188,7 +1425,6 @@ class _NearbyScreenState extends State<NearbyScreen>
     _getFilteredServices(serviceProvider.localizedServices);
     final categories = _getCategoriesForSelectedService(serviceProvider);
 
-    // Computed once per build instead of per row/marker.
     final validTechnicians = techProvider.technicians
         .where((t) => t.latitude != null && t.longitude != null)
         .toList();
@@ -1206,10 +1442,14 @@ class _NearbyScreenState extends State<NearbyScreen>
         backgroundColor: _NearbyConstants.primaryGreen,
         foregroundColor: Colors.white,
         elevation: 0,
-        centerTitle: true,
+        centerTitle: isTablet || isDesktop ? true : false,
         title: Text(
           l10n.findFundi,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w800,
+            fontSize: isDesktop ? 22 : (isTablet ? 20 : 18),
+          ),
         ),
         iconTheme: const IconThemeData(color: Colors.white),
         actionsIconTheme: const IconThemeData(color: Colors.white),
@@ -1258,10 +1498,10 @@ class _NearbyScreenState extends State<NearbyScreen>
           IconButton(
             tooltip: l10n.search,
             icon: techProvider.isLoading
-                ? const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
+                ? SizedBox(
+              width: isDesktop ? 24 : 20,
+              height: isDesktop ? 24 : 20,
+              child: const CircularProgressIndicator(
                 strokeWidth: 2,
                 color: Colors.white,
               ),
@@ -1288,6 +1528,8 @@ class _NearbyScreenState extends State<NearbyScreen>
               categories,
               techProvider,
               small,
+              isTablet,
+              isDesktop,
             )
                 : const SizedBox(key: ValueKey('hidden-search')),
           ),
@@ -1321,7 +1563,11 @@ class _NearbyScreenState extends State<NearbyScreen>
                   ),
                 ),
                 if (_isFetchingRoutes)
-                  Positioned(top: 12, left: 12, child: _routeLoadingBadge()),
+                  Positioned(
+                    top: 12,
+                    left: 12,
+                    child: _routeLoadingBadge(),
+                  ),
               ],
             ),
           ),
@@ -1342,10 +1588,19 @@ class _NearbyScreenState extends State<NearbyScreen>
       List<ServiceCategory> categories,
       TechnicianProvider techProvider,
       bool small,
+      bool isTablet,
+      bool isDesktop,
       ) {
+    final padding = ResponsiveHelper.getPadding(context);
+
     return Container(
       key: const ValueKey('visible-search'),
-      padding: EdgeInsets.fromLTRB(14, 8, 14, small ? 8 : 12),
+      padding: EdgeInsets.fromLTRB(
+        padding,
+        isDesktop ? 12 : 8,
+        padding,
+        isDesktop ? 16 : (small ? 8 : 12),
+      ),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         boxShadow: [
@@ -1380,7 +1635,9 @@ class _NearbyScreenState extends State<NearbyScreen>
                   child: TextField(
                     controller: _locationController,
                     focusNode: _locationFocus,
-                    style: TextStyle(fontSize: small ? 14 : 15),
+                    style: TextStyle(
+                      fontSize: isDesktop ? 16 : (isTablet ? 15 : 14),
+                    ),
                     decoration: InputDecoration(
                       hintText: l10n.searchLocation,
                       hintStyle: TextStyle(color: theme.hintColor),
@@ -1453,14 +1710,14 @@ class _NearbyScreenState extends State<NearbyScreen>
                       onTap: _isSearching ? null : _performSearch,
                       child: Padding(
                         padding: EdgeInsets.symmetric(
-                          horizontal: small ? 12 : 15,
-                          vertical: small ? 11 : 12,
+                          horizontal: isDesktop ? 18 : (isTablet ? 15 : 12),
+                          vertical: isDesktop ? 14 : (isTablet ? 13 : 11),
                         ),
                         child: _isSearching
-                            ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
+                            ? SizedBox(
+                          width: isDesktop ? 24 : 20,
+                          height: isDesktop ? 24 : 20,
+                          child: const CircularProgressIndicator(
                             strokeWidth: 2,
                             color: Colors.white,
                           ),
@@ -1473,7 +1730,7 @@ class _NearbyScreenState extends State<NearbyScreen>
                               color: Colors.white,
                               size: 19,
                             ),
-                            if (!small) ...[
+                            if (!isDesktop && !isTablet) ...[
                               const SizedBox(width: 4),
                               Text(
                                 l10n.search,
@@ -1601,7 +1858,7 @@ class _NearbyScreenState extends State<NearbyScreen>
             Padding(
               padding: const EdgeInsets.only(top: 9),
               child: SizedBox(
-                height: 36,
+                height: isDesktop ? 44 : 36,
                 child: ListView(
                   controller: _serviceChipScrollController,
                   scrollDirection: Axis.horizontal,
@@ -1617,6 +1874,7 @@ class _NearbyScreenState extends State<NearbyScreen>
                         });
                       },
                       isSmallScreen: small,
+                      isDesktop: isDesktop,
                     ),
                     const SizedBox(width: 7),
                     ...services.map((service) {
@@ -1635,6 +1893,7 @@ class _NearbyScreenState extends State<NearbyScreen>
                             });
                           },
                           isSmallScreen: small,
+                          isDesktop: isDesktop,
                         ),
                       );
                     }),
@@ -1650,7 +1909,7 @@ class _NearbyScreenState extends State<NearbyScreen>
             Padding(
               padding: const EdgeInsets.only(top: 7),
               child: SizedBox(
-                height: 32,
+                height: isDesktop ? 40 : 32,
                 child: ListView(
                   controller: _categoryChipScrollController,
                   scrollDirection: Axis.horizontal,
@@ -1669,6 +1928,7 @@ class _NearbyScreenState extends State<NearbyScreen>
                           });
                         },
                         isSmallScreen: small,
+                        isDesktop: isDesktop,
                       ),
                     );
                   }).toList(),
@@ -1823,7 +2083,9 @@ class _NearbyScreenState extends State<NearbyScreen>
     }
 
     final screenWidth = MediaQuery.of(context).size.width;
-    final small = screenWidth < 400;
+    final small = screenWidth < _ResponsiveConstants.mobileBreakpoint;
+    final isTablet = ResponsiveHelper.isTablet(context);
+    final isDesktop = ResponsiveHelper.isDesktop(context);
 
     // ------------------------------------------------------------
     // ROAD POLYLINES
@@ -1839,7 +2101,7 @@ class _NearbyScreenState extends State<NearbyScreen>
       polylines.add(
         Polyline(
           points: route.points,
-          strokeWidth: selected ? 10 : 8,
+          strokeWidth: selected ? (isDesktop ? 12.0 : 10.0) : (isDesktop ? 10.0 : 8.0),
           color: Colors.white.withOpacity(0.85),
         ),
       );
@@ -1847,7 +2109,7 @@ class _NearbyScreenState extends State<NearbyScreen>
       polylines.add(
         Polyline(
           points: route.points,
-          strokeWidth: selected ? 6.5 : 5.0,
+          strokeWidth: selected ? (isDesktop ? 8.0 : 6.5) : (isDesktop ? 6.0 : 5.0),
           color: selected
               ? _NearbyConstants.selectedColor
               : _NearbyConstants.technicianGreen,
@@ -1865,12 +2127,33 @@ class _NearbyScreenState extends State<NearbyScreen>
       final selected = _selectedTechnicianId == tech.id;
       final isRecommended = recommendedIds.contains(tech.id);
 
+      final markerWidth = isDesktop
+          ? _ResponsiveConstants.largeMarkerWidth
+          : (isTablet
+          ? _ResponsiveConstants.mediumMarkerWidth
+          : _ResponsiveConstants.smallMarkerWidth);
+      final markerHeight = isDesktop
+          ? (isRecommended
+          ? _ResponsiveConstants.largeMarkerHeight
+          : _ResponsiveConstants.largeMarkerHeight - 15.0)
+          : (isTablet
+          ? (isRecommended
+          ? _ResponsiveConstants.mediumMarkerHeight
+          : _ResponsiveConstants.mediumMarkerHeight - 15.0)
+          : (isRecommended
+          ? _ResponsiveConstants.smallMarkerHeight
+          : _ResponsiveConstants.smallMarkerHeight - 15.0));
+
+      final avatarSize = isDesktop
+          ? _ResponsiveConstants.largeAvatarSize
+          : (isTablet
+          ? _ResponsiveConstants.mediumAvatarSize
+          : _ResponsiveConstants.smallAvatarSize);
+
       return Marker(
         point: LatLng(tech.latitude!, tech.longitude!),
-        width: small ? 126 : 142,
-        height: isRecommended
-            ? (small ? 156 : 175)
-            : (small ? 132 : 150),
+        width: markerWidth,
+        height: markerHeight,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () {
@@ -1884,7 +2167,7 @@ class _NearbyScreenState extends State<NearbyScreen>
             mainAxisSize: MainAxisSize.min,
             children: [
               if (isRecommended)
-                _buildRecommendationPulse(tech, small ? 46 : 55)
+                _buildRecommendationPulse(tech, avatarSize)
               else
                 Container(
                   decoration: BoxDecoration(
@@ -1898,14 +2181,14 @@ class _NearbyScreenState extends State<NearbyScreen>
                   ),
                   child: _buildAvatar(
                     tech,
-                    size: small ? 46 : 55,
-                    iconSize: small ? 23 : 28,
+                    size: avatarSize,
+                    iconSize: avatarSize * 0.5,
                   ),
                 ),
               const SizedBox(height: 4),
               if (isRecommended)
                 Container(
-                  constraints: const BoxConstraints(maxWidth: 125),
+                  constraints: BoxConstraints(maxWidth: markerWidth - 10.0),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 7,
                     vertical: 4,
@@ -1943,7 +2226,7 @@ class _NearbyScreenState extends State<NearbyScreen>
               if (isRecommended) const SizedBox(height: 3),
               if (tech.area != null && tech.area!.trim().isNotEmpty)
                 Container(
-                  constraints: const BoxConstraints(maxWidth: 125),
+                  constraints: BoxConstraints(maxWidth: markerWidth - 10.0),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 6,
                     vertical: 3,
@@ -2054,8 +2337,8 @@ class _NearbyScreenState extends State<NearbyScreen>
     // ------------------------------------------------------------
     final originMarker = Marker(
       point: origin,
-      width: small ? 86 : 100,
-      height: small ? 88 : 100,
+      width: isDesktop ? 120.0 : (isTablet ? 100.0 : 86.0),
+      height: isDesktop ? 120.0 : (isTablet ? 100.0 : 88.0),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -2074,7 +2357,7 @@ class _NearbyScreenState extends State<NearbyScreen>
             child: Icon(
               Icons.location_on_rounded,
               color: _NearbyConstants.locationRed,
-              size: small ? 45 : 55,
+              size: isDesktop ? 65 : (isTablet ? 55 : 45),
             ),
           ),
           const SizedBox(height: 1),
@@ -2104,7 +2387,7 @@ class _NearbyScreenState extends State<NearbyScreen>
       mapController: _mapController,
       options: MapOptions(
         initialCenter: origin,
-        initialZoom: 13,
+        initialZoom: isDesktop ? 14 : (isTablet ? 13.5 : 13),
         minZoom: 4,
         maxZoom: 18,
         onTap: (_, __) {
@@ -2155,6 +2438,9 @@ class _NearbyScreenState extends State<NearbyScreen>
       String message, {
         bool showExpandRadius = false,
       }) {
+    final isDesktop = ResponsiveHelper.isDesktop(context);
+    final iconSize = isDesktop ? 48.0 : 38.0;
+
     return Container(
       color: theme.colorScheme.surfaceContainerLowest,
       alignment: Alignment.center,
@@ -2162,26 +2448,29 @@ class _NearbyScreenState extends State<NearbyScreen>
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 76,
-            height: 76,
+            width: isDesktop ? 96.0 : 76.0,
+            height: isDesktop ? 96.0 : 76.0,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: _NearbyConstants.primaryGreen.withOpacity(0.08),
             ),
-            child: Icon(icon, size: 38, color: _NearbyConstants.primaryGreen),
+            child: Icon(icon, size: iconSize, color: _NearbyConstants.primaryGreen),
           ),
           const SizedBox(height: 14),
           Text(
             message,
             style: TextStyle(
               color: theme.hintColor,
-              fontSize: 15,
+              fontSize: isDesktop ? 18 : 15,
               fontWeight: FontWeight.w600,
             ),
           ),
           Text(
             'Within your area.',
-            style: TextStyle(color: theme.hintColor, fontSize: 12.5),
+            style: TextStyle(
+              color: theme.hintColor,
+              fontSize: isDesktop ? 14 : 12.5,
+            ),
           ),
           if (showExpandRadius &&
               _searchRadiusKm < _NearbyConstants.maxRadiusKm) ...[
@@ -2191,10 +2480,17 @@ class _NearbyScreenState extends State<NearbyScreen>
               icon: const Icon(Icons.add_location_alt_outlined, size: 18),
               label: Text(
                 '${_Strings.expandSearchRadius} (+${_NearbyConstants.radiusStepKm} km)',
+                style: TextStyle(
+                  fontSize: isDesktop ? 16 : 14,
+                ),
               ),
               style: OutlinedButton.styleFrom(
                 foregroundColor: _NearbyConstants.primaryGreen,
                 side: const BorderSide(color: _NearbyConstants.primaryGreen),
+                padding: EdgeInsets.symmetric(
+                  horizontal: isDesktop ? 24.0 : 16.0,
+                  vertical: isDesktop ? 16.0 : 12.0,
+                ),
               ),
             ),
           ],
@@ -2258,7 +2554,8 @@ class _NearbyScreenState extends State<NearbyScreen>
       ) {
     final theme = Theme.of(context);
     final width = MediaQuery.of(context).size.width;
-    final small = width < 400;
+    final small = width < _ResponsiveConstants.mobileBreakpoint;
+    final isDesktop = ResponsiveHelper.isDesktop(context);
 
     final route = _routesData[tech.id];
     final distance = route?.distanceKm ?? tech.distanceKm;
@@ -2274,7 +2571,12 @@ class _NearbyScreenState extends State<NearbyScreen>
       builder: (sheetContext) {
         return SafeArea(
           child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(small ? 16 : 20, 12, small ? 16 : 20, 18),
+            padding: EdgeInsets.fromLTRB(
+              small ? 16 : 20,
+              12,
+              small ? 16 : 20,
+              isDesktop ? 24 : 18,
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -2298,8 +2600,8 @@ class _NearbyScreenState extends State<NearbyScreen>
                   children: [
                     _buildAvatar(
                       tech,
-                      size: small ? 56 : 64,
-                      iconSize: small ? 28 : 32,
+                      size: small ? 56.0 : (isDesktop ? 72.0 : 64.0),
+                      iconSize: small ? 28.0 : (isDesktop ? 36.0 : 32.0),
                     ),
                     const SizedBox(width: 13),
                     Expanded(
@@ -2315,25 +2617,26 @@ class _NearbyScreenState extends State<NearbyScreen>
                                   overflow: TextOverflow.ellipsis,
                                   style: theme.textTheme.titleLarge?.copyWith(
                                     fontWeight: FontWeight.w800,
+                                    fontSize: isDesktop ? 24 : 20,
                                   ),
                                 ),
                               ),
                               if (tech.verified)
-                                const Icon(
+                                Icon(
                                   Icons.verified_rounded,
                                   color: _NearbyConstants.verifiedBlue,
-                                  size: 19,
+                                  size: isDesktop ? 24 : 19,
                                 ),
                             ],
                           ),
                           if (recommended)
-                            const Padding(
-                              padding: EdgeInsets.only(top: 3),
+                            Padding(
+                              padding: const EdgeInsets.only(top: 3),
                               child: Text(
                                 _Strings.recommendedReason,
                                 style: TextStyle(
                                   color: _NearbyConstants.primaryGreen,
-                                  fontSize: 11.5,
+                                  fontSize: isDesktop ? 14 : 11.5,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
@@ -2356,7 +2659,7 @@ class _NearbyScreenState extends State<NearbyScreen>
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
                                         color: theme.hintColor,
-                                        fontSize: 12.5,
+                                        fontSize: isDesktop ? 14 : 12.5,
                                       ),
                                     ),
                                   ),
@@ -2395,12 +2698,14 @@ class _NearbyScreenState extends State<NearbyScreen>
                       _modalInfo(
                         Icons.directions_car_rounded,
                         '${distance.toStringAsFixed(1)} km',
+                        isDesktop,
                       ),
                       const SizedBox(width: 18),
                       if (duration != null)
                         _modalInfo(
                           Icons.access_time_rounded,
                           '~${duration.toStringAsFixed(0)} min',
+                          isDesktop,
                         ),
                     ],
                   ),
@@ -2415,7 +2720,10 @@ class _NearbyScreenState extends State<NearbyScreen>
                       const SizedBox(width: 4),
                       Text(
                         tech.rating.toStringAsFixed(1),
-                        style: const TextStyle(fontWeight: FontWeight.w800),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: isDesktop ? 18 : 14,
+                        ),
                       ),
                     ],
                   ),
@@ -2438,9 +2746,9 @@ class _NearbyScreenState extends State<NearbyScreen>
                         ),
                         child: Text(
                           service,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: _NearbyConstants.primaryGreen,
-                            fontSize: 11.5,
+                            fontSize: isDesktop ? 14 : 11.5,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -2469,22 +2777,27 @@ class _NearbyScreenState extends State<NearbyScreen>
                           backgroundColor: _NearbyConstants.primaryGreen,
                           foregroundColor: Colors.white,
                           elevation: 0,
-                          padding: const EdgeInsets.symmetric(vertical: 15),
+                          padding: EdgeInsets.symmetric(
+                            vertical: isDesktop ? 18 : 15,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(13),
                           ),
                         ),
-                        child: const Text(
+                        child: Text(
                           _Strings.viewProfile,
-                          style: TextStyle(fontWeight: FontWeight.w700),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: isDesktop ? 18 : 14,
+                          ),
                         ),
                       ),
                     ),
                     if (tech.latitude != null && tech.longitude != null) ...[
                       const SizedBox(width: 10),
                       SizedBox(
-                        height: 52,
-                        width: 54,
+                        height: isDesktop ? 62 : 52,
+                        width: isDesktop ? 64 : 54,
                         child: OutlinedButton(
                           onPressed: () {
                             _openDirectionsInGoogleMaps(
@@ -2520,18 +2833,18 @@ class _NearbyScreenState extends State<NearbyScreen>
     );
   }
 
-  Widget _modalInfo(IconData icon, String value) {
+  Widget _modalInfo(IconData icon, String value, bool isDesktop) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, color: _NearbyConstants.distanceGreen, size: 18),
+        Icon(icon, color: _NearbyConstants.distanceGreen, size: isDesktop ? 22 : 18),
         const SizedBox(width: 5),
         Text(
           value,
-          style: const TextStyle(
+          style: TextStyle(
             color: _NearbyConstants.distanceGreen,
             fontWeight: FontWeight.w800,
-            fontSize: 13,
+            fontSize: isDesktop ? 16 : 13,
           ),
         ),
       ],
@@ -2582,6 +2895,7 @@ class _NearbyScreenState extends State<NearbyScreen>
     required bool isSelected,
     required VoidCallback onTap,
     required bool isSmallScreen,
+    bool isDesktop = false,
   }) {
     final theme = Theme.of(context);
 
@@ -2592,8 +2906,8 @@ class _NearbyScreenState extends State<NearbyScreen>
         onTap: onTap,
         child: Container(
           padding: EdgeInsets.symmetric(
-            horizontal: isSmallScreen ? 10 : 13,
-            vertical: isSmallScreen ? 5 : 6,
+            horizontal: isDesktop ? 16.0 : (isSmallScreen ? 10.0 : 13.0),
+            vertical: isDesktop ? 10.0 : (isSmallScreen ? 5.0 : 6.0),
           ),
           decoration: BoxDecoration(
             color: isSelected
@@ -2612,7 +2926,7 @@ class _NearbyScreenState extends State<NearbyScreen>
               if (icon != null) ...[
                 Icon(
                   icon,
-                  size: isSmallScreen ? 12 : 14,
+                  size: isDesktop ? 16.0 : (isSmallScreen ? 12.0 : 14.0),
                   color: isSelected ? Colors.white : theme.hintColor,
                 ),
                 const SizedBox(width: 4),
@@ -2621,7 +2935,7 @@ class _NearbyScreenState extends State<NearbyScreen>
                 label,
                 style: TextStyle(
                   color: isSelected ? Colors.white : theme.colorScheme.onSurface,
-                  fontSize: isSmallScreen ? 10 : 11.5,
+                  fontSize: isDesktop ? 14 : (isSmallScreen ? 10 : 11.5),
                   fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                 ),
               ),
@@ -2641,6 +2955,7 @@ class _NearbyScreenState extends State<NearbyScreen>
     required bool isSelected,
     required VoidCallback onTap,
     required bool isSmallScreen,
+    bool isDesktop = false,
   }) {
     final theme = Theme.of(context);
 
@@ -2651,8 +2966,8 @@ class _NearbyScreenState extends State<NearbyScreen>
         onTap: onTap,
         child: Container(
           padding: EdgeInsets.symmetric(
-            horizontal: isSmallScreen ? 9 : 12,
-            vertical: isSmallScreen ? 4 : 5,
+            horizontal: isDesktop ? 14.0 : (isSmallScreen ? 9.0 : 12.0),
+            vertical: isDesktop ? 8.0 : (isSmallScreen ? 4.0 : 5.0),
           ),
           decoration: BoxDecoration(
             color: isSelected
@@ -2682,7 +2997,7 @@ class _NearbyScreenState extends State<NearbyScreen>
                   color: isSelected
                       ? _NearbyConstants.primaryGreen
                       : theme.colorScheme.onSurface,
-                  fontSize: isSmallScreen ? 10 : 11,
+                  fontSize: isDesktop ? 14 : (isSmallScreen ? 10 : 11),
                   fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                 ),
               ),
@@ -2711,6 +3026,9 @@ class _MapControlButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = ResponsiveHelper.isDesktop(context);
+    final iconSize = isDesktop ? 28.0 : 21.0;
+
     return Material(
       color: Theme.of(context).colorScheme.surface,
       shape: const CircleBorder(),
@@ -2718,7 +3036,7 @@ class _MapControlButton extends StatelessWidget {
       child: IconButton(
         tooltip: tooltip,
         onPressed: onPressed,
-        icon: Icon(icon, color: _NearbyConstants.primaryGreen, size: 21),
+        icon: Icon(icon, color: _NearbyConstants.primaryGreen, size: iconSize),
       ),
     );
   }

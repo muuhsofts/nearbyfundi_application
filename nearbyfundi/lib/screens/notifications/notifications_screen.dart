@@ -58,8 +58,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   void _handleNotificationTap(Map<String, dynamic> notification) {
     final provider = context.read<NotificationProvider>();
 
-    // Mark as read
-    provider.markAsRead(notification['id']);
+    // Mark as read — id can arrive as int or String from the API, so
+    // normalize to String since markAsRead() expects one.
+    final id = notification['id']?.toString();
+    if (id != null) {
+      provider.markAsRead(id);
+    }
 
     // Pop the notifications screen first
     Navigator.pop(context);
@@ -74,12 +78,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           type == 'request_accepted' ||
           type == 'request_rejected' ||
           type == 'request_in_progress' ||
-          type == 'request_completed') {
+          type == 'request_completed' ||
+          type == 'request_on_the_way' ||
+          type == 'request_arrived' ||
+          type == 'request_cancelled') {
         Navigator.pushNamed(context, AppRoutes.myRequests);
       } else if (type == 'subscription_approved' ||
           type == 'subscription_rejected' ||
           type == 'subscription_expired' ||
-          type == 'subscription_expiring_soon') {
+          type == 'subscription_expiring_soon' ||
+          type == 'subscription_created' ||
+          type == 'admin_new_subscription') {
         Navigator.pop(context);
       } else if (type == 'new_post') {
         Navigator.pushNamed(context, AppRoutes.home);
@@ -97,169 +106,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
-  // ================================================================
-  // FORMAT DATE TIME
-  // ================================================================
-
-  String _formatCreatedAt(dynamic value) {
-    if (value == null || value.toString().trim().isEmpty) {
-      return '';
-    }
-
-    try {
-      DateTime dateTime = DateTime.parse(value.toString());
-
-      if (dateTime.isUtc) {
-        dateTime = dateTime.toLocal();
-      }
-
-      final now = DateTime.now();
-      final difference = now.difference(dateTime);
-
-      // Just now
-      if (difference.inSeconds < 30) {
-        return 'Just now';
-      }
-
-      // Minutes
-      if (difference.inMinutes < 60) {
-        final minutes = difference.inMinutes;
-        return '$minutes min${minutes == 1 ? '' : 's'} ago';
-      }
-
-      // Hours
-      if (difference.inHours < 24) {
-        final hours = difference.inHours;
-        return '$hours hr${hours == 1 ? '' : 's'} ago';
-      }
-
-      // Days
-      if (difference.inDays == 1) {
-        return 'Yesterday';
-      }
-
-      if (difference.inDays < 7) {
-        return '${difference.inDays} days ago';
-      }
-
-      // More than a week - show formatted date
-      final day = dateTime.day.toString().padLeft(2, '0');
-      final month = dateTime.month.toString().padLeft(2, '0');
-      final year = dateTime.year.toString();
-
-      final hour12 = dateTime.hour % 12 == 0 ? 12 : dateTime.hour % 12;
-      final hour = hour12.toString().padLeft(2, '0');
-      final minute = dateTime.minute.toString().padLeft(2, '0');
-      final period = dateTime.hour >= 12 ? 'PM' : 'AM';
-
-      return '$day/$month/$year • $hour:$minute $period';
-    } catch (e) {
-      debugPrint('Invalid notification created_at: $value');
-      return value.toString();
-    }
-  }
-
-  // ================================================================
-  // GET ICON
-  // ================================================================
-
-  IconData _getIcon(String? type) {
-    switch (type) {
-      case 'chat_message':
-        return Icons.chat_bubble_outline_rounded;
-      case 'new_request':
-        return Icons.request_page_outlined;
-      case 'request_accepted':
-        return Icons.check_circle_outline_rounded;
-      case 'request_rejected':
-        return Icons.cancel_outlined;
-      case 'request_in_progress':
-        return Icons.hourglass_top_rounded;
-      case 'request_completed':
-        return Icons.task_alt_rounded;
-      case 'subscription_approved':
-        return Icons.verified_rounded;
-      case 'subscription_rejected':
-        return Icons.cancel_rounded;
-      case 'subscription_expired':
-        return Icons.warning_rounded;
-      case 'subscription_expiring_soon':
-        return Icons.timer_rounded;
-      case 'new_post':
-        return Icons.article_outlined;
-      default:
-        return Icons.notifications_outlined;
-    }
-  }
-
-  // ================================================================
-  // GET ICON COLOR
-  // ================================================================
-
-  Color _getIconColor(String? type, ThemeData theme) {
-    switch (type) {
-      case 'request_accepted':
-      case 'request_completed':
-      case 'subscription_approved':
-        return Colors.green.shade600;
-      case 'request_rejected':
-      case 'subscription_rejected':
-        return Colors.red.shade600;
-      case 'request_in_progress':
-        return Colors.orange.shade700;
-      case 'chat_message':
-        return Colors.blue.shade600;
-      case 'subscription_expired':
-        return Colors.red.shade700;
-      case 'subscription_expiring_soon':
-        return Colors.amber.shade700;
-      case 'new_request':
-      case 'new_post':
-        return theme.primaryColor;
-      default:
-        return theme.primaryColor;
-    }
-  }
-
-  // ================================================================
-  // GET TYPE LABEL
-  // ================================================================
-
-  String _getTypeLabel(String? type) {
-    switch (type) {
-      case 'chat_message':
-        return 'Chat';
-      case 'new_request':
-        return 'New Request';
-      case 'request_accepted':
-        return 'Accepted';
-      case 'request_rejected':
-        return 'Rejected';
-      case 'request_in_progress':
-        return 'In Progress';
-      case 'request_completed':
-        return 'Completed';
-      case 'subscription_approved':
-        return 'Approved';
-      case 'subscription_rejected':
-        return 'Rejected';
-      case 'subscription_expired':
-        return 'Expired';
-      case 'subscription_expiring_soon':
-        return 'Expiring Soon';
-      case 'new_post':
-        return 'New Post';
-      default:
-        return 'Notification';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     final provider = context.watch<NotificationProvider>();
-    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -279,6 +130,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
+          // Uses the provider's unreadCount, which is now sourced from the
+          // server's /unread-count endpoint (see NotificationProvider),
+          // so this always agrees with the badge shown elsewhere in the app.
           if (provider.unreadCount > 0)
             TextButton(
               onPressed: _markAllAsRead,
@@ -434,7 +288,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       itemCount: provider.notifications.length,
       itemBuilder: (context, index) {
         final notification = provider.notifications[index];
-        final isRead = notification['is_read'] ?? false;
+
+        // ✅ Fixed: was `notification['is_read'] ?? false`, which treated
+        // any non-null value (including a stray string "0") as read.
+        // provider.isRead() normalizes bool/int/string/null consistently.
+        final isRead = provider.isRead(notification);
 
         return _NotificationTile(
           notification: notification,
@@ -461,10 +319,6 @@ class _NotificationTile extends StatelessWidget {
     required this.onTap,
   });
 
-  // ================================================================
-  // FORMAT DATE TIME
-  // ================================================================
-
   String _formatCreatedAt(dynamic value) {
     if (value == null || value.toString().trim().isEmpty) {
       return '';
@@ -480,24 +334,20 @@ class _NotificationTile extends StatelessWidget {
       final now = DateTime.now();
       final difference = now.difference(dateTime);
 
-      // Just now
       if (difference.inSeconds < 30) {
         return 'Just now';
       }
 
-      // Minutes
       if (difference.inMinutes < 60) {
         final minutes = difference.inMinutes;
         return '$minutes min${minutes == 1 ? '' : 's'} ago';
       }
 
-      // Hours
       if (difference.inHours < 24) {
         final hours = difference.inHours;
         return '$hours hr${hours == 1 ? '' : 's'} ago';
       }
 
-      // Days
       if (difference.inDays == 1) {
         return 'Yesterday';
       }
@@ -506,7 +356,6 @@ class _NotificationTile extends StatelessWidget {
         return '${difference.inDays} days ago';
       }
 
-      // More than a week - show formatted date
       final day = dateTime.day.toString().padLeft(2, '0');
       final month = dateTime.month.toString().padLeft(2, '0');
       final year = dateTime.year.toString();
@@ -523,10 +372,6 @@ class _NotificationTile extends StatelessWidget {
     }
   }
 
-  // ================================================================
-  // GET ICON
-  // ================================================================
-
   IconData _getIcon(String? type) {
     switch (type) {
       case 'chat_message':
@@ -536,11 +381,18 @@ class _NotificationTile extends StatelessWidget {
       case 'request_accepted':
         return Icons.check_circle_outline_rounded;
       case 'request_rejected':
+      case 'request_cancelled':
         return Icons.cancel_outlined;
       case 'request_in_progress':
         return Icons.hourglass_top_rounded;
+      case 'request_on_the_way':
+        return Icons.local_shipping_outlined;
+      case 'request_arrived':
+        return Icons.pin_drop_outlined;
       case 'request_completed':
         return Icons.task_alt_rounded;
+      case 'subscription_created':
+        return Icons.receipt_long_outlined;
       case 'subscription_approved':
         return Icons.verified_rounded;
       case 'subscription_rejected':
@@ -549,16 +401,14 @@ class _NotificationTile extends StatelessWidget {
         return Icons.warning_rounded;
       case 'subscription_expiring_soon':
         return Icons.timer_rounded;
+      case 'admin_new_subscription':
+        return Icons.admin_panel_settings_outlined;
       case 'new_post':
         return Icons.article_outlined;
       default:
         return Icons.notifications_outlined;
     }
   }
-
-  // ================================================================
-  // GET ICON COLOR
-  // ================================================================
 
   Color _getIconColor(String? type, ThemeData theme) {
     switch (type) {
@@ -568,15 +418,21 @@ class _NotificationTile extends StatelessWidget {
         return Colors.green.shade600;
       case 'request_rejected':
       case 'subscription_rejected':
+      case 'request_cancelled':
         return Colors.red.shade600;
       case 'request_in_progress':
+      case 'request_on_the_way':
         return Colors.orange.shade700;
+      case 'request_arrived':
+        return Colors.teal.shade600;
       case 'chat_message':
         return Colors.blue.shade600;
       case 'subscription_expired':
         return Colors.red.shade700;
       case 'subscription_expiring_soon':
         return Colors.amber.shade700;
+      case 'subscription_created':
+      case 'admin_new_subscription':
       case 'new_request':
       case 'new_post':
         return theme.primaryColor;
@@ -584,10 +440,6 @@ class _NotificationTile extends StatelessWidget {
         return theme.primaryColor;
     }
   }
-
-  // ================================================================
-  // GET TYPE LABEL
-  // ================================================================
 
   String _getTypeLabel(String? type) {
     switch (type) {
@@ -599,10 +451,18 @@ class _NotificationTile extends StatelessWidget {
         return 'Accepted';
       case 'request_rejected':
         return 'Rejected';
+      case 'request_cancelled':
+        return 'Cancelled';
       case 'request_in_progress':
         return 'In Progress';
+      case 'request_on_the_way':
+        return 'On the Way';
+      case 'request_arrived':
+        return 'Arrived';
       case 'request_completed':
         return 'Completed';
+      case 'subscription_created':
+        return 'Subscription';
       case 'subscription_approved':
         return 'Approved';
       case 'subscription_rejected':
@@ -611,6 +471,8 @@ class _NotificationTile extends StatelessWidget {
         return 'Expired';
       case 'subscription_expiring_soon':
         return 'Expiring Soon';
+      case 'admin_new_subscription':
+        return 'New Subscription';
       case 'new_post':
         return 'New Post';
       default:
@@ -655,10 +517,6 @@ class _NotificationTile extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // =====================================================
-                // ICON
-                // =====================================================
-
                 Container(
                   width: 48,
                   height: 48,
@@ -672,21 +530,11 @@ class _NotificationTile extends StatelessWidget {
                     size: 22,
                   ),
                 ),
-
                 const SizedBox(width: 12),
-
-                // =====================================================
-                // CONTENT
-                // =====================================================
-
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // =============================================
-                      // TITLE + UNREAD DOT
-                      // =============================================
-
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -698,24 +546,21 @@ class _NotificationTile extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: 14.5,
                                 height: 1.25,
-                                fontWeight: isRead
-                                    ? FontWeight.w500
-                                    : FontWeight.w700,
+                                fontWeight:
+                                isRead ? FontWeight.w500 : FontWeight.w700,
                                 color: isRead
-                                    ? (isDark ? Colors.grey.shade400 : Colors.grey.shade700)
+                                    ? (isDark
+                                    ? Colors.grey.shade400
+                                    : Colors.grey.shade700)
                                     : theme.colorScheme.onSurface,
                               ),
                             ),
                           ),
-
                           if (!isRead)
                             Container(
                               width: 8,
                               height: 8,
-                              margin: const EdgeInsets.only(
-                                left: 8,
-                                top: 5,
-                              ),
+                              margin: const EdgeInsets.only(left: 8, top: 5),
                               decoration: BoxDecoration(
                                 color: theme.primaryColor,
                                 shape: BoxShape.circle,
@@ -723,11 +568,6 @@ class _NotificationTile extends StatelessWidget {
                             ),
                         ],
                       ),
-
-                      // =============================================
-                      // BODY
-                      // =============================================
-
                       if (body.isNotEmpty) ...[
                         const SizedBox(height: 5),
                         Text(
@@ -737,17 +577,13 @@ class _NotificationTile extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 13,
                             height: 1.35,
-                            color: isDark ? Colors.grey.shade500 : Colors.grey.shade600,
+                            color: isDark
+                                ? Colors.grey.shade500
+                                : Colors.grey.shade600,
                           ),
                         ),
                       ],
-
                       const SizedBox(height: 8),
-
-                      // =============================================
-                      // TYPE + TIME
-                      // =============================================
-
                       Wrap(
                         spacing: 8,
                         runSpacing: 5,
@@ -772,7 +608,6 @@ class _NotificationTile extends StatelessWidget {
                                 ),
                               ),
                             ),
-
                           if (relativeTime.isNotEmpty)
                             Row(
                               mainAxisSize: MainAxisSize.min,
@@ -780,13 +615,17 @@ class _NotificationTile extends StatelessWidget {
                                 Icon(
                                   Icons.access_time_rounded,
                                   size: 13,
-                                  color: isDark ? Colors.grey.shade600 : Colors.grey.shade500,
+                                  color: isDark
+                                      ? Colors.grey.shade600
+                                      : Colors.grey.shade500,
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
                                   relativeTime,
                                   style: TextStyle(
-                                    color: isDark ? Colors.grey.shade600 : Colors.grey.shade600,
+                                    color: isDark
+                                        ? Colors.grey.shade600
+                                        : Colors.grey.shade600,
                                     fontSize: 10.5,
                                     fontWeight: FontWeight.w500,
                                   ),
@@ -795,11 +634,6 @@ class _NotificationTile extends StatelessWidget {
                             ),
                         ],
                       ),
-
-                      // =============================================
-                      // EXACT DATE/TIME (for older notifications)
-                      // =============================================
-
                       if (relativeTime.contains('/')) ...[
                         const SizedBox(height: 5),
                         Row(
@@ -807,7 +641,9 @@ class _NotificationTile extends StatelessWidget {
                             Icon(
                               Icons.calendar_today_outlined,
                               size: 11,
-                              color: isDark ? Colors.grey.shade600 : Colors.grey.shade500,
+                              color: isDark
+                                  ? Colors.grey.shade600
+                                  : Colors.grey.shade500,
                             ),
                             const SizedBox(width: 4),
                             Flexible(
@@ -816,7 +652,9 @@ class _NotificationTile extends StatelessWidget {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  color: isDark ? Colors.grey.shade600 : Colors.grey.shade500,
+                                  color: isDark
+                                      ? Colors.grey.shade600
+                                      : Colors.grey.shade500,
                                   fontSize: 10,
                                 ),
                               ),
