@@ -26,15 +26,17 @@ class $AssetsAssetsGen {
 class $AssetsImagesGen {
   const $AssetsImagesGen();
 
+  final AssetGenImage appIcon =
+      const AssetGenImage('assets/images/app_icon.png');
   final AssetGenImage backimg =
       const AssetGenImage('assets/images/backimg.jpg');
   final AssetGenImage googleLogo =
       const AssetGenImage('assets/images/google_logo.png');
   final AssetGenImage home = const AssetGenImage('assets/images/home.jpg');
-  final SvgGenImage nearbyfundiLogo =
-      const SvgGenImage('assets/images/nearbyfundi-logo.svg');
-  final AssetGenImage nearbyfundiImage =
-      const AssetGenImage('assets/images/nearbyfundi_image.jpg');
+  final AssetGenImage nearbyfundiLogo =
+      const AssetGenImage('assets/images/nearbyfundi-logo.png');
+  final AssetGenImage nearbyfundiImageRemovebgPreview = const AssetGenImage(
+      'assets/images/nearbyfundi_image.jpg');
 }
 
 class AssetGenImage {
