@@ -1,9 +1,7 @@
-// lib/screens/auth/otp_verification_screen.dart
-
+// otp_verification_screen.dart
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 
 import '../../config/app_theme.dart';
@@ -184,8 +182,8 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                         color: theme.dividerColor.withOpacity(0.4),
                       ),
                     ),
-                    child: SvgPicture.asset(
-                      'assets/icons/nearbyfundi-logo.svg',
+                    child: Image.asset(
+                      'assets/images/nearbyfundi-logo.png',
                       fit: BoxFit.contain,
                     ),
                   ),

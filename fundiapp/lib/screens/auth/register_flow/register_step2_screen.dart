@@ -2,8 +2,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
+import 'package:qr_code_scanner_plus/qr_code_scanner_plus.dart';
 import '../../../config/app_theme.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../config/app_routes.dart';
@@ -345,6 +345,10 @@ class _RegisterStep2ScreenState extends State<RegisterStep2Screen> {
   }
 }
 
+// ============================================================
+// Scanner screen — now using qr_code_scanner_plus instead of
+// mobile_scanner (avoids the iOS 15.5+ deployment requirement).
+// ============================================================
 class _ScannerScreen extends StatefulWidget {
   const _ScannerScreen({super.key});
 
@@ -353,15 +357,37 @@ class _ScannerScreen extends StatefulWidget {
 }
 
 class _ScannerScreenState extends State<_ScannerScreen> {
-  final MobileScannerController _controller = MobileScannerController(
-    formats: [BarcodeFormat.qrCode, BarcodeFormat.code128, BarcodeFormat.code39],
-  );
-  bool _isDetecting = false;
-  bool _isPopped = false;
+  final GlobalKey qrKey = GlobalKey(debugLabel: 'ID_QR');
+  QRViewController? _controller;
+  bool _isFlashOn = false;
+  bool _hasPopped = false;
+
+  @override
+  void reassemble() {
+    super.reassemble();
+    // Required workaround for hot reload on Android.
+    if (_controller != null) {
+      _controller!.pauseCamera();
+      _controller!.resumeCamera();
+    }
+  }
+
+  void _onQRViewCreated(QRViewController controller) {
+    _controller = controller;
+    controller.scannedDataStream.listen((scanData) {
+      if (_hasPopped) return;
+      final rawValue = scanData.code;
+      if (rawValue != null && rawValue.isNotEmpty) {
+        _hasPopped = true;
+        controller.pauseCamera();
+        Navigator.pop(context, rawValue);
+      }
+    });
+  }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _controller?.dispose();
     super.dispose();
   }
 
@@ -372,48 +398,41 @@ class _ScannerScreenState extends State<_ScannerScreen> {
         title: const Text('Scan ID'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.flash_on),
-            onPressed: () => _controller.toggleTorch(),
+            icon: Icon(_isFlashOn ? Icons.flash_on : Icons.flash_off),
+            onPressed: () async {
+              await _controller?.toggleFlash();
+              final status = await _controller?.getFlashStatus();
+              setState(() => _isFlashOn = status ?? false);
+            },
           ),
           IconButton(
             icon: const Icon(Icons.cameraswitch),
-            onPressed: () => _controller.switchCamera(),
+            onPressed: () => _controller?.flipCamera(),
           ),
         ],
       ),
       body: Stack(
         children: [
-          MobileScanner(
-            controller: _controller,
-            onDetect: (capture) {
-              if (_isDetecting || _isPopped) return;
-              _isDetecting = true;
-              final barcodes = capture.barcodes;
-              for (final barcode in barcodes) {
-                final rawValue = barcode.rawValue;
-                if (rawValue != null) {
-                  _isPopped = true;
-                  Navigator.pop(context, rawValue);
-                  _isDetecting = false;
-                  return;
-                }
-              }
-              _isDetecting = false;
-            },
+          QRView(
+            key: qrKey,
+            onQRViewCreated: _onQRViewCreated,
+            overlay: QrScannerOverlayShape(
+              borderColor: Colors.white,
+              borderRadius: 12,
+              borderLength: 30,
+              borderWidth: 6,
+              cutOutWidth: 250,
+              cutOutHeight: 100,
+            ),
           ),
-          Center(
-            child: Container(
-              width: 250,
-              height: 100,
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.white, width: 3),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Center(
-                child: Text(
-                  'Align barcode/QR here',
-                  style: TextStyle(color: Colors.white, fontSize: 16),
-                ),
+          const Positioned(
+            bottom: 40,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Text(
+                'Align barcode/QR here',
+                style: TextStyle(color: Colors.white, fontSize: 16),
               ),
             ),
           ),

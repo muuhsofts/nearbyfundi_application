@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import '../../config/app_theme.dart';
 import '../../providers/auth_provider.dart';
@@ -118,10 +117,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     const SizedBox(height: 20),
 
-                    // ────────────── LARGE LOGO (NO CARD) ──────────────
+                    // ────────────── LARGE LOGO (PNG) ──────────────
                     Center(
-                      child: SvgPicture.asset(
-                        'assets/icons/nearbyfundi-logo.svg',
+                      child: Image.asset(
+                        'assets/images/nearbyfundi-logo.png',
                         width: 140,
                         height: 140,
                         fit: BoxFit.contain,
