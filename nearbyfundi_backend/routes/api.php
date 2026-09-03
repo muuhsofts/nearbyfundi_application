@@ -31,6 +31,10 @@ use App\Http\Controllers\Api\ServiceCategoryController;
 // NEW controllers for Phase 2
 use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\PrivacyPolicyController;
+use App\Http\Controllers\Api\Finance\FinanceSubscriptionController;
+use App\Http\Controllers\Api\Finance\FinanceTechnicianController;
+use App\Http\Controllers\Api\Finance\FinanceCustomerController;
+
 
 Route::get('/health', fn() => response()->json(['status' => 'ok', 'timestamp' => now()]));
 
@@ -478,6 +482,34 @@ Route::prefix('v19')->group(function () {
 Route::prefix('v20')->middleware(['auth:sanctum', 'active.session'])->group(function () {
     Route::get('admin/technicians', [TechnicianController::class, 'adminIndex']);
 });
+
+// =============================================
+// V21 – FINANCE
+// =============================================
+Route::prefix('v21')
+    ->middleware(['auth:sanctum', 'active.session', 'permission:finance.view'])
+    ->group(function () {
+        Route::prefix('finance/subscriptions')->group(function () {
+            Route::get('summary', [FinanceSubscriptionController::class, 'summary']);
+            Route::get('trends', [FinanceSubscriptionController::class, 'trends']);
+            Route::get('table', [FinanceSubscriptionController::class, 'table']);
+            Route::get('export', [FinanceSubscriptionController::class, 'export']);
+        });
+
+        Route::prefix('finance/technicians')->group(function () {
+            Route::get('summary', [FinanceTechnicianController::class, 'summary']);
+            Route::get('trends', [FinanceTechnicianController::class, 'trends']);
+            Route::get('table', [FinanceTechnicianController::class, 'table']);
+            Route::get('export', [FinanceTechnicianController::class, 'export']);
+        });
+
+        Route::prefix('finance/customers')->group(function () {
+            Route::get('summary', [FinanceCustomerController::class, 'summary']);
+            Route::get('trends', [FinanceCustomerController::class, 'trends']);
+            Route::get('table', [FinanceCustomerController::class, 'table']);
+            Route::get('export', [FinanceCustomerController::class, 'export']);
+        });
+    });
 
 // =============================================
 // Public tracking endpoint 
