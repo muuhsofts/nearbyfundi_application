@@ -21,7 +21,8 @@ import {
   AccountBalance as FundIcon,
   Subscriptions as SubscriptionsIcon,
   PrivacyTip as PrivacyPolicyIcon,
-  Category as CategoryIcon, // <-- added
+  Category as CategoryIcon,
+  AttachMoney as FinanceIcon, // Finance icon (BarChart alias)
 } from '@mui/icons-material';
 
 const addIf = (condition, item) => (condition ? [item] : []);
@@ -118,6 +119,21 @@ export function getSidebarStructure(hasPermission) {
       link: '/app/requests',
       icon: <RequestsIcon />,
       children: [{ label: 'All Requests', link: '/app/requests' }],
+    });
+  }
+
+  // ----- Finance (dropdown) -----
+  if (hasPermission('finance.view')) {
+    structure.push({
+      id: 13,
+      label: 'Finance',
+      link: '#',
+      icon: <FinanceIcon />,
+      children: [
+        { label: 'Subscriptions', link: '/app/finance/subscriptions' },
+        { label: 'Technicians', link: '/app/finance/technicians' },
+        { label: 'Customers', link: '/app/finance/customers' },
+      ],
     });
   }
 
@@ -245,6 +261,17 @@ const staticStructure = [
     link: '/app/requests',
     icon: <RequestsIcon />,
     children: [{ label: 'All Requests', link: '/app/requests' }],
+  },
+  {
+    id: 13,
+    label: 'Finance',
+    link: '#',
+    icon: <FinanceIcon />,
+    children: [
+      { label: 'Subscriptions', link: '/app/finance/subscriptions' },
+      { label: 'Technicians', link: '/app/finance/technicians' },
+      { label: 'Customers', link: '/app/finance/customers' },
+    ],
   },
   {
     id: 11,

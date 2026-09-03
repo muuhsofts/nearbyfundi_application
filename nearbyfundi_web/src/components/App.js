@@ -1,4 +1,4 @@
-// App.js (only the relevant parts)
+// App.js
 
 import React from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
@@ -32,7 +32,7 @@ import PostsList from "pages/posts/PostsList";
 import RequestsList from "pages/requests/RequestsList";
 import ReportsDashboard from "pages/reports/ReportsDashboard";
 import ServicesList from "pages/services/ServicesList";
-import CategoriesList from "pages/categories/CategoriesList"; // <-- added
+import CategoriesList from "pages/categories/CategoriesList";
 import MonitoringMap from "pages/monitoring/MonitoringMap";
 import PrivacyPolicyPage from "pages/privacy-policy/PrivacyPolicyPage";
 
@@ -40,6 +40,12 @@ import PrivacyPolicyPage from "pages/privacy-policy/PrivacyPolicyPage";
 import SubscriptionList from "pages/subscriptions/SubscriptionList";
 import RateCardManagement from "pages/subscriptions/RateCardManagement";
 import PaymentMethodManagement from "pages/subscriptions/PaymentMethodManagement";
+
+// Finance pages (NEW)
+import FinanceLayout from "pages/finance/FinanceLayout";
+import FinanceSubscriptions from "pages/finance/FinanceSubscriptions";
+import FinanceTechnicians from "pages/finance/FinanceTechnicians";
+import FinanceCustomers from "pages/finance/FinanceCustomers";
 
 // Contexts
 import { UserProvider } from "context/UserContext";
@@ -66,6 +72,11 @@ import {
     SubscriptionProvider,
 } from "context/SubscriptionContext";
 import { PrivacyPolicyProvider } from "context/PrivacyPolicyContext";
+
+// Finance contexts (NEW)
+import { FinanceSubscriptionProvider } from "context/FinanceSubscriptionContext";
+import { FinanceTechnicianProvider } from "context/FinanceTechnicianContext";
+import { FinanceCustomerProvider } from "context/FinanceCustomerContext";
 
 function RouterNavigatorSync() {
     const navigate = useNavigate();
@@ -126,7 +137,7 @@ function AppContent() {
                 <Route path="faqs/create" element={<FaqList />} />
                 <Route path="faqs/:id/edit" element={<FaqList />} />
                 <Route path="services" element={<ServicesList />} />
-                <Route path="services/categories" element={<CategoriesList />} /> {/* new route */}
+                <Route path="services/categories" element={<CategoriesList />} />
                 <Route path="services/create" element={<ServicesList />} />
                 <Route path="services/:id/edit" element={<ServicesList />} />
                 <Route path="technicians" element={<TechniciansList />} />
@@ -140,6 +151,15 @@ function AppContent() {
                 <Route path="rate-cards" element={<RateCardManagement />} />
                 <Route path="payment-methods" element={<PaymentMethodManagement />} />
                 <Route path="privacy-policy" element={<PrivacyPolicyPage />} />
+
+                {/* Finance nested routes */}
+                <Route path="finance" element={<FinanceLayout />}>
+                    <Route index element={<Navigate to="/app/finance/subscriptions" replace />} />
+                    <Route path="subscriptions" element={<FinanceSubscriptions />} />
+                    <Route path="technicians" element={<FinanceTechnicians />} />
+                    <Route path="customers" element={<FinanceCustomers />} />
+                </Route>
+
                 <Route index element={<Navigate to="/app/dashboard" replace />} />
                 <Route path="*" element={<Navigate to="/app/dashboard" replace />} />
             </Route>
@@ -187,13 +207,19 @@ export default function App() {
                                                                                             <RateCardProvider>
                                                                                                 <PaymentMethodProvider>
                                                                                                     <SubscriptionProvider>
-                                                                                                        <ToastContainer
-                                                                                                            position="top-right"
-                                                                                                            autoClose={3000}
-                                                                                                            hideProgressBar={false}
-                                                                                                        />
-                                                                                                        <RouterNavigatorSync />
-                                                                                                        <AppContent />
+                                                                                                        <FinanceSubscriptionProvider>
+                                                                                                            <FinanceTechnicianProvider>
+                                                                                                                <FinanceCustomerProvider>
+                                                                                                                    <ToastContainer
+                                                                                                                        position="top-right"
+                                                                                                                        autoClose={3000}
+                                                                                                                        hideProgressBar={false}
+                                                                                                                    />
+                                                                                                                    <RouterNavigatorSync />
+                                                                                                                    <AppContent />
+                                                                                                                </FinanceCustomerProvider>
+                                                                                                            </FinanceTechnicianProvider>
+                                                                                                        </FinanceSubscriptionProvider>
                                                                                                     </SubscriptionProvider>
                                                                                                 </PaymentMethodProvider>
                                                                                             </RateCardProvider>

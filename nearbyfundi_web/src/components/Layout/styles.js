@@ -5,19 +5,28 @@ export default makeStyles((theme) => ({
     display: 'flex',
     maxWidth: '100vw',
     overflowX: 'hidden',
+    minHeight: '100vh',
   },
   content: {
     position: 'relative',
     flexGrow: 1,
-    margin: '0px 35px 0px 35px',
-    width: `calc(100vw - 240px)`,
+    // fluid width – takes all remaining space after sidebar
+    width: 'auto',
+    minWidth: 0,                    // critical for flex children
+    margin: 0,
+    padding: theme.spacing(0, 2),   // small horizontal padding only
     minHeight: '100vh',
     paddingBottom: 70,
+    transition: theme.transitions.create(['margin', 'width'], {
+      easing: theme.transitions.easing.sharp,
+      duration: theme.transitions.duration.leavingScreen,
+    }),
   },
   contentShift: {
-    width: `calc(100vw - (240px + ${theme.spacing(8)}))`,
-    transition: theme.transitions.create(['width', 'margin'], {
-      easing: theme.transitions.easing.sharp,
+    // when sidebar is open we just keep the fluid behaviour
+    // (sidebar already occupies its space via flex)
+    transition: theme.transitions.create(['margin', 'width'], {
+      easing: theme.transitions.easing.easeOut,
       duration: theme.transitions.duration.enteringScreen,
     }),
   },

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Outlet } from 'react-router-dom';  // ✅ Use Outlet
+import { Outlet } from 'react-router-dom';
 import classnames from 'classnames';
 
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -17,7 +17,7 @@ import { Link } from '../Wrappers';
 import ColorChangeThemePopper from './components/ColorChangeThemePopper';
 import BreadCrumbs from '../../components/BreadCrumbs';
 
-import { useLayoutState } from "context/LayoutContext";
+import { useLayoutState } from 'context/LayoutContext';
 import { getSidebarStructure } from '../Sidebar/SidebarStructure';
 import { usePermissions } from 'hooks/usePermissions';
 
@@ -41,6 +41,7 @@ function Layout() {
       <div className={classes.root}>
         <Header />
         <Sidebar structure={dynamicStructure} />
+
         <div
             className={classnames(classes.content, {
               [classes.contentShift]: layoutState.isSidebarOpened,
@@ -49,7 +50,7 @@ function Layout() {
           <div className={classes.fakeToolbar} />
           <BreadCrumbs />
 
-          {/* ✅ All nested routes from App.js render here */}
+          {/* All nested routes render here */}
           <Outlet />
 
           <Fab
@@ -65,7 +66,12 @@ function Layout() {
 
           <Footer>
             <div>
-              <Link color="primary" href="https://imaratech.co.tz/" target="_blank" className={classes.link}>
+              <Link
+                  color="primary"
+                  href="https://imaratech.co.tz/"
+                  target="_blank"
+                  className={classes.link}
+              >
                 hanai technologies
               </Link>
             </div>
@@ -81,7 +87,10 @@ function Layout() {
                 </IconButton>
               </Link>
               <Link href="https://github.com/flatlogic" target="_blank">
-                <IconButton aria-label="github" style={{ padding: '12px 0 12px 12px' }}>
+                <IconButton
+                    aria-label="github"
+                    style={{ padding: '12px 0 12px 12px' }}
+                >
                   <GithubIcon style={{ color: '#6E6E6E99' }} />
                 </IconButton>
               </Link>
