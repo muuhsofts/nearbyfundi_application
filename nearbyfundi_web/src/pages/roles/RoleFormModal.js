@@ -1,10 +1,22 @@
 // src/pages/roles/RoleFormModal.js
 import React, { useState, useEffect } from 'react';
 import {
-    Dialog, DialogTitle, DialogContent, DialogActions,
-    TextField, Button, Box, CircularProgress, useMediaQuery, useTheme,
-    Typography
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    TextField,
+    Button,
+    Box,
+    CircularProgress,
+    useMediaQuery,
+    useTheme,
+    Typography,
+    IconButton,
+    Stack,
+    Divider,
 } from '@mui/material';
+import { Close as CloseIcon } from '@mui/icons-material';
 import { useRoleManagement } from 'hooks/useRole';
 import { showSnackbar } from 'utils/snackbar';
 import appConfig from '../../config';
@@ -77,27 +89,48 @@ export default function RoleFormModal({ open, onClose, role }) {
             fullScreen={fullScreen}
             PaperProps={{
                 sx: {
-                    borderRadius: { xs: 0, sm: 2 },
-                    backgroundColor: colors.light,
-                }
+                    borderRadius: { xs: 0, sm: 3 },
+                    bgcolor: 'background.paper',
+                },
             }}
         >
             <form onSubmit={handleSubmit}>
-                <DialogTitle sx={{
-                    pb: 1,
-                    fontSize: { xs: '1.25rem', sm: '1.5rem' },
-                    color: colors.dark,
-                }}>
-                    {role ? 'Edit Role' : 'Add New Role'}
-                </DialogTitle>
-                <DialogContent>
-                    <Box display="flex" flexDirection="column" gap={2} mt={1}>
-                        <Typography variant="body2" sx={{ color: colors.rain }}>
-                            {role
-                                ? 'Update the role details below.'
-                                : 'Create a new role.'}
+                <DialogTitle
+                    sx={{
+                        px: { xs: 2.5, sm: 3 },
+                        pt: 2.5,
+                        pb: 1.5,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-start',
+                    }}
+                >
+                    <Box>
+                        <Typography variant="h6" fontWeight={800} color="text.primary">
+                            {role ? 'Edit Role' : 'Add New Role'}
                         </Typography>
+                        <Typography variant="body2" color="text.secondary" fontWeight={500} sx={{ mt: 0.25 }}>
+                            {role ? 'Update role details below' : 'Create a new role with a unique key'}
+                        </Typography>
+                    </Box>
+                    <IconButton
+                        onClick={() => onClose(false)}
+                        size="small"
+                        disabled={loading}
+                        sx={{
+                            color: 'text.secondary',
+                            mt: -0.5,
+                            '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
+                        }}
+                    >
+                        <CloseIcon />
+                    </IconButton>
+                </DialogTitle>
 
+                <Divider />
+
+                <DialogContent sx={{ px: { xs: 2.5, sm: 3 }, py: 2.5 }}>
+                    <Stack spacing={2.25}>
                         <TextField
                             label="Role Name (key)"
                             name="name"
@@ -105,27 +138,15 @@ export default function RoleFormModal({ open, onClose, role }) {
                             onChange={handleChange}
                             required
                             fullWidth
-                            helperText="Unique identifier, uppercase e.g. 'ADMINISTRATOR'"
                             size="small"
+                            helperText="Unique identifier, uppercase e.g. ADMINISTRATOR"
                             sx={{
-                                '& .MuiInputBase-root': {
-                                    backgroundColor: colors.sky,
+                                '& .MuiOutlinedInput-root': {
                                     borderRadius: 2,
-                                },
-                                '& .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: colors.middle,
-                                },
-                                '&:hover .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: colors.sea,
-                                },
-                                '& .Mui-focused .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: colors.sea,
-                                },
-                                '& .MuiInputLabel-root': {
-                                    color: colors.rain,
-                                },
-                                '& .MuiInputLabel-root.Mui-focused': {
-                                    color: colors.sea,
+                                    bgcolor: 'action.hover',
+                                    '& fieldset': { borderColor: 'transparent' },
+                                    '&:hover fieldset': { borderColor: 'divider' },
+                                    '&.Mui-focused fieldset': { borderColor: 'primary.main' },
                                 },
                             }}
                         />
@@ -139,24 +160,12 @@ export default function RoleFormModal({ open, onClose, role }) {
                             fullWidth
                             size="small"
                             sx={{
-                                '& .MuiInputBase-root': {
-                                    backgroundColor: colors.sky,
+                                '& .MuiOutlinedInput-root': {
                                     borderRadius: 2,
-                                },
-                                '& .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: colors.middle,
-                                },
-                                '&:hover .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: colors.sea,
-                                },
-                                '& .Mui-focused .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: colors.sea,
-                                },
-                                '& .MuiInputLabel-root': {
-                                    color: colors.rain,
-                                },
-                                '& .MuiInputLabel-root.Mui-focused': {
-                                    color: colors.sea,
+                                    bgcolor: 'action.hover',
+                                    '& fieldset': { borderColor: 'transparent' },
+                                    '&:hover fieldset': { borderColor: 'divider' },
+                                    '&.Mui-focused fieldset': { borderColor: 'primary.main' },
                                 },
                             }}
                         />
@@ -171,24 +180,12 @@ export default function RoleFormModal({ open, onClose, role }) {
                             fullWidth
                             size="small"
                             sx={{
-                                '& .MuiInputBase-root': {
-                                    backgroundColor: colors.sky,
+                                '& .MuiOutlinedInput-root': {
                                     borderRadius: 2,
-                                },
-                                '& .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: colors.middle,
-                                },
-                                '&:hover .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: colors.sea,
-                                },
-                                '& .Mui-focused .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: colors.sea,
-                                },
-                                '& .MuiInputLabel-root': {
-                                    color: colors.rain,
-                                },
-                                '& .MuiInputLabel-root.Mui-focused': {
-                                    color: colors.sea,
+                                    bgcolor: 'action.hover',
+                                    '& fieldset': { borderColor: 'transparent' },
+                                    '&:hover fieldset': { borderColor: 'divider' },
+                                    '&.Mui-focused fieldset': { borderColor: 'primary.main' },
                                 },
                             }}
                         />
@@ -200,38 +197,32 @@ export default function RoleFormModal({ open, onClose, role }) {
                             onChange={handleChange}
                             required
                             fullWidth
-                            helperText="Usually 'web' or 'api'"
                             size="small"
+                            helperText="Usually 'web' or 'api'"
                             sx={{
-                                '& .MuiInputBase-root': {
-                                    backgroundColor: colors.sky,
+                                '& .MuiOutlinedInput-root': {
                                     borderRadius: 2,
-                                },
-                                '& .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: colors.middle,
-                                },
-                                '&:hover .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: colors.sea,
-                                },
-                                '& .Mui-focused .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: colors.sea,
-                                },
-                                '& .MuiInputLabel-root': {
-                                    color: colors.rain,
-                                },
-                                '& .MuiInputLabel-root.Mui-focused': {
-                                    color: colors.sea,
+                                    bgcolor: 'action.hover',
+                                    '& fieldset': { borderColor: 'transparent' },
+                                    '&:hover fieldset': { borderColor: 'divider' },
+                                    '&.Mui-focused fieldset': { borderColor: 'primary.main' },
                                 },
                             }}
                         />
-                    </Box>
+                    </Stack>
                 </DialogContent>
-                <DialogActions sx={{ p: 2, pt: 0 }}>
+
+                <Divider />
+
+                <DialogActions sx={{ px: { xs: 2.5, sm: 3 }, py: 2, gap: 1.5 }}>
                     <Button
                         onClick={() => onClose(false)}
+                        disabled={loading}
                         sx={{
-                            color: colors.rain,
-                            '&:hover': { color: colors.black }
+                            fontWeight: 600,
+                            textTransform: 'none',
+                            color: 'text.secondary',
+                            '&:hover': { bgcolor: 'action.hover' },
                         }}
                     >
                         Cancel
@@ -241,11 +232,25 @@ export default function RoleFormModal({ open, onClose, role }) {
                         variant="contained"
                         disabled={loading}
                         sx={{
-                            backgroundColor: colors.sea,
-                            '&:hover': { backgroundColor: colors.dark },
+                            minWidth: 110,
+                            borderRadius: 2,
+                            fontWeight: 700,
+                            textTransform: 'none',
+                            boxShadow: 'none',
+                            bgcolor: colors.sea || '#0f766e',
+                            '&:hover': {
+                                bgcolor: colors.dark || '#0d5c56',
+                                boxShadow: '0 4px 12px rgba(15,118,110,0.35)',
+                            },
                         }}
                     >
-                        {loading ? <CircularProgress size={24} sx={{ color: colors.light }} /> : (role ? 'Update' : 'Create')}
+                        {loading ? (
+                            <CircularProgress size={22} thickness={4} sx={{ color: '#fff' }} />
+                        ) : role ? (
+                            'Update Role'
+                        ) : (
+                            'Create Role'
+                        )}
                     </Button>
                 </DialogActions>
             </form>

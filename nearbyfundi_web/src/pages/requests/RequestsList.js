@@ -4,30 +4,12 @@ import {
     Box,
     Paper,
     Typography,
+    Button,
     Grid,
     Card,
     CardContent,
-    Avatar,
-    Chip,
-    IconButton,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    Button,
     TextField,
-    InputAdornment,
-    CircularProgress,
-    Alert,
-    Stack,
-    Pagination,
-    FormControl,
-    InputLabel,
-    Select,
     MenuItem,
-    useMediaQuery,
-    useTheme,
-    Divider,
     Table,
     TableBody,
     TableCell,
@@ -35,12 +17,20 @@ import {
     TableHead,
     TableRow,
     TablePagination,
-    TableSortLabel,
+    Chip,
+    CircularProgress,
     Tooltip,
+    Stack,
+    Avatar,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    Divider,
+    TableSortLabel,
+    IconButton,
 } from '@mui/material';
 import {
-    Close as CloseIcon,
-    Search as SearchIcon,
     Refresh as RefreshIcon,
     Person as PersonIcon,
     LocationOn as LocationIcon,
@@ -51,9 +41,12 @@ import {
     Cancel as CancelIcon,
     Pending as PendingIcon,
     HourglassEmpty as HourglassIcon,
-    Schedule as ScheduleIcon,
     Phone as PhoneIcon,
     Email as EmailIcon,
+    Close as CloseIcon,
+    Receipt as ReceiptIcon,
+    CalendarToday as CalendarIcon,
+    Notes as NotesIcon,
 } from '@mui/icons-material';
 import { requestService } from 'services/request.service';
 import { usePermissions } from 'hooks/usePermissions';
@@ -63,24 +56,28 @@ import appConfig from '../../config';
 
 const colors = appConfig.app.colors;
 
+const STATUS_COLORS = {
+    pending: { color: '#f59e0b', bg: '#fef3c7', label: 'Pending', icon: <PendingIcon sx={{ fontSize: 14 }} /> },
+    accepted: { color: '#10b981', bg: '#d1fae5', label: 'Accepted', icon: <CheckCircleIcon sx={{ fontSize: 14 }} /> },
+    rejected: { color: '#ef4444', bg: '#fee2e2', label: 'Rejected', icon: <CancelIcon sx={{ fontSize: 14 }} /> },
+    cancelled: { color: '#6b7280', bg: '#f3f4f6', label: 'Cancelled', icon: <CancelIcon sx={{ fontSize: 14 }} /> },
+    in_progress: { color: '#3b82f6', bg: '#eff6ff', label: 'In Progress', icon: <HourglassIcon sx={{ fontSize: 14 }} /> },
+    completed: { color: '#10b981', bg: '#d1fae5', label: 'Completed', icon: <CheckCircleIcon sx={{ fontSize: 14 }} /> },
+};
+
 const RequestsList = () => {
-    const theme = useTheme();
-    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-    const showTableView = useMediaQuery(theme.breakpoints.up('md'));
-
-    const [requests, setRequests] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
-    const [pagination, setPagination] = useState({ total: 0, per_page: 20, current_page: 1, last_page: 1 });
-
     const { can } = usePermissions();
     const canView = can('requests.view');
     const canDelete = can('requests.delete');
 
+    const [requests, setRequests] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [pagination, setPagination] = useState({ total: 0, per_page: 10, current_page: 1, last_page: 1 });
+
+    const [statusFilter, setStatusFilter] = useState('all');
     const [search, setSearch] = useState('');
-    const [statusFilter, setStatusFilter] = useState('');
     const [page, setPage] = useState(0);
-    const [rowsPerPage, setRowsPerPage] = useState(20);
+    const [rowsPerPage, setRowsPerPage] = useState(10);
     const [order, setOrder] = useState('desc');
     const [orderBy, setOrderBy] = useState('created_at');
     const [selectedRequest, setSelectedRequest] = useState(null);
@@ -96,13 +93,12 @@ const RequestsList = () => {
         if (!canView) return;
 
         setLoading(true);
-        setError(null);
         try {
             const response = await requestService.getRequests({
                 page: page + 1,
                 per_page: rowsPerPage,
                 search: search || undefined,
-                status: statusFilter || undefined,
+                status: statusFilter === 'all' ? undefined : statusFilter,
             });
 
             if (response?.data?.status === 'success') {
@@ -125,7 +121,7 @@ const RequestsList = () => {
             }
         } catch (err) {
             console.error('Requests error:', err);
-            setError(err.message || 'Failed to load requests');
+            showSnackbar({ type: 'error', message: err.message || 'Failed to load requests' });
         } finally {
             setLoading(false);
         }
@@ -137,7 +133,7 @@ const RequestsList = () => {
         }
     }, [page, rowsPerPage, search, statusFilter, canView]);
 
-    const handleRefresh = () => {
+    const refreshAll = () => {
         loadRequests();
     };
 
@@ -188,38 +184,34 @@ const RequestsList = () => {
     };
 
     const getStatusChip = (status) => {
-        const statusMap = {
-            'pending': { color: 'warning', icon: <PendingIcon sx={{ fontSize: 16 }} />, label: 'Pending' },
-            'accepted': { color: 'success', icon: <CheckCircleIcon sx={{ fontSize: 16 }} />, label: 'Accepted' },
-            'rejected': { color: 'error', icon: <CancelIcon sx={{ fontSize: 16 }} />, label: 'Rejected' },
-            'cancelled': { color: 'default', icon: <CancelIcon sx={{ fontSize: 16 }} />, label: 'Cancelled' },
-            'in_progress': { color: 'info', icon: <HourglassIcon sx={{ fontSize: 16 }} />, label: 'In Progress' },
-            'completed': { color: 'success', icon: <CheckCircleIcon sx={{ fontSize: 16 }} />, label: 'Completed' },
-        };
-        const config = statusMap[status] || statusMap['pending'];
+        const st = STATUS_COLORS[status] || STATUS_COLORS.pending;
         return (
             <Chip
-                icon={config.icon}
-                label={config.label}
+                icon={st.icon}
+                label={st.label}
                 size="small"
                 sx={{
-                    backgroundColor: config.color === 'warning' ? '#fef3c7' :
-                        config.color === 'success' ? '#d1fae5' :
-                            config.color === 'error' ? '#fee2e2' :
-                                config.color === 'info' ? '#dbeafe' :
-                                    config.color === 'default' ? colors.sky : colors.sky,
-                    color: config.color === 'warning' ? '#92400e' :
-                        config.color === 'success' ? '#065f46' :
-                            config.color === 'error' ? '#991b1b' :
-                                config.color === 'info' ? '#1e40af' :
-                                    config.color === 'default' ? colors.rain : colors.rain,
-                    borderColor: colors.middle,
+                    backgroundColor: st.bg,
+                    color: st.color,
+                    fontWeight: 600,
+                    '& .MuiChip-icon': {
+                        color: st.color,
+                    },
                 }}
             />
         );
     };
 
     const formatDate = (dateStr) => {
+        if (!dateStr) return '-';
+        try {
+            return format(new Date(dateStr), 'MMM d, yyyy');
+        } catch {
+            return '-';
+        }
+    };
+
+    const formatDateFull = (dateStr) => {
         if (!dateStr) return '-';
         try {
             return format(new Date(dateStr), 'MMM d, yyyy h:mm a');
@@ -230,312 +222,236 @@ const RequestsList = () => {
 
     if (!canView) {
         return (
-            <Box p={3}>
-                <Paper sx={{ p: 3, textAlign: 'center', backgroundColor: colors.light }}>
-                    <Typography color="error">You do not have permission to view requests.</Typography>
-                </Paper>
-            </Box>
+            <Paper sx={{ p: 3, textAlign: 'center' }}>
+                <Typography color="error">You do not have permission to view requests.</Typography>
+            </Paper>
         );
     }
 
-    if (error) {
-        return (
-            <Box p={3}>
-                <Alert
-                    severity="error"
-                    action={
-                        <Button color="inherit" size="small" onClick={() => { setError(null); loadRequests(); }}>
-                            Retry
-                        </Button>
-                    }
-                >
-                    {error}
-                </Alert>
-            </Box>
-        );
-    }
+    // Summary stats
+    const totalRequests = pagination.total || 0;
+    const pendingCount = requests.filter(r => r.status === 'pending').length;
+    const inProgressCount = requests.filter(r => r.status === 'in_progress').length;
+    const completedCount = requests.filter(r => r.status === 'completed').length;
 
     return (
-        <Box sx={{ width: '100%', p: { xs: 1, sm: 2 } }}>
-            <Paper sx={{
-                width: '100%',
-                borderRadius: { xs: 1, sm: 2 },
-                overflow: 'hidden',
-                boxShadow: { xs: 0, sm: 1 },
-                p: { xs: 2, sm: 3 },
-                backgroundColor: colors.light,
-                border: `1px solid ${colors.middle}`,
-            }}>
-                {/* Header */}
-                <Box display="flex" justifyContent="space-between" alignItems="center" mb={3} flexWrap="wrap" gap={2}>
-                    <Typography variant="h5" fontWeight="600" sx={{ fontSize: { xs: '1.5rem', sm: '1.75rem' }, color: colors.dark }}>
-                        Service Requests
-                    </Typography>
-                    <Box display="flex" gap={2} alignItems="center" flexWrap="wrap">
-                        <TextField
-                            placeholder="Search requests..."
-                            size="small"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            InputProps={{
-                                startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>,
-                            }}
+        <Box sx={{ width: '100%', maxWidth: '100%' }}>
+            {/* Filter Bar */}
+            <Paper
+                elevation={0}
+                sx={{
+                    p: 2,
+                    mb: 3,
+                    borderRadius: 3,
+                    border: `1px solid ${colors.middle}`,
+                    backgroundColor: '#fff',
+                }}
+            >
+                <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap alignItems="center">
+                    <TextField
+                        select
+                        label="Status"
+                        size="small"
+                        value={statusFilter}
+                        onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }}
+                        sx={{ minWidth: 140 }}
+                    >
+                        <MenuItem value="all">All</MenuItem>
+                        <MenuItem value="pending">Pending</MenuItem>
+                        <MenuItem value="accepted">Accepted</MenuItem>
+                        <MenuItem value="rejected">Rejected</MenuItem>
+                        <MenuItem value="cancelled">Cancelled</MenuItem>
+                        <MenuItem value="in_progress">In Progress</MenuItem>
+                        <MenuItem value="completed">Completed</MenuItem>
+                    </TextField>
+
+                    <TextField
+                        size="small"
+                        placeholder="Search requests..."
+                        value={search}
+                        onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+                        sx={{ minWidth: 200 }}
+                    />
+
+                    <Box flexGrow={1} />
+
+                    <Button
+                        variant="contained"
+                        startIcon={<RefreshIcon />}
+                        onClick={refreshAll}
+                    >
+                        Refresh
+                    </Button>
+                </Stack>
+            </Paper>
+
+            {/* Summary Cards */}
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+                {[
+                    { label: 'Total Requests', value: totalRequests, color: '#3b82f6', bg: '#eff6ff' },
+                    { label: 'Pending', value: pendingCount, color: '#f59e0b', bg: '#fef3c7' },
+                    { label: 'In Progress', value: inProgressCount, color: '#8b5cf6', bg: '#f3e8ff' },
+                    { label: 'Completed', value: completedCount, color: '#10b981', bg: '#ecfdf5' },
+                ].map((item, idx) => (
+                    <Grid item xs={12} sm={6} md={3} key={idx}>
+                        <Card
+                            elevation={0}
                             sx={{
-                                minWidth: 200,
-                                '& .MuiInputBase-root': {
-                                    backgroundColor: colors.sky,
-                                    borderRadius: 2,
-                                },
-                                '& .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: colors.middle,
-                                },
-                            }}
-                        />
-                        <FormControl size="small" sx={{ minWidth: 130 }}>
-                            <InputLabel sx={{ color: colors.rain }}>Status</InputLabel>
-                            <Select
-                                value={statusFilter}
-                                label="Status"
-                                onChange={(e) => setStatusFilter(e.target.value)}
-                                sx={{
-                                    '& .MuiOutlinedInput-notchedOutline': {
-                                        borderColor: colors.middle,
-                                    },
-                                    '& .MuiInputBase-root': {
-                                        backgroundColor: colors.sky,
-                                    },
-                                }}
-                            >
-                                <MenuItem value="">All</MenuItem>
-                                <MenuItem value="pending">Pending</MenuItem>
-                                <MenuItem value="accepted">Accepted</MenuItem>
-                                <MenuItem value="rejected">Rejected</MenuItem>
-                                <MenuItem value="cancelled">Cancelled</MenuItem>
-                                <MenuItem value="in_progress">In Progress</MenuItem>
-                                <MenuItem value="completed">Completed</MenuItem>
-                            </Select>
-                        </FormControl>
-                        <Button
-                            variant="outlined"
-                            startIcon={<RefreshIcon />}
-                            onClick={handleRefresh}
-                            size="small"
-                            sx={{
-                                borderColor: colors.middle,
-                                color: colors.sea,
-                                '&:hover': {
-                                    borderColor: colors.sea,
-                                    backgroundColor: colors.wave,
-                                }
+                                borderRadius: 3,
+                                border: `1px solid ${colors.middle}`,
+                                backgroundColor: item.bg,
+                                height: '100%',
                             }}
                         >
-                            Refresh
-                        </Button>
-                    </Box>
+                            <CardContent>
+                                <Typography variant="body2" sx={{ color: item.color, fontWeight: 600, mb: 0.5 }}>
+                                    {item.label}
+                                </Typography>
+                                <Typography variant="h4" sx={{ color: item.color, fontWeight: 700 }}>
+                                    {item.value}
+                                </Typography>
+                            </CardContent>
+                        </Card>
+                    </Grid>
+                ))}
+            </Grid>
+
+            {/* Table */}
+            <Paper
+                elevation={0}
+                sx={{
+                    borderRadius: 3,
+                    border: `1px solid ${colors.middle}`,
+                    overflow: 'hidden',
+                }}
+            >
+                <Box
+                    sx={{
+                        p: 2.5,
+                        borderBottom: `1px solid ${colors.middle}`,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: 2,
+                    }}
+                >
+                    <Typography variant="h6" fontWeight={600}>
+                        Service Requests
+                    </Typography>
                 </Box>
 
-                {/* Loading */}
-                {loading && !requests.length ? (
-                    <Box display="flex" justifyContent="center" py={8}>
-                        <CircularProgress sx={{ color: colors.sea }} />
+                {loading ? (
+                    <Box sx={{ py: 6, textAlign: 'center' }}>
+                        <CircularProgress />
                     </Box>
                 ) : requests.length === 0 ? (
-                    <Box textAlign="center" py={8}>
-                        <Typography sx={{ color: colors.rain }}>
-                            No requests found.
-                        </Typography>
+                    <Box sx={{ py: 6, textAlign: 'center' }}>
+                        <Typography color="text.secondary">No requests found</Typography>
                     </Box>
                 ) : (
                     <>
-                        {/* Table View (Desktop) */}
-                        {showTableView ? (
-                            <TableContainer sx={{ width: '100%', overflowX: 'auto' }}>
-                                <Table sx={{ width: '100%', minWidth: 800 }}>
-                                    <TableHead>
-                                        <TableRow sx={{ backgroundColor: colors.sky }}>
-                                            <TableCell sx={{ fontWeight: 'bold', color: colors.dark }}>Customer</TableCell>
-                                            <TableCell sx={{ fontWeight: 'bold', color: colors.dark }}>Technician</TableCell>
-                                            <TableCell sx={{ fontWeight: 'bold', color: colors.dark }}>Service</TableCell>
-                                            <TableCell sx={{ fontWeight: 'bold', color: colors.dark }}>Status</TableCell>
-                                            <TableCell sx={{ fontWeight: 'bold', color: colors.dark }}>
-                                                <TableSortLabel
-                                                    active={orderBy === 'created_at'}
-                                                    direction={orderBy === 'created_at' ? order : 'asc'}
-                                                    onClick={() => handleRequestSort('created_at')}
-                                                    sx={{ color: colors.dark }}
-                                                >
-                                                    Created
-                                                </TableSortLabel>
-                                            </TableCell>
-                                            <TableCell sx={{ fontWeight: 'bold', color: colors.dark }} align="center">Actions</TableCell>
-                                        </TableRow>
-                                    </TableHead>
-                                    <TableBody>
-                                        {requests.map((request) => (
-                                            <TableRow key={request.id} hover>
-                                                <TableCell>
-                                                    <Box display="flex" alignItems="center" gap={1}>
-                                                        <Avatar sx={{ width: 32, height: 32, bgcolor: colors.sea }}>
-                                                            {request.customer?.name?.charAt(0).toUpperCase() || <PersonIcon />}
-                                                        </Avatar>
-                                                        <Box>
-                                                            <Typography variant="body2" fontWeight="500" sx={{ color: colors.dark }}>
-                                                                {request.customer?.name || 'Unknown'}
-                                                            </Typography>
-                                                            <Typography variant="caption" sx={{ color: colors.rain }}>
-                                                                {request.customer?.phone || 'No phone'}
-                                                            </Typography>
-                                                        </Box>
-                                                    </Box>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Box display="flex" alignItems="center" gap={1}>
-                                                        <Avatar
-                                                            src={request.technician?.profile_photo || undefined}
-                                                            sx={{ width: 32, height: 32, bgcolor: colors.sea }}
-                                                        >
-                                                            {request.technician?.name?.charAt(0).toUpperCase() || <PersonIcon />}
-                                                        </Avatar>
-                                                        <Box>
-                                                            <Typography variant="body2" fontWeight="500" sx={{ color: colors.dark }}>
-                                                                {request.technician?.name || 'Unknown'}
-                                                            </Typography>
-                                                            <Typography variant="caption" sx={{ color: colors.rain }}>
-                                                                {request.technician?.area || 'No area'}
-                                                            </Typography>
-                                                        </Box>
-                                                    </Box>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Chip
-                                                        icon={<BuildIcon sx={{ fontSize: 16, color: colors.sea }} />}
-                                                        label={request.service?.name || 'N/A'}
-                                                        size="small"
-                                                        variant="outlined"
-                                                        sx={{ borderColor: colors.middle }}
-                                                    />
-                                                </TableCell>
-                                                <TableCell>
-                                                    {getStatusChip(request.status)}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Typography variant="body2" sx={{ color: colors.black }}>
-                                                        {formatDate(request.created_at)}
-                                                    </Typography>
-                                                </TableCell>
-                                                <TableCell align="center">
-                                                    <IconButton
-                                                        size="small"
-                                                        onClick={() => handleViewRequest(request)}
-                                                        sx={{ color: colors.sea }}
-                                                        title="View Request"
+                        <TableContainer>
+                            <Table>
+                                <TableHead sx={{ backgroundColor: '#f8fafc' }}>
+                                    <TableRow>
+                                        <TableCell sx={{ fontWeight: 700 }}>Customer</TableCell>
+                                        <TableCell sx={{ fontWeight: 700 }}>Technician</TableCell>
+                                        <TableCell sx={{ fontWeight: 700 }}>Service</TableCell>
+                                        <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
+                                        <TableCell sx={{ fontWeight: 700 }}>
+                                            <TableSortLabel
+                                                active={orderBy === 'created_at'}
+                                                direction={orderBy === 'created_at' ? order : 'asc'}
+                                                onClick={() => handleRequestSort('created_at')}
+                                            >
+                                                Created
+                                            </TableSortLabel>
+                                        </TableCell>
+                                        <TableCell sx={{ fontWeight: 700 }} align="center">Actions</TableCell>
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    {requests.map((request) => (
+                                        <TableRow key={request.id} hover>
+                                            <TableCell>
+                                                <Box display="flex" alignItems="center" gap={1}>
+                                                    <Avatar
+                                                        sx={{
+                                                            width: 32,
+                                                            height: 32,
+                                                            bgcolor: colors.sea,
+                                                            fontSize: 14,
+                                                        }}
                                                     >
-                                                        <ViewIcon />
-                                                    </IconButton>
-                                                    {canDelete && (
-                                                        <IconButton
-                                                            size="small"
-                                                            onClick={() => openConfirmDialog(
-                                                                'Delete Request',
-                                                                `Are you sure you want to delete this request?`,
-                                                                () => handleDeleteRequest(request.id)
-                                                            )}
-                                                            sx={{ color: 'error.main' }}
-                                                            title="Delete Request"
-                                                        >
-                                                            <DeleteIcon />
-                                                        </IconButton>
-                                                    )}
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </TableContainer>
-                        ) : (
-                            // Mobile Card View
-                            <Grid container spacing={2}>
-                                {requests.map((request) => (
-                                    <Grid item xs={12} key={request.id}>
-                                        <Card sx={{
-                                            borderRadius: 2,
-                                            border: `1px solid ${colors.middle}`,
-                                        }}>
-                                            <CardContent sx={{ p: 2 }}>
-                                                <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
+                                                        {request.customer?.name?.charAt(0).toUpperCase() || <PersonIcon />}
+                                                    </Avatar>
                                                     <Box>
-                                                        <Typography variant="subtitle2" sx={{ color: colors.rain }}>
-                                                            Request #{request.id}
+                                                        <Typography variant="body2" fontWeight={500}>
+                                                            {request.customer?.name || '-'}
                                                         </Typography>
-                                                        <Typography variant="body2" sx={{ color: colors.rain }}>
-                                                            {formatDate(request.created_at)}
+                                                        <Typography variant="caption" color="text.secondary">
+                                                            {request.customer?.phone || ''}
                                                         </Typography>
                                                     </Box>
-                                                    {getStatusChip(request.status)}
                                                 </Box>
-
-                                                <Divider sx={{ my: 1.5, borderColor: colors.middle }} />
-
-                                                <Grid container spacing={1}>
-                                                    <Grid item xs={6}>
-                                                        <Typography variant="caption" sx={{ color: colors.rain }}>
-                                                            Customer
+                                            </TableCell>
+                                            <TableCell>
+                                                <Box display="flex" alignItems="center" gap={1}>
+                                                    <Avatar
+                                                        src={request.technician?.profile_photo || undefined}
+                                                        sx={{
+                                                            width: 32,
+                                                            height: 32,
+                                                            bgcolor: colors.sea,
+                                                            fontSize: 14,
+                                                        }}
+                                                    >
+                                                        {request.technician?.name?.charAt(0).toUpperCase() || <PersonIcon />}
+                                                    </Avatar>
+                                                    <Box>
+                                                        <Typography variant="body2" fontWeight={500}>
+                                                            {request.technician?.name || '-'}
                                                         </Typography>
-                                                        <Box display="flex" alignItems="center" gap={1} mt={0.5}>
-                                                            <Avatar sx={{ width: 24, height: 24, bgcolor: colors.sea, fontSize: 12 }}>
-                                                                {request.customer?.name?.charAt(0).toUpperCase() || <PersonIcon />}
-                                                            </Avatar>
-                                                            <Typography variant="body2" noWrap sx={{ color: colors.black }}>
-                                                                {request.customer?.name || 'Unknown'}
-                                                            </Typography>
-                                                        </Box>
-                                                    </Grid>
-                                                    <Grid item xs={6}>
-                                                        <Typography variant="caption" sx={{ color: colors.rain }}>
-                                                            Technician
+                                                        <Typography variant="caption" color="text.secondary">
+                                                            {request.technician?.area || ''}
                                                         </Typography>
-                                                        <Box display="flex" alignItems="center" gap={1} mt={0.5}>
-                                                            <Avatar
-                                                                src={request.technician?.profile_photo || undefined}
-                                                                sx={{ width: 24, height: 24, bgcolor: colors.sea, fontSize: 12 }}
-                                                            >
-                                                                {request.technician?.name?.charAt(0).toUpperCase() || <PersonIcon />}
-                                                            </Avatar>
-                                                            <Typography variant="body2" noWrap sx={{ color: colors.black }}>
-                                                                {request.technician?.name || 'Unknown'}
-                                                            </Typography>
-                                                        </Box>
-                                                    </Grid>
-                                                </Grid>
-
-                                                <Box mt={1}>
-                                                    <Chip
-                                                        icon={<BuildIcon sx={{ fontSize: 14, color: colors.sea }} />}
-                                                        label={request.service?.name || 'N/A'}
-                                                        size="small"
-                                                        variant="outlined"
-                                                        sx={{ borderColor: colors.middle }}
-                                                    />
+                                                    </Box>
                                                 </Box>
-
-                                                <Box mt={2} display="flex" justifyContent="flex-end" gap={1}>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Chip
+                                                    icon={<BuildIcon sx={{ fontSize: 14 }} />}
+                                                    label={request.service?.name || '-'}
+                                                    size="small"
+                                                    variant="outlined"
+                                                    sx={{ borderColor: colors.middle }}
+                                                />
+                                            </TableCell>
+                                            <TableCell>{getStatusChip(request.status)}</TableCell>
+                                            <TableCell>{formatDate(request.created_at)}</TableCell>
+                                            <TableCell align="center">
+                                                <Tooltip title="View Request">
                                                     <Button
                                                         size="small"
                                                         variant="outlined"
                                                         startIcon={<ViewIcon />}
                                                         onClick={() => handleViewRequest(request)}
                                                         sx={{
+                                                            mr: 1,
                                                             borderColor: colors.middle,
                                                             color: colors.sea,
                                                             '&:hover': {
                                                                 borderColor: colors.sea,
                                                                 backgroundColor: colors.wave,
-                                                            }
+                                                            },
                                                         }}
                                                     >
                                                         View
                                                     </Button>
-                                                    {canDelete && (
+                                                </Tooltip>
+                                                {canDelete && (
+                                                    <Tooltip title="Delete Request">
                                                         <Button
                                                             size="small"
                                                             variant="outlined"
@@ -543,214 +459,264 @@ const RequestsList = () => {
                                                             startIcon={<DeleteIcon />}
                                                             onClick={() => openConfirmDialog(
                                                                 'Delete Request',
-                                                                `Are you sure you want to delete this request?`,
+                                                                'Are you sure you want to delete this request?',
                                                                 () => handleDeleteRequest(request.id)
                                                             )}
                                                         >
                                                             Delete
                                                         </Button>
-                                                    )}
-                                                </Box>
-                                            </CardContent>
-                                        </Card>
-                                    </Grid>
-                                ))}
-                            </Grid>
-                        )}
+                                                    </Tooltip>
+                                                )}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </TableContainer>
 
-                        {/* Pagination */}
-                        <Box display="flex" justifyContent="center" alignItems="center" mt={3} gap={2} flexWrap="wrap">
-                            <Pagination
-                                count={pagination.last_page || 1}
-                                page={pagination.current_page || 1}
-                                onChange={(e, value) => setPage(value - 1)}
-                                sx={{
-                                    '& .MuiPaginationItem-root': {
-                                        color: colors.black,
-                                    },
-                                    '& .Mui-selected': {
-                                        backgroundColor: colors.sea,
-                                        color: colors.light,
-                                    },
-                                }}
-                                size={isMobile ? "small" : "medium"}
-                            />
-                            <FormControl size="small" sx={{ minWidth: 100 }}>
-                                <InputLabel sx={{ color: colors.rain }}>Per Page</InputLabel>
-                                <Select
-                                    value={rowsPerPage}
-                                    label="Per Page"
-                                    onChange={(e) => {
-                                        setRowsPerPage(e.target.value);
-                                        setPage(0);
-                                    }}
-                                    sx={{
-                                        '& .MuiOutlinedInput-notchedOutline': {
-                                            borderColor: colors.middle,
-                                        },
-                                    }}
-                                >
-                                    <MenuItem value={10}>10</MenuItem>
-                                    <MenuItem value={20}>20</MenuItem>
-                                    <MenuItem value={50}>50</MenuItem>
-                                    <MenuItem value={100}>100</MenuItem>
-                                </Select>
-                            </FormControl>
-                            <Typography variant="body2" sx={{ color: colors.rain }}>
-                                {pagination.total || 0} total requests
-                            </Typography>
-                        </Box>
+                        <TablePagination
+                            component="div"
+                            count={pagination.total || 0}
+                            rowsPerPage={rowsPerPage}
+                            page={page}
+                            onPageChange={(e, p) => setPage(p)}
+                            onRowsPerPageChange={(e) => {
+                                setRowsPerPage(parseInt(e.target.value, 10));
+                                setPage(0);
+                            }}
+                            rowsPerPageOptions={[5, 10, 25, 50]}
+                        />
                     </>
                 )}
+            </Paper>
 
-                {/* Request Detail Dialog */}
-                <Dialog
-                    open={openViewDialog}
-                    onClose={handleCloseDialog}
-                    maxWidth="md"
-                    fullWidth
-                    fullScreen={isMobile}
-                    PaperProps={{
-                        sx: {
-                            borderRadius: 2,
-                            backgroundColor: colors.light,
-                        }
-                    }}
-                >
-                    {selectedRequest && (
-                        <>
-                            <DialogTitle sx={{ color: colors.dark }}>
-                                <Box display="flex" justifyContent="space-between" alignItems="flex-start">
-                                    <Box>
-                                        <Typography variant="h6" sx={{ color: colors.dark }}>
-                                            Request Details
-                                        </Typography>
-                                        <Box display="flex" alignItems="center" gap={1} mt={1}>
-                                            {getStatusChip(selectedRequest.status)}
-                                            <Typography variant="caption" sx={{ color: colors.rain }}>
-                                                {formatDate(selectedRequest.created_at)}
-                                            </Typography>
-                                        </Box>
-                                    </Box>
-                                    <IconButton onClick={handleCloseDialog} sx={{ color: colors.rain }}>
-                                        <CloseIcon />
-                                    </IconButton>
-                                </Box>
-                            </DialogTitle>
-                            <DialogContent dividers sx={{ borderColor: colors.middle }}>
-                                {/* Description */}
-                                <Box mb={3}>
-                                    <Typography variant="subtitle2" gutterBottom sx={{ color: colors.dark }}>
-                                        Description
+            {/* Request Detail Dialog - Clean & Detailed */}
+            <Dialog
+                open={openViewDialog}
+                onClose={handleCloseDialog}
+                maxWidth="md"
+                fullWidth
+                PaperProps={{
+                    sx: {
+                        borderRadius: 3,
+                        border: `1px solid ${colors.middle}`,
+                        maxHeight: '90vh',
+                    },
+                }}
+            >
+                {selectedRequest && (
+                    <>
+                        <DialogTitle sx={{ pb: 1, borderBottom: `1px solid ${colors.middle}` }}>
+                            <Box display="flex" justifyContent="space-between" alignItems="flex-start">
+                                <Box>
+                                    <Typography variant="h6" fontWeight={600} color={colors.dark}>
+                                        Request Details
                                     </Typography>
-                                    <Paper variant="outlined" sx={{ p: 2, backgroundColor: colors.sky }}>
-                                        <Typography variant="body2" sx={{ color: colors.black }}>
-                                            {selectedRequest.description || 'No description provided'}
+                                    <Box display="flex" alignItems="center" gap={2} mt={1}>
+                                        {getStatusChip(selectedRequest.status)}
+                                        <Typography variant="caption" color="text.secondary">
+                                            <CalendarIcon sx={{ fontSize: 14, mr: 0.5, verticalAlign: 'middle' }} />
+                                            {formatDateFull(selectedRequest.created_at)}
                                         </Typography>
-                                    </Paper>
+                                        <Typography variant="caption" color="text.secondary">
+                                            <ReceiptIcon sx={{ fontSize: 14, mr: 0.5, verticalAlign: 'middle' }} />
+                                            #{selectedRequest.id}
+                                        </Typography>
+                                    </Box>
                                 </Box>
+                                <IconButton onClick={handleCloseDialog} size="small" sx={{ color: colors.rain }}>
+                                    <CloseIcon />
+                                </IconButton>
+                            </Box>
+                        </DialogTitle>
 
-                                <Grid container spacing={2}>
-                                    {/* Customer Details */}
-                                    <Grid item xs={12} md={6}>
-                                        <Typography variant="subtitle2" gutterBottom sx={{ color: colors.dark }}>
-                                            Customer
-                                        </Typography>
-                                        <Paper variant="outlined" sx={{ p: 2, borderColor: colors.middle }}>
-                                            <Stack spacing={1}>
-                                                <Box display="flex" alignItems="center" gap={1}>
-                                                    <Avatar sx={{ bgcolor: colors.sea }}>
-                                                        {selectedRequest.customer?.name?.charAt(0).toUpperCase() || <PersonIcon />}
-                                                    </Avatar>
-                                                    <Box>
-                                                        <Typography variant="body2" fontWeight="500" sx={{ color: colors.dark }}>
-                                                            {selectedRequest.customer?.name || 'Unknown'}
-                                                        </Typography>
-                                                        <Typography variant="caption" sx={{ color: colors.rain }}>
-                                                            ID: {selectedRequest.customer?.id || 'N/A'}
-                                                        </Typography>
-                                                    </Box>
-                                                </Box>
-                                                <Box display="flex" alignItems="center" gap={1}>
-                                                    <EmailIcon fontSize="small" sx={{ color: colors.rain }} />
-                                                    <Typography variant="body2" sx={{ color: colors.black }}>
-                                                        {selectedRequest.customer?.email || 'N/A'}
-                                                    </Typography>
-                                                </Box>
-                                                <Box display="flex" alignItems="center" gap={1}>
-                                                    <PhoneIcon fontSize="small" sx={{ color: colors.rain }} />
-                                                    <Typography variant="body2" sx={{ color: colors.black }}>
-                                                        {selectedRequest.customer?.phone || 'N/A'}
-                                                    </Typography>
-                                                </Box>
-                                            </Stack>
-                                        </Paper>
-                                    </Grid>
+                        <DialogContent sx={{ p: 3 }}>
+                            {/* Description Section */}
+                            <Box mb={3}>
+                                <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ color: colors.dark, display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <NotesIcon sx={{ fontSize: 18, color: colors.sea }} />
+                                    Description
+                                </Typography>
+                                <Paper
+                                    variant="outlined"
+                                    sx={{
+                                        p: 2.5,
+                                        backgroundColor: '#f8fafc',
+                                        borderColor: colors.middle,
+                                        borderRadius: 2,
+                                    }}
+                                >
+                                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                                        {selectedRequest.description || 'No description provided'}
+                                    </Typography>
+                                </Paper>
+                            </Box>
 
-                                    {/* Technician Details */}
-                                    <Grid item xs={12} md={6}>
-                                        <Typography variant="subtitle2" gutterBottom sx={{ color: colors.dark }}>
-                                            Technician
-                                        </Typography>
-                                        <Paper variant="outlined" sx={{ p: 2, borderColor: colors.middle }}>
-                                            <Stack spacing={1}>
-                                                <Box display="flex" alignItems="center" gap={1}>
-                                                    <Avatar
-                                                        src={selectedRequest.technician?.profile_photo || undefined}
-                                                        sx={{ bgcolor: colors.sea }}
-                                                    >
-                                                        {selectedRequest.technician?.name?.charAt(0).toUpperCase() || <PersonIcon />}
-                                                    </Avatar>
-                                                    <Box>
-                                                        <Typography variant="body2" fontWeight="500" sx={{ color: colors.dark }}>
-                                                            {selectedRequest.technician?.name || 'Unknown'}
-                                                        </Typography>
-                                                        <Typography variant="caption" sx={{ color: colors.rain }}>
-                                                            ID: {selectedRequest.technician?.id || 'N/A'}
-                                                        </Typography>
-                                                    </Box>
-                                                </Box>
-                                                <Box display="flex" alignItems="center" gap={1}>
-                                                    <LocationIcon fontSize="small" sx={{ color: colors.rain }} />
-                                                    <Typography variant="body2" sx={{ color: colors.black }}>
-                                                        {selectedRequest.technician?.area || 'N/A'}
+                            <Divider sx={{ mb: 3, borderColor: colors.middle }} />
+
+                            {/* Customer & Technician Details */}
+                            <Grid container spacing={3}>
+                                {/* Customer Details */}
+                                <Grid item xs={12} md={6}>
+                                    <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ color: colors.dark }}>
+                                        Customer Information
+                                    </Typography>
+                                    <Paper
+                                        variant="outlined"
+                                        sx={{
+                                            p: 2.5,
+                                            borderColor: colors.middle,
+                                            borderRadius: 2,
+                                        }}
+                                    >
+                                        <Stack spacing={1.5}>
+                                            <Box display="flex" alignItems="center" gap={1.5}>
+                                                <Avatar sx={{ bgcolor: colors.sea, width: 40, height: 40 }}>
+                                                    {selectedRequest.customer?.name?.charAt(0).toUpperCase() || <PersonIcon />}
+                                                </Avatar>
+                                                <Box>
+                                                    <Typography variant="body1" fontWeight={500}>
+                                                        {selectedRequest.customer?.name || 'Unknown'}
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        Customer ID: {selectedRequest.customer?.id || 'N/A'}
                                                     </Typography>
                                                 </Box>
-                                                <Box display="flex" alignItems="center" gap={1}>
-                                                    <BuildIcon fontSize="small" sx={{ color: colors.rain }} />
-                                                    <Typography variant="body2" sx={{ color: colors.black }}>
-                                                        {selectedRequest.service?.name || 'N/A'}
+                                            </Box>
+                                            <Divider sx={{ borderColor: colors.middle }} />
+                                            <Box display="flex" alignItems="center" gap={1.5}>
+                                                <EmailIcon fontSize="small" sx={{ color: colors.rain, width: 20 }} />
+                                                <Typography variant="body2">
+                                                    {selectedRequest.customer?.email || 'N/A'}
+                                                </Typography>
+                                            </Box>
+                                            <Box display="flex" alignItems="center" gap={1.5}>
+                                                <PhoneIcon fontSize="small" sx={{ color: colors.rain, width: 20 }} />
+                                                <Typography variant="body2">
+                                                    {selectedRequest.customer?.phone || 'N/A'}
+                                                </Typography>
+                                            </Box>
+                                            {selectedRequest.customer?.address && (
+                                                <Box display="flex" alignItems="center" gap={1.5}>
+                                                    <LocationIcon fontSize="small" sx={{ color: colors.rain, width: 20 }} />
+                                                    <Typography variant="body2">
+                                                        {selectedRequest.customer?.address}
                                                     </Typography>
                                                 </Box>
-                                            </Stack>
-                                        </Paper>
-                                    </Grid>
+                                            )}
+                                        </Stack>
+                                    </Paper>
                                 </Grid>
 
-                                {/* Activity Logs */}
-                                {selectedRequest.logs && selectedRequest.logs.length > 0 && (
-                                    <Box mt={3}>
-                                        <Typography variant="subtitle2" gutterBottom sx={{ color: colors.dark }}>
+                                {/* Technician Details */}
+                                <Grid item xs={12} md={6}>
+                                    <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ color: colors.dark }}>
+                                        Technician Information
+                                    </Typography>
+                                    <Paper
+                                        variant="outlined"
+                                        sx={{
+                                            p: 2.5,
+                                            borderColor: colors.middle,
+                                            borderRadius: 2,
+                                        }}
+                                    >
+                                        <Stack spacing={1.5}>
+                                            <Box display="flex" alignItems="center" gap={1.5}>
+                                                <Avatar
+                                                    src={selectedRequest.technician?.profile_photo || undefined}
+                                                    sx={{ bgcolor: colors.sea, width: 40, height: 40 }}
+                                                >
+                                                    {selectedRequest.technician?.name?.charAt(0).toUpperCase() || <PersonIcon />}
+                                                </Avatar>
+                                                <Box>
+                                                    <Typography variant="body1" fontWeight={500}>
+                                                        {selectedRequest.technician?.name || 'Not Assigned'}
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        Technician ID: {selectedRequest.technician?.id || 'N/A'}
+                                                    </Typography>
+                                                </Box>
+                                            </Box>
+                                            <Divider sx={{ borderColor: colors.middle }} />
+                                            <Box display="flex" alignItems="center" gap={1.5}>
+                                                <BuildIcon fontSize="small" sx={{ color: colors.rain, width: 20 }} />
+                                                <Typography variant="body2">
+                                                    {selectedRequest.service?.name || 'N/A'}
+                                                </Typography>
+                                            </Box>
+                                            {selectedRequest.technician?.area && (
+                                                <Box display="flex" alignItems="center" gap={1.5}>
+                                                    <LocationIcon fontSize="small" sx={{ color: colors.rain, width: 20 }} />
+                                                    <Typography variant="body2">
+                                                        {selectedRequest.technician?.area}
+                                                    </Typography>
+                                                </Box>
+                                            )}
+                                            {selectedRequest.technician?.phone && (
+                                                <Box display="flex" alignItems="center" gap={1.5}>
+                                                    <PhoneIcon fontSize="small" sx={{ color: colors.rain, width: 20 }} />
+                                                    <Typography variant="body2">
+                                                        {selectedRequest.technician?.phone}
+                                                    </Typography>
+                                                </Box>
+                                            )}
+                                        </Stack>
+                                    </Paper>
+                                </Grid>
+                            </Grid>
+
+                            {/* Activity Logs */}
+                            {selectedRequest.logs && selectedRequest.logs.length > 0 && (
+                                <>
+                                    <Divider sx={{ my: 3, borderColor: colors.middle }} />
+                                    <Box>
+                                        <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ color: colors.dark }}>
                                             Activity Log
                                         </Typography>
-                                        <Paper variant="outlined" sx={{ p: 2, maxHeight: 200, overflow: 'auto', borderColor: colors.middle }}>
-                                            <Stack spacing={1}>
+                                        <Paper
+                                            variant="outlined"
+                                            sx={{
+                                                p: 2,
+                                                maxHeight: 200,
+                                                overflow: 'auto',
+                                                borderColor: colors.middle,
+                                                borderRadius: 2,
+                                                backgroundColor: '#fafafa',
+                                            }}
+                                        >
+                                            <Stack spacing={1.5}>
                                                 {selectedRequest.logs.map((log) => (
-                                                    <Box key={log.id} display="flex" gap={2} alignItems="center" flexWrap="wrap">
-                                                        <Typography variant="caption" sx={{ color: colors.rain, minWidth: 120 }}>
-                                                            {formatDate(log.created_at)}
+                                                    <Box
+                                                        key={log.id}
+                                                        display="flex"
+                                                        gap={2}
+                                                        alignItems="flex-start"
+                                                        flexWrap="wrap"
+                                                        sx={{
+                                                            p: 1,
+                                                            borderRadius: 1,
+                                                            backgroundColor: '#fff',
+                                                            border: `1px solid ${colors.middle}`,
+                                                        }}
+                                                    >
+                                                        <Typography variant="caption" color="text.secondary" sx={{ minWidth: 140, fontWeight: 500 }}>
+                                                            {formatDateFull(log.created_at)}
                                                         </Typography>
                                                         <Chip
                                                             label={log.action}
                                                             size="small"
-                                                            variant="outlined"
-                                                            sx={{ borderColor: colors.middle }}
+                                                            sx={{
+                                                                backgroundColor: colors.wave,
+                                                                color: colors.sea,
+                                                                fontWeight: 500,
+                                                            }}
                                                         />
-                                                        <Typography variant="caption" sx={{ color: colors.rain }}>
+                                                        <Typography variant="caption" color="text.secondary">
                                                             by {log.user?.name || 'System'}
                                                         </Typography>
                                                         {log.notes && (
-                                                            <Typography variant="caption" sx={{ color: colors.rain }}>
+                                                            <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
                                                                 - {log.notes}
                                                             </Typography>
                                                         )}
@@ -759,61 +725,103 @@ const RequestsList = () => {
                                             </Stack>
                                         </Paper>
                                     </Box>
-                                )}
-                            </DialogContent>
-                            <DialogActions>
-                                <Button
-                                    onClick={handleCloseDialog}
-                                    variant="contained"
-                                    sx={{
-                                        backgroundColor: colors.sea,
-                                        '&:hover': { backgroundColor: colors.dark },
-                                    }}
-                                >
-                                    Close
-                                </Button>
-                            </DialogActions>
-                        </>
-                    )}
-                </Dialog>
+                                </>
+                            )}
 
-                {/* Confirmation Dialog */}
-                <Dialog
-                    open={confirmDialog.open}
-                    onClose={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
-                    fullWidth
-                    maxWidth="xs"
-                    PaperProps={{
-                        sx: {
-                            borderRadius: 2,
-                            backgroundColor: colors.light,
-                        }
-                    }}
-                >
-                    <DialogTitle sx={{ pb: 1, color: colors.dark }}>{confirmDialog.title}</DialogTitle>
-                    <DialogContent>
-                        <Typography sx={{ color: colors.black }}>{confirmDialog.message}</Typography>
-                    </DialogContent>
-                    <DialogActions sx={{ p: 2, pt: 0 }}>
-                        <Button
-                            onClick={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
-                            sx={{ color: colors.rain }}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={handleConfirm}
-                            variant="contained"
-                            sx={{
-                                backgroundColor: 'error.main',
-                                '&:hover': { backgroundColor: 'error.dark' },
-                            }}
-                        >
-                            Confirm
-                        </Button>
-                    </DialogActions>
-                </Dialog>
-            </Paper>
+                            {/* Additional Info - Schedule */}
+                            {(selectedRequest.scheduled_date || selectedRequest.scheduled_time) && (
+                                <>
+                                    <Divider sx={{ my: 3, borderColor: colors.middle }} />
+                                    <Box>
+                                        <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ color: colors.dark }}>
+                                            Schedule Information
+                                        </Typography>
+                                        <Paper
+                                            variant="outlined"
+                                            sx={{
+                                                p: 2.5,
+                                                borderColor: colors.middle,
+                                                borderRadius: 2,
+                                                backgroundColor: '#f8fafc',
+                                            }}
+                                        >
+                                            <Stack spacing={1}>
+                                                {selectedRequest.scheduled_date && (
+                                                    <Box display="flex" alignItems="center" gap={1.5}>
+                                                        <CalendarIcon fontSize="small" sx={{ color: colors.rain }} />
+                                                        <Typography variant="body2">
+                                                            <strong>Date:</strong> {formatDateFull(selectedRequest.scheduled_date)}
+                                                        </Typography>
+                                                    </Box>
+                                                )}
+                                                {selectedRequest.scheduled_time && (
+                                                    <Box display="flex" alignItems="center" gap={1.5}>
+                                                        <ScheduleIcon fontSize="small" sx={{ color: colors.rain }} />
+                                                        <Typography variant="body2">
+                                                            <strong>Time:</strong> {selectedRequest.scheduled_time}
+                                                        </Typography>
+                                                    </Box>
+                                                )}
+                                            </Stack>
+                                        </Paper>
+                                    </Box>
+                                </>
+                            )}
+                        </DialogContent>
+
+                        <DialogActions sx={{ p: 2.5, borderTop: `1px solid ${colors.middle}` }}>
+                            <Button
+                                onClick={handleCloseDialog}
+                                variant="contained"
+                                sx={{
+                                    backgroundColor: colors.sea,
+                                    '&:hover': { backgroundColor: colors.dark },
+                                    px: 4,
+                                }}
+                            >
+                                Close
+                            </Button>
+                        </DialogActions>
+                    </>
+                )}
+            </Dialog>
+
+            {/* Confirmation Dialog */}
+            <Dialog
+                open={confirmDialog.open}
+                onClose={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+                fullWidth
+                maxWidth="xs"
+                PaperProps={{
+                    sx: {
+                        borderRadius: 3,
+                        border: `1px solid ${colors.middle}`,
+                    },
+                }}
+            >
+                <DialogTitle sx={{ pb: 1, fontWeight: 600, color: colors.dark }}>
+                    {confirmDialog.title}
+                </DialogTitle>
+                <DialogContent>
+                    <Typography sx={{ color: colors.black }}>{confirmDialog.message}</Typography>
+                </DialogContent>
+                <DialogActions sx={{ p: 2, pt: 0 }}>
+                    <Button
+                        onClick={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+                        variant="outlined"
+                        sx={{ borderColor: colors.middle, color: colors.rain }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={handleConfirm}
+                        variant="contained"
+                        color="error"
+                    >
+                        Confirm
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 };

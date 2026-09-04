@@ -1,15 +1,46 @@
+// src/pages/faqs/FaqList.js
 import React, { useState, useEffect } from 'react';
 import {
-    Box, Paper, Typography, Button, Table, TableBody, TableCell,
-    TableContainer, TableHead, TableRow, IconButton, CircularProgress,
-    Alert, Tooltip, useMediaQuery, useTheme, Card, CardContent,
-    Divider, Chip, TextField, InputAdornment, Menu, MenuItem,
-    TablePagination
+    Box,
+    Paper,
+    Typography,
+    Button,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    TablePagination,
+    TableSortLabel,
+    IconButton,
+    CircularProgress,
+    Alert,
+    Tooltip,
+    useMediaQuery,
+    useTheme,
+    Card,
+    CardContent,
+    Divider,
+    Chip,
+    TextField,
+    InputAdornment,
+    Menu,
+    MenuItem,
+    Stack,
+    Grid,
+    alpha,
 } from '@mui/material';
 import {
-    Add as AddIcon, Edit as EditIcon, Refresh as RefreshIcon,
-    Search as SearchIcon, MoreVert as MoreVertIcon,
-    Description as DescriptionIcon
+    Add as AddIcon,
+    Edit as EditIcon,
+    Refresh as RefreshIcon,
+    Search as SearchIcon,
+    MoreVert as MoreVertIcon,
+    Description as DescriptionIcon,
+    Clear as ClearIcon,
+    QuestionAnswer as QuestionAnswerIcon,
+    Sort as SortIcon,
 } from '@mui/icons-material';
 import { useFaqManagement } from 'hooks/useFaq';
 import { usePermissions } from 'hooks/usePermissions';
@@ -20,9 +51,10 @@ import appConfig from '../../config';
 const colors = appConfig.app.colors;
 
 const headCells = [
-    { id: 'index', label: '#' },
+    { id: 'index', label: '#', disableSort: true },
     { id: 'question', label: 'Question' },
-    { id: 'answer', label: 'Answer' },
+    { id: 'answer', label: 'Answer', disableSort: true },
+    { id: 'order', label: 'Order' },
     { id: 'actions', label: 'Actions', disableSort: true },
 ];
 
@@ -43,6 +75,8 @@ const FaqList = () => {
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
+    const [order, setOrder] = useState('asc');
+    const [orderBy, setOrderBy] = useState('order');
 
     const loadFaqs = async () => {
         try {
@@ -55,6 +89,24 @@ const FaqList = () => {
     useEffect(() => {
         loadFaqs();
     }, [page, rowsPerPage, search]);
+
+    const handleRequestSort = (property) => {
+        const isAsc = orderBy === property && order === 'asc';
+        setOrder(isAsc ? 'desc' : 'asc');
+        setOrderBy(property);
+    };
+
+    const sortedFaqs = Array.isArray(faqs) ? [...faqs].sort((a, b) => {
+        let aValue = a[orderBy] || '';
+        let bValue = b[orderBy] || '';
+        if (typeof aValue === 'string') {
+            aValue = aValue.toLowerCase();
+            bValue = bValue.toLowerCase();
+        }
+        if (aValue < bValue) return order === 'asc' ? -1 : 1;
+        if (aValue > bValue) return order === 'asc' ? 1 : -1;
+        return 0;
+    }) : [];
 
     const handleMenuOpen = (event, faq) => {
         setSelectedFaq(faq);
@@ -83,152 +135,418 @@ const FaqList = () => {
     if (error) {
         return (
             <Box p={3}>
-                <Alert severity="error" action={<Button color="inherit" size="small" onClick={() => { clearError(); loadFaqs(); }}>Retry</Button>}>
+                <Alert
+                    severity="error"
+                    action={
+                        <Button color="inherit" size="small" onClick={() => { clearError(); loadFaqs(); }}>
+                            Retry
+                        </Button>
+                    }
+                    sx={{ borderRadius: 2 }}
+                >
                     {error}
                 </Alert>
             </Box>
         );
     }
 
-    const faqList = Array.isArray(faqs) ? faqs : [];
-
-    const FaqCard = ({ faq, index }) => (
-        <Card sx={{ mb: 2, borderRadius: 2, border: `1px solid ${colors.middle}` }}>
-            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 }, backgroundColor: colors.light }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
-                    <Chip label={`#${index + 1}`} size="small" sx={{ backgroundColor: colors.wave, color: colors.sea }} />
-                    <IconButton size="small" onClick={(e) => handleMenuOpen(e, faq)} sx={{ color: colors.rain }}>
-                        <MoreVertIcon fontSize="small" />
-                    </IconButton>
-                </Box>
-                <Typography variant="body1" fontWeight="medium" sx={{ mb: 0.5, color: colors.dark }}>
-                    {faq.question}
-                </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 1 }}>
-                    <DescriptionIcon fontSize="small" sx={{ color: colors.rain, mt: 0.2 }} />
-                    <Typography variant="body2" sx={{ color: colors.black }}>
-                        {faq.answer}
-                    </Typography>
-                </Box>
-                <Divider sx={{ my: 1, borderColor: colors.middle }} />
-                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                    <Chip label={`Order: ${faq.order || 0}`} size="small" variant="outlined" sx={{ borderColor: colors.middle, color: colors.rain }} />
-                    <Chip label={`Created: ${faq.created_at ? new Date(faq.created_at).toLocaleDateString() : 'N/A'}`} size="small" variant="outlined" sx={{ borderColor: colors.middle, color: colors.rain }} />
-                </Box>
-            </CardContent>
-        </Card>
-    );
+    const faqList = sortedFaqs;
+    const totalCount = faqList.length;
 
     return (
-        <Box sx={{ width: '100%', p: { xs: 1, sm: 2 }, m: 0 }}>
-            <Paper sx={{
-                width: '100%',
-                borderRadius: { xs: 1, sm: 2 },
-                overflow: 'hidden',
-                boxShadow: { xs: 0, sm: 1 },
-                backgroundColor: colors.light,
-                border: `1px solid ${colors.middle}`,
-            }}>
-                <Box sx={{ p: { xs: 2, sm: 3 }, borderBottom: `1px solid ${colors.middle}` }}>
-                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={2} flexWrap="wrap" gap={1}>
-                        <Typography variant="h5" fontWeight="600" sx={{ fontSize: { xs: '1.5rem', sm: '1.75rem' }, color: colors.dark }}>
-                            FAQs
-                        </Typography>
-                        {canCreate && (
-                            <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate}
+        <Box sx={{ width: '100%', p: { xs: 1.5, sm: 2.5 }, m: 0, bgcolor: 'background.default' }}>
+            <Paper
+                elevation={0}
+                sx={{
+                    width: '100%',
+                    borderRadius: 3,
+                    overflow: 'hidden',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    bgcolor: 'background.paper',
+                }}
+            >
+                {/* ── HEADER ────────────────────────────────────────────── */}
+                <Box
+                    sx={{
+                        px: { xs: 2, sm: 3 },
+                        py: 2.5,
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                    }}
+                >
+                    <Stack
+                        direction={{ xs: 'column', sm: 'row' }}
+                        justifyContent="space-between"
+                        alignItems={{ xs: 'stretch', sm: 'center' }}
+                        spacing={2}
+                        mb={2.5}
+                    >
+                        <Box>
+                            <Typography variant="h5" fontWeight={800} color="text.primary">
+                                FAQs
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                                Manage frequently asked questions and answers
+                            </Typography>
+                        </Box>
+
+                        <Stack direction="row" spacing={1.5} alignItems="center" justifyContent={{ xs: 'space-between', sm: 'flex-end' }}>
+                            {canCreate && (
+                                <Button
+                                    variant="contained"
+                                    startIcon={<AddIcon />}
+                                    onClick={handleCreate}
                                     size={isMobile ? 'small' : 'medium'}
-                                    sx={{ borderRadius: 2, backgroundColor: colors.salat, '&:hover': { backgroundColor: colors.dark } }}>
-                                Add FAQ
-                            </Button>
-                        )}
-                    </Box>
-                    <Box display="flex" gap={2} flexWrap="wrap" alignItems="center">
+                                    sx={{
+                                        borderRadius: 2,
+                                        fontWeight: 700,
+                                        textTransform: 'none',
+                                        px: 2.5,
+                                        boxShadow: 'none',
+                                        bgcolor: colors.salat || '#10b981',
+                                        '&:hover': {
+                                            bgcolor: colors.dark || '#047857',
+                                            boxShadow: '0 4px 12px rgba(16,185,129,0.35)',
+                                        },
+                                    }}
+                                >
+                                    Add FAQ
+                                </Button>
+                            )}
+                        </Stack>
+                    </Stack>
+
+                    {/* ── FILTERS ──────────────────────────────────────── */}
+                    <Stack
+                        direction={{ xs: 'column', sm: 'row' }}
+                        spacing={1.5}
+                        alignItems={{ xs: 'stretch', sm: 'center' }}
+                        flexWrap="wrap"
+                    >
                         <TextField
-                            label="Search"
+                            placeholder="Search FAQs..."
                             size="small"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" sx={{ color: colors.rain }} /></InputAdornment> }}
+                            InputProps={{
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <SearchIcon fontSize="small" color="action" />
+                                    </InputAdornment>
+                                ),
+                                endAdornment: search ? (
+                                    <InputAdornment position="end">
+                                        <IconButton size="small" onClick={() => setSearch('')}>
+                                            <ClearIcon fontSize="small" />
+                                        </IconButton>
+                                    </InputAdornment>
+                                ) : null,
+                            }}
                             sx={{
-                                minWidth: { xs: '100%', sm: 250 },
+                                minWidth: { xs: '100%', sm: 260 },
                                 flexGrow: { xs: 1, sm: 0 },
-                                '& .MuiInputBase-root': { backgroundColor: colors.sky, borderRadius: 2 },
-                                '& .MuiOutlinedInput-notchedOutline': { borderColor: colors.middle },
+                                '& .MuiOutlinedInput-root': {
+                                    borderRadius: 2,
+                                    bgcolor: 'action.hover',
+                                    '& fieldset': { borderColor: 'transparent' },
+                                    '&:hover fieldset': { borderColor: 'divider' },
+                                    '&.Mui-focused fieldset': { borderColor: 'primary.main' },
+                                },
                             }}
                         />
-                        <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadFaqs}
-                                size={isMobile ? 'small' : 'medium'}
-                                sx={{ borderColor: colors.middle, color: colors.sea, '&:hover': { borderColor: colors.sea, backgroundColor: colors.wave } }}>
+
+                        <Button
+                            variant="outlined"
+                            startIcon={<RefreshIcon />}
+                            onClick={loadFaqs}
+                            disabled={loading}
+                            size={isMobile ? 'small' : 'medium'}
+                            sx={{
+                                borderRadius: 2,
+                                fontWeight: 600,
+                                textTransform: 'none',
+                                borderColor: 'divider',
+                                color: 'text.primary',
+                                '&:hover': {
+                                    borderColor: 'text.primary',
+                                    bgcolor: 'action.hover',
+                                },
+                            }}
+                        >
                             Refresh
                         </Button>
-                    </Box>
+                    </Stack>
                 </Box>
 
+                {/* ── SUMMARY CARDS ────────────────────────────────────── */}
+                <Box sx={{ px: { xs: 2, sm: 3 }, pt: 2.5, pb: 1 }}>
+                    <Grid container spacing={2}>
+                        {[
+                            { label: 'Total FAQs', value: totalCount, color: '#3b82f6', bg: '#eff6ff', icon: <QuestionAnswerIcon sx={{ fontSize: 18 }} /> },
+                            { label: 'With Answers', value: faqList.filter(f => f.answer?.trim()).length, color: '#10b981', bg: '#ecfdf5', icon: <DescriptionIcon sx={{ fontSize: 18 }} /> },
+                            { label: 'Last Updated', value: faqList.length > 0 && faqList[0]?.updated_at ? new Date(faqList[0].updated_at).toLocaleDateString() : 'Never', color: '#8b5cf6', bg: '#f3e8ff', icon: <SortIcon sx={{ fontSize: 18 }} /> },
+                        ].map((item, idx) => (
+                            <Grid item xs={6} sm={4} key={idx}>
+                                <Card
+                                    elevation={0}
+                                    sx={{
+                                        borderRadius: 2,
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                        backgroundColor: item.bg,
+                                        height: '100%',
+                                    }}
+                                >
+                                    <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                                        <Box display="flex" alignItems="center" justifyContent="space-between">
+                                            <Typography variant="caption" sx={{ color: item.color, fontWeight: 600 }}>
+                                                {item.label}
+                                            </Typography>
+                                            {item.icon}
+                                        </Box>
+                                        <Typography variant="h4" sx={{ color: item.color, fontWeight: 700, fontSize: '1.3rem' }}>
+                                            {item.value}
+                                        </Typography>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+                        ))}
+                    </Grid>
+                </Box>
+
+                {/* ── TABLE (DESKTOP) ───────────────────────────────────── */}
                 {showTableView ? (
-                    <TableContainer sx={{ width: '100%', overflowX: 'auto' }}>
-                        <Table sx={{ width: '100%', minWidth: 800 }}>
+                    <TableContainer>
+                        <Table sx={{ minWidth: 700 }}>
                             <TableHead>
-                                <TableRow sx={{ backgroundColor: colors.sky }}>
+                                <TableRow
+                                    sx={{
+                                        bgcolor: 'action.hover',
+                                        '& th': {
+                                            fontWeight: 700,
+                                            fontSize: '0.8125rem',
+                                            color: 'text.secondary',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: 0.6,
+                                            borderBottom: '1px solid',
+                                            borderColor: 'divider',
+                                            py: 1.75,
+                                        },
+                                    }}
+                                >
                                     {headCells.map((cell) => (
-                                        <TableCell key={cell.id} sx={{ fontWeight: 'bold', color: colors.dark }}>
-                                            {cell.label}
+                                        <TableCell key={cell.id} sx={{ whiteSpace: 'nowrap' }}>
+                                            {!cell.disableSort ? (
+                                                <TableSortLabel
+                                                    active={orderBy === cell.id}
+                                                    direction={orderBy === cell.id ? order : 'asc'}
+                                                    onClick={() => handleRequestSort(cell.id)}
+                                                >
+                                                    {cell.label}
+                                                </TableSortLabel>
+                                            ) : (
+                                                cell.label
+                                            )}
                                         </TableCell>
                                     ))}
                                 </TableRow>
                             </TableHead>
+
                             <TableBody>
                                 {loading ? (
                                     <TableRow>
-                                        <TableCell colSpan={4} align="center">
-                                            <CircularProgress size={32} sx={{ color: colors.sea, my: 3 }} />
+                                        <TableCell colSpan={headCells.length} align="center" sx={{ py: 8 }}>
+                                            <CircularProgress size={36} thickness={4} />
                                         </TableCell>
                                     </TableRow>
                                 ) : faqList.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={4} align="center">
-                                            <Typography sx={{ py: 3, color: colors.rain }}>No FAQs found</Typography>
+                                        <TableCell colSpan={headCells.length} align="center" sx={{ py: 8 }}>
+                                            <Typography color="text.secondary" fontWeight={500}>
+                                                {search ? 'No FAQs match your search' : 'No FAQs found'}
+                                            </Typography>
                                         </TableCell>
                                     </TableRow>
                                 ) : (
-                                    faqList.map((faq, index) => (
-                                        <TableRow key={faq.id} hover>
-                                            <TableCell>{index + 1}</TableCell>
-                                            <TableCell sx={{ color: colors.black }}>{faq.question}</TableCell>
-                                            <TableCell sx={{ maxWidth: 300, wordBreak: 'break-word', color: colors.black }}>
-                                                {faq.answer}
-                                            </TableCell>
-                                            <TableCell align="center">
-                                                <IconButton size="small" onClick={(e) => handleMenuOpen(e, faq)} sx={{ color: colors.rain }}>
-                                                    <MoreVertIcon />
-                                                </IconButton>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
+                                    faqList.map((faq, index) => {
+                                        const rowNumber = page * rowsPerPage + index + 1;
+                                        return (
+                                            <TableRow
+                                                key={faq.id}
+                                                hover
+                                                sx={{
+                                                    '&:last-child td': { borderBottom: 0 },
+                                                    transition: 'background-color 0.15s',
+                                                }}
+                                            >
+                                                <TableCell>
+                                                    <Typography variant="body2" fontWeight={500} color="text.secondary">
+                                                        {rowNumber}
+                                                    </Typography>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Typography variant="body2" fontWeight={600} color="text.primary">
+                                                        {faq.question}
+                                                    </Typography>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Typography
+                                                        variant="body2"
+                                                        color="text.secondary"
+                                                        sx={{
+                                                            display: '-webkit-box',
+                                                            WebkitLineClamp: 2,
+                                                            WebkitBoxOrient: 'vertical',
+                                                            overflow: 'hidden',
+                                                            maxWidth: 300,
+                                                        }}
+                                                    >
+                                                        {faq.answer}
+                                                    </Typography>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Chip
+                                                        label={faq.order || 0}
+                                                        size="small"
+                                                        sx={{
+                                                            fontWeight: 700,
+                                                            bgcolor: alpha(colors.sea, 0.08),
+                                                            color: colors.sea,
+                                                            minWidth: 36,
+                                                        }}
+                                                    />
+                                                </TableCell>
+                                                <TableCell align="center">
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={(e) => handleMenuOpen(e, faq)}
+                                                        sx={{
+                                                            color: 'text.secondary',
+                                                            '&:hover': {
+                                                                bgcolor: 'action.hover',
+                                                                color: 'text.primary',
+                                                            },
+                                                        }}
+                                                    >
+                                                        <MoreVertIcon />
+                                                    </IconButton>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })
                                 )}
                             </TableBody>
                         </Table>
                     </TableContainer>
                 ) : (
-                    <Box sx={{ p: { xs: 2, sm: 3 } }}>
+                    /* ── MOBILE CARDS ──────────────────────────────────── */
+                    <Box sx={{ p: { xs: 2, sm: 2.5 } }}>
                         {loading ? (
-                            <Box display="flex" justifyContent="center" py={4}>
-                                <CircularProgress sx={{ color: colors.sea }} />
+                            <Box display="flex" justifyContent="center" py={6}>
+                                <CircularProgress size={36} thickness={4} />
                             </Box>
                         ) : faqList.length === 0 ? (
-                            <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', borderColor: colors.middle }}>
-                                <Typography sx={{ color: colors.rain }}>No FAQs found</Typography>
+                            <Paper
+                                variant="outlined"
+                                sx={{
+                                    p: 5,
+                                    textAlign: 'center',
+                                    borderRadius: 3,
+                                    borderStyle: 'dashed',
+                                }}
+                            >
+                                <QuestionAnswerIcon sx={{ fontSize: 56, color: 'text.disabled', mb: 2 }} />
+                                <Typography color="text.secondary" fontWeight={500}>
+                                    {search ? 'No FAQs match your search' : 'No FAQs found'}
+                                </Typography>
                             </Paper>
                         ) : (
-                            faqList.map((faq, index) => <FaqCard key={faq.id} faq={faq} index={index} />)
+                            <Stack spacing={2}>
+                                {faqList.map((faq, index) => (
+                                    <Card
+                                        key={faq.id}
+                                        elevation={0}
+                                        sx={{
+                                            borderRadius: 3,
+                                            border: '1px solid',
+                                            borderColor: 'divider',
+                                            overflow: 'hidden',
+                                        }}
+                                    >
+                                        <CardContent sx={{ p: 2.5 }}>
+                                            <Stack
+                                                direction="row"
+                                                justifyContent="space-between"
+                                                alignItems="flex-start"
+                                                mb={1.5}
+                                            >
+                                                <Stack direction="row" spacing={1} alignItems="center">
+                                                    <Chip
+                                                        label={`#${index + 1}`}
+                                                        size="small"
+                                                        sx={{
+                                                            fontWeight: 700,
+                                                            bgcolor: alpha(colors.sea, 0.08),
+                                                            color: colors.sea,
+                                                        }}
+                                                    />
+                                                    <Chip
+                                                        label={`Order: ${faq.order || 0}`}
+                                                        size="small"
+                                                        variant="outlined"
+                                                        sx={{ borderColor: 'divider' }}
+                                                    />
+                                                </Stack>
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={(e) => handleMenuOpen(e, faq)}
+                                                    sx={{ color: 'text.secondary' }}
+                                                >
+                                                    <MoreVertIcon fontSize="small" />
+                                                </IconButton>
+                                            </Stack>
+
+                                            <Typography variant="subtitle1" fontWeight={700} color="text.primary" sx={{ mb: 1 }}>
+                                                {faq.question}
+                                            </Typography>
+
+                                            <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+                                                {faq.answer}
+                                            </Typography>
+
+                                            <Divider sx={{ my: 1.5 }} />
+
+                                            <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
+                                                <Typography variant="caption" color="text.secondary">
+                                                    Created: {faq.created_at ? new Date(faq.created_at).toLocaleDateString() : 'N/A'}
+                                                </Typography>
+                                                {faq.updated_at && faq.updated_at !== faq.created_at && (
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        Updated: {new Date(faq.updated_at).toLocaleDateString()}
+                                                    </Typography>
+                                                )}
+                                            </Stack>
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                            </Stack>
                         )}
                     </Box>
                 )}
 
-                <Box sx={{ borderTop: `1px solid ${colors.middle}`, py: { xs: 1, sm: 0 } }}>
+                {/* ── PAGINATION ────────────────────────────────────────── */}
+                <Box
+                    sx={{
+                        borderTop: '1px solid',
+                        borderColor: 'divider',
+                        bgcolor: 'action.hover',
+                    }}
+                >
                     <TablePagination
                         rowsPerPageOptions={[5, 10, 25, 50]}
                         component="div"
-                        count={faqList.length}
+                        count={totalCount}
                         rowsPerPage={rowsPerPage}
                         page={page}
                         onPageChange={(e, newPage) => setPage(newPage)}
@@ -238,29 +556,34 @@ const FaqList = () => {
                         }}
                         sx={{
                             '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
-                                fontSize: { xs: '0.75rem', sm: '0.875rem' },
-                                color: colors.black,
+                                fontWeight: 500,
                             },
-                            '.MuiTablePagination-actions': { color: colors.sea }
                         }}
                     />
                 </Box>
             </Paper>
 
+            {/* ─── ACTION MENU ───────────────────────────────────────────── */}
             <Menu
                 anchorEl={actionMenu}
                 open={Boolean(actionMenu)}
                 onClose={handleMenuClose}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                 transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                PaperProps={{
+                    elevation: 8,
+                    sx: { borderRadius: 2, minWidth: 180, mt: 0.5 },
+                }}
             >
                 {canEdit && (
-                    <MenuItem onClick={handleEdit} sx={{ color: colors.sea }}>
-                        <EditIcon sx={{ mr: 1, fontSize: 20 }} /> Edit
+                    <MenuItem onClick={handleEdit} sx={{ fontWeight: 500 }}>
+                        <EditIcon sx={{ mr: 1.5, fontSize: 20, color: colors.sea || '#0f766e' }} />
+                        Edit
                     </MenuItem>
                 )}
             </Menu>
 
+            {/* ─── FAQ FORM MODAL ──────────────────────────────────────── */}
             <FaqFormModal
                 open={openFormModal}
                 onClose={handleFormModalClose}

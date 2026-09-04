@@ -1,18 +1,35 @@
 // src/pages/technicians/TechnicianDetails.js
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-    Box, Paper, Typography, Avatar, Chip, CircularProgress, Alert,
-    Card, CardContent, Grid, Divider, Button, Stack,
-    Dialog, DialogTitle, DialogContent, DialogContentText,
-    DialogActions, LinearProgress,
-    IconButton, useMediaQuery, useTheme,
+    Box,
+    Paper,
+    Typography,
+    Avatar,
+    Chip,
+    CircularProgress,
+    Alert,
+    Card,
+    CardContent,
+    Grid,
+    Divider,
+    Button,
+    Stack,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogContentText,
+    DialogActions,
+    LinearProgress,
+    IconButton,
+    useMediaQuery,
+    useTheme,
+    alpha,
+    Tooltip,
 } from '@mui/material';
-import { alpha } from '@mui/material/styles';
 import {
     ArrowBack as ArrowBackIcon,
-    CheckCircle as VerifiedIcon,
+    Verified as VerifiedIcon,
     LocationOn as LocationIcon,
     Email as EmailIcon,
     Phone as PhoneIcon,
@@ -26,9 +43,12 @@ import {
     CalendarToday as CalendarIcon,
     Subscriptions as SubscriptionsIcon,
     CheckCircle as ApproveIcon,
+    Refresh as RefreshIcon,
+    Description as DescriptionIcon,
 } from '@mui/icons-material';
 import { technicianService } from 'services/technician.service';
 import { usePermissions } from 'hooks/usePermissions';
+import { showSnackbar } from 'utils/snackbar';
 import appConfig from '../../config';
 
 const colors = appConfig.app.colors;
@@ -61,7 +81,6 @@ const TechnicianDetails = () => {
     const [imageModalSrc, setImageModalSrc] = useState('');
     const [imageModalAlt, setImageModalAlt] = useState('');
 
-    // Approval states
     const [approveDialogOpen, setApproveDialogOpen] = useState(false);
     const [approveProcessing, setApproveProcessing] = useState(false);
     const [approveProgress, setApproveProgress] = useState(0);
@@ -116,16 +135,55 @@ const TechnicianDetails = () => {
         }
     };
 
-    // ─── Approval Handlers ──────────────────────────────────────────
+    const getStatusChip = () => {
+        if (!technician) return null;
+        const isVerified = technician.verified && technician.verification_status === 'approved';
+        const status = technician.verification_status || 'pending';
 
-    // Open the confirmation dialog
+        if (isVerified) {
+            return (
+                <Chip
+                    label="Verified"
+                    icon={<VerifiedIcon sx={{ fontSize: 16 }} />}
+                    sx={{
+                        fontWeight: 700,
+                        bgcolor: '#d1fae5',
+                        color: '#047857',
+                        border: '1.5px solid #10b981',
+                        height: 32,
+                        '& .MuiChip-icon': { color: '#047857' },
+                    }}
+                />
+            );
+        }
+
+        const statusMap = {
+            approved: { label: 'Approved', color: '#047857', bg: '#d1fae5', border: '#10b981' },
+            pending: { label: 'Pending', color: '#b45309', bg: '#fef3c7', border: '#f59e0b' },
+            rejected: { label: 'Rejected', color: '#b91c1c', bg: '#fee2e2', border: '#ef4444' },
+        };
+
+        const s = statusMap[status] || statusMap.pending;
+        return (
+            <Chip
+                label={s.label}
+                sx={{
+                    fontWeight: 700,
+                    bgcolor: s.bg,
+                    color: s.color,
+                    border: `1.5px solid ${s.border}`,
+                    height: 32,
+                }}
+            />
+        );
+    };
+
     const openApproveDialog = () => {
         setApproveDialogOpen(true);
         setApproveProgress(0);
         setApproveFeedback(null);
     };
 
-    // Close dialog without approving
     const closeApproveDialog = () => {
         if (!approveProcessing) {
             setApproveDialogOpen(false);
@@ -133,16 +191,13 @@ const TechnicianDetails = () => {
         }
     };
 
-    // Confirm approval – starts the API call with progress simulation
     const confirmApprove = async () => {
         setApproveProcessing(true);
         setApproveProgress(0);
 
-        // Simulate progress updates while the request is pending
         const interval = setInterval(() => {
             setApproveProgress((prev) => {
                 if (prev < 90) {
-                    // Random increment up to 90%
                     return Math.min(prev + Math.random() * 10, 90);
                 }
                 return prev;
@@ -152,21 +207,20 @@ const TechnicianDetails = () => {
         try {
             const response = await technicianService.approveTechnician(id);
             clearInterval(interval);
-            setApproveProgress(100); // complete
+            setApproveProgress(100);
 
             if (response?.data?.status === 'success') {
                 setApproveFeedback({
                     type: 'success',
                     message: 'Technician approved successfully! Free trial activated.',
                 });
-                // Update local state
                 setTechnician((prev) => ({
                     ...prev,
                     verified: true,
                     verification_status: 'approved',
                 }));
-                // Re‑fetch to sync all data
                 await fetchTechnician();
+                showSnackbar({ type: 'success', message: 'Technician approved successfully!' });
             } else {
                 setApproveFeedback({
                     type: 'error',
@@ -182,7 +236,6 @@ const TechnicianDetails = () => {
             });
         } finally {
             setApproveProcessing(false);
-            // Close dialog after a short delay so the user sees 100%
             setTimeout(() => {
                 setApproveDialogOpen(false);
                 setApproveProgress(0);
@@ -190,12 +243,10 @@ const TechnicianDetails = () => {
         }
     };
 
-    // ─── Render ──────────────────────────────────────────────────
-
     if (loading) {
         return (
             <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-                <CircularProgress sx={{ color: colors.sea }} />
+                <CircularProgress size={40} thickness={4} sx={{ color: colors.sea }} />
             </Box>
         );
     }
@@ -203,8 +254,15 @@ const TechnicianDetails = () => {
     if (error) {
         return (
             <Box p={3}>
-                <Alert severity="error">{error}</Alert>
-                <Button variant="contained" sx={{ mt: 2 }} onClick={() => navigate('/app/technicians')}>
+                <Alert severity="error" sx={{ borderRadius: 2, mb: 2 }}>
+                    {error}
+                </Alert>
+                <Button
+                    variant="contained"
+                    startIcon={<ArrowBackIcon />}
+                    onClick={() => navigate('/app/technicians')}
+                    sx={{ borderRadius: 2, textTransform: 'none' }}
+                >
                     Back to List
                 </Button>
             </Box>
@@ -220,70 +278,111 @@ const TechnicianDetails = () => {
     const isVerified = technician.verified && technician.verification_status === 'approved';
 
     return (
-        <Box sx={{ p: { xs: 1.5, sm: 2.5, md: 3.5 }, backgroundColor: '#f8fafc', minHeight: '100vh' }}>
-            {/* Top Bar with Back and Approve buttons */}
-            <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2} mb={2.5}>
-                <Button
-                    startIcon={<ArrowBackIcon />}
-                    onClick={() => navigate('/app/technicians')}
-                    sx={{ color: colors.sea, fontWeight: 600, textTransform: 'none' }}
-                >
-                    Back to List
-                </Button>
-
-                {canApprove && !isVerified && (
-                    <Button
-                        variant="contained"
-                        startIcon={<ApproveIcon />}
-                        onClick={openApproveDialog}
-                        sx={{
-                            backgroundColor: colors.salat,
-                            '&:hover': { backgroundColor: colors.salatDark },
-                            textTransform: 'none',
-                            fontWeight: 600,
-                        }}
-                    >
-                        Approve Technician
-                    </Button>
-                )}
-            </Box>
-
-            {approveFeedback && (
-                <Alert
-                    severity={approveFeedback.type}
-                    sx={{ mb: 2 }}
-                    onClose={() => setApproveFeedback(null)}
-                >
-                    {approveFeedback.message}
-                </Alert>
-            )}
-
+        <Box sx={{ p: { xs: 1.5, sm: 2.5 }, m: 0, bgcolor: 'background.default', minHeight: '100vh' }}>
             <Paper
                 elevation={0}
                 sx={{
+                    width: '100%',
                     borderRadius: 3,
                     overflow: 'hidden',
-                    backgroundColor: '#ffffff',
-                    border: `1px solid ${alpha(colors.middle, 0.15)}`,
-                    boxShadow: '0 4px 20px rgba(0,0,0,0.04)',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    bgcolor: 'background.paper',
                 }}
             >
-                {/* ─── Header ──────────────────────────────────────────── */}
+                {/* ── HEADER ────────────────────────────────────────────── */}
                 <Box
                     sx={{
-                        p: { xs: 2, sm: 3, md: 4 },
-                        background: `linear-gradient(135deg, ${alpha(colors.sea, 0.06)}, ${alpha(colors.sea, 0.02)})`,
-                        borderBottom: `1px solid ${alpha(colors.middle, 0.12)}`,
+                        px: { xs: 2, sm: 3 },
+                        py: 2.5,
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: 2,
+                    }}
+                >
+                    <Button
+                        startIcon={<ArrowBackIcon />}
+                        onClick={() => navigate('/app/technicians')}
+                        sx={{
+                            color: colors.sea,
+                            fontWeight: 600,
+                            textTransform: 'none',
+                            '&:hover': { bgcolor: alpha(colors.sea, 0.08) },
+                        }}
+                    >
+                        Back to List
+                    </Button>
+
+                    <Stack direction="row" spacing={1.5}>
+                        <Button
+                            variant="outlined"
+                            startIcon={<RefreshIcon />}
+                            onClick={fetchTechnician}
+                            disabled={loading}
+                            size={isMobile ? 'small' : 'medium'}
+                            sx={{
+                                borderRadius: 2,
+                                textTransform: 'none',
+                                fontWeight: 600,
+                                borderColor: 'divider',
+                                '&:hover': { borderColor: colors.sea },
+                            }}
+                        >
+                            Refresh
+                        </Button>
+                        {canApprove && !isVerified && (
+                            <Button
+                                variant="contained"
+                                startIcon={<ApproveIcon />}
+                                onClick={openApproveDialog}
+                                sx={{
+                                    borderRadius: 2,
+                                    textTransform: 'none',
+                                    fontWeight: 700,
+                                    bgcolor: colors.salat || '#10b981',
+                                    '&:hover': { bgcolor: colors.dark || '#047857' },
+                                }}
+                            >
+                                Approve Technician
+                            </Button>
+                        )}
+                    </Stack>
+                </Box>
+
+                {approveFeedback && (
+                    <Box sx={{ px: { xs: 2, sm: 3 }, pt: 2 }}>
+                        <Alert
+                            severity={approveFeedback.type}
+                            onClose={() => setApproveFeedback(null)}
+                            sx={{ borderRadius: 2 }}
+                        >
+                            {approveFeedback.message}
+                        </Alert>
+                    </Box>
+                )}
+
+                {/* ─── PROFILE HEADER ──────────────────────────────────── */}
+                <Box
+                    sx={{
+                        px: { xs: 2, sm: 3, md: 4 },
+                        py: { xs: 2, sm: 3, md: 4 },
                         display: 'flex',
                         flexDirection: { xs: 'column', md: 'row' },
                         gap: 3,
                         alignItems: { xs: 'center', md: 'flex-start' },
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                        background: alpha(colors.sea, 0.03),
                     }}
                 >
                     <Box
                         sx={{
                             position: 'relative',
-                            cursor: 'pointer',
+                            cursor: profilePhotoUrl ? 'pointer' : 'default',
                             flexShrink: 0,
                         }}
                         onClick={() => profilePhotoUrl && openImageModal(profilePhotoUrl, `${user.name} Profile`)}
@@ -296,10 +395,10 @@ const TechnicianDetails = () => {
                                 bgcolor: colors.sea,
                                 fontSize: '4rem',
                                 fontWeight: 700,
-                                border: `4px solid ${alpha(colors.sea, 0.2)}`,
-                                boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
-                                transition: 'transform 0.2s',
-                                '&:hover': {
+                                border: `4px solid ${alpha(colors.sea, 0.15)}`,
+                                boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
+                                transition: 'all 0.2s',
+                                '&:hover': profilePhotoUrl && {
                                     transform: 'scale(1.03)',
                                     borderColor: colors.sea,
                                 },
@@ -330,71 +429,56 @@ const TechnicianDetails = () => {
                     </Box>
 
                     <Box flex={1} textAlign={{ xs: 'center', md: 'left' }}>
-                        <Typography variant="h4" fontWeight="700" sx={{ color: colors.dark, mb: 0.5 }}>
-                            {user.name || 'Unknown'}
-                        </Typography>
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ xs: 'center', sm: 'flex-start' }} mb={1}>
+                            <Typography variant="h4" fontWeight={700} color="text.primary">
+                                {user.name || 'Unknown'}
+                            </Typography>
+                            {getStatusChip()}
+                        </Stack>
 
-                        {/* Chips */}
-                        <Box
-                            display="flex"
-                            flexWrap="wrap"
-                            gap={1}
-                            sx={{ mb: 1.5, justifyContent: { xs: 'center', md: 'flex-start' } }}
-                        >
-                            <Chip
-                                label={isVerified ? 'Verified' : 'Unverified'}
-                                color={isVerified ? 'success' : 'warning'}
-                                size="small"
-                                icon={<VerifiedIcon />}
-                            />
-                            <Chip
-                                label={`Status: ${technician.verification_status || 'pending'}`}
-                                color={
-                                    technician.verification_status === 'approved'
-                                        ? 'success'
-                                        : technician.verification_status === 'pending'
-                                            ? 'warning'
-                                            : 'default'
-                                }
-                                size="small"
-                            />
+                        <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 1.5, justifyContent: { xs: 'center', md: 'flex-start' } }}>
                             <Chip
                                 label={technician.registration_completed ? 'Registered' : 'Incomplete'}
-                                color={technician.registration_completed ? 'info' : 'default'}
                                 size="small"
+                                sx={{
+                                    fontWeight: 600,
+                                    bgcolor: technician.registration_completed ? '#d1fae5' : '#f3f4f6',
+                                    color: technician.registration_completed ? '#047857' : '#4b5563',
+                                    border: `1px solid ${technician.registration_completed ? '#10b981' : '#9ca3af'}`,
+                                }}
                             />
-                        </Box>
+                            <Chip
+                                label={`Step ${technician.registration_step || 0}/4`}
+                                size="small"
+                                sx={{
+                                    fontWeight: 600,
+                                    bgcolor: 'action.hover',
+                                }}
+                            />
+                        </Stack>
 
-                        {/* Contact info */}
-                        <Box display="flex" flexDirection={{ xs: 'column', sm: 'row' }} gap={1.5} flexWrap="wrap">
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} flexWrap="wrap">
                             <Box display="flex" alignItems="center" gap={1}>
-                                <EmailIcon sx={{ fontSize: 18, color: colors.rain }} />
-                                <Typography variant="body2" sx={{ color: colors.black }}>
-                                    {user.email || 'N/A'}
-                                </Typography>
+                                <EmailIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+                                <Typography variant="body2">{user.email || 'N/A'}</Typography>
                             </Box>
                             <Box display="flex" alignItems="center" gap={1}>
-                                <PhoneIcon sx={{ fontSize: 18, color: colors.rain }} />
-                                <Typography variant="body2" sx={{ color: colors.black }}>
-                                    {user.phone || 'N/A'}
-                                </Typography>
+                                <PhoneIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+                                <Typography variant="body2">{user.phone || 'N/A'}</Typography>
                             </Box>
                             <Box display="flex" alignItems="center" gap={1}>
-                                <LocationIcon sx={{ fontSize: 18, color: colors.rain }} />
-                                <Typography variant="body2" sx={{ color: colors.black }}>
-                                    {technician.area || 'N/A'}
-                                </Typography>
+                                <LocationIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+                                <Typography variant="body2">{technician.area || 'N/A'}</Typography>
                             </Box>
-                        </Box>
+                        </Stack>
 
-                        {/* Rating / Experience / Rate */}
-                        <Box display="flex" flexWrap="wrap" gap={2.5} sx={{ mt: 1.5 }}>
+                        <Stack direction="row" spacing={2.5} flexWrap="wrap" sx={{ mt: 1.5, justifyContent: { xs: 'center', md: 'flex-start' } }}>
                             <Box display="flex" alignItems="center" gap={0.5}>
                                 <StarIcon sx={{ fontSize: 20, color: '#f59e0b' }} />
-                                <Typography variant="body2" fontWeight="600">
+                                <Typography variant="body2" fontWeight={700}>
                                     {technician.rating?.toFixed(1) || 'N/A'}
                                 </Typography>
-                                <Typography variant="caption" sx={{ color: colors.rain }}>
+                                <Typography variant="caption" color="text.secondary">
                                     ({technician.completed_jobs_count || 0} jobs)
                                 </Typography>
                             </Box>
@@ -404,42 +488,42 @@ const TechnicianDetails = () => {
                                 </Typography>
                             )}
                             {technician.hourly_rate && (
-                                <Typography variant="body2" fontWeight="700" sx={{ color: colors.sea }}>
+                                <Typography variant="body2" fontWeight={700} color={colors.sea}>
                                     {technician.hourly_rate} TZS/hr
                                 </Typography>
                             )}
-                        </Box>
+                        </Stack>
                     </Box>
                 </Box>
 
-                {/* ─── Details Grid ──────────────────────────────────────── */}
+                {/* ─── DETAILS CONTENT ──────────────────────────────────── */}
                 <Box sx={{ p: { xs: 2, sm: 3, md: 4 } }}>
                     <Grid container spacing={3}>
                         {/* Left Column */}
                         <Grid item xs={12} md={6}>
                             <Stack spacing={3}>
                                 {/* Bio */}
-                                <Card variant="outlined" sx={{ borderColor: alpha(colors.middle, 0.15) }}>
+                                <Card variant="outlined" sx={{ borderColor: 'divider' }}>
                                     <CardContent>
-                                        <Typography variant="subtitle1" fontWeight="700" sx={{ color: colors.dark, mb: 1.5 }}>
+                                        <Typography variant="subtitle1" fontWeight={700} color="text.primary" mb={1.5}>
                                             <PersonIcon sx={{ fontSize: 20, mr: 1, verticalAlign: 'middle', color: colors.sea }} />
                                             Bio
                                         </Typography>
-                                        <Typography variant="body2" sx={{ color: colors.black, lineHeight: 1.8 }}>
+                                        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
                                             {technician.bio || 'No bio provided.'}
                                         </Typography>
                                     </CardContent>
                                 </Card>
 
                                 {/* Identification */}
-                                <Card variant="outlined" sx={{ borderColor: alpha(colors.middle, 0.15) }}>
+                                <Card variant="outlined" sx={{ borderColor: 'divider' }}>
                                     <CardContent>
-                                        <Typography variant="subtitle1" fontWeight="700" sx={{ color: colors.dark, mb: 1.5 }}>
+                                        <Typography variant="subtitle1" fontWeight={700} color="text.primary" mb={1.5}>
                                             <DocumentIcon sx={{ fontSize: 20, mr: 1, verticalAlign: 'middle', color: colors.sea }} />
-                                            Identification & Registration
+                                            Identification
                                         </Typography>
                                         {hasIdDocument ? (
-                                            <Box display="flex" flexDirection="column" gap={1.5}>
+                                            <Stack spacing={1.5}>
                                                 {technician.nida && (
                                                     <Typography variant="body2">
                                                         <strong>NIDA:</strong> {technician.nida}
@@ -449,19 +533,12 @@ const TechnicianDetails = () => {
                                                     <strong>Document Type:</strong> {technician.id_document_type || 'N/A'}
                                                 </Typography>
                                                 <Typography variant="body2">
-                                                    <strong>Registration Step:</strong> {technician.registration_step}/4
-                                                </Typography>
-                                                <Typography variant="body2">
-                                                    <strong>Registration Completed:</strong>{' '}
-                                                    {technician.registration_completed ? 'Yes' : 'No'}
-                                                </Typography>
-                                                <Typography variant="body2">
                                                     <strong>Verification Status:</strong> {technician.verification_status}
                                                 </Typography>
                                                 {idDocumentUrl && !imageErrors['id'] && (
                                                     <Box mt={1}>
-                                                        <Typography variant="body2" fontWeight="600" sx={{ mb: 1 }}>
-                                                            ID Document Image:
+                                                        <Typography variant="body2" fontWeight={600} mb={1}>
+                                                            ID Document:
                                                         </Typography>
                                                         <Box
                                                             component="img"
@@ -471,33 +548,104 @@ const TechnicianDetails = () => {
                                                             sx={{
                                                                 maxWidth: '100%',
                                                                 maxHeight: 250,
-                                                                border: `1px solid ${alpha(colors.middle, 0.3)}`,
+                                                                border: '1px solid',
+                                                                borderColor: 'divider',
                                                                 borderRadius: 2,
                                                                 objectFit: 'contain',
-                                                                backgroundColor: '#f8fafc',
+                                                                bgcolor: 'action.hover',
                                                                 p: 1,
                                                                 cursor: 'pointer',
-                                                                transition: 'transform 0.2s',
+                                                                transition: 'all 0.2s',
                                                                 '&:hover': {
-                                                                    transform: 'scale(1.02)',
                                                                     borderColor: colors.sea,
+                                                                    transform: 'scale(1.02)',
                                                                 },
                                                             }}
                                                             onError={() => handleImageError('id')}
                                                         />
                                                     </Box>
                                                 )}
-                                                {imageErrors['id'] && (
-                                                    <Alert severity="warning" icon={<ImageIcon />}>
-                                                        Failed to load ID document image.
-                                                    </Alert>
-                                                )}
-                                            </Box>
+                                            </Stack>
                                         ) : (
-                                            <Typography variant="body2" sx={{ color: colors.rain }}>
+                                            <Typography variant="body2" color="text.secondary">
                                                 No ID documents uploaded yet.
                                             </Typography>
                                         )}
+                                    </CardContent>
+                                </Card>
+
+                                {/* Services */}
+                                <Card variant="outlined" sx={{ borderColor: 'divider' }}>
+                                    <CardContent>
+                                        <Typography variant="subtitle1" fontWeight={700} color="text.primary" mb={1.5}>
+                                            <WorkIcon sx={{ fontSize: 20, mr: 1, verticalAlign: 'middle', color: colors.sea }} />
+                                            Services & Pricing
+                                        </Typography>
+                                        {technician.service_prices && technician.service_prices.length > 0 ? (
+                                            <Grid container spacing={1.5}>
+                                                {technician.service_prices.map((service) => (
+                                                    <Grid item xs={12} sm={6} key={service.id}>
+                                                        <Box
+                                                            sx={{
+                                                                p: 2,
+                                                                bgcolor: 'action.hover',
+                                                                borderRadius: 2,
+                                                                border: '1px solid',
+                                                                borderColor: 'divider',
+                                                                transition: 'all 0.2s',
+                                                                '&:hover': {
+                                                                    borderColor: colors.sea,
+                                                                    bgcolor: alpha(colors.sea, 0.04),
+                                                                },
+                                                            }}
+                                                        >
+                                                            <Typography variant="body2" fontWeight={600} color="text.primary">
+                                                                {service.name}
+                                                            </Typography>
+                                                            <Typography variant="body2" color="text.secondary">
+                                                                Price: {service.pivot?.min_price || 0} – {service.pivot?.max_price || 0} TZS
+                                                            </Typography>
+                                                        </Box>
+                                                    </Grid>
+                                                ))}
+                                            </Grid>
+                                        ) : (
+                                            <Typography variant="body2" color="text.secondary">
+                                                No services assigned.
+                                            </Typography>
+                                        )}
+                                    </CardContent>
+                                </Card>
+
+                                {/* Location */}
+                                <Card variant="outlined" sx={{ borderColor: 'divider' }}>
+                                    <CardContent>
+                                        <Typography variant="subtitle1" fontWeight={700} color="text.primary" mb={1.5}>
+                                            <LocationIcon sx={{ fontSize: 20, mr: 1, verticalAlign: 'middle', color: colors.sea }} />
+                                            Location
+                                        </Typography>
+                                        <Stack spacing={1.5}>
+                                            <Typography variant="body2">
+                                                <strong>Area:</strong> {technician.area || 'N/A'}
+                                            </Typography>
+                                            {technician.latitude && technician.longitude && (
+                                                <Typography variant="body2">
+                                                    <strong>Coordinates:</strong> {technician.latitude}, {technician.longitude}
+                                                </Typography>
+                                            )}
+                                            {technician.location_updated_at && (
+                                                <Typography variant="body2" display="flex" alignItems="center" gap={1}>
+                                                    <CalendarIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                                                    <strong>Last Location Update:</strong> {new Date(technician.location_updated_at).toLocaleString()}
+                                                </Typography>
+                                            )}
+                                            {technician.last_activity_at && (
+                                                <Typography variant="body2" display="flex" alignItems="center" gap={1}>
+                                                    <CalendarIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                                                    <strong>Last Activity:</strong> {new Date(technician.last_activity_at).toLocaleString()}
+                                                </Typography>
+                                            )}
+                                        </Stack>
                                     </CardContent>
                                 </Card>
                             </Stack>
@@ -506,93 +654,112 @@ const TechnicianDetails = () => {
                         {/* Right Column */}
                         <Grid item xs={12} md={6}>
                             <Stack spacing={3}>
-                                {/* Services & Pricing */}
-                                <Card variant="outlined" sx={{ borderColor: alpha(colors.middle, 0.15) }}>
-                                    <CardContent>
-                                        <Typography variant="subtitle1" fontWeight="700" sx={{ color: colors.dark, mb: 1.5 }}>
-                                            <WorkIcon sx={{ fontSize: 20, mr: 1, verticalAlign: 'middle', color: colors.sea }} />
-                                            Services & Pricing
-                                        </Typography>
-                                        {technician.service_prices && technician.service_prices.length > 0 ? (
-                                            <Grid container spacing={2}>
-                                                {technician.service_prices.map((service) => (
-                                                    <Grid item xs={12} sm={6} key={service.id}>
-                                                        <Box
-                                                            sx={{
-                                                                p: 2,
-                                                                backgroundColor: alpha(colors.sea, 0.04),
-                                                                borderRadius: 2,
-                                                                border: `1px solid ${alpha(colors.middle, 0.15)}`,
-                                                                transition: 'all 0.2s',
-                                                                '&:hover': {
-                                                                    borderColor: colors.sea,
-                                                                    backgroundColor: alpha(colors.sea, 0.08),
-                                                                },
-                                                            }}
-                                                        >
-                                                            <Typography variant="body2" fontWeight="600" sx={{ color: colors.dark }}>
-                                                                {service.name}
-                                                            </Typography>
-                                                            <Typography variant="body2" sx={{ color: colors.rain }}>
-                                                                Price Range: {service.pivot?.min_price || 0} –{' '}
-                                                                {service.pivot?.max_price || 0} TZS
-                                                            </Typography>
-                                                        </Box>
-                                                    </Grid>
-                                                ))}
-                                            </Grid>
-                                        ) : (
-                                            <Typography variant="body2" sx={{ color: colors.rain }}>
-                                                No services assigned.
+                                {/* Portfolio */}
+                                {technician.portfolios && technician.portfolios.length > 0 && (
+                                    <Card variant="outlined" sx={{ borderColor: 'divider' }}>
+                                        <CardContent>
+                                            <Typography variant="subtitle1" fontWeight={700} color="text.primary" mb={1.5}>
+                                                <ImageIcon sx={{ fontSize: 20, mr: 1, verticalAlign: 'middle', color: colors.sea }} />
+                                                Portfolio ({technician.portfolios.length})
                                             </Typography>
-                                        )}
-                                    </CardContent>
-                                </Card>
+                                            <Grid container spacing={1.5}>
+                                                {technician.portfolios.map((item) => {
+                                                    const imgUrl = item.image ? getImageUrl(item.image) : null;
+                                                    return (
+                                                        <Grid item xs={12} sm={6} key={item.id}>
+                                                            <Box
+                                                                sx={{
+                                                                    border: '1px solid',
+                                                                    borderColor: 'divider',
+                                                                    borderRadius: 2,
+                                                                    overflow: 'hidden',
+                                                                    bgcolor: 'action.hover',
+                                                                    cursor: imgUrl ? 'pointer' : 'default',
+                                                                    transition: 'all 0.2s',
+                                                                    '&:hover': imgUrl && {
+                                                                        borderColor: colors.sea,
+                                                                        transform: 'scale(1.02)',
+                                                                    },
+                                                                }}
+                                                                onClick={() => imgUrl && openImageModal(imgUrl, item.description || 'Portfolio')}
+                                                            >
+                                                                {imgUrl && !imageErrors[`portfolio-${item.id}`] ? (
+                                                                    <img
+                                                                        src={imgUrl}
+                                                                        alt={item.description || 'Portfolio'}
+                                                                        style={{
+                                                                            width: '100%',
+                                                                            height: 160,
+                                                                            objectFit: 'cover',
+                                                                            display: 'block',
+                                                                        }}
+                                                                        onError={() => handleImageError(`portfolio-${item.id}`)}
+                                                                    />
+                                                                ) : (
+                                                                    <Box
+                                                                        sx={{
+                                                                            height: 160,
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            justifyContent: 'center',
+                                                                            bgcolor: 'action.hover',
+                                                                            color: 'text.disabled',
+                                                                        }}
+                                                                    >
+                                                                        <ImageIcon sx={{ fontSize: 48, opacity: 0.5 }} />
+                                                                    </Box>
+                                                                )}
+                                                                {item.description && (
+                                                                    <Box sx={{ p: 1.5, bgcolor: 'background.paper' }}>
+                                                                        <Typography variant="caption" color="text.secondary">
+                                                                            {item.description}
+                                                                        </Typography>
+                                                                    </Box>
+                                                                )}
+                                                            </Box>
+                                                        </Grid>
+                                                    );
+                                                })}
+                                            </Grid>
+                                        </CardContent>
+                                    </Card>
+                                )}
 
-                                {/* Subscription History */}
-                                <Card variant="outlined" sx={{ borderColor: alpha(colors.middle, 0.15) }}>
+                                {/* Subscription - Moved to Bottom */}
+                                <Card variant="outlined" sx={{ borderColor: 'divider' }}>
                                     <CardContent>
-                                        <Typography variant="subtitle1" fontWeight="700" sx={{ color: colors.dark, mb: 1.5 }}>
+                                        <Typography variant="subtitle1" fontWeight={700} color="text.primary" mb={1.5}>
                                             <SubscriptionsIcon sx={{ fontSize: 20, mr: 1, verticalAlign: 'middle', color: colors.sea }} />
                                             Subscription History
                                         </Typography>
 
                                         {user.subscriptions && user.subscriptions.length > 0 ? (
-                                            <Box>
+                                            <Stack spacing={1.5}>
                                                 {user.subscriptions.map((sub) => (
                                                     <Box
                                                         key={sub.id}
                                                         sx={{
                                                             p: 2,
-                                                            mb: 1.5,
-                                                            backgroundColor: alpha(colors.sea, 0.04),
+                                                            bgcolor: 'action.hover',
                                                             borderRadius: 2,
-                                                            border: `1px solid ${alpha(colors.middle, 0.15)}`,
-                                                            '&:last-child': { mb: 0 },
+                                                            border: '1px solid',
+                                                            borderColor: 'divider',
                                                         }}
                                                     >
                                                         <Grid container spacing={1}>
                                                             <Grid item xs={12} sm={6}>
-                                                                <Typography variant="body2" fontWeight="600">
+                                                                <Typography variant="body2" fontWeight={600}>
                                                                     Plan: {sub.rate_card?.name || 'N/A'}
                                                                 </Typography>
                                                                 <Box display="flex" alignItems="center" gap={0.5} mt={0.5}>
-                                                                    <Typography variant="body2" component="span">
-                                                                        Status:
-                                                                    </Typography>
+                                                                    <Typography variant="body2">Status:</Typography>
                                                                     <Chip
                                                                         label={sub.status}
                                                                         size="small"
                                                                         color={
-                                                                            sub.status === 'active'
-                                                                                ? 'success'
-                                                                                : sub.status === 'expired'
-                                                                                    ? 'error'
-                                                                                    : sub.status === 'pending'
-                                                                                        ? 'warning'
-                                                                                        : sub.status === 'approved'
-                                                                                            ? 'info'
-                                                                                            : 'default'
+                                                                            sub.status === 'active' ? 'success' :
+                                                                                sub.status === 'expired' ? 'error' :
+                                                                                    sub.status === 'pending' ? 'warning' : 'default'
                                                                         }
                                                                     />
                                                                 </Box>
@@ -608,171 +775,43 @@ const TechnicianDetails = () => {
                                                                     <strong>Expiry:</strong> {formatDate(sub.expiry_date)}
                                                                 </Typography>
                                                                 <Typography variant="body2">
-                                                                    <strong>Payment:</strong> {sub.payment_method}{' '}
-                                                                    {sub.payment_reference ? `(${sub.payment_reference})` : ''}
+                                                                    <strong>Payment:</strong> {sub.payment_method}
+                                                                    {sub.payment_reference ? ` (${sub.payment_reference})` : ''}
                                                                 </Typography>
-                                                                {sub.admin_notes && (
-                                                                    <Typography variant="body2" sx={{ color: colors.rain }}>
-                                                                        <strong>Note:</strong> {sub.admin_notes}
-                                                                    </Typography>
-                                                                )}
                                                             </Grid>
                                                         </Grid>
                                                     </Box>
                                                 ))}
-                                            </Box>
+                                            </Stack>
                                         ) : (
-                                            <Typography variant="body2" sx={{ color: colors.rain }}>
+                                            <Typography variant="body2" color="text.secondary">
                                                 No subscription records found.
                                             </Typography>
                                         )}
 
                                         <Divider sx={{ my: 1.5 }} />
-                                        <Box display="flex" flexDirection="column" gap={0.5}>
+
+                                        <Stack spacing={0.5}>
                                             <Box display="flex" alignItems="center" gap={0.5}>
-                                                <Typography variant="body2" component="span">
+                                                <Typography variant="body2">
                                                     <strong>Current Status:</strong>
                                                 </Typography>
                                                 <Chip
                                                     label={user.subscription_status || 'N/A'}
                                                     size="small"
                                                     color={
-                                                        user.subscription_status === 'active'
-                                                            ? 'success'
-                                                            : user.subscription_status === 'expired'
-                                                                ? 'error'
-                                                                : user.subscription_status === 'pending'
-                                                                    ? 'warning'
-                                                                    : 'default'
+                                                        user.subscription_status === 'active' ? 'success' :
+                                                            user.subscription_status === 'expired' ? 'error' :
+                                                                user.subscription_status === 'pending' ? 'warning' : 'default'
                                                     }
                                                 />
                                             </Box>
                                             {user.subscription_expires_at && (
                                                 <Typography variant="body2">
-                                                    <strong>Current Expiry:</strong>{' '}
-                                                    {formatDate(user.subscription_expires_at)}
+                                                    <strong>Current Expiry:</strong> {formatDate(user.subscription_expires_at)}
                                                 </Typography>
                                             )}
-                                            {user.current_subscription_id && (
-                                                <Typography variant="body2">
-                                                    <strong>Current Subscription ID:</strong> {user.current_subscription_id}
-                                                </Typography>
-                                            )}
-                                        </Box>
-                                    </CardContent>
-                                </Card>
-
-                                {/* Portfolio */}
-                                {technician.portfolios && technician.portfolios.length > 0 && (
-                                    <Card variant="outlined" sx={{ borderColor: alpha(colors.middle, 0.15) }}>
-                                        <CardContent>
-                                            <Typography variant="subtitle1" fontWeight="700" sx={{ color: colors.dark, mb: 1.5 }}>
-                                                <ImageIcon sx={{ fontSize: 20, mr: 1, verticalAlign: 'middle', color: colors.sea }} />
-                                                Portfolio ({technician.portfolios.length})
-                                            </Typography>
-                                            <Grid container spacing={2}>
-                                                {technician.portfolios.map((item) => {
-                                                    const imgUrl = item.image ? getImageUrl(item.image) : null;
-                                                    return (
-                                                        <Grid item xs={12} sm={6} key={item.id}>
-                                                            <Box
-                                                                sx={{
-                                                                    border: `1px solid ${alpha(colors.middle, 0.2)}`,
-                                                                    borderRadius: 2,
-                                                                    overflow: 'hidden',
-                                                                    backgroundColor: '#f8fafc',
-                                                                    transition: 'transform 0.2s',
-                                                                    cursor: 'pointer',
-                                                                    '&:hover': {
-                                                                        transform: 'scale(1.02)',
-                                                                        borderColor: colors.sea,
-                                                                    },
-                                                                }}
-                                                                onClick={() =>
-                                                                    imgUrl &&
-                                                                    openImageModal(
-                                                                        imgUrl,
-                                                                        item.description || 'Portfolio'
-                                                                    )
-                                                                }
-                                                            >
-                                                                {imgUrl && !imageErrors[`portfolio-${item.id}`] ? (
-                                                                    <img
-                                                                        src={imgUrl}
-                                                                        alt={item.description || 'Portfolio'}
-                                                                        style={{
-                                                                            width: '100%',
-                                                                            height: 160,
-                                                                            objectFit: 'cover',
-                                                                            objectPosition: 'center',
-                                                                            display: 'block',
-                                                                        }}
-                                                                        onError={() =>
-                                                                            handleImageError(`portfolio-${item.id}`)
-                                                                        }
-                                                                    />
-                                                                ) : (
-                                                                    <Box
-                                                                        sx={{
-                                                                            height: 160,
-                                                                            display: 'flex',
-                                                                            alignItems: 'center',
-                                                                            justifyContent: 'center',
-                                                                            backgroundColor: '#f1f5f9',
-                                                                            color: colors.rain,
-                                                                        }}
-                                                                    >
-                                                                        <ImageIcon sx={{ fontSize: 48, opacity: 0.5 }} />
-                                                                    </Box>
-                                                                )}
-                                                                {item.description && (
-                                                                    <Box sx={{ p: 1.5, backgroundColor: '#ffffff' }}>
-                                                                        <Typography variant="caption" sx={{ color: colors.black }}>
-                                                                            {item.description}
-                                                                        </Typography>
-                                                                    </Box>
-                                                                )}
-                                                            </Box>
-                                                        </Grid>
-                                                    );
-                                                })}
-                                            </Grid>
-                                        </CardContent>
-                                    </Card>
-                                )}
-
-                                {/* Location */}
-                                <Card variant="outlined" sx={{ borderColor: alpha(colors.middle, 0.15) }}>
-                                    <CardContent>
-                                        <Typography variant="subtitle1" fontWeight="700" sx={{ color: colors.dark, mb: 1.5 }}>
-                                            <LocationIcon sx={{ fontSize: 20, mr: 1, verticalAlign: 'middle', color: colors.sea }} />
-                                            Location
-                                        </Typography>
-                                        <Box display="flex" flexDirection="column" gap={1.5}>
-                                            <Typography variant="body2">
-                                                <strong>Area:</strong> {technician.area || 'N/A'}
-                                            </Typography>
-                                            {technician.latitude && technician.longitude && (
-                                                <Typography variant="body2">
-                                                    <strong>Coordinates:</strong> {technician.latitude},{' '}
-                                                    {technician.longitude}
-                                                </Typography>
-                                            )}
-                                            {technician.location_updated_at && (
-                                                <Typography variant="body2" display="flex" alignItems="center" gap={1}>
-                                                    <CalendarIcon sx={{ fontSize: 16, color: colors.rain }} />
-                                                    <strong>Last Location Update:</strong>{' '}
-                                                    {new Date(technician.location_updated_at).toLocaleString()}
-                                                </Typography>
-                                            )}
-                                            {technician.last_activity_at && (
-                                                <Typography variant="body2" display="flex" alignItems="center" gap={1}>
-                                                    <CalendarIcon sx={{ fontSize: 16, color: colors.rain }} />
-                                                    <strong>Last Activity:</strong>{' '}
-                                                    {new Date(technician.last_activity_at).toLocaleString()}
-                                                </Typography>
-                                            )}
-                                        </Box>
+                                        </Stack>
                                     </CardContent>
                                 </Card>
                             </Stack>
@@ -781,31 +820,29 @@ const TechnicianDetails = () => {
                 </Box>
             </Paper>
 
-            {/* ─── Approval Confirmation Dialog ─────────────────────────── */}
+            {/* ─── APPROVAL CONFIRMATION DIALOG ────────────────────────── */}
             <Dialog
                 open={approveDialogOpen}
                 onClose={closeApproveDialog}
-                aria-labelledby="approve-dialog-title"
-                aria-describedby="approve-dialog-description"
                 maxWidth="sm"
                 fullWidth
+                PaperProps={{ sx: { borderRadius: 3 } }}
             >
-                <DialogTitle id="approve-dialog-title" sx={{ fontWeight: 600, color: colors.dark }}>
+                <DialogTitle sx={{ fontWeight: 700, color: 'text.primary' }}>
                     Approve Technician
                 </DialogTitle>
                 <DialogContent>
-                    <DialogContentText id="approve-dialog-description" sx={{ mb: 2 }}>
+                    <DialogContentText color="text.secondary" sx={{ mb: 2 }}>
                         Are you sure you want to approve <strong>{user.name || 'this technician'}</strong>?
                         This will activate a <strong>1‑day free trial</strong> subscription.
                     </DialogContentText>
-                    {/* Progress bar – only shown when processing */}
                     {approveProcessing && (
                         <Box sx={{ width: '100%', mt: 2 }}>
                             <Box display="flex" justifyContent="space-between" alignItems="center">
-                                <Typography variant="body2" color="textSecondary">
+                                <Typography variant="body2" color="text.secondary">
                                     Approving...
                                 </Typography>
-                                <Typography variant="body2" fontWeight="600" color={colors.sea}>
+                                <Typography variant="body2" fontWeight={600} color={colors.sea}>
                                     {Math.round(approveProgress)}%
                                 </Typography>
                             </Box>
@@ -816,9 +853,9 @@ const TechnicianDetails = () => {
                                     height: 8,
                                     borderRadius: 4,
                                     mt: 0.5,
-                                    backgroundColor: alpha(colors.middle, 0.3),
+                                    bgcolor: alpha(colors.middle, 0.3),
                                     '& .MuiLinearProgress-bar': {
-                                        backgroundColor: colors.salat,
+                                        bgcolor: colors.salat || '#10b981',
                                         borderRadius: 4,
                                     },
                                 }}
@@ -826,8 +863,8 @@ const TechnicianDetails = () => {
                         </Box>
                     )}
                 </DialogContent>
-                <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button onClick={closeApproveDialog} disabled={approveProcessing}>
+                <DialogActions sx={{ px: 3, pb: 2.5, pt: 1 }}>
+                    <Button onClick={closeApproveDialog} disabled={approveProcessing} sx={{ fontWeight: 600 }}>
                         Cancel
                     </Button>
                     <Button
@@ -835,10 +872,11 @@ const TechnicianDetails = () => {
                         variant="contained"
                         disabled={approveProcessing}
                         sx={{
-                            backgroundColor: colors.salat,
-                            '&:hover': { backgroundColor: colors.salatDark },
+                            borderRadius: 2,
+                            fontWeight: 700,
                             textTransform: 'none',
-                            fontWeight: 600,
+                            bgcolor: colors.salat || '#10b981',
+                            '&:hover': { bgcolor: colors.dark || '#047857' },
                         }}
                     >
                         {approveProcessing ? 'Processing...' : 'Yes, Approve'}
@@ -846,7 +884,7 @@ const TechnicianDetails = () => {
                 </DialogActions>
             </Dialog>
 
-            {/* ─── Image Modal ───────────────────────────────────────────── */}
+            {/* ─── IMAGE MODAL ──────────────────────────────────────────── */}
             <Dialog
                 open={imageModalOpen}
                 onClose={closeImageModal}
@@ -854,8 +892,8 @@ const TechnicianDetails = () => {
                 fullWidth
                 PaperProps={{
                     sx: {
-                        backgroundColor: 'rgba(0,0,0,0.9)',
-                        borderRadius: 2,
+                        bgcolor: 'rgba(0,0,0,0.92)',
+                        borderRadius: { xs: 0, sm: 3 },
                         overflow: 'hidden',
                     },
                 }}
@@ -868,10 +906,8 @@ const TechnicianDetails = () => {
                         right: 16,
                         color: '#fff',
                         zIndex: 10,
-                        backgroundColor: 'rgba(0,0,0,0.5)',
-                        '&:hover': {
-                            backgroundColor: 'rgba(0,0,0,0.7)',
-                        },
+                        bgcolor: 'rgba(0,0,0,0.5)',
+                        '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' },
                     }}
                 >
                     <CloseIcon />
@@ -881,7 +917,7 @@ const TechnicianDetails = () => {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        minHeight: '80vh',
+                        minHeight: { xs: '60vh', sm: '80vh' },
                         p: 2,
                     }}
                 >

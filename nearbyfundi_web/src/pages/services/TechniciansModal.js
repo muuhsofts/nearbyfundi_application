@@ -1,12 +1,35 @@
 // src/pages/services/TechniciansModal.js
 import React, { useState, useEffect } from 'react';
 import {
-    Dialog, DialogTitle, DialogContent, DialogActions,
-    Button, List, ListItem, ListItemAvatar, Avatar,
-    ListItemText, CircularProgress, Typography, Box,
-    IconButton, Chip, Rating,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    Button,
+    List,
+    ListItem,
+    ListItemAvatar,
+    Avatar,
+    ListItemText,
+    CircularProgress,
+    Typography,
+    Box,
+    IconButton,
+    Chip,
+    Rating,
+    Stack,
+    Divider,
+    Alert,
+    alpha,
 } from '@mui/material';
-import { Close as CloseIcon, Phone as PhoneIcon, Work as WorkIcon } from '@mui/icons-material';
+import {
+    Close as CloseIcon,
+    Phone as PhoneIcon,
+    Work as WorkIcon,
+    LocationOn as LocationIcon,
+    Star as StarIcon,
+    Person as PersonIcon,
+} from '@mui/icons-material';
 import { serviceService } from 'services/service.service';
 import appConfig from '../../config';
 
@@ -44,97 +67,234 @@ const TechniciansModal = ({ open, onClose, serviceId, serviceName }) => {
         }
     };
 
+    const getImageUrl = (path) => {
+        if (!path) return null;
+        if (path.startsWith('http://') || path.startsWith('https://')) {
+            return path;
+        }
+        const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+        const cleanPath = path.replace(/^\/+/, '');
+        return `${baseUrl}/storage/${cleanPath}`;
+    };
+
     const getInitials = (name) => name ? name.charAt(0).toUpperCase() : '?';
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 2 } }}>
-            <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Dialog
+            open={open}
+            onClose={onClose}
+            maxWidth="sm"
+            fullWidth
+            PaperProps={{
+                sx: {
+                    borderRadius: 3,
+                    border: '1px solid',
+                    borderColor: 'divider',
+                }
+            }}
+        >
+            <DialogTitle
+                sx={{
+                    pb: 1.5,
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                }}
+            >
                 <Box>
-                    <Typography variant="h6" component="span">Technicians for</Typography>
-                    <Typography variant="h6" component="span" sx={{ ml: 1, color: colors.sea }}>{serviceName || 'Service'}</Typography>
+                    <Typography variant="h6" fontWeight={700} color="text.primary">
+                        Technicians for
+                    </Typography>
+                    <Typography variant="h6" fontWeight={700} color={colors.sea || '#0f766e'}>
+                        {serviceName || 'Service'}
+                    </Typography>
                 </Box>
-                <IconButton onClick={onClose} size="small"><CloseIcon /></IconButton>
+                <IconButton
+                    onClick={onClose}
+                    size="small"
+                    sx={{
+                        color: 'text.secondary',
+                        '&:hover': { bgcolor: 'action.hover' },
+                    }}
+                >
+                    <CloseIcon />
+                </IconButton>
             </DialogTitle>
-            <DialogContent dividers>
+
+            <DialogContent
+                dividers
+                sx={{
+                    borderColor: 'divider',
+                    p: 0,
+                    '& .MuiDialogContent-dividers': { borderTop: '1px solid', borderColor: 'divider' },
+                }}
+            >
                 {loading ? (
-                    <Box display="flex" justifyContent="center" py={4}><CircularProgress sx={{ color: colors.sea }} /></Box>
+                    <Box display="flex" justifyContent="center" py={6}>
+                        <CircularProgress size={36} thickness={4} sx={{ color: colors.sea }} />
+                    </Box>
                 ) : error ? (
-                    <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
+                    <Box p={2.5}>
+                        <Alert severity="error" sx={{ borderRadius: 2 }}>{error}</Alert>
+                    </Box>
                 ) : technicians.length === 0 ? (
-                    <Box textAlign="center" py={3}>
-                        <Typography sx={{ color: colors.rain }}>No technicians assigned to this service.</Typography>
+                    <Box textAlign="center" py={5}>
+                        <PersonIcon sx={{ fontSize: 56, color: 'text.disabled', mb: 1.5 }} />
+                        <Typography color="text.secondary" fontWeight={500}>
+                            No technicians assigned to this service.
+                        </Typography>
                     </Box>
                 ) : (
-                    <List>
-                        {technicians.map((tech) => {
+                    <List sx={{ p: 0 }}>
+                        {technicians.map((tech, index) => {
                             const user = tech.user || {};
                             const servicesCount = tech.services?.length || 0;
                             const rating = parseFloat(tech.rating) || 0;
                             const phone = user.phone || 'N/A';
                             const area = tech.area || 'Unknown area';
                             const completedJobs = tech.completed_jobs_count || 0;
+                            const profilePhotoUrl = tech.profile_photo ? getImageUrl(tech.profile_photo) : null;
 
                             return (
-                                <ListItem key={tech.id} divider alignItems="flex-start">
-                                    <ListItemAvatar>
-                                        <Avatar
-                                            src={tech.profile_photo ? `${process.env.REACT_APP_API_URL}/storage/${tech.profile_photo}` : undefined}
-                                            sx={{ bgcolor: colors.sea, color: colors.light, width: 50, height: 50 }}
-                                        >
-                                            {!tech.profile_photo && getInitials(user.name)}
-                                        </Avatar>
-                                    </ListItemAvatar>
-                                    <ListItemText
-                                        primary={
-                                            <Box display="flex" alignItems="center" flexWrap="wrap" gap={1}>
-                                                <Typography variant="subtitle1" fontWeight="bold" sx={{ color: colors.dark }}>
-                                                    {user.name || 'Unknown'}
-                                                </Typography>
-                                                <Chip
-                                                    label={`${servicesCount} service${servicesCount !== 1 ? 's' : ''}`}
-                                                    size="small"
-                                                    icon={<WorkIcon style={{ fontSize: 14 }} />}
-                                                    sx={{ bgcolor: colors.wave, color: colors.dark }}
-                                                />
-                                                <Chip
-                                                    label={`${completedJobs} job${completedJobs !== 1 ? 's' : ''}`}
-                                                    size="small"
-                                                    sx={{ bgcolor: colors.sky, color: colors.dark }}
-                                                />
-                                            </Box>
-                                        }
-                                        secondary={
-                                            <Box component="span" sx={{ display: 'block', mt: 0.5 }}>
-                                                <Typography variant="body2" sx={{ color: colors.black, display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                                    <PhoneIcon fontSize="small" sx={{ color: colors.rain }} />
-                                                    {phone}
-                                                </Typography>
-                                                <Typography variant="body2" sx={{ color: colors.black, mt: 0.5 }}>
-                                                    📍 {area}
-                                                </Typography>
-                                                <Box display="flex" alignItems="center" mt={0.5}>
-                                                    <Rating
-                                                        value={rating}
-                                                        readOnly
-                                                        precision={0.5}
-                                                        size="small"
-                                                        sx={{ color: colors.secondary || '#f5a623' }}
-                                                    />
-                                                    <Typography variant="body2" sx={{ ml: 1, color: colors.black }}>
-                                                        ({rating.toFixed(1)})
+                                <React.Fragment key={tech.id}>
+                                    <ListItem
+                                        alignItems="flex-start"
+                                        sx={{
+                                            py: 2.5,
+                                            px: 2.5,
+                                            transition: 'background-color 0.15s',
+                                            '&:hover': {
+                                                bgcolor: alpha(colors.sea, 0.03),
+                                            },
+                                        }}
+                                    >
+                                        <ListItemAvatar>
+                                            <Avatar
+                                                src={profilePhotoUrl}
+                                                sx={{
+                                                    width: 52,
+                                                    height: 52,
+                                                    bgcolor: colors.sea || '#0f766e',
+                                                    color: '#fff',
+                                                    fontSize: '1.2rem',
+                                                    fontWeight: 700,
+                                                    border: `2px solid ${alpha(colors.sea, 0.15)}`,
+                                                }}
+                                            >
+                                                {!profilePhotoUrl && getInitials(user.name)}
+                                            </Avatar>
+                                        </ListItemAvatar>
+
+                                        <ListItemText
+                                            primary={
+                                                <Stack direction="row" alignItems="center" flexWrap="wrap" gap={1}>
+                                                    <Typography variant="subtitle1" fontWeight={700} color="text.primary">
+                                                        {user.name || 'Unknown'}
                                                     </Typography>
-                                                </Box>
-                                            </Box>
-                                        }
-                                    />
-                                </ListItem>
+                                                    {tech.verified && (
+                                                        <Chip
+                                                            label="Verified"
+                                                            size="small"
+                                                            sx={{
+                                                                fontWeight: 600,
+                                                                bgcolor: '#d1fae5',
+                                                                color: '#047857',
+                                                                border: '1px solid #10b981',
+                                                                height: 22,
+                                                                fontSize: '0.65rem',
+                                                            }}
+                                                        />
+                                                    )}
+                                                    <Chip
+                                                        label={`${servicesCount} service${servicesCount !== 1 ? 's' : ''}`}
+                                                        size="small"
+                                                        icon={<WorkIcon sx={{ fontSize: 14 }} />}
+                                                        sx={{
+                                                            fontWeight: 600,
+                                                            bgcolor: alpha(colors.sea, 0.08),
+                                                            color: colors.sea,
+                                                            height: 22,
+                                                            fontSize: '0.65rem',
+                                                        }}
+                                                    />
+                                                    <Chip
+                                                        label={`${completedJobs} job${completedJobs !== 1 ? 's' : ''}`}
+                                                        size="small"
+                                                        sx={{
+                                                            fontWeight: 600,
+                                                            bgcolor: 'action.hover',
+                                                            height: 22,
+                                                            fontSize: '0.65rem',
+                                                        }}
+                                                    />
+                                                </Stack>
+                                            }
+                                            secondary={
+                                                <Stack spacing={0.75} sx={{ mt: 1 }}>
+                                                    <Box display="flex" alignItems="center" gap={1}>
+                                                        <PhoneIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                                                        <Typography variant="body2" color="text.primary">
+                                                            {phone}
+                                                        </Typography>
+                                                    </Box>
+
+                                                    <Box display="flex" alignItems="center" gap={1}>
+                                                        <LocationIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                                                        <Typography variant="body2" color="text.primary">
+                                                            {area}
+                                                        </Typography>
+                                                    </Box>
+
+                                                    <Box display="flex" alignItems="center" gap={1}>
+                                                        <StarIcon sx={{ fontSize: 16, color: '#f59e0b' }} />
+                                                        <Rating
+                                                            value={rating}
+                                                            readOnly
+                                                            precision={0.5}
+                                                            size="small"
+                                                            sx={{ color: '#f59e0b' }}
+                                                        />
+                                                        <Typography variant="body2" fontWeight={600} color="text.primary">
+                                                            ({rating.toFixed(1)})
+                                                        </Typography>
+                                                    </Box>
+
+                                                    {tech.experience !== undefined && tech.experience !== null && (
+                                                        <Typography variant="body2" color="text.secondary">
+                                                            {tech.experience} years experience
+                                                        </Typography>
+                                                    )}
+                                                </Stack>
+                                            }
+                                        />
+                                    </ListItem>
+                                    {index < technicians.length - 1 && (
+                                        <Divider sx={{ mx: 2.5 }} />
+                                    )}
+                                </React.Fragment>
                             );
                         })}
                     </List>
                 )}
             </DialogContent>
-            <DialogActions>
-                <Button onClick={onClose}>Close</Button>
+
+            <DialogActions sx={{ p: 2.5, borderTop: '1px solid', borderColor: 'divider' }}>
+                <Button
+                    onClick={onClose}
+                    variant="contained"
+                    sx={{
+                        borderRadius: 2,
+                        fontWeight: 700,
+                        textTransform: 'none',
+                        px: 3,
+                        bgcolor: colors.sea || '#0f766e',
+                        '&:hover': { bgcolor: colors.dark || '#0d5c56' },
+                    }}
+                >
+                    Close
+                </Button>
             </DialogActions>
         </Dialog>
     );

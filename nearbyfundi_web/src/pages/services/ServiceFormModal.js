@@ -18,11 +18,16 @@ import {
     MenuItem,
     Chip,
     OutlinedInput,
+    Stack,
+    alpha,
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
 import { useServiceManagement } from 'hooks/useService';
 import { serviceService } from 'services/service.service';
 import { showSnackbar } from 'utils/snackbar';
+import appConfig from '../../config';
+
+const colors = appConfig.app.colors;
 
 export default function ServiceFormModal({ open, onClose, service }) {
     const theme = useTheme();
@@ -58,7 +63,6 @@ export default function ServiceFormModal({ open, onClose, service }) {
 
     useEffect(() => {
         if (service) {
-            // ✅ Handle both `swahili_name` and `name_sw` (backend returns `name_sw` in GET response)
             const swahili = service.swahili_name || service.name_sw || '';
             setForm({
                 name: service.name || '',
@@ -104,8 +108,6 @@ export default function ServiceFormModal({ open, onClose, service }) {
                 category_ids: selectedCategoryIds,
             };
 
-            console.log('Submitting payload:', payload); // debug
-
             if (service) {
                 await updateService(service.id, payload);
                 showSnackbar({ type: 'success', message: 'Service updated successfully' });
@@ -144,23 +146,41 @@ export default function ServiceFormModal({ open, onClose, service }) {
             maxWidth="sm"
             fullWidth
             fullScreen={fullScreen}
-            PaperProps={{ sx: { borderRadius: { xs: 0, sm: 2 } } }}
+            PaperProps={{
+                sx: {
+                    borderRadius: { xs: 0, sm: 3 },
+                    border: '1px solid',
+                    borderColor: 'divider',
+                }
+            }}
         >
             <form onSubmit={handleSubmit}>
                 <DialogTitle sx={{
-                    pb: 1,
-                    fontSize: { xs: '1.25rem', sm: '1.5rem' },
+                    pb: 1.5,
+                    fontWeight: 700,
+                    fontSize: { xs: '1.2rem', sm: '1.4rem' },
                     display: 'flex',
                     justifyContent: 'space-between',
-                    alignItems: 'center'
+                    alignItems: 'center',
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                    color: 'text.primary',
                 }}>
                     {service ? 'Edit Service' : 'Add New Service'}
-                    <IconButton onClick={() => onClose(false)} size="small" sx={{ minWidth: 'auto', p: 0.5 }}>
+                    <IconButton
+                        onClick={() => onClose(false)}
+                        size="small"
+                        sx={{
+                            color: 'text.secondary',
+                            '&:hover': { bgcolor: 'action.hover' },
+                        }}
+                    >
                         <CloseIcon />
                     </IconButton>
                 </DialogTitle>
-                <DialogContent>
-                    <Box display="flex" flexDirection="column" gap={2} mt={1}>
+
+                <DialogContent sx={{ pt: 3, pb: 1 }}>
+                    <Stack spacing={2.5}>
                         <TextField
                             label="Service Name (English)"
                             name="name"
@@ -173,7 +193,20 @@ export default function ServiceFormModal({ open, onClose, service }) {
                             disabled={loading}
                             placeholder="e.g., TV Repair, Plumbing, AC Service"
                             autoFocus
+                            sx={{
+                                '& .MuiOutlinedInput-root': {
+                                    borderRadius: 2,
+                                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                                        borderColor: colors.sea,
+                                    },
+                                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                        borderColor: colors.sea,
+                                        borderWidth: 2,
+                                    },
+                                },
+                            }}
                         />
+
                         <TextField
                             label="Service Name (Swahili)"
                             name="swahili_name"
@@ -182,10 +215,24 @@ export default function ServiceFormModal({ open, onClose, service }) {
                             fullWidth
                             disabled={loading}
                             placeholder="e.g., Ukarabati wa TV, Mabomba"
+                            sx={{
+                                '& .MuiOutlinedInput-root': {
+                                    borderRadius: 2,
+                                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                                        borderColor: colors.sea,
+                                    },
+                                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                        borderColor: colors.sea,
+                                        borderWidth: 2,
+                                    },
+                                },
+                            }}
                         />
 
                         <FormControl fullWidth disabled={loadingCategories}>
-                            <InputLabel>Categories</InputLabel>
+                            <InputLabel sx={{ '&.Mui-focused': { color: colors.sea } }}>
+                                Categories
+                            </InputLabel>
                             <Select
                                 multiple
                                 value={selectedCategoryIds}
@@ -195,23 +242,80 @@ export default function ServiceFormModal({ open, onClose, service }) {
                                     <Box display="flex" flexWrap="wrap" gap={0.5}>
                                         {selected.map((id) => {
                                             const cat = categories.find(c => c.service_categoryID === id);
-                                            return <Chip key={id} label={cat?.category_name || id} size="small" />;
+                                            return (
+                                                <Chip
+                                                    key={id}
+                                                    label={cat?.category_name || id}
+                                                    size="small"
+                                                    sx={{
+                                                        fontWeight: 600,
+                                                        bgcolor: alpha(colors.sea, 0.08),
+                                                        color: colors.sea,
+                                                    }}
+                                                />
+                                            );
                                         })}
                                     </Box>
                                 )}
+                                sx={{
+                                    borderRadius: 2,
+                                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                                        borderColor: colors.sea,
+                                    },
+                                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                        borderColor: colors.sea,
+                                        borderWidth: 2,
+                                    },
+                                }}
                             >
                                 {categories.map((cat) => (
-                                    <MenuItem key={cat.service_categoryID} value={cat.service_categoryID}>
+                                    <MenuItem
+                                        key={cat.service_categoryID}
+                                        value={cat.service_categoryID}
+                                        sx={{
+                                            '&.Mui-selected': {
+                                                bgcolor: alpha(colors.sea, 0.08),
+                                            },
+                                            '&.Mui-selected:hover': {
+                                                bgcolor: alpha(colors.sea, 0.12),
+                                            },
+                                        }}
+                                    >
                                         {cat.category_name}
                                     </MenuItem>
                                 ))}
                             </Select>
                         </FormControl>
-                    </Box>
+                    </Stack>
                 </DialogContent>
-                <DialogActions sx={{ p: { xs: 2, sm: 3 }, pt: 0 }}>
-                    <Button onClick={() => onClose(false)} disabled={loading}>Cancel</Button>
-                    <Button type="submit" variant="contained" disabled={loading}>
+
+                <DialogActions sx={{ p: { xs: 2, sm: 3 }, pt: 1, borderTop: '1px solid', borderColor: 'divider' }}>
+                    <Button
+                        onClick={() => onClose(false)}
+                        disabled={loading}
+                        sx={{
+                            fontWeight: 600,
+                            textTransform: 'none',
+                            color: 'text.secondary',
+                            '&:hover': { bgcolor: 'action.hover' },
+                        }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        type="submit"
+                        variant="contained"
+                        disabled={loading}
+                        sx={{
+                            borderRadius: 2,
+                            fontWeight: 700,
+                            textTransform: 'none',
+                            px: 3,
+                            bgcolor: colors.sea || '#0f766e',
+                            '&:hover': { bgcolor: colors.dark || '#0d5c56' },
+                            '&:disabled': { opacity: 0.6 },
+                        }}
+                    >
                         {loading ? <CircularProgress size={24} color="inherit" /> : (service ? 'Update' : 'Create')}
                     </Button>
                 </DialogActions>

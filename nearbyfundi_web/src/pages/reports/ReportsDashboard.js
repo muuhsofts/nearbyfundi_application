@@ -1,52 +1,19 @@
+// src/pages/reports/ReportsDashboard.jsx
 import React, { useState, useEffect } from 'react';
 import {
-    Box,
-    Paper,
-    Typography,
-    Tabs,
-    Tab,
-    Grid,
-    TextField,
-    InputAdornment,
-    Button,
-    FormControl,
-    InputLabel,
-    Select,
-    MenuItem,
-    CircularProgress,
-    Alert,
-    useTheme,
-    alpha,
-    Chip,
-    Avatar,
-    Stack,
-    LinearProgress,
-    TableCell,
-    TableRow,
-    Tooltip,
+    Box, Paper, Typography, Tabs, Tab, TextField, InputAdornment,
+    Button, FormControl, InputLabel, Select, MenuItem, CircularProgress,
+    Alert, alpha, Chip, Avatar, Stack, LinearProgress, TableCell, TableRow, Tooltip,
 } from '@mui/material';
 import {
-    People as PeopleIcon,
-    Build as BuildIcon,
-    Assignment as RequestIcon,
-    Category as CategoryIcon,
-    Comment as CommentIcon,
-    Photo as PhotoIcon,
-    Search as SearchIcon,
-    Refresh as RefreshIcon,
-    Download as DownloadIcon,
-    Verified as VerifiedIcon,
-    Star as StarIcon,
-    Person as PersonIcon,
-    CheckCircle as CheckCircleIcon,
-    Cancel as CancelIcon,
-    TrendingUp as TrendingUpIcon,
-    Subscriptions as SubscriptionIcon,
-    Payment as PaymentIcon,
-    AttachMoney as MoneyIcon,
-    CalendarToday as CalendarIcon,
-    Timer as TimerIcon,
-    Pending as PendingIcon,  // ✅ Added this import
+    People as PeopleIcon, Build as BuildIcon, Assignment as RequestIcon,
+    Category as CategoryIcon, Comment as CommentIcon, Photo as PhotoIcon,
+    Search as SearchIcon, Refresh as RefreshIcon, Download as DownloadIcon,
+    Verified as VerifiedIcon, Star as StarIcon, Person as PersonIcon,
+    CheckCircle as CheckCircleIcon, Cancel as CancelIcon, TrendingUp as TrendingUpIcon,
+    Subscriptions as SubscriptionIcon, Payment as PaymentIcon, AttachMoney as MoneyIcon,
+    CalendarToday as CalendarIcon, Timer as TimerIcon, Pending as PendingIcon,
+    Clear as ClearIcon,
 } from '@mui/icons-material';
 
 import { reportService } from 'services/report.service';
@@ -57,15 +24,8 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 import {
-    ReportFilters,
-    StatCard,
-    StatusChip,
-    TabPanel,
-    ReportTable,
-    ReportExportMenu,
-    TrendChart,
-    SummaryCards,
-    BlogStats,
+    ReportFilters, StatusChip, TabPanel, ReportTable,
+    ReportExportMenu, TrendChart, SummaryCards, BlogStats,
 } from './components';
 
 import appConfig from '../../config';
@@ -73,18 +33,13 @@ import appConfig from '../../config';
 const colors = appConfig.app.colors;
 
 const formatDate = (dateStr) => {
-    if (!dateStr) return '-';
+    if (!dateStr) return '—';
     try {
         return new Date(dateStr).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
+            year: 'numeric', month: 'short', day: 'numeric',
+            hour: '2-digit', minute: '2-digit',
         });
-    } catch {
-        return '-';
-    }
+    } catch { return '—'; }
 };
 
 const formatCurrency = (amount) => {
@@ -94,34 +49,23 @@ const formatCurrency = (amount) => {
 
 const getStatusColor = (status) => {
     const map = {
-        pending: '#f59e0b',
-        active: '#10b981',
-        expired: '#ef4444',
-        cancelled: '#6b7280',
-        approved: '#10b981',
-        rejected: '#ef4444',
-        paid: '#10b981',
-        unpaid: '#f59e0b',
+        pending: '#f59e0b', active: '#10b981', expired: '#ef4444',
+        cancelled: '#6b7280', approved: '#10b981', rejected: '#ef4444',
+        paid: '#10b981', unpaid: '#f59e0b',
     };
     return map[status] || '#6b7280';
 };
 
 const getStatusLabel = (status) => {
     const map = {
-        pending: 'Pending',
-        active: 'Active',
-        expired: 'Expired',
-        cancelled: 'Cancelled',
-        approved: 'Approved',
-        rejected: 'Rejected',
-        paid: 'Paid',
-        unpaid: 'Unpaid',
+        pending: 'Pending', active: 'Active', expired: 'Expired',
+        cancelled: 'Cancelled', approved: 'Approved', rejected: 'Rejected',
+        paid: 'Paid', unpaid: 'Unpaid',
     };
     return map[status] || status || 'Unknown';
 };
 
 const ReportsDashboard = () => {
-    const theme = useTheme();
     const { can } = usePermissions();
     const canViewReports = can('reports.view');
 
@@ -142,43 +86,30 @@ const ReportsDashboard = () => {
     const [reportData, setReportData] = useState(null);
     const [exportMenuAnchor, setExportMenuAnchor] = useState(null);
 
-    // ---------- Helpers ----------
+    // Incremental number (no real IDs)
+    const getRowNumber = (index) => page * rowsPerPage + index + 1;
+
     const getListData = () => {
         if (!reportData) return [];
         let data = [];
         switch (tabValue) {
-            case 0: case 1: case 2:
-                data = reportData?.data?.data;
-                break;
-            case 3:
-                data = reportData?.data;
-                break;
-            case 4:
-                data = [];
-                break;
-            case 5:
-                data = reportData?.technicians_with_most_portfolios;
-                break;
-            case 6:
-                data = reportData?.data?.data;
-                break;
-            default:
-                data = [];
+            case 0: case 1: case 2: data = reportData?.data?.data; break;
+            case 3: data = reportData?.data; break;
+            case 4: data = []; break;
+            case 5: data = reportData?.technicians_with_most_portfolios; break;
+            case 6: data = reportData?.data?.data; break;
+            default: data = [];
         }
         return Array.isArray(data) ? data : [];
     };
 
     const getTotalCount = () => {
         if (!reportData) return 0;
-        if (tabValue <= 2 || tabValue === 6) {
-            return reportData?.data?.total || 0;
-        } else if (tabValue === 3 || tabValue === 5) {
-            return getListData().length;
-        }
+        if (tabValue <= 2 || tabValue === 6) return reportData?.data?.total || 0;
+        if (tabValue === 3 || tabValue === 5) return getListData().length;
         return 0;
     };
 
-    // ---------- Fetch ----------
     const fetchReportData = async () => {
         if (!canViewReports) return;
         setLoading(true);
@@ -224,28 +155,20 @@ const ReportsDashboard = () => {
     useEffect(() => {
         if (canViewReports) fetchReportData();
         // eslint-disable-next-line
-    }, [
-        tabValue, page, rowsPerPage, search, filterStatus,
-        filterVerified, filterArea, filterRole, filterPaymentMethod,
-        period, periodDate, canViewReports,
-    ]);
+    }, [tabValue, page, rowsPerPage, search, filterStatus, filterVerified,
+        filterArea, filterRole, filterPaymentMethod, period, periodDate, canViewReports]);
 
     const handleRefresh = () => {
         fetchReportData();
         showSnackbar({ type: 'success', message: 'Report refreshed' });
     };
 
-    const handleTabChange = (event, newValue) => {
+    const handleTabChange = (_, newValue) => {
         setTabValue(newValue);
         setPage(0);
     };
-    const handleChangePage = (event, newPage) => setPage(newPage);
-    const handleChangeRowsPerPage = (event) => {
-        setRowsPerPage(parseInt(event.target.value, 10));
-        setPage(0);
-    };
 
-    // ---------- Export ----------
+    // ---------- Export helpers (same logic) ----------
     const getCurrentTabLabel = () => {
         const labels = ['Users', 'Technicians', 'Requests', 'Services', 'Blog', 'Portfolio', 'Subscriptions'];
         return labels[tabValue] || 'Report';
@@ -253,70 +176,28 @@ const ReportsDashboard = () => {
 
     const getExportData = () => {
         const list = getListData();
-        let rows = [];
-        if (tabValue === 0) {
-            rows = list.map((u) => [
-                u.name || 'N/A',
-                u.email || 'N/A',
-                u.phone || 'N/A',
-                u.roles?.map((r) => r.name).join(', ') || 'N/A',
-                u.status || 'inactive',
-                formatDate(u.created_at),
-            ]);
-        } else if (tabValue === 1) {
-            rows = list.map((t) => [
-                t.user?.name || 'N/A',
-                t.user?.email || 'N/A',
-                t.area || 'N/A',
-                t.rating || 0,
-                t.verified ? 'Yes' : 'No',
-                formatDate(t.created_at),
-            ]);
-        } else if (tabValue === 2) {
-            rows = list.map((r) => [
-                `#${r.id}`,
-                r.customer?.name || 'N/A',
-                r.technician?.user?.name || 'N/A',
-                r.service?.name || 'N/A',
-                r.status || 'N/A',
-                formatDate(r.created_at),
-            ]);
-        } else if (tabValue === 3) {
-            rows = list.map((s) => [s.name || 'N/A', s.requests_count || 0]);
-        } else if (tabValue === 4) {
+        if (tabValue === 0) return list.map((u, i) => [getRowNumber(i), u.name || 'N/A', u.email || 'N/A', u.phone || 'N/A', u.roles?.map(r => r.name).join(', ') || 'N/A', u.status || 'inactive', formatDate(u.created_at)]);
+        if (tabValue === 1) return list.map((t, i) => [getRowNumber(i), t.user?.name || 'N/A', t.user?.email || 'N/A', t.area || 'N/A', t.rating || 0, t.verified ? 'Yes' : 'No', formatDate(t.created_at)]);
+        if (tabValue === 2) return list.map((r, i) => [getRowNumber(i), r.customer?.name || 'N/A', r.technician?.user?.name || 'N/A', r.service?.name || 'N/A', r.status || 'N/A', formatDate(r.created_at)]);
+        if (tabValue === 3) return list.map((s, i) => [getRowNumber(i), s.name || 'N/A', s.requests_count || 0]);
+        if (tabValue === 4) {
             const stats = reportData?.stats || {};
-            rows = [
-                ['Total Posts', stats.total_posts || 0],
-                ['Total Comments', stats.total_comments || 0],
-                ['Total Likes', stats.total_likes || 0],
-                ['Avg Comments/Post', stats.avg_comments_per_post || 0],
-            ];
-        } else if (tabValue === 5) {
-            rows = list.map((item) => [item.technician?.user?.name || 'Unknown', item.count || 0]);
-        } else if (tabValue === 6) {
-            rows = list.map((s) => [
-                `#${s.id}`,
-                s.user?.name || 'N/A',
-                s.rate_card?.name || 'N/A',
-                s.amount || 'N/A',
-                s.status || 'N/A',
-                s.payment_method || 'N/A',
-                formatDate(s.created_at),
-                formatDate(s.expiry_date),
-            ]);
+            return [['Total Posts', stats.total_posts || 0], ['Total Comments', stats.total_comments || 0], ['Total Likes', stats.total_likes || 0], ['Avg Comments/Post', stats.avg_comments_per_post || 0]];
         }
-        return rows;
+        if (tabValue === 5) return list.map((item, i) => [getRowNumber(i), item.technician?.user?.name || 'Unknown', item.count || 0]);
+        if (tabValue === 6) return list.map((s, i) => [getRowNumber(i), s.user?.name || 'N/A', s.rate_card?.name || 'N/A', s.amount || 'N/A', s.status || 'N/A', s.payment_method || 'N/A', formatDate(s.created_at), formatDate(s.expiry_date)]);
+        return [];
     };
 
     const getExportHeaders = () => {
         switch (tabValue) {
-            case 0: return ['Name', 'Email', 'Phone', 'Role', 'Status', 'Created'];
-            case 1: return ['Technician', 'Email', 'Area', 'Rating', 'Verified', 'Created'];
-            case 2: return ['ID', 'Customer', 'Technician', 'Service', 'Status', 'Created'];
-            case 3: return ['Service Name', 'Total Requests'];
+            case 0: return ['#', 'Name', 'Email', 'Phone', 'Role', 'Status', 'Created'];
+            case 1: return ['#', 'Technician', 'Email', 'Area', 'Rating', 'Verified', 'Created'];
+            case 2: return ['#', 'Customer', 'Technician', 'Service', 'Status', 'Created'];
+            case 3: return ['#', 'Service Name', 'Total Requests'];
             case 4: return ['Metric', 'Value'];
-            case 5: return ['Technician', 'Portfolio Items'];
-            case 6: return ['ID', 'User', 'Plan', 'Amount', 'Status', 'Payment Method', 'Created', 'Expiry'];
+            case 5: return ['#', 'Technician', 'Portfolio Items'];
+            case 6: return ['#', 'User', 'Plan', 'Amount', 'Status', 'Payment Method', 'Created', 'Expiry'];
             default: return [];
         }
     };
@@ -324,87 +205,55 @@ const ReportsDashboard = () => {
     const exportToCSV = () => {
         const headers = getExportHeaders();
         const rows = getExportData();
-        if (rows.length === 0) {
-            showSnackbar({ type: 'warning', message: 'No data to export' });
-            return;
-        }
-        const csvContent = [headers.join(','), ...rows.map((row) => row.join(','))].join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        if (!rows.length) return showSnackbar({ type: 'warning', message: 'No data to export' });
+        const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
-        const url = URL.createObjectURL(blob);
-        link.setAttribute('href', url);
-        link.setAttribute('download', `${getCurrentTabLabel()}_Report_${new Date().toISOString().split('T')[0]}.csv`);
-        document.body.appendChild(link);
+        link.href = URL.createObjectURL(blob);
+        link.download = `${getCurrentTabLabel()}_Report_${new Date().toISOString().split('T')[0]}.csv`;
         link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        showSnackbar({ type: 'success', message: 'CSV exported successfully' });
-        handleExportMenuClose();
+        showSnackbar({ type: 'success', message: 'CSV exported' });
+        setExportMenuAnchor(null);
     };
 
     const exportToExcel = () => {
         const headers = getExportHeaders();
         const rows = getExportData();
-        if (rows.length === 0) {
-            showSnackbar({ type: 'warning', message: 'No data to export' });
-            return;
-        }
-        const wsData = [headers, ...rows];
-        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        if (!rows.length) return showSnackbar({ type: 'warning', message: 'No data to export' });
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, getCurrentTabLabel());
         XLSX.writeFile(wb, `${getCurrentTabLabel()}_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
-        showSnackbar({ type: 'success', message: 'Excel exported successfully' });
-        handleExportMenuClose();
+        showSnackbar({ type: 'success', message: 'Excel exported' });
+        setExportMenuAnchor(null);
     };
 
     const exportToPDF = () => {
         const headers = getExportHeaders();
         const rows = getExportData();
-        if (rows.length === 0) {
-            showSnackbar({ type: 'warning', message: 'No data to export' });
-            return;
-        }
+        if (!rows.length) return showSnackbar({ type: 'warning', message: 'No data to export' });
         const doc = new jsPDF('landscape', 'pt', 'a4');
-        const pageWidth = doc.internal.pageSize.getWidth();
-        doc.setFillColor('#006B5E');
-        doc.rect(0, 0, pageWidth, 60, 'F');
-        doc.setTextColor('#FFFFFF');
-        doc.setFontSize(20);
-        doc.text(`${getCurrentTabLabel()} Report`, 40, 40);
-        doc.setTextColor('#666666');
-        doc.setFontSize(10);
-        doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth - 150, 40);
-
+        doc.setFillColor('#0f766e');
+        doc.rect(0, 0, doc.internal.pageSize.getWidth(), 55, 'F');
+        doc.setTextColor('#fff');
+        doc.setFontSize(18);
+        doc.text(`${getCurrentTabLabel()} Report`, 40, 35);
         autoTable(doc, {
-            head: [headers],
-            body: rows,
-            startY: 80,
-            styles: { fontSize: 9, cellPadding: 4 },
-            headStyles: { fillColor: '#006B5E', textColor: '#FFFFFF', fontSize: 10, fontStyle: 'bold' },
-            alternateRowStyles: { fillColor: '#f5f5f5' },
-            margin: { left: 40, right: 40 },
-            pageBreak: 'auto',
+            head: [headers], body: rows, startY: 70,
+            headStyles: { fillColor: '#0f766e', textColor: '#fff' },
+            styles: { fontSize: 9 },
+            alternateRowStyles: { fillColor: '#f8fafc' },
         });
-
-        const finalY = doc.lastAutoTable?.finalY || 80;
-        doc.setFontSize(8);
-        doc.setTextColor('#999999');
-        doc.text(`Generated by NearbyFundi • ${new Date().toISOString().split('T')[0]}`, 40, finalY + 20);
         doc.save(`${getCurrentTabLabel()}_Report_${new Date().toISOString().split('T')[0]}.pdf`);
-        showSnackbar({ type: 'success', message: 'PDF exported successfully' });
-        handleExportMenuClose();
+        showSnackbar({ type: 'success', message: 'PDF exported' });
+        setExportMenuAnchor(null);
     };
 
-    const handleExportMenuOpen = (event) => setExportMenuAnchor(event.currentTarget);
-    const handleExportMenuClose = () => setExportMenuAnchor(null);
-
-    // ---------- Permission & Error ----------
     if (!canViewReports) {
         return (
-            <Box display="flex" justifyContent="center" alignItems="center" minHeight="80vh">
-                <Paper sx={{ p: 4, textAlign: 'center' }}>
-                    <Typography variant="h5" color="error">Access Denied</Typography>
+            <Box display="flex" justifyContent="center" alignItems="center" minHeight="70vh">
+                <Paper elevation={0} sx={{ p: 5, textAlign: 'center', borderRadius: 3, border: '1px solid', borderColor: 'divider' }}>
+                    <Typography variant="h5" color="error" fontWeight={700}>Access Denied</Typography>
                 </Paper>
             </Box>
         );
@@ -413,85 +262,135 @@ const ReportsDashboard = () => {
     if (error) {
         return (
             <Box p={3}>
-                <Alert severity="error" action={<Button color="inherit" size="small" onClick={() => { setError(null); fetchReportData(); }}>Retry</Button>}>
+                <Alert severity="error" variant="filled" sx={{ borderRadius: 2 }}
+                       action={<Button color="inherit" size="small" onClick={() => { setError(null); fetchReportData(); }}>Retry</Button>}>
                     {error}
                 </Alert>
             </Box>
         );
     }
 
-    // ---------- Render ----------
     return (
-        <Box sx={{ p: { xs: 2, sm: 3 } }}>
-            <Paper sx={{ p: 3, borderRadius: 3, mb: 3, backgroundColor: colors.light, border: `1px solid ${colors.middle}` }}>
-                <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
+        <Box sx={{ p: { xs: 1.5, sm: 2.5 }, bgcolor: '#f8fafc', minHeight: '100vh' }}>
+            {/* ========== HEADER ========== */}
+            <Paper elevation={0} sx={{
+                p: { xs: 2.5, sm: 3 }, borderRadius: 3, mb: 3,
+                border: '1px solid', borderColor: 'divider', bgcolor: '#fff',
+            }}>
+                <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between"
+                       alignItems={{ xs: 'stretch', sm: 'center' }} spacing={2} mb={2.5}>
                     <Box>
-                        <Typography variant="h4" fontWeight="700" sx={{ color: colors.dark }}>Reports Dashboard</Typography>
-                        <Typography variant="body2" sx={{ color: colors.rain }}>Comprehensive reports with period filters and trends</Typography>
+                        <Typography variant="h4" fontWeight={800} color="#0f172a">
+                            Reports Dashboard
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" fontWeight={500} mt={0.5}>
+                            Comprehensive reports with period filters and trends
+                        </Typography>
                     </Box>
-                    <Box display="flex" gap={1}>
-                        <Button variant="outlined" startIcon={<RefreshIcon />} onClick={handleRefresh} disabled={loading}
-                                sx={{ borderColor: colors.middle, color: colors.sea, '&:hover': { borderColor: colors.sea, backgroundColor: colors.wave } }}>
+                    <Stack direction="row" spacing={1.5}>
+                        <Button
+                            variant="outlined"
+                            startIcon={<RefreshIcon />}
+                            onClick={handleRefresh}
+                            disabled={loading}
+                            sx={{
+                                borderRadius: 2, fontWeight: 600, textTransform: 'none',
+                                borderColor: '#e2e8f0', color: '#334155',
+                                '&:hover': { borderColor: '#94a3b8', bgcolor: '#f1f5f9' },
+                            }}
+                        >
                             Refresh
                         </Button>
-                        <Button variant="contained" startIcon={<DownloadIcon />} onClick={handleExportMenuOpen}
-                                sx={{ backgroundColor: colors.sea, '&:hover': { backgroundColor: colors.dark } }}>
+                        <Button
+                            variant="contained"
+                            startIcon={<DownloadIcon />}
+                            onClick={(e) => setExportMenuAnchor(e.currentTarget)}
+                            sx={{
+                                borderRadius: 2, fontWeight: 700, textTransform: 'none',
+                                boxShadow: 'none', bgcolor: '#0f766e',
+                                '&:hover': { bgcolor: '#0d5c56', boxShadow: '0 4px 14px rgba(15,118,110,0.3)' },
+                            }}
+                        >
                             Export
                         </Button>
                         <ReportExportMenu
                             anchorEl={exportMenuAnchor}
                             open={Boolean(exportMenuAnchor)}
-                            onClose={handleExportMenuClose}
+                            onClose={() => setExportMenuAnchor(null)}
                             onExportCSV={exportToCSV}
                             onExportExcel={exportToExcel}
                             onExportPDF={exportToPDF}
                         />
-                    </Box>
-                </Box>
+                    </Stack>
+                </Stack>
+
                 <ReportFilters
-                    period={period}
-                    setPeriod={setPeriod}
-                    periodDate={periodDate}
-                    setPeriodDate={setPeriodDate}
-                    onRefresh={handleRefresh}
-                    loading={loading}
+                    period={period} setPeriod={setPeriod}
+                    periodDate={periodDate} setPeriodDate={setPeriodDate}
+                    onRefresh={handleRefresh} loading={loading}
                 />
             </Paper>
 
-            <Paper sx={{ borderRadius: 3, overflow: 'hidden', backgroundColor: colors.light, border: `1px solid ${colors.middle}` }}>
-                <Tabs value={tabValue} onChange={handleTabChange} variant="scrollable" scrollButtons="auto"
-                      sx={{ borderBottom: `1px solid ${colors.middle}`, bgcolor: alpha(colors.sky, 0.6),
-                          '& .MuiTab-root': { color: colors.rain, '&.Mui-selected': { color: colors.sea } },
-                          '& .MuiTabs-indicator': { backgroundColor: colors.sea } }}>
-                    <Tab icon={<PeopleIcon />} label="Users" />
-                    <Tab icon={<BuildIcon />} label="Technicians" />
-                    <Tab icon={<RequestIcon />} label="Requests" />
-                    <Tab icon={<CategoryIcon />} label="Services" />
-                    <Tab icon={<CommentIcon />} label="Blog" />
-                    <Tab icon={<PhotoIcon />} label="Portfolio" />
-                    <Tab icon={<SubscriptionIcon />} label="Subscriptions" />
+            {/* ========== TABS + CONTENT ========== */}
+            <Paper elevation={0} sx={{
+                borderRadius: 3, overflow: 'hidden',
+                border: '1px solid', borderColor: 'divider', bgcolor: '#fff',
+            }}>
+                <Tabs
+                    value={tabValue}
+                    onChange={handleTabChange}
+                    variant="scrollable"
+                    scrollButtons="auto"
+                    sx={{
+                        borderBottom: '1px solid', borderColor: 'divider',
+                        bgcolor: '#f8fafc',
+                        '& .MuiTab-root': {
+                            fontWeight: 600, textTransform: 'none', minHeight: 56,
+                            color: '#64748b', px: 2.5,
+                            '&.Mui-selected': { color: '#0f766e' },
+                        },
+                        '& .MuiTabs-indicator': { bgcolor: '#0f766e', height: 3 },
+                    }}
+                >
+                    <Tab icon={<PeopleIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Users" />
+                    <Tab icon={<BuildIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Technicians" />
+                    <Tab icon={<RequestIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Requests" />
+                    <Tab icon={<CategoryIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Services" />
+                    <Tab icon={<CommentIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Blog" />
+                    <Tab icon={<PhotoIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Portfolio" />
+                    <Tab icon={<SubscriptionIcon sx={{ fontSize: 20 }} />} iconPosition="start" label="Subscriptions" />
                 </Tabs>
 
-                {loading && <Box display="flex" justifyContent="center" py={4}><CircularProgress sx={{ color: colors.sea }} /></Box>}
+                {loading && (
+                    <Box display="flex" justifyContent="center" py={8}>
+                        <CircularProgress size={38} thickness={4} sx={{ color: '#0f766e' }} />
+                    </Box>
+                )}
 
-                {/* USERS TAB */}
+                {/* ===== USERS ===== */}
                 <TabPanel value={tabValue} index={0}>
-                    <Box sx={{ p: 2 }}>
+                    <Box sx={{ p: { xs: 2, sm: 3 } }}>
                         <SummaryCards items={[
-                            { title: 'Total Users', value: reportData?.stats?.total || 0, icon: <PeopleIcon />, color: colors.sea },
-                            { title: 'Active', value: reportData?.stats?.active || 0, icon: <CheckCircleIcon />, color: colors.salat },
-                            { title: 'Inactive', value: reportData?.stats?.inactive || 0, icon: <CancelIcon />, color: colors.rain },
-                            { title: 'New (Period)', value: reportData?.trend?.length || 0, icon: <TrendingUpIcon />, color: colors.sea },
+                            { title: 'Total Users', value: reportData?.stats?.total || 0, icon: <PeopleIcon />, color: '#0f766e' },
+                            { title: 'Active', value: reportData?.stats?.active || 0, icon: <CheckCircleIcon />, color: '#10b981' },
+                            { title: 'Inactive', value: reportData?.stats?.inactive || 0, icon: <CancelIcon />, color: '#64748b' },
+                            { title: 'New (Period)', value: reportData?.trend?.length || 0, icon: <TrendingUpIcon />, color: '#0ea5e9' },
                         ]} />
-                        {reportData?.trend && reportData.trend.length > 0 && <TrendChart data={reportData.trend} label="New Users" />}
-                        <Box display="flex" gap={2} flexWrap="wrap" my={2}>
-                            <TextField size="small" placeholder="Search users..." value={search} onChange={(e) => setSearch(e.target.value)}
-                                       InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
-                                       sx={{ minWidth: 200, '& .MuiInputBase-root': { backgroundColor: colors.sky, borderRadius: 2 }, '& .MuiOutlinedInput-notchedOutline': { borderColor: colors.middle } }} />
-                            <FormControl size="small" sx={{ minWidth: 130 }}>
-                                <InputLabel sx={{ color: colors.rain }}>Role</InputLabel>
+                        {reportData?.trend?.length > 0 && <TrendChart data={reportData.trend} label="New Users" />}
+
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} my={3} flexWrap="wrap">
+                            <TextField size="small" placeholder="Search users…" value={search}
+                                       onChange={(e) => setSearch(e.target.value)}
+                                       InputProps={{
+                                           startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" color="action" /></InputAdornment>,
+                                           endAdornment: search ? <InputAdornment position="end"><ClearIcon fontSize="small" sx={{ cursor: 'pointer' }} onClick={() => setSearch('')} /></InputAdornment> : null,
+                                       }}
+                                       sx={{ minWidth: 240, '& .MuiOutlinedInput-root': { borderRadius: 2, bgcolor: '#f1f5f9', '& fieldset': { borderColor: 'transparent' } } }}
+                            />
+                            <FormControl size="small" sx={{ minWidth: 140 }}>
+                                <InputLabel>Role</InputLabel>
                                 <Select value={filterRole} label="Role" onChange={(e) => setFilterRole(e.target.value)}
-                                        sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: colors.middle }, '& .MuiInputBase-root': { backgroundColor: colors.sky } }}>
+                                        sx={{ borderRadius: 2, bgcolor: '#f1f5f9', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'transparent' } }}>
                                     <MenuItem value="">All</MenuItem>
                                     <MenuItem value="CUSTOMER">Customer</MenuItem>
                                     <MenuItem value="FUNDI">Fundi</MenuItem>
@@ -499,116 +398,158 @@ const ReportsDashboard = () => {
                                     <MenuItem value="MANAGER">Manager</MenuItem>
                                 </Select>
                             </FormControl>
-                            <FormControl size="small" sx={{ minWidth: 130 }}>
-                                <InputLabel sx={{ color: colors.rain }}>Status</InputLabel>
+                            <FormControl size="small" sx={{ minWidth: 140 }}>
+                                <InputLabel>Status</InputLabel>
                                 <Select value={filterStatus} label="Status" onChange={(e) => setFilterStatus(e.target.value)}
-                                        sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: colors.middle }, '& .MuiInputBase-root': { backgroundColor: colors.sky } }}>
+                                        sx={{ borderRadius: 2, bgcolor: '#f1f5f9', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'transparent' } }}>
                                     <MenuItem value="">All</MenuItem>
                                     <MenuItem value="active">Active</MenuItem>
                                     <MenuItem value="inactive">Inactive</MenuItem>
                                     <MenuItem value="pending">Pending</MenuItem>
                                 </Select>
                             </FormControl>
-                        </Box>
-                        <ReportTable columns={[
-                            { key: 'user', label: 'User' },
-                            { key: 'email', label: 'Email' },
-                            { key: 'phone', label: 'Phone' },
-                            { key: 'role', label: 'Role' },
-                            { key: 'status', label: 'Status' },
-                            { key: 'created', label: 'Created' },
-                        ]} rows={getListData().map((user) => (
-                            <TableRow key={user.id} hover>
-                                <TableCell><Box display="flex" alignItems="center"><Avatar sx={{ width: 32, height: 32, bgcolor: colors.sea }}>{user.name?.charAt(0).toUpperCase() || <PersonIcon />}</Avatar>{user.name || 'N/A'}</Box></TableCell>
-                                <TableCell>{user.email || 'N/A'}</TableCell>
-                                <TableCell>{user.phone || 'N/A'}</TableCell>
-                                <TableCell>{user.roles?.map(r => <Chip key={r.id} label={r.name} size="small" variant="outlined" sx={{ borderColor: colors.middle }} />)}</TableCell>
-                                <TableCell><StatusChip status={user.status || 'inactive'} /></TableCell>
-                                <TableCell>{formatDate(user.created_at)}</TableCell>
-                            </TableRow>
-                        ))} total={getTotalCount()} page={page} rowsPerPage={rowsPerPage} onPageChange={handleChangePage} onRowsPerPageChange={handleChangeRowsPerPage} loading={loading} emptyMessage="No users found" />
+                        </Stack>
+
+                        <ReportTable
+                            columns={[
+                                { key: 'no', label: '#' }, { key: 'user', label: 'User' },
+                                { key: 'email', label: 'Email' }, { key: 'phone', label: 'Phone' },
+                                { key: 'role', label: 'Role' }, { key: 'status', label: 'Status' },
+                                { key: 'created', label: 'Created' },
+                            ]}
+                            rows={getListData().map((user, index) => (
+                                <TableRow key={user.id || index} hover>
+                                    <TableCell><Typography variant="body2" fontWeight={600} color="text.secondary">{getRowNumber(index)}</Typography></TableCell>
+                                    <TableCell>
+                                        <Stack direction="row" spacing={1.25} alignItems="center">
+                                            <Avatar sx={{ width: 36, height: 36, bgcolor: '#0f766e', fontSize: 14, fontWeight: 700 }}>
+                                                {user.name?.charAt(0).toUpperCase() || <PersonIcon fontSize="small" />}
+                                            </Avatar>
+                                            <Typography variant="body2" fontWeight={600}>{user.name || 'N/A'}</Typography>
+                                        </Stack>
+                                    </TableCell>
+                                    <TableCell><Typography variant="body2">{user.email || 'N/A'}</Typography></TableCell>
+                                    <TableCell><Typography variant="body2">{user.phone || 'N/A'}</Typography></TableCell>
+                                    <TableCell>
+                                        {user.roles?.map(r => (
+                                            <Chip key={r.id} label={r.name} size="small"
+                                                  sx={{ mr: 0.5, fontWeight: 600, bgcolor: '#f1f5f9', border: '1px solid #e2e8f0', height: 24 }} />
+                                        ))}
+                                    </TableCell>
+                                    <TableCell><StatusChip status={user.status || 'inactive'} /></TableCell>
+                                    <TableCell><Typography variant="body2" color="text.secondary">{formatDate(user.created_at)}</Typography></TableCell>
+                                </TableRow>
+                            ))}
+                            total={getTotalCount()} page={page} rowsPerPage={rowsPerPage}
+                            onPageChange={(_, p) => setPage(p)}
+                            onRowsPerPageChange={(e) => { setRowsPerPage(+e.target.value); setPage(0); }}
+                            loading={loading} emptyMessage="No users found"
+                        />
                     </Box>
                 </TabPanel>
 
-                {/* TECHNICIANS TAB */}
+                {/* ===== TECHNICIANS ===== */}
                 <TabPanel value={tabValue} index={1}>
-                    <Box sx={{ p: 2 }}>
+                    <Box sx={{ p: { xs: 2, sm: 3 } }}>
                         <SummaryCards items={[
-                            { title: 'Total Technicians', value: reportData?.stats?.total || 0, icon: <BuildIcon />, color: colors.sea },
-                            { title: 'Verified', value: reportData?.stats?.verified || 0, icon: <VerifiedIcon />, color: colors.salat },
-                            { title: 'New (Period)', value: reportData?.trend?.length || 0, icon: <TrendingUpIcon />, color: colors.sea },
+                            { title: 'Total Technicians', value: reportData?.stats?.total || 0, icon: <BuildIcon />, color: '#0f766e' },
+                            { title: 'Verified', value: reportData?.stats?.verified || 0, icon: <VerifiedIcon />, color: '#10b981' },
+                            { title: 'New (Period)', value: reportData?.trend?.length || 0, icon: <TrendingUpIcon />, color: '#0ea5e9' },
                         ]} />
-                        {reportData?.trend && reportData.trend.length > 0 && <TrendChart data={reportData.trend} label="New Technicians" color={colors.salat} />}
-                        <Box display="flex" gap={2} flexWrap="wrap" my={2}>
-                            <TextField size="small" placeholder="Search technicians..." value={search} onChange={(e) => setSearch(e.target.value)}
-                                       InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
-                                       sx={{ minWidth: 200, '& .MuiInputBase-root': { backgroundColor: colors.sky, borderRadius: 2 }, '& .MuiOutlinedInput-notchedOutline': { borderColor: colors.middle } }} />
-                            <FormControl size="small" sx={{ minWidth: 130 }}>
-                                <InputLabel sx={{ color: colors.rain }}>Verified</InputLabel>
+                        {reportData?.trend?.length > 0 && <TrendChart data={reportData.trend} label="New Technicians" color="#10b981" />}
+
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} my={3}>
+                            <TextField size="small" placeholder="Search technicians…" value={search}
+                                       onChange={(e) => setSearch(e.target.value)}
+                                       InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" color="action" /></InputAdornment> }}
+                                       sx={{ minWidth: 240, '& .MuiOutlinedInput-root': { borderRadius: 2, bgcolor: '#f1f5f9', '& fieldset': { borderColor: 'transparent' } } }}
+                            />
+                            <FormControl size="small" sx={{ minWidth: 140 }}>
+                                <InputLabel>Verified</InputLabel>
                                 <Select value={filterVerified} label="Verified" onChange={(e) => setFilterVerified(e.target.value)}
-                                        sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: colors.middle }, '& .MuiInputBase-root': { backgroundColor: colors.sky } }}>
+                                        sx={{ borderRadius: 2, bgcolor: '#f1f5f9', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'transparent' } }}>
                                     <MenuItem value="">All</MenuItem>
                                     <MenuItem value="true">Verified</MenuItem>
                                     <MenuItem value="false">Unverified</MenuItem>
                                 </Select>
                             </FormControl>
-                            <TextField
-                                size="small"
-                                placeholder="Filter by area..."
-                                value={filterArea}
-                                onChange={(e) => setFilterArea(e.target.value)}
-                                InputProps={{
-                                    startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>,
-                                }}
-                                sx={{
-                                    minWidth: 180,
-                                    '& .MuiInputBase-root': { backgroundColor: colors.sky, borderRadius: 2 },
-                                    '& .MuiOutlinedInput-notchedOutline': { borderColor: colors.middle },
-                                }}
+                            <TextField size="small" placeholder="Filter by area…" value={filterArea}
+                                       onChange={(e) => setFilterArea(e.target.value)}
+                                       sx={{ minWidth: 180, '& .MuiOutlinedInput-root': { borderRadius: 2, bgcolor: '#f1f5f9', '& fieldset': { borderColor: 'transparent' } } }}
                             />
-                        </Box>
-                        <ReportTable columns={[
-                            { key: 'technician', label: 'Technician' },
-                            { key: 'email', label: 'Email' },
-                            { key: 'area', label: 'Area' },
-                            { key: 'rating', label: 'Rating' },
-                            { key: 'verified', label: 'Verified' },
-                            { key: 'created', label: 'Created' },
-                        ]} rows={getListData().map((tech) => (
-                            <TableRow key={tech.id} hover>
-                                <TableCell><Box display="flex" alignItems="center"><Avatar src={tech.profile_photo} sx={{ width: 32, height: 32, bgcolor: colors.sea }}>{tech.user?.name?.charAt(0).toUpperCase() || <BuildIcon />}</Avatar>{tech.user?.name || 'N/A'}{tech.verified && <VerifiedIcon sx={{ fontSize: 14, color: colors.salat }} />}</Box></TableCell>
-                                <TableCell>{tech.user?.email || 'N/A'}</TableCell>
-                                <TableCell>{tech.area || 'N/A'}</TableCell>
-                                <TableCell><Box display="flex" alignItems="center"><StarIcon sx={{ fontSize: 16, color: '#f59e0b' }} />{tech.rating || 0}</Box></TableCell>
-                                <TableCell>{tech.verified ? 'Yes' : 'No'}</TableCell>
-                                <TableCell>{formatDate(tech.created_at)}</TableCell>
-                            </TableRow>
-                        ))} total={getTotalCount()} page={page} rowsPerPage={rowsPerPage} onPageChange={handleChangePage} onRowsPerPageChange={handleChangeRowsPerPage} loading={loading} emptyMessage="No technicians found" />
+                        </Stack>
+
+                        <ReportTable
+                            columns={[
+                                { key: 'no', label: '#' }, { key: 'technician', label: 'Technician' },
+                                { key: 'email', label: 'Email' }, { key: 'area', label: 'Area' },
+                                { key: 'rating', label: 'Rating' }, { key: 'verified', label: 'Verified' },
+                                { key: 'created', label: 'Created' },
+                            ]}
+                            rows={getListData().map((tech, index) => (
+                                <TableRow key={tech.id || index} hover>
+                                    <TableCell><Typography variant="body2" fontWeight={600} color="text.secondary">{getRowNumber(index)}</Typography></TableCell>
+                                    <TableCell>
+                                        <Stack direction="row" spacing={1.25} alignItems="center">
+                                            <Avatar src={tech.profile_photo} sx={{ width: 36, height: 36, bgcolor: '#0f766e', fontSize: 14, fontWeight: 700 }}>
+                                                {tech.user?.name?.charAt(0).toUpperCase() || <BuildIcon fontSize="small" />}
+                                            </Avatar>
+                                            <Stack direction="row" spacing={0.5} alignItems="center">
+                                                <Typography variant="body2" fontWeight={600}>{tech.user?.name || 'N/A'}</Typography>
+                                                {tech.verified && <VerifiedIcon sx={{ fontSize: 16, color: '#10b981' }} />}
+                                            </Stack>
+                                        </Stack>
+                                    </TableCell>
+                                    <TableCell><Typography variant="body2">{tech.user?.email || 'N/A'}</Typography></TableCell>
+                                    <TableCell><Typography variant="body2">{tech.area || 'N/A'}</Typography></TableCell>
+                                    <TableCell>
+                                        <Stack direction="row" spacing={0.5} alignItems="center">
+                                            <StarIcon sx={{ fontSize: 16, color: '#f59e0b' }} />
+                                            <Typography variant="body2" fontWeight={600}>{tech.rating || 0}</Typography>
+                                        </Stack>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Chip label={tech.verified ? 'Yes' : 'No'} size="small"
+                                              sx={{
+                                                  fontWeight: 700, height: 26,
+                                                  bgcolor: tech.verified ? '#d1fae5' : '#f1f5f9',
+                                                  color: tech.verified ? '#047857' : '#64748b',
+                                                  border: `1.5px solid ${tech.verified ? '#10b981' : '#cbd5e1'}`,
+                                              }} />
+                                    </TableCell>
+                                    <TableCell><Typography variant="body2" color="text.secondary">{formatDate(tech.created_at)}</Typography></TableCell>
+                                </TableRow>
+                            ))}
+                            total={getTotalCount()} page={page} rowsPerPage={rowsPerPage}
+                            onPageChange={(_, p) => setPage(p)}
+                            onRowsPerPageChange={(e) => { setRowsPerPage(+e.target.value); setPage(0); }}
+                            loading={loading} emptyMessage="No technicians found"
+                        />
                     </Box>
                 </TabPanel>
 
-                {/* REQUESTS TAB */}
+                {/* ===== REQUESTS ===== */}
                 <TabPanel value={tabValue} index={2}>
-                    <Box sx={{ p: 2 }}>
+                    <Box sx={{ p: { xs: 2, sm: 3 } }}>
                         <SummaryCards items={[
-                            { title: 'Total Requests', value: reportData?.stats?.total || 0, icon: <RequestIcon />, color: colors.sea },
-                            ...(reportData?.stats?.by_status || []).map((s) => ({
-                                title: s.status,
-                                value: s.count,
-                                icon: <CheckCircleIcon />,
-                                color: getStatusColor(s.status),
-                                md: 1.5,
+                            { title: 'Total Requests', value: reportData?.stats?.total || 0, icon: <RequestIcon />, color: '#0f766e' },
+                            ...(reportData?.stats?.by_status || []).map(s => ({
+                                title: s.status, value: s.count, icon: <CheckCircleIcon />,
+                                color: getStatusColor(s.status), md: 1.5,
                             })),
                         ]} />
-                        {reportData?.trend && reportData.trend.length > 0 && <TrendChart data={reportData.trend} label="Requests" />}
-                        <Box display="flex" gap={2} flexWrap="wrap" my={2}>
-                            <TextField size="small" placeholder="Search requests..." value={search} onChange={(e) => setSearch(e.target.value)}
-                                       InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
-                                       sx={{ minWidth: 200, '& .MuiInputBase-root': { backgroundColor: colors.sky, borderRadius: 2 }, '& .MuiOutlinedInput-notchedOutline': { borderColor: colors.middle } }} />
-                            <FormControl size="small" sx={{ minWidth: 130 }}>
-                                <InputLabel sx={{ color: colors.rain }}>Status</InputLabel>
+                        {reportData?.trend?.length > 0 && <TrendChart data={reportData.trend} label="Requests" />}
+
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} my={3}>
+                            <TextField size="small" placeholder="Search requests…" value={search}
+                                       onChange={(e) => setSearch(e.target.value)}
+                                       InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" color="action" /></InputAdornment> }}
+                                       sx={{ minWidth: 240, '& .MuiOutlinedInput-root': { borderRadius: 2, bgcolor: '#f1f5f9', '& fieldset': { borderColor: 'transparent' } } }}
+                            />
+                            <FormControl size="small" sx={{ minWidth: 150 }}>
+                                <InputLabel>Status</InputLabel>
                                 <Select value={filterStatus} label="Status" onChange={(e) => setFilterStatus(e.target.value)}
-                                        sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: colors.middle }, '& .MuiInputBase-root': { backgroundColor: colors.sky } }}>
+                                        sx={{ borderRadius: 2, bgcolor: '#f1f5f9', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'transparent' } }}>
                                     <MenuItem value="">All</MenuItem>
                                     <MenuItem value="pending">Pending</MenuItem>
                                     <MenuItem value="accepted">Accepted</MenuItem>
@@ -618,109 +559,163 @@ const ReportsDashboard = () => {
                                     <MenuItem value="rejected">Rejected</MenuItem>
                                 </Select>
                             </FormControl>
-                        </Box>
-                        <ReportTable columns={[
-                            { key: 'id', label: 'ID' },
-                            { key: 'customer', label: 'Customer' },
-                            { key: 'technician', label: 'Technician' },
-                            { key: 'service', label: 'Service' },
-                            { key: 'status', label: 'Status' },
-                            { key: 'created', label: 'Created' },
-                        ]} rows={getListData().map((req) => (
-                            <TableRow key={req.id} hover>
-                                <TableCell>#{req.id}</TableCell>
-                                <TableCell>{req.customer?.name || 'N/A'}</TableCell>
-                                <TableCell>{req.technician?.user?.name || 'N/A'}</TableCell>
-                                <TableCell>{req.service?.name || 'N/A'}</TableCell>
-                                <TableCell><StatusChip status={req.status} /></TableCell>
-                                <TableCell>{formatDate(req.created_at)}</TableCell>
-                            </TableRow>
-                        ))} total={getTotalCount()} page={page} rowsPerPage={rowsPerPage} onPageChange={handleChangePage} onRowsPerPageChange={handleChangeRowsPerPage} loading={loading} emptyMessage="No requests found" />
-                    </Box>
-                </TabPanel>
+                        </Stack>
 
-                {/* SERVICES TAB */}
-                <TabPanel value={tabValue} index={3}>
-                    <Box sx={{ p: 2 }}>
-                        <SummaryCards items={[
-                            { title: 'Total Services', value: reportData?.stats?.total || 0, icon: <CategoryIcon />, color: colors.sea, md: 4 },
-                            { title: 'Total Requests', value: reportData?.stats?.total_requests || 0, icon: <RequestIcon />, color: colors.salat, md: 4 },
-                            { title: 'Avg Requests/Service', value: reportData?.stats?.avg_per_service || 0, icon: <TrendingUpIcon />, color: colors.sea, md: 4 },
-                        ]} />
-                        <ReportTable columns={[
-                            { key: 'service', label: 'Service Name' },
-                            { key: 'requests', label: 'Requests' },
-                            { key: 'rank', label: 'Rank' },
-                        ]} rows={getListData().map((service, index) => {
-                            const maxRequests = getListData().reduce((max, s) => Math.max(max, s.requests_count || 0), 0);
-                            return (
-                                <TableRow key={service.id} hover>
-                                    <TableCell><Box display="flex" alignItems="center"><CategoryIcon fontSize="small" sx={{ color: colors.sea, mr: 1 }} />{service.name}</Box></TableCell>
-                                    <TableCell><Box display="flex" alignItems="center"><LinearProgress variant="determinate" value={maxRequests > 0 ? (service.requests_count / maxRequests) * 100 : 0} sx={{ width: 100, height: 8, borderRadius: 4, backgroundColor: colors.sky, mr: 2 }} />{service.requests_count}</Box></TableCell>
-                                    <TableCell><Chip label={`#${index + 1}`} size="small" sx={{ backgroundColor: index < 3 ? colors.sea : colors.sky, color: index < 3 ? colors.light : colors.dark }} /></TableCell>
+                        <ReportTable
+                            columns={[
+                                { key: 'no', label: '#' }, { key: 'customer', label: 'Customer' },
+                                { key: 'technician', label: 'Technician' }, { key: 'service', label: 'Service' },
+                                { key: 'status', label: 'Status' }, { key: 'created', label: 'Created' },
+                            ]}
+                            rows={getListData().map((req, index) => (
+                                <TableRow key={req.id || index} hover>
+                                    <TableCell><Typography variant="body2" fontWeight={600} color="text.secondary">{getRowNumber(index)}</Typography></TableCell>
+                                    <TableCell><Typography variant="body2" fontWeight={500}>{req.customer?.name || 'N/A'}</Typography></TableCell>
+                                    <TableCell><Typography variant="body2">{req.technician?.user?.name || 'N/A'}</Typography></TableCell>
+                                    <TableCell><Typography variant="body2">{req.service?.name || 'N/A'}</Typography></TableCell>
+                                    <TableCell><StatusChip status={req.status} /></TableCell>
+                                    <TableCell><Typography variant="body2" color="text.secondary">{formatDate(req.created_at)}</Typography></TableCell>
                                 </TableRow>
-                            );
-                        })} total={getTotalCount()} page={page} rowsPerPage={rowsPerPage} onPageChange={handleChangePage} onRowsPerPageChange={handleChangeRowsPerPage} loading={loading} emptyMessage="No services found" />
+                            ))}
+                            total={getTotalCount()} page={page} rowsPerPage={rowsPerPage}
+                            onPageChange={(_, p) => setPage(p)}
+                            onRowsPerPageChange={(e) => { setRowsPerPage(+e.target.value); setPage(0); }}
+                            loading={loading} emptyMessage="No requests found"
+                        />
                     </Box>
                 </TabPanel>
 
-                {/* BLOG TAB */}
-                <TabPanel value={tabValue} index={4}>
-                    <Box sx={{ p: 2 }}>
+                {/* ===== SERVICES ===== */}
+                <TabPanel value={tabValue} index={3}>
+                    <Box sx={{ p: { xs: 2, sm: 3 } }}>
                         <SummaryCards items={[
-                            { title: 'Total Posts', value: reportData?.stats?.total_posts || 0, icon: <CommentIcon />, color: colors.sea },
-                            { title: 'Total Comments', value: reportData?.stats?.total_comments || 0, icon: <CommentIcon />, color: colors.sea },
-                            { title: 'Total Likes', value: reportData?.stats?.total_likes || 0, icon: <StarIcon />, color: colors.sea },
-                            { title: 'Avg Comments/Post', value: reportData?.stats?.avg_comments_per_post || 0, icon: <TrendingUpIcon />, color: colors.salat },
+                            { title: 'Total Services', value: reportData?.stats?.total || 0, icon: <CategoryIcon />, color: '#0f766e', md: 4 },
+                            { title: 'Total Requests', value: reportData?.stats?.total_requests || 0, icon: <RequestIcon />, color: '#10b981', md: 4 },
+                            { title: 'Avg Requests/Service', value: reportData?.stats?.avg_per_service || 0, icon: <TrendingUpIcon />, color: '#0ea5e9', md: 4 },
                         ]} />
-                        {reportData?.trend && reportData.trend.length > 0 && <TrendChart data={reportData.trend} label="Blog Posts" color={colors.salat} />}
+                        <ReportTable
+                            columns={[
+                                { key: 'no', label: '#' }, { key: 'service', label: 'Service Name' },
+                                { key: 'requests', label: 'Requests' }, { key: 'rank', label: 'Rank' },
+                            ]}
+                            rows={getListData().map((service, index) => {
+                                const max = getListData().reduce((m, s) => Math.max(m, s.requests_count || 0), 0);
+                                return (
+                                    <TableRow key={service.id || index} hover>
+                                        <TableCell><Typography variant="body2" fontWeight={600} color="text.secondary">{getRowNumber(index)}</Typography></TableCell>
+                                        <TableCell>
+                                            <Stack direction="row" spacing={1} alignItems="center">
+                                                <CategoryIcon sx={{ fontSize: 18, color: '#0f766e' }} />
+                                                <Typography variant="body2" fontWeight={600}>{service.name}</Typography>
+                                            </Stack>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Stack direction="row" spacing={1.5} alignItems="center">
+                                                <LinearProgress variant="determinate"
+                                                                value={max > 0 ? (service.requests_count / max) * 100 : 0}
+                                                                sx={{ width: 100, height: 8, borderRadius: 4, bgcolor: '#f1f5f9',
+                                                                    '& .MuiLinearProgress-bar': { bgcolor: '#0f766e', borderRadius: 4 } }} />
+                                                <Typography variant="body2" fontWeight={700}>{service.requests_count}</Typography>
+                                            </Stack>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Chip label={`#${index + 1}`} size="small"
+                                                  sx={{ fontWeight: 700, height: 26,
+                                                      bgcolor: index < 3 ? '#0f766e' : '#f1f5f9',
+                                                      color: index < 3 ? '#fff' : '#334155' }} />
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
+                            total={getTotalCount()} page={page} rowsPerPage={rowsPerPage}
+                            onPageChange={(_, p) => setPage(p)}
+                            onRowsPerPageChange={(e) => { setRowsPerPage(+e.target.value); setPage(0); }}
+                            loading={loading} emptyMessage="No services found"
+                        />
+                    </Box>
+                </TabPanel>
+
+                {/* ===== BLOG ===== */}
+                <TabPanel value={tabValue} index={4}>
+                    <Box sx={{ p: { xs: 2, sm: 3 } }}>
+                        <SummaryCards items={[
+                            { title: 'Total Posts', value: reportData?.stats?.total_posts || 0, icon: <CommentIcon />, color: '#0f766e' },
+                            { title: 'Total Comments', value: reportData?.stats?.total_comments || 0, icon: <CommentIcon />, color: '#0ea5e9' },
+                            { title: 'Total Likes', value: reportData?.stats?.total_likes || 0, icon: <StarIcon />, color: '#f59e0b' },
+                            { title: 'Avg Comments/Post', value: reportData?.stats?.avg_comments_per_post || 0, icon: <TrendingUpIcon />, color: '#10b981' },
+                        ]} />
+                        {reportData?.trend?.length > 0 && <TrendChart data={reportData.trend} label="Blog Posts" color="#10b981" />}
                         <BlogStats stats={reportData?.stats} />
                     </Box>
                 </TabPanel>
 
-                {/* PORTFOLIO TAB */}
+                {/* ===== PORTFOLIO ===== */}
                 <TabPanel value={tabValue} index={5}>
-                    <Box sx={{ p: 2 }}>
+                    <Box sx={{ p: { xs: 2, sm: 3 } }}>
                         <SummaryCards items={[
-                            { title: 'Total Portfolio Items', value: reportData?.total_portfolio_items || 0, icon: <PhotoIcon />, color: colors.sea, md: 6 },
-                            { title: 'Technicians with Portfolios', value: getListData().length, icon: <BuildIcon />, color: colors.salat, md: 6 },
+                            { title: 'Total Portfolio Items', value: reportData?.total_portfolio_items || 0, icon: <PhotoIcon />, color: '#0f766e', md: 6 },
+                            { title: 'Technicians with Portfolios', value: getListData().length, icon: <BuildIcon />, color: '#10b981', md: 6 },
                         ]} />
-                        <Typography variant="h6" fontWeight="600" sx={{ mb: 2, color: colors.dark }}>Technicians with Most Portfolios</Typography>
-                        <ReportTable columns={[
-                            { key: 'rank', label: '#' },
-                            { key: 'technician', label: 'Technician' },
-                            { key: 'items', label: 'Items' },
-                        ]} rows={getListData().map((item, index) => (
-                            <TableRow key={item.technician_id || index} hover>
-                                <TableCell><Chip label={`#${index + 1}`} size="small" sx={{ backgroundColor: index < 3 ? colors.sea : colors.sky, color: index < 3 ? colors.light : colors.dark }} /></TableCell>
-                                <TableCell><Box display="flex" alignItems="center"><Avatar sx={{ width: 24, height: 24, bgcolor: colors.sea }}>{item.technician?.user?.name?.charAt(0).toUpperCase() || <BuildIcon />}</Avatar>{item.technician?.user?.name || 'Unknown'}</Box></TableCell>
-                                <TableCell><Chip label={item.count} size="small" sx={{ backgroundColor: colors.salat, color: colors.light }} /></TableCell>
-                            </TableRow>
-                        ))} total={getTotalCount()} page={page} rowsPerPage={rowsPerPage} onPageChange={handleChangePage} onRowsPerPageChange={handleChangeRowsPerPage} loading={loading} emptyMessage="No portfolio data" />
+                        <Typography variant="h6" fontWeight={700} sx={{ mb: 2, mt: 1 }}>Technicians with Most Portfolios</Typography>
+                        <ReportTable
+                            columns={[
+                                { key: 'no', label: '#' }, { key: 'technician', label: 'Technician' },
+                                { key: 'items', label: 'Items' },
+                            ]}
+                            rows={getListData().map((item, index) => (
+                                <TableRow key={item.technician_id || index} hover>
+                                    <TableCell>
+                                        <Chip label={`#${getRowNumber(index)}`} size="small"
+                                              sx={{ fontWeight: 700, height: 26,
+                                                  bgcolor: index < 3 ? '#0f766e' : '#f1f5f9',
+                                                  color: index < 3 ? '#fff' : '#334155' }} />
+                                    </TableCell>
+                                    <TableCell>
+                                        <Stack direction="row" spacing={1.25} alignItems="center">
+                                            <Avatar sx={{ width: 34, height: 34, bgcolor: '#0f766e', fontSize: 13, fontWeight: 700 }}>
+                                                {item.technician?.user?.name?.charAt(0).toUpperCase() || <BuildIcon fontSize="small" />}
+                                            </Avatar>
+                                            <Typography variant="body2" fontWeight={600}>{item.technician?.user?.name || 'Unknown'}</Typography>
+                                        </Stack>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Chip label={item.count} size="small"
+                                              sx={{ fontWeight: 700, bgcolor: '#d1fae5', color: '#047857',
+                                                  border: '1.5px solid #10b981', height: 26 }} />
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                            total={getTotalCount()} page={page} rowsPerPage={rowsPerPage}
+                            onPageChange={(_, p) => setPage(p)}
+                            onRowsPerPageChange={(e) => { setRowsPerPage(+e.target.value); setPage(0); }}
+                            loading={loading} emptyMessage="No portfolio data"
+                        />
                     </Box>
                 </TabPanel>
 
-                {/* SUBSCRIPTIONS TAB */}
+                {/* ===== SUBSCRIPTIONS ===== */}
                 <TabPanel value={tabValue} index={6}>
-                    <Box sx={{ p: 2 }}>
+                    <Box sx={{ p: { xs: 2, sm: 3 } }}>
                         <SummaryCards items={[
-                            { title: 'Total Subscriptions', value: reportData?.stats?.total || 0, icon: <SubscriptionIcon />, color: colors.sea },
-                            { title: 'Active', value: reportData?.stats?.active || 0, icon: <CheckCircleIcon />, color: colors.salat },
+                            { title: 'Total Subscriptions', value: reportData?.stats?.total || 0, icon: <SubscriptionIcon />, color: '#0f766e' },
+                            { title: 'Active', value: reportData?.stats?.active || 0, icon: <CheckCircleIcon />, color: '#10b981' },
                             { title: 'Pending', value: reportData?.stats?.pending || 0, icon: <PendingIcon />, color: '#f59e0b' },
                             { title: 'Expired', value: reportData?.stats?.expired || 0, icon: <TimerIcon />, color: '#ef4444' },
-                            { title: 'Total Revenue', value: formatCurrency(reportData?.stats?.total_revenue), icon: <MoneyIcon />, color: colors.sea },
-                            { title: 'New (Period)', value: reportData?.trend?.length || 0, icon: <TrendingUpIcon />, color: colors.salat },
+                            { title: 'Total Revenue', value: formatCurrency(reportData?.stats?.total_revenue), icon: <MoneyIcon />, color: '#0f766e' },
+                            { title: 'New (Period)', value: reportData?.trend?.length || 0, icon: <TrendingUpIcon />, color: '#10b981' },
                         ]} />
-                        {reportData?.trend && reportData.trend.length > 0 && <TrendChart data={reportData.trend} label="New Subscriptions" color={colors.sea} />}
+                        {reportData?.trend?.length > 0 && <TrendChart data={reportData.trend} label="New Subscriptions" color="#0f766e" />}
 
-                        <Box display="flex" gap={2} flexWrap="wrap" my={2}>
-                            <TextField size="small" placeholder="Search subscriptions..." value={search} onChange={(e) => setSearch(e.target.value)}
-                                       InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
-                                       sx={{ minWidth: 200, '& .MuiInputBase-root': { backgroundColor: colors.sky, borderRadius: 2 }, '& .MuiOutlinedInput-notchedOutline': { borderColor: colors.middle } }} />
-                            <FormControl size="small" sx={{ minWidth: 130 }}>
-                                <InputLabel sx={{ color: colors.rain }}>Status</InputLabel>
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} my={3} flexWrap="wrap">
+                            <TextField size="small" placeholder="Search subscriptions…" value={search}
+                                       onChange={(e) => setSearch(e.target.value)}
+                                       InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" color="action" /></InputAdornment> }}
+                                       sx={{ minWidth: 240, '& .MuiOutlinedInput-root': { borderRadius: 2, bgcolor: '#f1f5f9', '& fieldset': { borderColor: 'transparent' } } }}
+                            />
+                            <FormControl size="small" sx={{ minWidth: 140 }}>
+                                <InputLabel>Status</InputLabel>
                                 <Select value={filterStatus} label="Status" onChange={(e) => setFilterStatus(e.target.value)}
-                                        sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: colors.middle }, '& .MuiInputBase-root': { backgroundColor: colors.sky } }}>
+                                        sx={{ borderRadius: 2, bgcolor: '#f1f5f9', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'transparent' } }}>
                                     <MenuItem value="">All</MenuItem>
                                     <MenuItem value="pending">Pending</MenuItem>
                                     <MenuItem value="active">Active</MenuItem>
@@ -728,91 +723,81 @@ const ReportsDashboard = () => {
                                     <MenuItem value="cancelled">Cancelled</MenuItem>
                                 </Select>
                             </FormControl>
-                            <FormControl size="small" sx={{ minWidth: 150 }}>
-                                <InputLabel sx={{ color: colors.rain }}>Payment Method</InputLabel>
+                            <FormControl size="small" sx={{ minWidth: 160 }}>
+                                <InputLabel>Payment Method</InputLabel>
                                 <Select value={filterPaymentMethod} label="Payment Method" onChange={(e) => setFilterPaymentMethod(e.target.value)}
-                                        sx={{ '& .MuiOutlinedInput-notchedOutline': { borderColor: colors.middle }, '& .MuiInputBase-root': { backgroundColor: colors.sky } }}>
+                                        sx={{ borderRadius: 2, bgcolor: '#f1f5f9', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'transparent' } }}>
                                     <MenuItem value="">All</MenuItem>
                                     <MenuItem value="M-Pesa">M-Pesa</MenuItem>
                                     <MenuItem value="Airtel Money">Airtel Money</MenuItem>
                                     <MenuItem value="Mix by Yas">Mix by Yas</MenuItem>
                                 </Select>
                             </FormControl>
-                        </Box>
+                        </Stack>
 
-                        <ReportTable columns={[
-                            { key: 'id', label: 'ID' },
-                            { key: 'user', label: 'User' },
-                            { key: 'plan', label: 'Plan' },
-                            { key: 'amount', label: 'Amount' },
-                            { key: 'status', label: 'Status' },
-                            { key: 'payment', label: 'Payment' },
-                            { key: 'created', label: 'Created' },
-                            { key: 'expiry', label: 'Expiry' },
-                        ]} rows={getListData().map((sub) => {
-                            const isExpired = sub.expiry_date && new Date(sub.expiry_date) < new Date();
-                            const displayStatus = isExpired && sub.status === 'active' ? 'expired' : sub.status;
-                            return (
-                                <TableRow key={sub.id} hover>
-                                    <TableCell>#{sub.id}</TableCell>
-                                    <TableCell>
-                                        <Box display="flex" alignItems="center" gap={1}>
-                                            <Avatar sx={{ width: 28, height: 28, bgcolor: colors.sea, fontSize: 12 }}>
-                                                {sub.user?.name?.charAt(0).toUpperCase() || 'U'}
-                                            </Avatar>
-                                            {sub.user?.name || 'N/A'}
-                                        </Box>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Tooltip title={`${sub.rate_card?.duration || ''}`}>
-                                            <Chip
-                                                label={sub.rate_card?.name || 'N/A'}
-                                                size="small"
-                                                sx={{ backgroundColor: alpha(colors.sea, 0.1), color: colors.sea }}
-                                            />
-                                        </Tooltip>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Typography fontWeight="600" color={colors.sea}>
-                                            {sub.amount || 'N/A'}
-                                        </Typography>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Chip
-                                            label={getStatusLabel(displayStatus)}
-                                            size="small"
-                                            sx={{
-                                                backgroundColor: alpha(getStatusColor(displayStatus), 0.1),
-                                                color: getStatusColor(displayStatus),
-                                                fontWeight: 600,
-                                            }}
-                                        />
-                                        {isExpired && sub.status === 'active' && (
-                                            <Tooltip title="Auto-marked as expired based on expiry date">
-                                                <TimerIcon sx={{ fontSize: 14, color: '#ef4444', ml: 0.5 }} />
-                                            </Tooltip>
-                                        )}
-                                    </TableCell>
-                                    <TableCell>
-                                        <Box display="flex" alignItems="center" gap={0.5}>
-                                            <PaymentIcon sx={{ fontSize: 14, color: colors.rain }} />
-                                            <Typography variant="caption">
-                                                {sub.payment_method || 'N/A'}
-                                            </Typography>
-                                        </Box>
-                                    </TableCell>
-                                    <TableCell>{formatDate(sub.created_at)}</TableCell>
-                                    <TableCell>
-                                        <Box display="flex" alignItems="center" gap={0.5}>
-                                            <CalendarIcon sx={{ fontSize: 14, color: colors.rain }} />
-                                            <Typography variant="body2">
-                                                {formatDate(sub.expiry_date)}
-                                            </Typography>
-                                        </Box>
-                                    </TableCell>
-                                </TableRow>
-                            );
-                        })} total={getTotalCount()} page={page} rowsPerPage={rowsPerPage} onPageChange={handleChangePage} onRowsPerPageChange={handleChangeRowsPerPage} loading={loading} emptyMessage="No subscriptions found" />
+                        <ReportTable
+                            columns={[
+                                { key: 'no', label: '#' }, { key: 'user', label: 'User' },
+                                { key: 'plan', label: 'Plan' }, { key: 'amount', label: 'Amount' },
+                                { key: 'status', label: 'Status' }, { key: 'payment', label: 'Payment' },
+                                { key: 'created', label: 'Created' }, { key: 'expiry', label: 'Expiry' },
+                            ]}
+                            rows={getListData().map((sub, index) => {
+                                const isExpired = sub.expiry_date && new Date(sub.expiry_date) < new Date();
+                                const displayStatus = isExpired && sub.status === 'active' ? 'expired' : sub.status;
+                                return (
+                                    <TableRow key={sub.id || index} hover>
+                                        <TableCell><Typography variant="body2" fontWeight={600} color="text.secondary">{getRowNumber(index)}</Typography></TableCell>
+                                        <TableCell>
+                                            <Stack direction="row" spacing={1.25} alignItems="center">
+                                                <Avatar sx={{ width: 34, height: 34, bgcolor: '#0f766e', fontSize: 13, fontWeight: 700 }}>
+                                                    {sub.user?.name?.charAt(0).toUpperCase() || 'U'}
+                                                </Avatar>
+                                                <Typography variant="body2" fontWeight={600}>{sub.user?.name || 'N/A'}</Typography>
+                                            </Stack>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Chip label={sub.rate_card?.name || 'N/A'} size="small"
+                                                  sx={{ fontWeight: 600, bgcolor: alpha('#0f766e', 0.1), color: '#0f766e', height: 26 }} />
+                                        </TableCell>
+                                        <TableCell>
+                                            <Typography variant="body2" fontWeight={700} color="#0f766e">{sub.amount || 'N/A'}</Typography>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Chip label={getStatusLabel(displayStatus)} size="small"
+                                                  sx={{
+                                                      fontWeight: 700, height: 26,
+                                                      bgcolor: alpha(getStatusColor(displayStatus), 0.12),
+                                                      color: getStatusColor(displayStatus),
+                                                      border: `1.5px solid ${getStatusColor(displayStatus)}`,
+                                                  }} />
+                                            {isExpired && sub.status === 'active' && (
+                                                <Tooltip title="Auto-marked as expired">
+                                                    <TimerIcon sx={{ fontSize: 14, color: '#ef4444', ml: 0.5 }} />
+                                                </Tooltip>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
+                                            <Stack direction="row" spacing={0.5} alignItems="center">
+                                                <PaymentIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                                                <Typography variant="body2">{sub.payment_method || 'N/A'}</Typography>
+                                            </Stack>
+                                        </TableCell>
+                                        <TableCell><Typography variant="body2" color="text.secondary">{formatDate(sub.created_at)}</Typography></TableCell>
+                                        <TableCell>
+                                            <Stack direction="row" spacing={0.5} alignItems="center">
+                                                <CalendarIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                                                <Typography variant="body2" color="text.secondary">{formatDate(sub.expiry_date)}</Typography>
+                                            </Stack>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
+                            total={getTotalCount()} page={page} rowsPerPage={rowsPerPage}
+                            onPageChange={(_, p) => setPage(p)}
+                            onRowsPerPageChange={(e) => { setRowsPerPage(+e.target.value); setPage(0); }}
+                            loading={loading} emptyMessage="No subscriptions found"
+                        />
                     </Box>
                 </TabPanel>
             </Paper>

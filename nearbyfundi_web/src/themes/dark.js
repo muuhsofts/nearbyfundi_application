@@ -1,10 +1,10 @@
 import tinycolor from 'tinycolor2';
 
-const primary = '#536DFE';
-const secondary = '#EE266D';
-const warning = '#E9B55F';
-const success = '#63C5B5';
-const info = '#AE1ECC';
+const primary = '#818CF8';
+const secondary = '#F472B6';
+const warning = '#FBBF24';
+const success = '#34D399';
+const info = '#A78BFA';
 
 const lightenRate = 7.5;
 const darkenRate = 15;
@@ -40,18 +40,17 @@ const darkTheme = {
       dark: tinycolor(info).darken(darkenRate).toHexString(),
     },
     text: {
-      primary: '#fff',
-      secondary: '#D6D6D6',
-      hint: '#76767B',
+      primary: '#F1F1F9',
+      secondary: '#B8B8D0',
+      hint: '#7A7A9E',
     },
     background: {
-      default: '#13131A',
-      light: '#23232D',
+      default: '#0F0F1A',
+      light: '#1A1A2E',
     },
   },
   customShadows: {
-    widget:
-      '0px 1px 8px rgba(0, 0, 0, 0.103475), 0px 3px 3px rgba(0, 0, 0, 0.0988309), 0px 3px 4px rgba(0, 0, 0, 0.10301)',
+    widget: '0px 1px 8px rgba(0, 0, 0, 0.103475), 0px 3px 3px rgba(0, 0, 0, 0.0988309), 0px 3px 4px rgba(0, 0, 0, 0.10301)',
   },
 };
 

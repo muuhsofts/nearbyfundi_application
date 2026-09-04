@@ -41,11 +41,15 @@ import SubscriptionList from "pages/subscriptions/SubscriptionList";
 import RateCardManagement from "pages/subscriptions/RateCardManagement";
 import PaymentMethodManagement from "pages/subscriptions/PaymentMethodManagement";
 
-// Finance pages (NEW)
+// Finance pages
 import FinanceLayout from "pages/finance/FinanceLayout";
 import FinanceSubscriptions from "pages/finance/FinanceSubscriptions";
 import FinanceTechnicians from "pages/finance/FinanceTechnicians";
 import FinanceCustomers from "pages/finance/FinanceCustomers";
+
+// SMS Logs pages (NEW)
+import SmsLogsList from "pages/sms/SmsLogsList";
+import SendSmsDialog from "pages/sms/SendSmsDialog";
 
 // Contexts
 import { UserProvider } from "context/UserContext";
@@ -73,10 +77,13 @@ import {
 } from "context/SubscriptionContext";
 import { PrivacyPolicyProvider } from "context/PrivacyPolicyContext";
 
-// Finance contexts (NEW)
+// Finance contexts
 import { FinanceSubscriptionProvider } from "context/FinanceSubscriptionContext";
 import { FinanceTechnicianProvider } from "context/FinanceTechnicianContext";
 import { FinanceCustomerProvider } from "context/FinanceCustomerContext";
+
+// SMS Context (NEW)
+import { SmsProvider } from "context/SmsContext";
 
 function RouterNavigatorSync() {
     const navigate = useNavigate();
@@ -152,6 +159,10 @@ function AppContent() {
                 <Route path="payment-methods" element={<PaymentMethodManagement />} />
                 <Route path="privacy-policy" element={<PrivacyPolicyPage />} />
 
+                {/* SMS Logs routes (NEW) */}
+                <Route path="sms-logs" element={<SmsLogsList />} />
+                <Route path="sms-logs/send" element={<SmsLogsList />} />
+
                 {/* Finance nested routes */}
                 <Route path="finance" element={<FinanceLayout />}>
                     <Route index element={<Navigate to="/app/finance/subscriptions" replace />} />
@@ -207,19 +218,22 @@ export default function App() {
                                                                                             <RateCardProvider>
                                                                                                 <PaymentMethodProvider>
                                                                                                     <SubscriptionProvider>
-                                                                                                        <FinanceSubscriptionProvider>
-                                                                                                            <FinanceTechnicianProvider>
-                                                                                                                <FinanceCustomerProvider>
-                                                                                                                    <ToastContainer
-                                                                                                                        position="top-right"
-                                                                                                                        autoClose={3000}
-                                                                                                                        hideProgressBar={false}
-                                                                                                                    />
-                                                                                                                    <RouterNavigatorSync />
-                                                                                                                    <AppContent />
-                                                                                                                </FinanceCustomerProvider>
-                                                                                                            </FinanceTechnicianProvider>
-                                                                                                        </FinanceSubscriptionProvider>
+                                                                                                        {/* SMS Provider (NEW) */}
+                                                                                                        <SmsProvider>
+                                                                                                            <FinanceSubscriptionProvider>
+                                                                                                                <FinanceTechnicianProvider>
+                                                                                                                    <FinanceCustomerProvider>
+                                                                                                                        <ToastContainer
+                                                                                                                            position="top-right"
+                                                                                                                            autoClose={3000}
+                                                                                                                            hideProgressBar={false}
+                                                                                                                        />
+                                                                                                                        <RouterNavigatorSync />
+                                                                                                                        <AppContent />
+                                                                                                                    </FinanceCustomerProvider>
+                                                                                                                </FinanceTechnicianProvider>
+                                                                                                            </FinanceSubscriptionProvider>
+                                                                                                        </SmsProvider>
                                                                                                     </SubscriptionProvider>
                                                                                                 </PaymentMethodProvider>
                                                                                             </RateCardProvider>

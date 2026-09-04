@@ -29,14 +29,12 @@ const overrides = {
   overrides: {
     MuiCard: {
       root: {
-        boxShadow:
-          '0px 3px 11px 0px #E8EAFC, 0 3px 3px -2px #B2B2B21A, 0 1px 8px 0 #9A9A9A1A',
+        boxShadow: '0px 3px 11px 0px #E8EAFC, 0 3px 3px -2px #B2B2B21A, 0 1px 8px 0 #9A9A9A1A',
       },
     },
     MUIDataTable: {
       paper: {
-        boxShadow:
-          '0px 3px 11px 0px #E8EAFC, 0 3px 3px -2px #B2B2B21A, 0 1px 8px 0 #9A9A9A1A',
+        boxShadow: '0px 3px 11px 0px #E8EAFC, 0 3px 3px -2px #B2B2B21A, 0 1px 8px 0 #9A9A9A1A',
       },
     },
     MuiBackdrop: {
@@ -46,8 +44,7 @@ const overrides = {
     },
     MuiMenu: {
       paper: {
-        boxShadow:
-          '0px 3px 11px 0px #E8EAFC, 0 3px 3px -2px #B2B2B21A, 0 1px 8px 0 #9A9A9A1A',
+        boxShadow: '0px 3px 11px 0px #E8EAFC, 0 3px 3px -2px #B2B2B21A, 0 1px 8px 0 #9A9A9A1A',
       },
     },
     MuiSelect: {
@@ -102,9 +99,6 @@ const darkModeOverrides = {
   components: {
     MuiCssBaseline: {
       '@global': {
-        // '*': {
-        //     'scrollbar-width': 'thin',
-        // },
         '*::-webkit-scrollbar': {
           width: '0.4em',
         },
@@ -117,8 +111,7 @@ const darkModeOverrides = {
       styleOverrides: {
         root: {
           backgroundColor: '#23232D',
-          boxShadow:
-            '0px 1px 8px rgba(0, 0, 0, 0.103475), 0px 3px 3px rgba(0, 0, 0, 0.0988309), 0px 3px 4px rgba(0, 0, 0, 0.10301) !important',
+          boxShadow: '0px 1px 8px rgba(0, 0, 0, 0.103475), 0px 3px 3px rgba(0, 0, 0, 0.0988309), 0px 3px 4px rgba(0, 0, 0, 0.10301) !important',
           '&::-webkit-scrollbar': {
             width: '0.4em',
           },

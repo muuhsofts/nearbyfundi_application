@@ -1,15 +1,43 @@
 // src/pages/services/ServicesList.js
 import React, { useState, useEffect } from 'react';
 import {
-    Box, Paper, Typography, Button, TextField, InputAdornment,
-    IconButton, Menu, MenuItem, Dialog, DialogTitle, DialogContent,
-    DialogActions, CircularProgress, useMediaQuery, useTheme,
-    Card, CardContent, Avatar, Tooltip, Alert, Grid, Chip,
+    Box,
+    Paper,
+    Typography,
+    Button,
+    TextField,
+    InputAdornment,
+    IconButton,
+    Menu,
+    MenuItem,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    CircularProgress,
+    useMediaQuery,
+    useTheme,
+    Card,
+    CardContent,
+    Avatar,
+    Tooltip,
+    Alert,
+    Grid,
+    Chip,
+    Stack,
+    alpha,
 } from '@mui/material';
 import {
-    Add as AddIcon, Search as SearchIcon, Refresh as RefreshIcon,
-    MoreVert as MoreVertIcon, Edit as EditIcon, Delete as DeleteIcon,
-    Build as BuildIcon, People as PeopleIcon,
+    Add as AddIcon,
+    Search as SearchIcon,
+    Refresh as RefreshIcon,
+    MoreVert as MoreVertIcon,
+    Edit as EditIcon,
+    Delete as DeleteIcon,
+    Build as BuildIcon,
+    People as PeopleIcon,
+    Clear as ClearIcon,
+    Category as CategoryIcon,
 } from '@mui/icons-material';
 import { serviceService } from 'services/service.service';
 import { usePermissions } from 'hooks/usePermissions';
@@ -23,6 +51,7 @@ const colors = appConfig.app.colors;
 const ServicesList = () => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+    const showTableView = useMediaQuery(theme.breakpoints.up('md'));
 
     const [groupedData, setGroupedData] = useState([]);
     const [filteredData, setFilteredData] = useState([]);
@@ -140,7 +169,6 @@ const ServicesList = () => {
         setTechniciansModal({ open: true, serviceId, serviceName });
     };
 
-    // ✅ Fetch full service details before editing
     const handleEdit = async (service) => {
         try {
             const response = await serviceService.getService(service.id);
@@ -161,8 +189,19 @@ const ServicesList = () => {
     if (!canView) {
         return (
             <Box p={3}>
-                <Paper sx={{ p: 3, textAlign: 'center' }}>
-                    <Typography color="error">You do not have permission to view services.</Typography>
+                <Paper
+                    elevation={0}
+                    sx={{
+                        p: 4,
+                        textAlign: 'center',
+                        borderRadius: 3,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                    }}
+                >
+                    <Typography color="error" fontWeight={600}>
+                        You do not have permission to view services.
+                    </Typography>
                 </Paper>
             </Box>
         );
@@ -178,6 +217,7 @@ const ServicesList = () => {
                             Retry
                         </Button>
                     }
+                    sx={{ borderRadius: 2 }}
                 >
                     {error}
                 </Alert>
@@ -185,143 +225,299 @@ const ServicesList = () => {
         );
     }
 
+    // Summary stats
+    const totalServices = groupedData.reduce((acc, cat) => acc + cat.services.length, 0);
+    const totalCategories = groupedData.length;
+
     return (
-        <Box sx={{ width: '100%', p: { xs: 1, sm: 2 }, m: 0 }}>
-            <Paper sx={{
-                width: '100%',
-                borderRadius: { xs: 1, sm: 2 },
-                overflow: 'hidden',
-                boxShadow: { xs: 0, sm: 1 },
-                backgroundColor: colors.light,
-                border: `1px solid ${colors.middle}`,
-            }}>
-                <Box sx={{ p: { xs: 2, sm: 3 }, borderBottom: `1px solid ${colors.middle}` }}>
-                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={2} flexWrap="wrap" gap={1}>
-                        <Typography variant="h5" fontWeight="600" sx={{ fontSize: { xs: '1.5rem', sm: '1.75rem' }, color: colors.dark }}>
-                            Service Management
-                        </Typography>
-                        <Box display="flex" alignItems="center" gap={2}>
+        <Box sx={{ width: '100%', p: { xs: 1.5, sm: 2.5 }, m: 0, bgcolor: 'background.default' }}>
+            <Paper
+                elevation={0}
+                sx={{
+                    width: '100%',
+                    borderRadius: 3,
+                    overflow: 'hidden',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    bgcolor: 'background.paper',
+                }}
+            >
+                {/* ── HEADER ────────────────────────────────────────────── */}
+                <Box
+                    sx={{
+                        px: { xs: 2, sm: 3 },
+                        py: 2.5,
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                    }}
+                >
+                    <Stack
+                        direction={{ xs: 'column', sm: 'row' }}
+                        justifyContent="space-between"
+                        alignItems={{ xs: 'stretch', sm: 'center' }}
+                        spacing={2}
+                        mb={2.5}
+                    >
+                        <Box>
+                            <Typography variant="h5" fontWeight={800} color="text.primary">
+                                Service Management
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                                Manage service categories and technician assignments
+                            </Typography>
+                        </Box>
+
+                        <Stack direction="row" spacing={1.5} alignItems="center" justifyContent={{ xs: 'space-between', sm: 'flex-end' }}>
                             {canCreate && (
                                 <Button
                                     variant="contained"
                                     startIcon={<AddIcon />}
                                     onClick={() => { setEditingService(null); setOpenModal(true); }}
-                                    size={isMobile ? "small" : "medium"}
+                                    size={isMobile ? 'small' : 'medium'}
                                     sx={{
                                         borderRadius: 2,
-                                        backgroundColor: colors.salat,
-                                        '&:hover': { backgroundColor: colors.dark }
+                                        fontWeight: 700,
+                                        textTransform: 'none',
+                                        px: 2.5,
+                                        boxShadow: 'none',
+                                        bgcolor: colors.salat || '#10b981',
+                                        '&:hover': {
+                                            bgcolor: colors.dark || '#047857',
+                                            boxShadow: '0 4px 12px rgba(16,185,129,0.35)',
+                                        },
                                     }}
                                 >
                                     Add Service
                                 </Button>
                             )}
-                        </Box>
-                    </Box>
+                        </Stack>
+                    </Stack>
 
-                    <Box display="flex" gap={2} flexWrap="wrap" alignItems="center">
+                    {/* ── FILTERS ──────────────────────────────────────── */}
+                    <Stack
+                        direction={{ xs: 'column', sm: 'row' }}
+                        spacing={1.5}
+                        alignItems={{ xs: 'stretch', sm: 'center' }}
+                        flexWrap="wrap"
+                    >
                         <TextField
-                            label="Search Services"
+                            placeholder="Search services..."
                             size="small"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             InputProps={{
-                                startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <SearchIcon fontSize="small" color="action" />
+                                    </InputAdornment>
+                                ),
+                                endAdornment: search ? (
+                                    <InputAdornment position="end">
+                                        <IconButton size="small" onClick={() => setSearch('')}>
+                                            <ClearIcon fontSize="small" />
+                                        </IconButton>
+                                    </InputAdornment>
+                                ) : null,
                             }}
                             sx={{
-                                minWidth: { xs: '100%', sm: 250 },
+                                minWidth: { xs: '100%', sm: 260 },
                                 flexGrow: { xs: 1, sm: 0 },
-                                '& .MuiInputBase-root': {
-                                    backgroundColor: colors.sky,
+                                '& .MuiOutlinedInput-root': {
                                     borderRadius: 2,
-                                },
-                                '& .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: colors.middle,
+                                    bgcolor: 'action.hover',
+                                    '& fieldset': { borderColor: 'transparent' },
+                                    '&:hover fieldset': { borderColor: 'divider' },
+                                    '&.Mui-focused fieldset': { borderColor: 'primary.main' },
                                 },
                             }}
                         />
+
                         <Button
                             variant="outlined"
                             startIcon={<RefreshIcon />}
                             onClick={loadGroupedServices}
-                            size={isMobile ? "small" : "medium"}
+                            disabled={loading}
+                            size={isMobile ? 'small' : 'medium'}
                             sx={{
-                                borderColor: colors.middle,
-                                color: colors.sea,
+                                borderRadius: 2,
+                                fontWeight: 600,
+                                textTransform: 'none',
+                                borderColor: 'divider',
+                                color: 'text.primary',
                                 '&:hover': {
-                                    borderColor: colors.sea,
-                                    backgroundColor: colors.wave,
-                                }
+                                    borderColor: 'text.primary',
+                                    bgcolor: 'action.hover',
+                                },
                             }}
                         >
                             Refresh
                         </Button>
-                    </Box>
+                    </Stack>
                 </Box>
 
+                {/* ── SUMMARY CARDS ────────────────────────────────────── */}
+                <Box sx={{ px: { xs: 2, sm: 3 }, pt: 2.5, pb: 1 }}>
+                    <Grid container spacing={2}>
+                        {[
+                            { label: 'Total Services', value: totalServices, color: '#3b82f6', bg: '#eff6ff', icon: <BuildIcon sx={{ fontSize: 18 }} /> },
+                            { label: 'Categories', value: totalCategories, color: '#8b5cf6', bg: '#f3e8ff', icon: <CategoryIcon sx={{ fontSize: 18 }} /> },
+                            { label: 'Technicians', value: new Set(groupedData.flatMap(cat => cat.services.flatMap(s => s.technicians?.map(t => t.id) || []))).size, color: '#10b981', bg: '#ecfdf5', icon: <PeopleIcon sx={{ fontSize: 18 }} /> },
+                        ].map((item, idx) => (
+                            <Grid item xs={6} sm={4} key={idx}>
+                                <Card
+                                    elevation={0}
+                                    sx={{
+                                        borderRadius: 2,
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                        backgroundColor: item.bg,
+                                        height: '100%',
+                                    }}
+                                >
+                                    <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                                        <Box display="flex" alignItems="center" justifyContent="space-between">
+                                            <Typography variant="caption" sx={{ color: item.color, fontWeight: 600 }}>
+                                                {item.label}
+                                            </Typography>
+                                            {item.icon}
+                                        </Box>
+                                        <Typography variant="h4" sx={{ color: item.color, fontWeight: 700 }}>
+                                            {item.value}
+                                        </Typography>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+                        ))}
+                    </Grid>
+                </Box>
+
+                {/* ── SERVICES GRID ────────────────────────────────────── */}
                 <Box sx={{ p: { xs: 2, sm: 3 } }}>
                     {loading ? (
-                        <Box display="flex" justifyContent="center" py={4}>
-                            <CircularProgress sx={{ color: colors.sea }} />
+                        <Box display="flex" justifyContent="center" py={6}>
+                            <CircularProgress size={36} thickness={4} />
                         </Box>
                     ) : filteredData.length === 0 ? (
-                        <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', borderColor: colors.middle }}>
-                            <Typography sx={{ color: colors.rain }}>
+                        <Paper
+                            variant="outlined"
+                            sx={{
+                                p: 5,
+                                textAlign: 'center',
+                                borderRadius: 3,
+                                borderStyle: 'dashed',
+                            }}
+                        >
+                            <BuildIcon sx={{ fontSize: 56, color: 'text.disabled', mb: 2 }} />
+                            <Typography color="text.secondary" fontWeight={500}>
                                 {search ? 'No services match your search' : 'No categories or services found'}
                             </Typography>
+                            {search && (
+                                <Button
+                                    variant="outlined"
+                                    onClick={() => setSearch('')}
+                                    sx={{ mt: 2, borderRadius: 2, textTransform: 'none' }}
+                                >
+                                    Clear Search
+                                </Button>
+                            )}
                         </Paper>
                     ) : (
                         filteredData.map((category) => (
                             <Paper
                                 key={category.category_id}
+                                elevation={0}
                                 sx={{
                                     mb: 3,
                                     p: { xs: 2, sm: 3 },
-                                    borderRadius: 2,
-                                    border: `1px solid ${colors.middle}`,
-                                    backgroundColor: colors.sky,
+                                    borderRadius: 2.5,
+                                    border: '1px solid',
+                                    borderColor: 'divider',
+                                    bgcolor: alpha(colors.sea, 0.02),
                                 }}
                             >
-                                <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                                    <Typography variant="h6" sx={{ color: colors.dark }}>
+                                <Stack
+                                    direction="row"
+                                    justifyContent="space-between"
+                                    alignItems="center"
+                                    mb={2.5}
+                                    flexWrap="wrap"
+                                    gap={1}
+                                >
+                                    <Typography variant="h6" fontWeight={700} color="text.primary">
+                                        <CategoryIcon sx={{ fontSize: 22, mr: 1, verticalAlign: 'middle', color: colors.sea }} />
                                         {category.category_name}
                                         <Chip
-                                            label={`${category.service_count} services`}
+                                            label={`${category.services.length} services`}
                                             size="small"
-                                            sx={{ ml: 2, bgcolor: colors.light, color: colors.rain }}
+                                            sx={{
+                                                ml: 1.5,
+                                                fontWeight: 600,
+                                                bgcolor: alpha(colors.sea, 0.08),
+                                                color: colors.sea,
+                                            }}
                                         />
                                     </Typography>
-                                </Box>
-                                <Grid container spacing={2}>
+                                </Stack>
+
+                                <Grid container spacing={2.5}>
                                     {category.services.map((service) => (
                                         <Grid item xs={12} sm={6} md={4} key={service.id}>
-                                            <Card sx={{
-                                                height: '100%',
-                                                borderRadius: 2,
-                                                border: `1px solid ${colors.middle}`,
-                                                transition: 'all 0.2s',
-                                                '&:hover': {
-                                                    boxShadow: 4,
-                                                    borderColor: colors.sea,
-                                                }
-                                            }}>
-                                                <CardContent>
-                                                    <Box display="flex" justifyContent="space-between" alignItems="flex-start">
-                                                        <Typography variant="subtitle1" fontWeight="bold" sx={{ color: colors.dark }}>
+                                            <Card
+                                                elevation={0}
+                                                sx={{
+                                                    height: '100%',
+                                                    borderRadius: 2.5,
+                                                    border: '1px solid',
+                                                    borderColor: 'divider',
+                                                    transition: 'all 0.25s ease',
+                                                    '&:hover': {
+                                                        borderColor: colors.sea,
+                                                        boxShadow: '0 8px 24px rgba(0,0,0,0.06)',
+                                                        transform: 'translateY(-2px)',
+                                                    },
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                }}
+                                            >
+                                                <CardContent sx={{ p: 2.5, flex: 1, display: 'flex', flexDirection: 'column' }}>
+                                                    <Stack
+                                                        direction="row"
+                                                        justifyContent="space-between"
+                                                        alignItems="flex-start"
+                                                        mb={1.5}
+                                                    >
+                                                        <Typography variant="subtitle1" fontWeight={700} color="text.primary">
                                                             {service.name}
                                                         </Typography>
                                                         <IconButton
                                                             size="small"
                                                             onClick={(e) => handleMenuOpen(e, service)}
-                                                            sx={{ color: colors.rain }}
+                                                            sx={{
+                                                                color: 'text.secondary',
+                                                                '&:hover': {
+                                                                    bgcolor: 'action.hover',
+                                                                    color: 'text.primary',
+                                                                },
+                                                            }}
                                                         >
                                                             <MoreVertIcon fontSize="small" />
                                                         </IconButton>
-                                                    </Box>
+                                                    </Stack>
 
-                                                    <Box display="flex" alignItems="center" mt={1} mb={1}>
-                                                        <PeopleIcon fontSize="small" sx={{ color: colors.rain, mr: 0.5 }} />
-                                                        <Typography variant="body2" sx={{ color: colors.black }}>
+                                                    {service.swahili_name && (
+                                                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                                                            {service.swahili_name}
+                                                        </Typography>
+                                                    )}
+
+                                                    <Box
+                                                        display="flex"
+                                                        alignItems="center"
+                                                        gap={0.5}
+                                                        sx={{ mb: 1.5, mt: 'auto' }}
+                                                    >
+                                                        <PeopleIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                                                        <Typography variant="body2" fontWeight={500} color="text.primary">
                                                             {service.technicians_count || 0} technician{service.technicians_count !== 1 ? 's' : ''}
                                                         </Typography>
                                                     </Box>
@@ -332,13 +528,15 @@ const ServicesList = () => {
                                                         fullWidth
                                                         onClick={() => handleViewTechnicians(service.id, service.name)}
                                                         sx={{
-                                                            mt: 1,
-                                                            borderColor: colors.middle,
-                                                            color: colors.sea,
+                                                            borderRadius: 2,
+                                                            textTransform: 'none',
+                                                            fontWeight: 600,
+                                                            borderColor: 'divider',
+                                                            color: colors.sea || '#0f766e',
                                                             '&:hover': {
-                                                                borderColor: colors.sea,
-                                                                backgroundColor: colors.wave,
-                                                            }
+                                                                borderColor: colors.sea || '#0f766e',
+                                                                bgcolor: alpha(colors.sea, 0.06),
+                                                            },
                                                         }}
                                                     >
                                                         View Technicians
@@ -354,34 +552,43 @@ const ServicesList = () => {
                 </Box>
             </Paper>
 
-            {/* Action Menu */}
+            {/* ─── ACTION MENU ───────────────────────────────────────────── */}
             <Menu
                 anchorEl={actionMenu}
                 open={Boolean(actionMenu)}
                 onClose={handleMenuClose}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                 transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                PaperProps={{
+                    elevation: 8,
+                    sx: { borderRadius: 2, minWidth: 180, mt: 0.5 },
+                }}
             >
                 {canEdit && (
-                    <MenuItem onClick={() => handleEdit(selectedService)}>
-                        <EditIcon sx={{ mr: 1, fontSize: 20, color: colors.sea }} /> Edit
+                    <MenuItem onClick={() => handleEdit(selectedService)} sx={{ fontWeight: 500 }}>
+                        <EditIcon sx={{ mr: 1.5, fontSize: 20, color: colors.sea || '#0f766e' }} />
+                        Edit
                     </MenuItem>
                 )}
                 {canDelete && (
-                    <MenuItem onClick={() => {
-                        openConfirmDialog(
-                            'Delete Service',
-                            `Are you sure you want to delete "${selectedService?.name}"? This action cannot be undone.`,
-                            () => handleDelete(selectedService?.id)
-                        );
-                        handleMenuClose();
-                    }} sx={{ color: 'error.main' }}>
-                        <DeleteIcon sx={{ mr: 1, fontSize: 20 }} /> Delete
+                    <MenuItem
+                        onClick={() => {
+                            openConfirmDialog(
+                                'Delete Service',
+                                `Are you sure you want to delete "${selectedService?.name}"? This action cannot be undone.`,
+                                () => handleDelete(selectedService?.id)
+                            );
+                            handleMenuClose();
+                        }}
+                        sx={{ color: 'error.main', fontWeight: 500 }}
+                    >
+                        <DeleteIcon sx={{ mr: 1.5, fontSize: 20 }} />
+                        Delete
                     </MenuItem>
                 )}
             </Menu>
 
-            {/* Service Form Modal */}
+            {/* ─── SERVICE FORM MODAL ──────────────────────────────────── */}
             <ServiceFormModal
                 open={openModal}
                 onClose={() => {
@@ -392,7 +599,7 @@ const ServicesList = () => {
                 service={editingService}
             />
 
-            {/* Technicians Modal */}
+            {/* ─── TECHNICIANS MODAL ───────────────────────────────────── */}
             <TechniciansModal
                 open={techniciansModal.open}
                 onClose={() => setTechniciansModal({ open: false, serviceId: null, serviceName: '' })}
@@ -400,7 +607,7 @@ const ServicesList = () => {
                 serviceName={techniciansModal.serviceName}
             />
 
-            {/* Confirmation Dialog */}
+            {/* ─── CONFIRMATION DIALOG ─────────────────────────────────── */}
             <Dialog
                 open={confirmDialog.open}
                 onClose={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
@@ -408,29 +615,28 @@ const ServicesList = () => {
                 maxWidth="xs"
                 PaperProps={{
                     sx: {
-                        borderRadius: 2,
-                        backgroundColor: colors.light,
-                    }
+                        borderRadius: 3,
+                    },
                 }}
             >
-                <DialogTitle sx={{ pb: 1, color: colors.dark }}>{confirmDialog.title}</DialogTitle>
+                <DialogTitle sx={{ fontWeight: 700, pb: 1, color: 'text.primary' }}>
+                    {confirmDialog.title}
+                </DialogTitle>
                 <DialogContent>
-                    <Typography sx={{ color: colors.black }}>{confirmDialog.message}</Typography>
+                    <Typography color="text.secondary">{confirmDialog.message}</Typography>
                 </DialogContent>
-                <DialogActions sx={{ p: 2, pt: 0 }}>
+                <DialogActions sx={{ px: 3, pb: 2.5, pt: 1 }}>
                     <Button
                         onClick={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
-                        sx={{ color: colors.rain }}
+                        sx={{ fontWeight: 600, textTransform: 'none' }}
                     >
                         Cancel
                     </Button>
                     <Button
                         onClick={handleConfirm}
                         variant="contained"
-                        sx={{
-                            backgroundColor: 'error.main',
-                            '&:hover': { backgroundColor: 'error.dark' },
-                        }}
+                        color="error"
+                        sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 2 }}
                     >
                         Confirm
                     </Button>

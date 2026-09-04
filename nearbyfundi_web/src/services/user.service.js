@@ -28,6 +28,11 @@ export const userService = {
     resendOtpPhone: (id) => api.post(`/v8/users/${id}/resend-otp-phone`),
     sendPasswordReset: (id) => api.post(`/v8/users/${id}/send-password-reset`),
 
+    // ===== USER VERIFICATION (NEW) =====
+    verifyUserOtp: (id, otp) => api.post(`/v8/users/${id}/verify-otp`, { otp }),
+    verifyUserToken: (id) => api.post(`/v8/users/${id}/verify-token`),
+    markUserVerified: (id) => api.post(`/v8/users/${id}/mark-verified`),
+
     // ===== USER LISTINGS =====
     getCustomers: (params) => api.get('/v8/customers', { params }),
     getFundis: (params) => api.get('/v8/fundis', { params }),
@@ -38,6 +43,7 @@ export const userService = {
     getCustomersDropdown: (params) => api.get('/v8/dropdown/customers', { params }),
     getFundisDropdown: (params) => api.get('/v8/dropdown/fundis', { params }),
     getActiveUsersDropdown: (params) => api.get('/v8/dropdown/active-users', { params }),
+
     // ===== TECHNICIAN VERIFICATION =====
     verifyTechnician: (technicianId) => api.patch(`/v2/technicians/${technicianId}/verify`),
 };

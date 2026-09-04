@@ -1,227 +1,179 @@
 // src/pages/portfolios/PortfoliosList.js
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     Box,
     Paper,
     Typography,
-    Grid,
-    Card,
-    CardContent,
-    Avatar,
-    Chip,
+    Button,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    TablePagination,
+    TableSortLabel,
+    TextField,
+    InputAdornment,
     IconButton,
+    Chip,
+    Menu,
+    MenuItem,
     Dialog,
     DialogTitle,
     DialogContent,
     DialogActions,
-    Button,
-    TextField,
-    InputAdornment,
     CircularProgress,
-    Alert,
-    Stack,
     useMediaQuery,
     useTheme,
-    Pagination,
-    FormControl,
-    InputLabel,
-    Select,
-    MenuItem,
+    Card,
+    CardContent,
     Divider,
-    Fade,
-    Grow,
-    Skeleton,
-    Collapse,
+    Avatar,
+    Stack,
+    Grid,
+    DialogContentText,
     Tooltip,
-    LinearProgress,
-    Autocomplete,
-    Badge,
-    alpha,
-    Link,
 } from '@mui/material';
 import {
-    Close as CloseIcon,
-    Delete as DeleteIcon,
     Search as SearchIcon,
     Refresh as RefreshIcon,
+    MoreVert as MoreVertIcon,
+    Delete as DeleteIcon,
+    Visibility as ViewIcon,
     Person as PersonIcon,
     Verified as VerifiedIcon,
     LocationOn as LocationIcon,
     Star as StarIcon,
     Image as ImageIcon,
     CalendarToday as CalendarIcon,
-    Work as WorkIcon,
-    ZoomIn as ZoomInIcon,
-    PhotoLibrary as PhotoLibraryIcon,
-    ExpandMore as ExpandMoreIcon,
-    ExpandLess as ExpandLessIcon,
-    Favorite as FavoriteIcon,
-    Visibility as VisibilityIcon,
-    AccessTime as AccessTimeIcon,
-    FilterList as FilterListIcon,
     Clear as ClearIcon,
-    Dashboard as DashboardIcon,
-    TrendingUp as TrendingUpIcon,
-    People as PeopleIcon,
-    Instagram as InstagramIcon,
-    Facebook as FacebookIcon,
-    Twitter as TwitterIcon,
-    Telegram as TelegramIcon,
-    MusicNote as MusicNoteIcon,
-    Link as LinkIcon,
+    PhotoCamera as PhotoCameraIcon,
+    Description as DescriptionIcon,
 } from '@mui/icons-material';
 import { portfolioService } from 'services/portfolio.service';
 import { usePermissions } from 'hooks/usePermissions';
 import { showSnackbar } from 'utils/snackbar';
+import { format } from 'date-fns';
 import appConfig from '../../config';
 
 const colors = appConfig.app.colors;
 
-// ─── Social Link Component ──────────────────────────────────────────────
-const SocialLink = ({ platform, url }) => {
-    if (!url) return null;
-
-    const getIcon = () => {
-        switch (platform.toLowerCase()) {
-            case 'instagram':
-                return <InstagramIcon sx={{ fontSize: 18 }} />;
-            case 'facebook':
-                return <FacebookIcon sx={{ fontSize: 18 }} />;
-            case 'tiktok':
-                return <MusicNoteIcon sx={{ fontSize: 18 }} />;
-            case 'twitter':
-                return <TwitterIcon sx={{ fontSize: 18 }} />;
-            case 'telegram':
-                return <TelegramIcon sx={{ fontSize: 18 }} />;
-            default:
-                return <LinkIcon sx={{ fontSize: 18 }} />;
-        }
-    };
-
-    const getColor = () => {
-        switch (platform.toLowerCase()) {
-            case 'instagram':
-                return '#E4405F';
-            case 'facebook':
-                return '#1877F2';
-            case 'tiktok':
-                return '#000000';
-            case 'twitter':
-                return '#1DA1F2';
-            case 'telegram':
-                return '#0088CC';
-            default:
-                return colors.rain;
-        }
-    };
-
-    const color = getColor();
-
-    return (
-        <Tooltip title={`Open ${platform}`}>
-            <Link
-                href={url}
-                target="_blank"
-                rel="noopener noreferrer"
-                sx={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 0.5,
-                    color: color,
-                    textDecoration: 'none',
-                    padding: '4px 10px',
-                    borderRadius: '20px',
-                    backgroundColor: alpha(color, 0.08),
-                    border: `1px solid ${alpha(color, 0.15)}`,
-                    transition: 'all 0.2s ease',
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    '&:hover': {
-                        backgroundColor: alpha(color, 0.15),
-                        transform: 'translateY(-1px)',
-                        boxShadow: `0 2px 8px ${alpha(color, 0.2)}`,
-                    },
-                }}
-            >
-                {getIcon()}
-                {platform}
-            </Link>
-        </Tooltip>
-    );
-};
+const headCells = [
+    { id: 'portfolio', label: 'Portfolio', disableSort: true },
+    { id: 'technician', label: 'Technician', disableSort: true },
+    { id: 'description', label: 'Description', disableSort: true },
+    { id: 'created_at', label: 'Created' },
+    { id: 'actions', label: 'Actions', disableSort: true },
+];
 
 const PortfoliosList = () => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-    const isTablet = useMediaQuery(theme.breakpoints.down('md'));
+    const showTableView = useMediaQuery(theme.breakpoints.up('md'));
+
+    const { can } = usePermissions();
+    const canView = can('portfolios.view');
+    const canDelete = can('portfolios.delete');
 
     const [portfolios, setPortfolios] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
-    const [pagination, setPagination] = useState({ total: 0, per_page: 20, current_page: 1, last_page: 1 });
-
-    const { can } = usePermissions();
-    const canDelete = can('portfolios.delete');
+    const [pagination, setPagination] = useState({ total: 0, per_page: 10, current_page: 1, last_page: 1 });
 
     const [search, setSearch] = useState('');
-    const [page, setPage] = useState(1);
-    const [perPage, setPerPage] = useState(20);
+    const [technicianFilter, setTechnicianFilter] = useState('all');
+    const [technicians, setTechnicians] = useState([]);
+    const [loadingTechnicians, setLoadingTechnicians] = useState(false);
+    const [page, setPage] = useState(0);
+    const [rowsPerPage, setRowsPerPage] = useState(10);
+    const [order, setOrder] = useState('desc');
+    const [orderBy, setOrderBy] = useState('created_at');
+
     const [selectedPortfolio, setSelectedPortfolio] = useState(null);
     const [openViewDialog, setOpenViewDialog] = useState(false);
-    const [imageLoaded, setImageLoaded] = useState({});
-    const [expandedDescriptions, setExpandedDescriptions] = useState({});
-    const [hoveredCard, setHoveredCard] = useState(null);
+    const [actionMenu, setActionMenu] = useState(null);
+    const [selectedPortfolioForMenu, setSelectedPortfolioForMenu] = useState(null);
 
-    const [selectedTechnician, setSelectedTechnician] = useState(null);
-    const [technicians, setTechnicians] = useState([]);
-    const [showFilters, setShowFilters] = useState(false);
+    const [confirmDialog, setConfirmDialog] = useState({
+        open: false,
+        title: '',
+        message: '',
+        action: null,
+    });
+
+    // ── EXISTING LOGIC: Load technicians ────────────────────────────────
+    const loadTechnicians = async () => {
+        setLoadingTechnicians(true);
+        try {
+            const response = await portfolioService.getTechnicians?.({
+                per_page: 100,
+                status: 'active',
+            });
+            if (response?.data?.status === 'success') {
+                const data = response.data.data;
+                if (data && data.data) {
+                    setTechnicians(data.data);
+                } else if (Array.isArray(data)) {
+                    setTechnicians(data);
+                } else {
+                    setTechnicians([]);
+                }
+            }
+        } catch (err) {
+            console.error('Error loading technicians:', err);
+        } finally {
+            setLoadingTechnicians(false);
+        }
+    };
 
     useEffect(() => {
-        if (portfolios.length > 0) {
-            const uniqueTechnicians = portfolios
-                .map(p => p.technician)
-                .filter((tech, index, self) =>
-                    tech && self.findIndex(t => t?.id === tech.id) === index
-                )
-                .filter(tech => tech !== null && tech !== undefined);
-            setTechnicians(uniqueTechnicians);
-        }
-    }, [portfolios]);
+        loadTechnicians();
+    }, []);
 
+    // ── EXISTING LOGIC: Load portfolios ──────────────────────────────────
     const loadPortfolios = async () => {
+        if (!canView) return;
+
         setLoading(true);
-        setError(null);
         try {
-            const response = await portfolioService.getPortfolios({
-                page,
-                per_page: perPage,
+            const params = {
+                page: page + 1,
+                per_page: rowsPerPage,
                 search: search || undefined,
-            });
+            };
+
+            const response = await portfolioService.getPortfolios(params);
 
             if (response?.data?.status === 'success') {
                 const data = response.data.data;
                 if (data && data.data) {
                     let filteredData = data.data;
-                    if (selectedTechnician) {
+                    if (technicianFilter !== 'all') {
                         filteredData = filteredData.filter(
-                            portfolio => portfolio.technician?.id === selectedTechnician.id
+                            portfolio => portfolio.technician?.id === parseInt(technicianFilter)
                         );
                     }
                     setPortfolios(filteredData);
                     setPagination({
-                        total: filteredData.length || 0,
-                        per_page: data.per_page || perPage,
+                        total: data.total || 0,
+                        per_page: data.per_page || rowsPerPage,
                         current_page: data.current_page || 1,
                         last_page: data.last_page || 1,
                     });
                 } else if (Array.isArray(data)) {
                     let filteredData = data;
-                    if (selectedTechnician) {
+                    if (technicianFilter !== 'all') {
                         filteredData = data.filter(
-                            portfolio => portfolio.technician?.id === selectedTechnician.id
+                            portfolio => portfolio.technician?.id === parseInt(technicianFilter)
                         );
                     }
                     setPortfolios(filteredData);
+                    setPagination({
+                        total: filteredData.length,
+                        per_page: rowsPerPage,
+                        current_page: 1,
+                        last_page: 1,
+                    });
                 } else {
                     setPortfolios([]);
                 }
@@ -230,33 +182,36 @@ const PortfoliosList = () => {
             }
         } catch (err) {
             console.error('Portfolios error:', err);
-            setError(err.message || 'Failed to load portfolios');
+            showSnackbar({ type: 'error', message: err.message || 'Failed to load portfolios' });
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        loadPortfolios();
-    }, [page, perPage, search, selectedTechnician]);
-
-    const handleRefresh = () => {
-        loadPortfolios();
-    };
-
-    const handleDeletePortfolio = async (id) => {
-        if (!window.confirm('Are you sure you want to delete this portfolio item?')) return;
-        try {
-            await portfolioService.deletePortfolio(id);
-            showSnackbar({ type: 'success', message: 'Portfolio deleted successfully' });
+        if (canView) {
             loadPortfolios();
-        } catch (error) {
-            showSnackbar({ type: 'error', message: 'Failed to delete portfolio' });
         }
+    }, [page, rowsPerPage, search, technicianFilter, canView]);
+
+    // ── EXISTING LOGIC: Refresh ─────────────────────────────────────────
+    const refreshAll = () => {
+        loadPortfolios();
     };
 
-    const handleViewPortfolio = (portfolio) => {
-        setSelectedPortfolio(portfolio);
+    // ── EXISTING LOGIC: View portfolio ───────────────────────────────────
+    const handleViewPortfolio = async (portfolio) => {
+        try {
+            const response = await portfolioService.getPortfolio?.(portfolio.id);
+            if (response?.data?.status === 'success') {
+                setSelectedPortfolio(response.data.data);
+            } else {
+                setSelectedPortfolio(portfolio);
+            }
+        } catch (err) {
+            console.error('Error fetching portfolio details:', err);
+            setSelectedPortfolio(portfolio);
+        }
         setOpenViewDialog(true);
     };
 
@@ -265,47 +220,74 @@ const PortfoliosList = () => {
         setSelectedPortfolio(null);
     };
 
-    const handleImageLoad = (id) => {
-        setImageLoaded(prev => ({ ...prev, [id]: true }));
+    // ── EXISTING LOGIC: Delete portfolio ─────────────────────────────────
+    const handleDeletePortfolio = async (id) => {
+        try {
+            await portfolioService.deletePortfolio(id);
+            showSnackbar({ type: 'success', message: 'Portfolio deleted successfully' });
+            await loadPortfolios();
+            return true;
+        } catch (err) {
+            console.error('Delete error:', err);
+            const errorMessage = err.response?.data?.message || 'Failed to delete portfolio';
+            showSnackbar({ type: 'error', message: errorMessage });
+            throw err;
+        }
     };
 
-    const toggleDescription = (id) => {
-        setExpandedDescriptions(prev => ({
-            ...prev,
-            [id]: !prev[id]
-        }));
+    // ── EXISTING LOGIC: Confirm dialog ──────────────────────────────────
+    const openConfirmDialog = (title, message, actionFn) => {
+        setConfirmDialog({ open: true, title, message, action: actionFn });
     };
 
-    const handleClearFilters = () => {
-        setSelectedTechnician(null);
-        setSearch('');
-        setPage(1);
+    const handleConfirm = async () => {
+        if (!confirmDialog.action) return;
+        const action = confirmDialog.action;
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+
+        try {
+            await action();
+        } catch (err) {
+            console.error('Confirm action failed:', err);
+        }
     };
 
-    const formatDate = (date) => {
-        if (!date) return 'N/A';
-        const now = new Date();
-        const past = new Date(date);
-        const diffTime = Math.abs(now - past);
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    // ── EXISTING LOGIC: Sorting ─────────────────────────────────────────
+    const handleRequestSort = (property) => {
+        const isAsc = orderBy === property && order === 'asc';
+        setOrder(isAsc ? 'desc' : 'asc');
+        setOrderBy(property);
+    };
 
-        if (diffDays === 0) return 'Today';
-        if (diffDays === 1) return 'Yesterday';
-        if (diffDays < 7) return `${diffDays} days ago`;
-        if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-        return past.toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
+    // ── Client-side sorting ─────────────────────────────────────────────
+    const sortedPortfolios = useMemo(() => {
+        const sorted = [...portfolios];
+        sorted.sort((a, b) => {
+            let aValue, bValue;
+
+            switch (orderBy) {
+                case 'created_at':
+                    aValue = a.created_at || '';
+                    bValue = b.created_at || '';
+                    break;
+                default:
+                    aValue = a[orderBy] || '';
+                    bValue = b[orderBy] || '';
+            }
+
+            if (typeof aValue === 'string') {
+                aValue = aValue.toLowerCase();
+                bValue = bValue.toLowerCase();
+            }
+
+            if (aValue < bValue) return order === 'asc' ? -1 : 1;
+            if (aValue > bValue) return order === 'asc' ? 1 : -1;
+            return 0;
         });
-    };
+        return sorted;
+    }, [portfolios, orderBy, order]);
 
-    const truncateText = (text, maxLength = 80) => {
-        if (!text) return '';
-        if (text.length <= maxLength) return text;
-        return text.substring(0, maxLength) + '...';
-    };
-
+    // ── EXISTING HELPERS ─────────────────────────────────────────────────
     const getInitials = (name) => {
         if (!name) return '?';
         return name
@@ -316,1518 +298,970 @@ const PortfoliosList = () => {
             .substring(0, 2);
     };
 
-    // ─── Get social links from portfolio ────────────────────────────────
-    const getSocialLinks = (portfolio) => {
-        // Check if social_links exists directly or in the response
-        const socialLinks = portfolio.social_links || portfolio.socialLinks || {};
-        const links = [];
-
-        const platforms = ['instagram', 'facebook', 'tiktok', 'twitter', 'telegram'];
-        platforms.forEach(platform => {
-            if (socialLinks[platform]) {
-                links.push({ platform, url: socialLinks[platform] });
-            }
-        });
-
-        return links;
+    const getImageUrl = (image) => {
+        if (!image) return null;
+        if (image.startsWith('http://') || image.startsWith('https://')) {
+            return image;
+        }
+        const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+        const cleanPath = image.replace(/^\/+/, '');
+        return `${baseUrl}/storage/${cleanPath}`;
     };
 
-    const hasSocialLinks = (portfolio) => {
-        return getSocialLinks(portfolio).length > 0;
+    const formatDate = (dateStr) => {
+        if (!dateStr) return '-';
+        try {
+            return format(new Date(dateStr), 'MMM d, yyyy');
+        } catch {
+            return '-';
+        }
     };
 
-    const groupPortfoliosByTechnician = () => {
-        const groups = {};
-        portfolios.forEach(portfolio => {
-            const techId = portfolio.technician?.id;
-            if (!techId) return;
-            if (!groups[techId]) {
-                groups[techId] = {
-                    technician: portfolio.technician,
-                    portfolios: []
-                };
-            }
-            groups[techId].portfolios.push(portfolio);
-        });
-        return Object.values(groups);
+    const formatDateFull = (dateStr) => {
+        if (!dateStr) return '-';
+        try {
+            return format(new Date(dateStr), 'MMM d, yyyy h:mm a');
+        } catch {
+            return '-';
+        }
     };
 
-    const technicianGroups = groupPortfoliosByTechnician();
-
-    const renderSkeletons = () => {
-        const count = isMobile ? 2 : 4;
-        return Array.from({ length: count }).map((_, index) => (
-            <Grid item xs={12} sm={6} key={`skeleton-${index}`}>
-                <Card sx={{ borderRadius: 3, overflow: 'hidden', height: '100%' }}>
-                    <Skeleton variant="rectangular" height={200} animation="wave" />
-                    <CardContent>
-                        <Skeleton variant="text" width="60%" height={24} animation="wave" />
-                        <Skeleton variant="text" width="40%" height={20} animation="wave" />
-                    </CardContent>
-                </Card>
-            </Grid>
-        ));
+    const truncateText = (text, maxLength = 60) => {
+        if (!text) return '';
+        if (text.length <= maxLength) return text;
+        return text.substring(0, maxLength) + '...';
     };
 
-    if (error) {
+    // ── UI: Action menu handlers ────────────────────────────────────────
+    const handleMenuOpen = (event, portfolio) => {
+        setSelectedPortfolioForMenu(portfolio);
+        setActionMenu(event.currentTarget);
+    };
+
+    const handleMenuClose = () => {
+        setActionMenu(null);
+        setSelectedPortfolioForMenu(null);
+    };
+
+    const handleAction = async (actionType) => {
+        if (!selectedPortfolioForMenu) return;
+        handleMenuClose();
+
+        switch (actionType) {
+            case 'view':
+                handleViewPortfolio(selectedPortfolioForMenu);
+                break;
+            case 'delete':
+                openConfirmDialog(
+                    'Delete Portfolio',
+                    `Are you sure you want to delete this portfolio item?`,
+                    () => handleDeletePortfolio(selectedPortfolioForMenu.id)
+                );
+                break;
+            default:
+                break;
+        }
+    };
+
+    // ── Summary stats ──────────────────────────────────────────────────
+    const totalPortfolios = pagination.total || 0;
+    const uniqueTechnicians = new Set(portfolios.map(p => p.technician?.id).filter(Boolean)).size;
+
+    // ── Permission check ──────────────────────────────────────────────
+    if (!canView) {
         return (
             <Box p={3}>
-                <Alert
-                    severity="error"
-                    action={
-                        <Button color="inherit" size="small" onClick={() => { setError(null); loadPortfolios(); }}>
-                            Retry
-                        </Button>
-                    }
+                <Paper
+                    elevation={0}
+                    sx={{
+                        p: 4,
+                        textAlign: 'center',
+                        borderRadius: 3,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                    }}
                 >
-                    {error}
-                </Alert>
+                    <Typography color="error" fontWeight={600}>
+                        You do not have permission to view portfolios.
+                    </Typography>
+                </Paper>
             </Box>
         );
     }
 
+    // ── RENDER ──────────────────────────────────────────────────────────
     return (
-        <Box sx={{
-            width: '100%',
-            p: { xs: 1.5, sm: 2.5, md: 3.5 },
-            background: `linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)`,
-            minHeight: '100vh',
-        }}>
-            {/* Main Container */}
-            <Paper sx={{
-                width: '100%',
-                borderRadius: { xs: 2, sm: 3 },
-                overflow: 'hidden',
-                boxShadow: '0 8px 40px rgba(0,0,0,0.06)',
-                p: { xs: 2, sm: 3, md: 4 },
-                backgroundColor: 'rgba(255,255,255,0.95)',
-                backdropFilter: 'blur(10px)',
-                border: '1px solid rgba(0,0,0,0.04)',
-            }}>
-                {/* ===== HEADER SECTION ===== */}
+        <Box sx={{ width: '100%', p: { xs: 1.5, sm: 2.5 }, m: 0, bgcolor: 'background.default' }}>
+            <Paper
+                elevation={0}
+                sx={{
+                    width: '100%',
+                    borderRadius: 3,
+                    overflow: 'hidden',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    bgcolor: 'background.paper',
+                }}
+            >
+                {/* ── HEADER ────────────────────────────────────────────── */}
                 <Box
                     sx={{
-                        display: 'flex',
-                        alignItems: { xs: 'flex-start', sm: 'center' },
-                        justifyContent: 'space-between',
-                        flexDirection: { xs: 'column', sm: 'row' },
-                        gap: 2,
-                        mb: 3,
+                        px: { xs: 2, sm: 3 },
+                        py: 2.5,
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
                     }}
                 >
-                    <Box display="flex" alignItems="center" gap={2}>
-                        <Box
-                            sx={{
-                                width: 52,
-                                height: 52,
-                                borderRadius: 2.5,
-                                background: `linear-gradient(135deg, ${colors.sea}15, ${colors.sea}08)`,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                border: `1px solid ${colors.sea}20`,
-                            }}
-                        >
-                            <PhotoLibraryIcon sx={{ color: colors.sea, fontSize: 28 }} />
-                        </Box>
+                    <Stack
+                        direction={{ xs: 'column', sm: 'row' }}
+                        justifyContent="space-between"
+                        alignItems={{ xs: 'stretch', sm: 'center' }}
+                        spacing={2}
+                        mb={2.5}
+                    >
                         <Box>
-                            <Typography
-                                variant="h5"
-                                fontWeight="800"
-                                sx={{
-                                    fontSize: { xs: '1.3rem', sm: '1.6rem', md: '1.9rem' },
-                                    color: colors.dark,
-                                    letterSpacing: '-0.5px',
-                                    lineHeight: 1.2,
-                                }}
-                            >
-                                Portfolios
+                            <Typography variant="h5" fontWeight={800} color="text.primary">
+                                Portfolio Management
                             </Typography>
-                            <Typography
-                                variant="body2"
-                                sx={{
-                                    color: colors.rain,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 0.5,
-                                    mt: 0.25,
-                                }}
-                            >
+                            <Typography variant="body2" color="text.secondary" fontWeight={500}>
                                 Showcasing technician work and expertise
                             </Typography>
                         </Box>
-                    </Box>
 
-                    <Box display="flex" gap={1.5} alignItems="center" flexWrap="wrap" sx={{ width: { xs: '100%', sm: 'auto' } }}>
-                        <Button
-                            variant="outlined"
-                            startIcon={<FilterListIcon />}
-                            onClick={() => setShowFilters(!showFilters)}
-                            size="medium"
+                        <Stack direction="row" spacing={1.5} alignItems="center" justifyContent={{ xs: 'space-between', sm: 'flex-end' }}>
+                            <Button
+                                variant="contained"
+                                startIcon={<RefreshIcon />}
+                                onClick={refreshAll}
+                                disabled={loading}
+                                size={isMobile ? 'small' : 'medium'}
+                                sx={{
+                                    borderRadius: 2,
+                                    fontWeight: 600,
+                                    textTransform: 'none',
+                                    px: 2.5,
+                                    boxShadow: 'none',
+                                    bgcolor: 'primary.main',
+                                    '&:hover': {
+                                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                    },
+                                }}
+                            >
+                                Refresh
+                            </Button>
+                        </Stack>
+                    </Stack>
+
+                    {/* ── FILTERS ──────────────────────────────────────── */}
+                    <Stack
+                        direction={{ xs: 'column', sm: 'row' }}
+                        spacing={1.5}
+                        alignItems={{ xs: 'stretch', sm: 'center' }}
+                        flexWrap="wrap"
+                    >
+                        <TextField
+                            select
+                            label="Technician"
+                            size="small"
+                            value={technicianFilter}
+                            onChange={(e) => { setTechnicianFilter(e.target.value); setPage(0); }}
                             sx={{
-                                borderColor: showFilters ? colors.sea : colors.middle,
-                                color: showFilters ? colors.sea : colors.rain,
-                                height: 44,
-                                borderRadius: 2.5,
-                                textTransform: 'none',
-                                fontWeight: 600,
-                                fontSize: '0.875rem',
-                                px: 2.5,
-                                transition: 'all 0.2s',
-                                '&:hover': {
-                                    borderColor: colors.sea,
-                                    backgroundColor: alpha(colors.sea, 0.06),
-                                    transform: 'translateY(-1px)',
+                                minWidth: { xs: '100%', sm: 180 },
+                                flexGrow: { xs: 1, sm: 0 },
+                                '& .MuiOutlinedInput-root': {
+                                    borderRadius: 2,
+                                    bgcolor: 'action.hover',
+                                    '& fieldset': { borderColor: 'transparent' },
+                                    '&:hover fieldset': { borderColor: 'divider' },
+                                    '&.Mui-focused fieldset': { borderColor: 'primary.main' },
                                 },
                             }}
                         >
-                            {showFilters ? 'Hide Filters' : 'Filters'}
-                            {selectedTechnician && (
-                                <Badge
-                                    badgeContent={1}
-                                    color="primary"
-                                    sx={{
-                                        '& .MuiBadge-badge': {
-                                            backgroundColor: colors.sea,
-                                            fontSize: '0.6rem',
-                                            height: 18,
-                                            minWidth: 18,
-                                        },
-                                    }}
-                                />
-                            )}
-                        </Button>
+                            <MenuItem value="all">All Technicians</MenuItem>
+                            {technicians.map((tech) => (
+                                <MenuItem key={tech.id} value={tech.id}>
+                                    {tech.user?.name || tech.name || 'Unknown'}
+                                </MenuItem>
+                            ))}
+                        </TextField>
+
                         <TextField
                             placeholder="Search portfolios..."
                             size="small"
                             value={search}
-                            onChange={(e) => setSearch(e.target.value)}
+                            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
                             InputProps={{
                                 startAdornment: (
                                     <InputAdornment position="start">
-                                        <SearchIcon fontSize="small" sx={{ color: colors.rain }} />
+                                        <SearchIcon fontSize="small" color="action" />
                                     </InputAdornment>
                                 ),
+                                endAdornment: search ? (
+                                    <InputAdornment position="end">
+                                        <IconButton size="small" onClick={() => setSearch('')}>
+                                            <ClearIcon fontSize="small" />
+                                        </IconButton>
+                                    </InputAdornment>
+                                ) : null,
                             }}
                             sx={{
-                                width: { xs: '100%', sm: 200, md: 260 },
-                                '& .MuiInputBase-root': {
-                                    backgroundColor: '#f8fafc',
-                                    borderRadius: 2.5,
-                                    height: 44,
-                                    transition: 'all 0.25s ease',
-                                    '&:hover': {
-                                        backgroundColor: '#f1f5f9',
-                                    },
-                                    '&.Mui-focused': {
-                                        backgroundColor: '#ffffff',
-                                        boxShadow: `0 0 0 3px ${alpha(colors.sea, 0.15)}`,
-                                        transform: 'scale(1.01)',
-                                    },
-                                },
-                                '& .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: colors.middle + '50',
+                                minWidth: { xs: '100%', sm: 260 },
+                                flexGrow: { xs: 1, sm: 0 },
+                                '& .MuiOutlinedInput-root': {
+                                    borderRadius: 2,
+                                    bgcolor: 'action.hover',
+                                    '& fieldset': { borderColor: 'transparent' },
+                                    '&:hover fieldset': { borderColor: 'divider' },
+                                    '&.Mui-focused fieldset': { borderColor: 'primary.main' },
                                 },
                             }}
                         />
-                        <Button
-                            variant="contained"
-                            startIcon={<RefreshIcon />}
-                            onClick={handleRefresh}
-                            disabled={loading}
-                            sx={{
-                                background: `linear-gradient(135deg, ${colors.sea}, ${colors.dark})`,
-                                height: 44,
-                                minWidth: 110,
-                                borderRadius: 2.5,
-                                textTransform: 'none',
-                                fontWeight: 700,
-                                fontSize: '0.875rem',
-                                boxShadow: `0 4px 16px ${alpha(colors.sea, 0.3)}`,
-                                '&:hover': {
-                                    transform: 'translateY(-2px)',
-                                    boxShadow: `0 8px 24px ${alpha(colors.sea, 0.4)}`,
-                                },
-                                transition: 'all 0.25s ease',
-                            }}
-                        >
-                            Refresh
-                        </Button>
-                    </Box>
+                    </Stack>
                 </Box>
 
-                {/* ===== FILTERS SECTION ===== */}
-                <Collapse in={showFilters}>
-                    <Box
-                        sx={{
-                            p: 3,
-                            mb: 3,
-                            background: `linear-gradient(135deg, #f8fafc, #f1f5f9)`,
-                            borderRadius: 2.5,
-                            border: `1px solid ${alpha(colors.middle, 0.2)}`,
-                        }}
-                    >
-                        <Box display="flex" alignItems="center" justifyContent="space-between" mb={2.5}>
-                            <Typography variant="subtitle1" sx={{ fontWeight: 700, color: colors.dark }}>
-                                Filter Portfolios
-                            </Typography>
-                            {(selectedTechnician || search) && (
-                                <Button
-                                    size="small"
-                                    startIcon={<ClearIcon />}
-                                    onClick={handleClearFilters}
-                                    sx={{
-                                        color: colors.rain,
-                                        textTransform: 'none',
-                                        fontWeight: 600,
-                                        '&:hover': {
-                                            color: colors.dark,
-                                            backgroundColor: alpha(colors.dark, 0.04),
-                                        },
-                                    }}
-                                >
-                                    Clear All
-                                </Button>
-                            )}
-                        </Box>
-
-                        <Grid container spacing={2.5}>
-                            <Grid item xs={12} md={6}>
-                                <Autocomplete
-                                    options={technicians}
-                                    getOptionLabel={(option) => option?.name || ''}
-                                    value={selectedTechnician}
-                                    onChange={(event, newValue) => {
-                                        setSelectedTechnician(newValue);
-                                        setPage(1);
-                                    }}
-                                    renderInput={(params) => (
-                                        <TextField
-                                            {...params}
-                                            label="Filter by Technician"
-                                            variant="outlined"
-                                            size="medium"
-                                            placeholder="Select technician..."
-                                            InputProps={{
-                                                ...params.InputProps,
-                                                startAdornment: (
-                                                    <>
-                                                        <InputAdornment position="start">
-                                                            <PersonIcon sx={{ color: colors.rain, fontSize: 20 }} />
-                                                        </InputAdornment>
-                                                        {params.InputProps.startAdornment}
-                                                    </>
-                                                ),
-                                            }}
-                                            sx={{
-                                                '& .MuiOutlinedInput-root': {
-                                                    backgroundColor: '#ffffff',
-                                                    borderRadius: 2,
-                                                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                                                        borderColor: colors.sea,
-                                                        borderWidth: 2,
-                                                    },
-                                                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                                                        borderColor: colors.sea,
-                                                        borderWidth: 2,
-                                                    },
-                                                },
-                                                '& .MuiInputLabel-root': {
-                                                    color: colors.rain,
-                                                    '&.Mui-focused': {
-                                                        color: colors.sea,
-                                                    },
-                                                },
-                                            }}
-                                        />
-                                    )}
-                                    renderOption={(props, option) => (
-                                        <Box component="li" {...props} sx={{ py: 1.5, px: 2 }}>
-                                            <Box display="flex" alignItems="center" gap={2} width="100%">
-                                                <Avatar
-                                                    src={option?.profile_photo || undefined}
-                                                    sx={{
-                                                        width: 36,
-                                                        height: 36,
-                                                        bgcolor: colors.sea,
-                                                        fontSize: '0.85rem',
-                                                        fontWeight: 600,
-                                                    }}
-                                                >
-                                                    {getInitials(option?.name)}
-                                                </Avatar>
-                                                <Box flex={1}>
-                                                    <Typography variant="body2" sx={{ fontWeight: 600, color: colors.dark }}>
-                                                        {option?.name || 'Unknown'}
-                                                    </Typography>
-                                                    {option?.area && (
-                                                        <Typography variant="caption" sx={{ color: colors.rain, display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                                            <LocationIcon sx={{ fontSize: 12 }} />
-                                                            {option.area}
-                                                        </Typography>
-                                                    )}
-                                                </Box>
-                                                {option?.verified && (
-                                                    <VerifiedIcon sx={{ fontSize: 18, color: colors.salat }} />
-                                                )}
-                                                {option?.rating > 0 && (
-                                                    <Box display="flex" alignItems="center" gap={0.5}>
-                                                        <StarIcon sx={{ fontSize: 16, color: '#f59e0b' }} />
-                                                        <Typography variant="caption" sx={{ fontWeight: 700 }}>
-                                                            {option.rating.toFixed(1)}
-                                                        </Typography>
-                                                    </Box>
-                                                )}
-                                            </Box>
-                                        </Box>
-                                    )}
-                                    isOptionEqualToValue={(option, value) => option?.id === value?.id}
-                                />
-                            </Grid>
-
-                            <Grid item xs={12} md={6}>
-                                <Box display="flex" alignItems="center" gap={1.5} flexWrap="wrap" sx={{ height: '100%' }}>
-                                    <Typography variant="caption" sx={{ color: colors.rain, fontWeight: 600 }}>
-                                        Active Filters:
-                                    </Typography>
-                                    {selectedTechnician && (
-                                        <Chip
-                                            avatar={
-                                                <Avatar
-                                                    src={selectedTechnician?.profile_photo || undefined}
-                                                    sx={{ width: 24, height: 24 }}
-                                                >
-                                                    {getInitials(selectedTechnician?.name)}
-                                                </Avatar>
-                                            }
-                                            label={selectedTechnician.name}
-                                            onDelete={() => {
-                                                setSelectedTechnician(null);
-                                                setPage(1);
-                                            }}
-                                            sx={{
-                                                backgroundColor: alpha(colors.sea, 0.12),
-                                                color: colors.sea,
-                                                fontWeight: 600,
-                                                '& .MuiChip-deleteIcon': {
-                                                    color: colors.sea,
-                                                    fontSize: 18,
-                                                },
-                                            }}
-                                        />
-                                    )}
-                                    {!selectedTechnician && !search && (
-                                        <Typography variant="caption" sx={{ color: colors.rain, fontStyle: 'italic' }}>
-                                            No filters applied
-                                        </Typography>
-                                    )}
-                                </Box>
-                            </Grid>
-                        </Grid>
-                    </Box>
-                </Collapse>
-
-                {/* ===== STATISTICS BANNER ===== */}
-                {portfolios.length > 0 && (
-                    <Box
-                        sx={{
-                            display: 'grid',
-                            gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)', md: 'repeat(4, 1fr)' },
-                            gap: 2,
-                            mb: 4,
-                            p: 2.5,
-                            background: `linear-gradient(135deg, ${alpha(colors.sea, 0.04)}, ${alpha(colors.sea, 0.01)})`,
-                            borderRadius: 2.5,
-                            border: `1px solid ${alpha(colors.middle, 0.15)}`,
-                        }}
-                    >
-                        <Box display="flex" alignItems="center" gap={1.5}>
-                            <Box sx={{
-                                p: 1,
-                                borderRadius: 2,
-                                background: alpha(colors.sea, 0.12),
-                            }}>
-                                <PhotoLibraryIcon sx={{ fontSize: 22, color: colors.sea }} />
-                            </Box>
-                            <Box>
-                                <Typography variant="h6" sx={{ color: colors.dark, fontWeight: 700, lineHeight: 1.2 }}>
-                                    {portfolios.length}
-                                </Typography>
-                                <Typography variant="caption" sx={{ color: colors.rain, fontWeight: 500 }}>
-                                    Portfolio{portfolios.length !== 1 ? 's' : ''}
-                                </Typography>
-                            </Box>
-                        </Box>
-
-                        <Box display="flex" alignItems="center" gap={1.5}>
-                            <Box sx={{
-                                p: 1,
-                                borderRadius: 2,
-                                background: alpha('#8b5cf6', 0.12),
-                            }}>
-                                <PeopleIcon sx={{ fontSize: 22, color: '#8b5cf6' }} />
-                            </Box>
-                            <Box>
-                                <Typography variant="h6" sx={{ color: colors.dark, fontWeight: 700, lineHeight: 1.2 }}>
-                                    {technicianGroups.length}
-                                </Typography>
-                                <Typography variant="caption" sx={{ color: colors.rain, fontWeight: 500 }}>
-                                    Technician{technicianGroups.length !== 1 ? 's' : ''}
-                                </Typography>
-                            </Box>
-                        </Box>
-
-                        <Box display="flex" alignItems="center" gap={1.5}>
-                            <Box sx={{
-                                p: 1,
-                                borderRadius: 2,
-                                background: alpha('#f59e0b', 0.12),
-                            }}>
-                                <TrendingUpIcon sx={{ fontSize: 22, color: '#f59e0b' }} />
-                            </Box>
-                            <Box>
-                                <Typography variant="h6" sx={{ color: colors.dark, fontWeight: 700, lineHeight: 1.2 }}>
-                                    {portfolios.filter(p => p.created_at && new Date(p.created_at) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)).length}
-                                </Typography>
-                                <Typography variant="caption" sx={{ color: colors.rain, fontWeight: 500 }}>
-                                    Last 30 days
-                                </Typography>
-                            </Box>
-                        </Box>
-
-                        {selectedTechnician && (
-                            <Box display="flex" alignItems="center" gap={1.5}>
-                                <Box sx={{
-                                    p: 1,
-                                    borderRadius: 2,
-                                    background: alpha(colors.salat, 0.12),
-                                }}>
-                                    <PersonIcon sx={{ fontSize: 22, color: colors.salat }} />
-                                </Box>
-                                <Box flex={1} minWidth={0}>
-                                    <Typography variant="h6" sx={{ color: colors.dark, fontWeight: 700, lineHeight: 1.2, fontSize: '0.95rem' }}>
-                                        {selectedTechnician.name}
-                                    </Typography>
-                                    <Typography variant="caption" sx={{ color: colors.rain, fontWeight: 500 }}>
-                                        Filtered view
-                                    </Typography>
-                                </Box>
-                            </Box>
-                        )}
-                    </Box>
-                )}
-
-                {/* ===== PORTFOLIO GRID ===== */}
-                {loading && portfolios.length === 0 ? (
-                    <Grid container spacing={3}>
-                        {renderSkeletons()}
-                    </Grid>
-                ) : portfolios.length === 0 ? (
-                    <Box
-                        textAlign="center"
-                        py={10}
-                        sx={{
-                            background: `linear-gradient(135deg, #f8fafc, #f1f5f9)`,
-                            borderRadius: 3,
-                            border: `2px dashed ${alpha(colors.middle, 0.3)}`,
-                        }}
-                    >
-                        <PhotoLibraryIcon sx={{ fontSize: 72, color: alpha(colors.middle, 0.5), mb: 2 }} />
-                        <Typography variant="h5" sx={{ color: colors.dark, fontWeight: 600, mb: 1 }}>
-                            No portfolios found
-                        </Typography>
-                        <Typography variant="body2" sx={{ color: colors.rain }}>
-                            {search || selectedTechnician ? 'No results match your filters' : 'Portfolios will appear here once created'}
-                        </Typography>
-                        {(search || selectedTechnician) && (
-                            <Button
-                                variant="outlined"
-                                onClick={handleClearFilters}
-                                sx={{
-                                    mt: 3,
-                                    borderColor: colors.middle,
-                                    borderRadius: 2.5,
-                                    textTransform: 'none',
-                                    fontWeight: 600,
-                                    '&:hover': {
-                                        borderColor: colors.sea,
-                                        backgroundColor: alpha(colors.sea, 0.06),
-                                    },
-                                }}
-                            >
-                                Clear Filters
-                            </Button>
-                        )}
-                    </Box>
-                ) : (
-                    <Stack spacing={4}>
-                        {technicianGroups.map((group, groupIndex) => (
-                            <Box key={groupIndex}>
-                                {/* Technician Header */}
-                                <Paper
+                {/* ── SUMMARY CARDS ────────────────────────────────────── */}
+                <Box sx={{ px: { xs: 2, sm: 3 }, pt: 2.5, pb: 1 }}>
+                    <Grid container spacing={2}>
+                        {[
+                            { label: 'Total Portfolios', value: totalPortfolios, color: '#8b5cf6', bg: '#f3e8ff', icon: <ImageIcon sx={{ fontSize: 18 }} /> },
+                            { label: 'Technicians', value: uniqueTechnicians, color: '#3b82f6', bg: '#eff6ff', icon: <PersonIcon sx={{ fontSize: 18 }} /> },
+                            { label: 'Active Items', value: portfolios.filter(p => p.status !== 'archived').length, color: '#10b981', bg: '#ecfdf5', icon: <DescriptionIcon sx={{ fontSize: 18 }} /> },
+                            { label: 'Recent', value: portfolios.filter(p => p.created_at && new Date(p.created_at) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)).length, color: '#f59e0b', bg: '#fef3c7', icon: <CalendarIcon sx={{ fontSize: 18 }} /> },
+                        ].map((item, idx) => (
+                            <Grid item xs={6} sm={3} key={idx}>
+                                <Card
                                     elevation={0}
                                     sx={{
-                                        p: 2.5,
-                                        mb: 2.5,
-                                        background: `linear-gradient(135deg, #f8fafc, #ffffff)`,
-                                        borderRadius: 2.5,
-                                        border: `1px solid ${alpha(colors.middle, 0.15)}`,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between',
-                                        flexWrap: 'wrap',
-                                        gap: 2,
-                                        transition: 'all 0.3s ease',
-                                        '&:hover': {
-                                            borderColor: alpha(colors.sea, 0.3),
-                                            boxShadow: '0 4px 20px rgba(0,0,0,0.04)',
+                                        borderRadius: 2,
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                        backgroundColor: item.bg,
+                                        height: '100%',
+                                    }}
+                                >
+                                    <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                                        <Box display="flex" alignItems="center" justifyContent="space-between">
+                                            <Typography variant="caption" sx={{ color: item.color, fontWeight: 600 }}>
+                                                {item.label}
+                                            </Typography>
+                                            {item.icon}
+                                        </Box>
+                                        <Typography variant="h4" sx={{ color: item.color, fontWeight: 700 }}>
+                                            {item.value}
+                                        </Typography>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+                        ))}
+                    </Grid>
+                </Box>
+
+                {/* ── TABLE (DESKTOP) ───────────────────────────────────── */}
+                {showTableView ? (
+                    <TableContainer>
+                        <Table sx={{ minWidth: 900 }}>
+                            <TableHead>
+                                <TableRow
+                                    sx={{
+                                        bgcolor: 'action.hover',
+                                        '& th': {
+                                            fontWeight: 700,
+                                            fontSize: '0.8125rem',
+                                            color: 'text.secondary',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: 0.6,
+                                            borderBottom: '1px solid',
+                                            borderColor: 'divider',
+                                            py: 1.75,
                                         },
                                     }}
                                 >
-                                    <Box display="flex" alignItems="center" gap={2.5}>
-                                        <Avatar
-                                            src={group.technician?.profile_photo || undefined}
-                                            sx={{
-                                                width: 64,
-                                                height: 64,
-                                                bgcolor: colors.sea,
-                                                fontSize: '1.4rem',
-                                                fontWeight: 700,
-                                                border: `3px solid ${alpha(colors.sea, 0.15)}`,
-                                            }}
-                                        >
-                                            {getInitials(group.technician?.name)}
-                                        </Avatar>
-                                        <Box>
-                                            <Box display="flex" alignItems="center" gap={1.5}>
-                                                <Typography variant="h6" fontWeight="700" sx={{ color: colors.dark }}>
-                                                    {group.technician?.name || 'Unknown'}
-                                                </Typography>
-                                                {group.technician?.verified && (
-                                                    <VerifiedIcon sx={{ fontSize: 20, color: colors.salat }} />
-                                                )}
-                                            </Box>
-                                            <Box display="flex" alignItems="center" gap={2.5} flexWrap="wrap" sx={{ mt: 0.75 }}>
-                                                {group.technician?.area && (
-                                                    <Box display="flex" alignItems="center" gap={0.75}>
-                                                        <LocationIcon sx={{ fontSize: 16, color: colors.rain }} />
-                                                        <Typography variant="body2" sx={{ color: colors.rain }}>
-                                                            {group.technician.area}
-                                                        </Typography>
-                                                    </Box>
-                                                )}
-                                                {group.technician?.rating > 0 && (
-                                                    <Box display="flex" alignItems="center" gap={0.75}>
-                                                        <StarIcon sx={{ fontSize: 16, color: '#f59e0b' }} />
-                                                        <Typography variant="body2" sx={{ color: colors.dark, fontWeight: 600 }}>
-                                                            {group.technician.rating.toFixed(1)}
-                                                        </Typography>
-                                                    </Box>
-                                                )}
-                                                {group.technician?.services && group.technician.services.length > 0 && (
-                                                    <Box display="flex" alignItems="center" gap={0.75}>
-                                                        <WorkIcon sx={{ fontSize: 16, color: colors.rain }} />
-                                                        <Typography variant="body2" sx={{ color: colors.rain }}>
-                                                            {group.technician.services.slice(0, 3).join(', ')}
-                                                            {group.technician.services.length > 3 && ` +${group.technician.services.length - 3}`}
-                                                        </Typography>
-                                                    </Box>
-                                                )}
-                                            </Box>
-                                        </Box>
-                                    </Box>
-                                    <Chip
-                                        icon={<PhotoLibraryIcon sx={{ fontSize: 18 }} />}
-                                        label={`${group.portfolios.length} Portfolio${group.portfolios.length !== 1 ? 's' : ''}`}
-                                        sx={{
-                                            backgroundColor: alpha(colors.sea, 0.12),
-                                            color: colors.sea,
-                                            fontWeight: 700,
-                                            fontSize: '0.85rem',
-                                            height: 36,
-                                            '& .MuiChip-icon': {
-                                                color: colors.sea,
-                                            },
-                                        }}
-                                    />
-                                </Paper>
+                                    {headCells.map((cell) => (
+                                        <TableCell key={cell.id} sx={{ whiteSpace: 'nowrap' }}>
+                                            {!cell.disableSort ? (
+                                                <TableSortLabel
+                                                    active={orderBy === cell.id}
+                                                    direction={orderBy === cell.id ? order : 'asc'}
+                                                    onClick={() => handleRequestSort(cell.id)}
+                                                >
+                                                    {cell.label}
+                                                </TableSortLabel>
+                                            ) : (
+                                                cell.label
+                                            )}
+                                        </TableCell>
+                                    ))}
+                                </TableRow>
+                            </TableHead>
 
-                                {/* Portfolios Grid */}
-                                <Grid container spacing={3}>
-                                    {group.portfolios.map((portfolio, index) => {
-                                        const isExpanded = expandedDescriptions[portfolio.id] || false;
-                                        const isHovered = hoveredCard === portfolio.id;
-                                        const description = portfolio.description || 'No description available';
-                                        const shouldTruncate = description.length > 80;
-                                        const socialLinks = getSocialLinks(portfolio);
-
+                            <TableBody>
+                                {loading ? (
+                                    <TableRow>
+                                        <TableCell colSpan={headCells.length} align="center" sx={{ py: 8 }}>
+                                            <CircularProgress size={36} thickness={4} />
+                                        </TableCell>
+                                    </TableRow>
+                                ) : sortedPortfolios.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={headCells.length} align="center" sx={{ py: 8 }}>
+                                            <Typography color="text.secondary" fontWeight={500}>
+                                                No portfolios found
+                                            </Typography>
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    sortedPortfolios.map((portfolio) => {
+                                        const imageUrl = portfolio.image ? getImageUrl(portfolio.image) : null;
                                         return (
-                                            <Grid
-                                                item
-                                                xs={12}
-                                                sm={6}
-                                                md={4}
-                                                lg={3}
+                                            <TableRow
                                                 key={portfolio.id}
-                                                sx={{ display: 'flex' }}
+                                                hover
+                                                sx={{
+                                                    '&:last-child td': { borderBottom: 0 },
+                                                    transition: 'background-color 0.15s',
+                                                }}
                                             >
-                                                <Grow in={true} timeout={300 + (index * 60)} style={{ width: '100%' }}>
-                                                    <Card
-                                                        sx={{
-                                                            borderRadius: 3,
-                                                            overflow: 'hidden',
-                                                            width: '100%',
-                                                            display: 'flex',
-                                                            flexDirection: 'column',
-                                                            transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-                                                            border: `1px solid ${alpha(colors.middle, 0.15)}`,
-                                                            backgroundColor: '#ffffff',
-                                                            '&:hover': {
-                                                                transform: 'translateY(-8px)',
-                                                                boxShadow: '0 16px 48px rgba(0,0,0,0.08)',
-                                                                borderColor: alpha(colors.sea, 0.3),
-                                                            },
-                                                            position: 'relative',
-                                                        }}
-                                                        onMouseEnter={() => setHoveredCard(portfolio.id)}
-                                                        onMouseLeave={() => setHoveredCard(null)}
-                                                    >
-                                                        {/* Image Section */}
-                                                        <Box
-                                                            sx={{
-                                                                position: 'relative',
-                                                                width: '100%',
-                                                                paddingTop: '75%',
-                                                                backgroundColor: '#f8fafc',
-                                                                overflow: 'hidden',
-                                                                cursor: 'pointer',
-                                                                flexShrink: 0,
-                                                            }}
-                                                            onClick={() => handleViewPortfolio(portfolio)}
-                                                        >
-                                                            {!imageLoaded[portfolio.id] && (
-                                                                <Box
-                                                                    sx={{
-                                                                        position: 'absolute',
-                                                                        top: 0,
-                                                                        left: 0,
+                                                {/* Portfolio */}
+                                                <TableCell sx={{ py: 2 }}>
+                                                    <Stack direction="row" spacing={1.5} alignItems="center">
+                                                        {imageUrl ? (
+                                                            <Box
+                                                                sx={{
+                                                                    width: 48,
+                                                                    height: 48,
+                                                                    borderRadius: 1.5,
+                                                                    overflow: 'hidden',
+                                                                    flexShrink: 0,
+                                                                    bgcolor: 'action.hover',
+                                                                    border: '1px solid',
+                                                                    borderColor: 'divider',
+                                                                }}
+                                                            >
+                                                                <img
+                                                                    src={imageUrl}
+                                                                    alt=""
+                                                                    style={{
                                                                         width: '100%',
                                                                         height: '100%',
-                                                                        display: 'flex',
-                                                                        alignItems: 'center',
-                                                                        justifyContent: 'center',
-                                                                        backgroundColor: '#f8fafc',
-                                                                        zIndex: 1,
+                                                                        objectFit: 'cover',
                                                                     }}
-                                                                >
-                                                                    <CircularProgress size={40} sx={{ color: colors.sea }} />
-                                                                </Box>
-                                                            )}
-                                                            <img
-                                                                src={portfolio.image || '/placeholder-image.jpg'}
-                                                                alt={portfolio.description || 'Portfolio item'}
-                                                                style={{
-                                                                    position: 'absolute',
-                                                                    top: 0,
-                                                                    left: 0,
-                                                                    width: '100%',
-                                                                    height: '100%',
-                                                                    objectFit: 'cover',
-                                                                    display: 'block',
-                                                                    transition: 'transform 0.6s ease',
-                                                                    transform: isHovered ? 'scale(1.06)' : 'scale(1)',
-                                                                }}
-                                                                onLoad={() => handleImageLoad(portfolio.id)}
-                                                            />
-
-                                                            {/* Gradient Overlay */}
+                                                                    onError={(e) => {
+                                                                        e.target.style.display = 'none';
+                                                                    }}
+                                                                />
+                                                            </Box>
+                                                        ) : (
                                                             <Box
                                                                 sx={{
-                                                                    position: 'absolute',
-                                                                    bottom: 0,
-                                                                    left: 0,
-                                                                    right: 0,
-                                                                    height: '45%',
-                                                                    background: 'linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 100%)',
-                                                                    opacity: isHovered ? 1 : 0.7,
-                                                                    transition: 'opacity 0.4s ease',
-                                                                }}
-                                                            />
-
-                                                            {/* Quick Actions */}
-                                                            <Box
-                                                                sx={{
-                                                                    position: 'absolute',
-                                                                    top: 10,
-                                                                    right: 10,
+                                                                    width: 48,
+                                                                    height: 48,
+                                                                    borderRadius: 1.5,
+                                                                    bgcolor: 'action.hover',
+                                                                    border: '1px solid',
+                                                                    borderColor: 'divider',
                                                                     display: 'flex',
-                                                                    gap: 0.5,
-                                                                    zIndex: 2,
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    flexShrink: 0,
                                                                 }}
                                                             >
-                                                                <Tooltip title="View Details">
-                                                                    <IconButton
-                                                                        size="small"
-                                                                        sx={{
-                                                                            backgroundColor: 'rgba(0,0,0,0.5)',
-                                                                            color: 'white',
-                                                                            backdropFilter: 'blur(8px)',
-                                                                            width: 32,
-                                                                            height: 32,
-                                                                            transition: 'all 0.2s ease',
-                                                                            '&:hover': {
-                                                                                backgroundColor: 'rgba(0,0,0,0.7)',
-                                                                                transform: 'scale(1.1)',
-                                                                            },
-                                                                        }}
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            handleViewPortfolio(portfolio);
-                                                                        }}
-                                                                    >
-                                                                        <ZoomInIcon sx={{ fontSize: 16 }} />
-                                                                    </IconButton>
-                                                                </Tooltip>
-                                                                {canDelete && (
-                                                                    <Tooltip title="Delete">
-                                                                        <IconButton
-                                                                            size="small"
-                                                                            sx={{
-                                                                                backgroundColor: 'rgba(220,38,38,0.7)',
-                                                                                color: 'white',
-                                                                                backdropFilter: 'blur(8px)',
-                                                                                width: 32,
-                                                                                height: 32,
-                                                                                transition: 'all 0.2s ease',
-                                                                                '&:hover': {
-                                                                                    backgroundColor: 'rgb(220,38,38)',
-                                                                                    transform: 'scale(1.1)',
-                                                                                },
-                                                                            }}
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                handleDeletePortfolio(portfolio.id);
-                                                                            }}
-                                                                        >
-                                                                            <DeleteIcon sx={{ fontSize: 16 }} />
-                                                                        </IconButton>
-                                                                    </Tooltip>
-                                                                )}
+                                                                <PhotoCameraIcon sx={{ color: 'text.disabled', fontSize: 24 }} />
                                                             </Box>
-
-                                                            {/* Verified Badge */}
-                                                            {portfolio.technician?.verified && (
-                                                                <Box
-                                                                    sx={{
-                                                                        position: 'absolute',
-                                                                        top: 10,
-                                                                        left: 10,
-                                                                        zIndex: 2,
-                                                                    }}
-                                                                >
-                                                                    <Tooltip title="Verified Technician">
-                                                                        <VerifiedIcon sx={{ color: colors.salat, fontSize: 20 }} />
-                                                                    </Tooltip>
-                                                                </Box>
-                                                            )}
-                                                        </Box>
-
-                                                        {/* Card Content */}
-                                                        <Box
-                                                            sx={{
-                                                                flex: 1,
-                                                                display: 'flex',
-                                                                flexDirection: 'column',
-                                                                p: 2.5,
-                                                                pb: 1.5,
-                                                            }}
-                                                        >
-                                                            {portfolio.technician?.rating > 0 && (
-                                                                <Box display="flex" alignItems="center" gap={0.75} mb={1}>
-                                                                    <StarIcon sx={{ fontSize: 16, color: '#f59e0b' }} />
-                                                                    <Typography variant="body2" sx={{ fontWeight: 700, color: colors.dark }}>
-                                                                        {portfolio.technician.rating.toFixed(1)}
-                                                                    </Typography>
-                                                                    <Typography variant="caption" sx={{ color: colors.rain }}>
-                                                                        rating
-                                                                    </Typography>
-                                                                </Box>
-                                                            )}
-
-                                                            <Typography
-                                                                variant="body2"
-                                                                sx={{
-                                                                    color: colors.black,
-                                                                    lineHeight: 1.7,
-                                                                    fontSize: '0.85rem',
-                                                                    mb: 0.5,
-                                                                    flex: 1,
-                                                                }}
-                                                            >
-                                                                {isExpanded ? description : truncateText(description, 80)}
+                                                        )}
+                                                        <Box>
+                                                            <Typography variant="body2" fontWeight={600} color="text.primary">
+                                                                Portfolio #{portfolio.id}
                                                             </Typography>
-
-                                                            {isExpanded && group.technician?.services?.length > 0 && (
-                                                                <Box sx={{ mt: 1.5, mb: 1 }}>
-                                                                    <Typography
-                                                                        variant="caption"
-                                                                        sx={{
-                                                                            color: colors.rain,
-                                                                            fontWeight: 600,
-                                                                            display: 'block',
-                                                                            mb: 0.75,
-                                                                            fontSize: '0.7rem',
-                                                                            textTransform: 'uppercase',
-                                                                            letterSpacing: '0.5px',
-                                                                        }}
-                                                                    >
-                                                                        Services
-                                                                    </Typography>
-                                                                    <Box display="flex" gap={0.75} flexWrap="wrap">
-                                                                        {group.technician.services.slice(0, 4).map((service, idx) => (
-                                                                            <Chip
-                                                                                key={idx}
-                                                                                label={service}
-                                                                                size="small"
-                                                                                sx={{
-                                                                                    backgroundColor: alpha(colors.sea, 0.08),
-                                                                                    color: colors.sea,
-                                                                                    fontSize: '0.65rem',
-                                                                                    height: 24,
-                                                                                    fontWeight: 600,
-                                                                                }}
-                                                                            />
-                                                                        ))}
-                                                                        {group.technician.services.length > 4 && (
-                                                                            <Chip
-                                                                                label={`+${group.technician.services.length - 4}`}
-                                                                                size="small"
-                                                                                sx={{
-                                                                                    backgroundColor: alpha(colors.middle, 0.15),
-                                                                                    color: colors.rain,
-                                                                                    fontSize: '0.65rem',
-                                                                                    height: 24,
-                                                                                    fontWeight: 600,
-                                                                                }}
-                                                                            />
-                                                                        )}
-                                                                    </Box>
-                                                                </Box>
-                                                            )}
-
-                                                            {shouldTruncate && (
-                                                                <Button
-                                                                    size="small"
-                                                                    onClick={() => toggleDescription(portfolio.id)}
-                                                                    sx={{
-                                                                        color: colors.sea,
-                                                                        textTransform: 'none',
-                                                                        fontWeight: 700,
-                                                                        fontSize: '0.75rem',
-                                                                        p: 0,
-                                                                        minWidth: 'auto',
-                                                                        alignSelf: 'flex-start',
-                                                                        '&:hover': {
-                                                                            backgroundColor: 'transparent',
-                                                                            color: colors.dark,
-                                                                        },
-                                                                    }}
-                                                                    endIcon={isExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
-                                                                >
-                                                                    {isExpanded ? 'Read Less' : 'Read More'}
-                                                                </Button>
-                                                            )}
-
-                                                            {/* ─── SOCIAL LINKS ──────────────────────────────── */}
-                                                            {socialLinks.length > 0 && (
-                                                                <Box sx={{ mt: 1.5, mb: 0.5 }}>
-                                                                    <Typography
-                                                                        variant="caption"
-                                                                        sx={{
-                                                                            color: colors.rain,
-                                                                            fontWeight: 600,
-                                                                            display: 'block',
-                                                                            mb: 0.75,
-                                                                            fontSize: '0.7rem',
-                                                                            textTransform: 'uppercase',
-                                                                            letterSpacing: '0.5px',
-                                                                        }}
-                                                                    >
-                                                                        Connect
-                                                                    </Typography>
-                                                                    <Box display="flex" gap={1} flexWrap="wrap">
-                                                                        {socialLinks.map((link, idx) => (
-                                                                            <SocialLink
-                                                                                key={idx}
-                                                                                platform={link.platform}
-                                                                                url={link.url}
-                                                                            />
-                                                                        ))}
-                                                                    </Box>
-                                                                </Box>
+                                                            {portfolio.technician?.name && (
+                                                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                                                    {portfolio.technician.name}
+                                                                </Typography>
                                                             )}
                                                         </Box>
+                                                    </Stack>
+                                                </TableCell>
 
-                                                        {/* Card Footer */}
-                                                        <Box
+                                                {/* Technician */}
+                                                <TableCell>
+                                                    <Stack direction="row" spacing={1} alignItems="center">
+                                                        <Avatar
+                                                            src={portfolio.technician?.profile_photo ? getImageUrl(portfolio.technician.profile_photo) : undefined}
                                                             sx={{
-                                                                p: 2,
-                                                                pt: 1.5,
-                                                                borderTop: `1px solid ${alpha(colors.middle, 0.08)}`,
-                                                                display: 'flex',
-                                                                justifyContent: 'space-between',
-                                                                alignItems: 'center',
-                                                                flexShrink: 0,
+                                                                width: 32,
+                                                                height: 32,
+                                                                bgcolor: colors.sea || '#0f766e',
+                                                                fontSize: 12,
+                                                                fontWeight: 600,
                                                             }}
                                                         >
-                                                            <Box display="flex" alignItems="center" gap={0.75}>
-                                                                <AccessTimeIcon sx={{ fontSize: 14, color: colors.rain }} />
-                                                                <Typography variant="caption" sx={{ color: colors.rain, fontSize: '0.7rem', fontWeight: 500 }}>
-                                                                    {formatDate(portfolio.created_at)}
-                                                                </Typography>
-                                                            </Box>
-                                                            {portfolio.technician?.area && (
-                                                                <Box display="flex" alignItems="center" gap={0.75}>
-                                                                    <LocationIcon sx={{ fontSize: 14, color: colors.rain }} />
-                                                                    <Typography variant="caption" sx={{ color: colors.rain, fontSize: '0.7rem', fontWeight: 500 }}>
-                                                                        {portfolio.technician.area}
-                                                                    </Typography>
-                                                                </Box>
+                                                            {getInitials(portfolio.technician?.user?.name || portfolio.technician?.name)}
+                                                        </Avatar>
+                                                        <Box>
+                                                            <Typography variant="body2" fontWeight={500}>
+                                                                {portfolio.technician?.user?.name || portfolio.technician?.name || '—'}
+                                                            </Typography>
+                                                            {portfolio.technician?.verified && (
+                                                                <VerifiedIcon sx={{ fontSize: 12, color: '#10b981', display: 'block' }} />
                                                             )}
-                                                            <Tooltip title="View Details">
-                                                                <IconButton
-                                                                    size="small"
-                                                                    onClick={() => handleViewPortfolio(portfolio)}
-                                                                    sx={{
-                                                                        color: colors.rain,
-                                                                        padding: 0.5,
-                                                                        transition: 'all 0.2s ease',
-                                                                        '&:hover': {
-                                                                            backgroundColor: alpha(colors.sea, 0.08),
-                                                                            color: colors.sea,
-                                                                            transform: 'scale(1.1)',
-                                                                        },
-                                                                    }}
-                                                                >
-                                                                    <VisibilityIcon sx={{ fontSize: 18 }} />
-                                                                </IconButton>
-                                                            </Tooltip>
                                                         </Box>
+                                                    </Stack>
+                                                </TableCell>
 
-                                                        {/* Hover Indicator */}
-                                                        <LinearProgress
-                                                            variant="determinate"
-                                                            value={isHovered ? 100 : 0}
-                                                            sx={{
-                                                                height: 3,
-                                                                backgroundColor: 'transparent',
-                                                                '& .MuiLinearProgress-bar': {
-                                                                    background: `linear-gradient(90deg, ${colors.sea}, ${colors.dark})`,
-                                                                    transition: 'transform 0.4s ease',
-                                                                },
-                                                                position: 'absolute',
-                                                                bottom: 0,
-                                                                left: 0,
-                                                                right: 0,
-                                                                borderRadius: 0,
-                                                            }}
-                                                        />
-                                                    </Card>
-                                                </Grow>
-                                            </Grid>
+                                                {/* Description */}
+                                                <TableCell>
+                                                    <Typography variant="body2" color="text.secondary">
+                                                        {truncateText(portfolio.description || 'No description', 50)}
+                                                    </Typography>
+                                                </TableCell>
+
+                                                {/* Created */}
+                                                <TableCell>
+                                                    <Typography variant="body2" fontWeight={500} color="text.secondary">
+                                                        {formatDate(portfolio.created_at)}
+                                                    </Typography>
+                                                </TableCell>
+
+                                                {/* Actions */}
+                                                <TableCell align="center">
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={(e) => handleMenuOpen(e, portfolio)}
+                                                        sx={{
+                                                            color: 'text.secondary',
+                                                            '&:hover': {
+                                                                bgcolor: 'action.hover',
+                                                                color: 'text.primary',
+                                                            },
+                                                        }}
+                                                    >
+                                                        <MoreVertIcon />
+                                                    </IconButton>
+                                                </TableCell>
+                                            </TableRow>
                                         );
-                                    })}
-                                </Grid>
+                                    })
+                                )}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                ) : (
+                    /* ── MOBILE/TABLET CARDS ──────────────────────────────── */
+                    <Box sx={{ p: { xs: 2, sm: 2.5 } }}>
+                        {loading ? (
+                            <Box display="flex" justifyContent="center" py={6}>
+                                <CircularProgress size={36} thickness={4} />
                             </Box>
-                        ))}
-                    </Stack>
-                )}
-
-                {/* ===== PAGINATION ===== */}
-                {portfolios.length > 0 && (
-                    <Box
-                        display="flex"
-                        justifyContent="center"
-                        alignItems="center"
-                        mt={4.5}
-                        gap={2.5}
-                        flexWrap="wrap"
-                        sx={{
-                            pt: 3.5,
-                            borderTop: `1px solid ${alpha(colors.middle, 0.15)}`,
-                        }}
-                    >
-                        <Pagination
-                            count={pagination.last_page || 1}
-                            page={page}
-                            onChange={(e, value) => setPage(value)}
-                            sx={{
-                                '& .MuiPaginationItem-root': {
-                                    borderRadius: 2,
-                                    fontWeight: 600,
-                                    fontSize: '0.9rem',
-                                    transition: 'all 0.2s ease',
-                                    '&:hover': {
-                                        backgroundColor: alpha(colors.sea, 0.08),
-                                    },
-                                },
-                                '& .Mui-selected': {
-                                    background: `linear-gradient(135deg, ${colors.sea}, ${colors.dark}) !important`,
-                                    color: '#ffffff !important',
-                                    boxShadow: `0 4px 16px ${alpha(colors.sea, 0.3)}`,
-                                    '&:hover': {
-                                        transform: 'translateY(-2px)',
-                                        boxShadow: `0 8px 24px ${alpha(colors.sea, 0.4)}`,
-                                    },
-                                },
-                            }}
-                            size={isMobile ? "small" : "medium"}
-                        />
-                        <FormControl size="small" sx={{ minWidth: 110 }}>
-                            <InputLabel sx={{ color: colors.rain, fontWeight: 500 }}>Per Page</InputLabel>
-                            <Select
-                                value={perPage}
-                                label="Per Page"
-                                onChange={(e) => {
-                                    setPerPage(e.target.value);
-                                    setPage(1);
-                                }}
+                        ) : sortedPortfolios.length === 0 ? (
+                            <Paper
+                                variant="outlined"
                                 sx={{
-                                    borderRadius: 2.5,
-                                    fontWeight: 600,
-                                    '& .MuiOutlinedInput-notchedOutline': {
-                                        borderColor: alpha(colors.middle, 0.3),
-                                    },
-                                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                                        borderColor: colors.sea,
-                                    },
+                                    p: 5,
+                                    textAlign: 'center',
+                                    borderRadius: 3,
+                                    borderStyle: 'dashed',
                                 }}
                             >
-                                <MenuItem value={10}>10</MenuItem>
-                                <MenuItem value={20}>20</MenuItem>
-                                <MenuItem value={50}>50</MenuItem>
-                                <MenuItem value={100}>100</MenuItem>
-                            </Select>
-                        </FormControl>
-                        <Typography variant="body2" sx={{ color: colors.rain, fontWeight: 500 }}>
-                            {portfolios.length} total portfolio{portfolios.length !== 1 ? 's' : ''}
-                        </Typography>
+                                <Typography color="text.secondary" fontWeight={500}>
+                                    No portfolios found
+                                </Typography>
+                            </Paper>
+                        ) : (
+                            <Grid container spacing={2}>
+                                {sortedPortfolios.map((portfolio) => {
+                                    const imageUrl = portfolio.image ? getImageUrl(portfolio.image) : null;
+                                    return (
+                                        <Grid item xs={12} sm={6} key={portfolio.id}>
+                                            <Card
+                                                elevation={0}
+                                                sx={{
+                                                    borderRadius: 3,
+                                                    border: '1px solid',
+                                                    borderColor: 'divider',
+                                                    overflow: 'hidden',
+                                                    height: '100%',
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    transition: 'box-shadow 0.2s',
+                                                    '&:hover': {
+                                                        boxShadow: 2,
+                                                    },
+                                                }}
+                                            >
+                                                {/* Image Header */}
+                                                {imageUrl ? (
+                                                    <Box
+                                                        sx={{
+                                                            width: '100%',
+                                                            height: 160,
+                                                            overflow: 'hidden',
+                                                            bgcolor: 'action.hover',
+                                                            position: 'relative',
+                                                        }}
+                                                    >
+                                                        <img
+                                                            src={imageUrl}
+                                                            alt="Portfolio"
+                                                            style={{
+                                                                width: '100%',
+                                                                height: '100%',
+                                                                objectFit: 'cover',
+                                                            }}
+                                                            onError={(e) => {
+                                                                e.target.style.display = 'none';
+                                                            }}
+                                                        />
+                                                        {portfolio.technician?.verified && (
+                                                            <Box
+                                                                sx={{
+                                                                    position: 'absolute',
+                                                                    top: 8,
+                                                                    left: 8,
+                                                                }}
+                                                            >
+                                                                <VerifiedIcon sx={{ fontSize: 20, color: '#10b981' }} />
+                                                            </Box>
+                                                        )}
+                                                    </Box>
+                                                ) : (
+                                                    <Box
+                                                        sx={{
+                                                            width: '100%',
+                                                            height: 160,
+                                                            bgcolor: 'action.hover',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            flexDirection: 'column',
+                                                            borderBottom: '1px solid',
+                                                            borderColor: 'divider',
+                                                            position: 'relative',
+                                                        }}
+                                                    >
+                                                        <PhotoCameraIcon sx={{ color: 'text.disabled', fontSize: 48 }} />
+                                                        <Typography variant="caption" color="text.disabled" sx={{ mt: 1 }}>
+                                                            No Image
+                                                        </Typography>
+                                                        {portfolio.technician?.verified && (
+                                                            <Box
+                                                                sx={{
+                                                                    position: 'absolute',
+                                                                    top: 8,
+                                                                    left: 8,
+                                                                }}
+                                                            >
+                                                                <VerifiedIcon sx={{ fontSize: 20, color: '#10b981' }} />
+                                                            </Box>
+                                                        )}
+                                                    </Box>
+                                                )}
+
+                                                <CardContent sx={{ p: 2.5, flex: 1, display: 'flex', flexDirection: 'column' }}>
+                                                    {/* Header & Menu */}
+                                                    <Stack
+                                                        direction="row"
+                                                        justifyContent="space-between"
+                                                        alignItems="flex-start"
+                                                        mb={1.5}
+                                                    >
+                                                        <Stack direction="row" spacing={1.5} alignItems="center">
+                                                            <Avatar
+                                                                src={portfolio.technician?.profile_photo ? getImageUrl(portfolio.technician.profile_photo) : undefined}
+                                                                sx={{
+                                                                    width: 36,
+                                                                    height: 36,
+                                                                    bgcolor: colors.sea || '#0f766e',
+                                                                    fontSize: 13,
+                                                                    fontWeight: 600,
+                                                                }}
+                                                            >
+                                                                {getInitials(portfolio.technician?.user?.name || portfolio.technician?.name)}
+                                                            </Avatar>
+                                                            <Box>
+                                                                <Typography variant="body2" fontWeight={600}>
+                                                                    {portfolio.technician?.user?.name || portfolio.technician?.name || '—'}
+                                                                </Typography>
+                                                                {portfolio.technician?.area && (
+                                                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                                        <LocationIcon sx={{ fontSize: 12 }} />
+                                                                        {portfolio.technician.area}
+                                                                    </Typography>
+                                                                )}
+                                                            </Box>
+                                                        </Stack>
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={(e) => handleMenuOpen(e, portfolio)}
+                                                            sx={{ color: 'text.secondary', mt: -0.5 }}
+                                                        >
+                                                            <MoreVertIcon fontSize="small" />
+                                                        </IconButton>
+                                                    </Stack>
+
+                                                    {/* Description */}
+                                                    <Typography
+                                                        variant="body2"
+                                                        color="text.secondary"
+                                                        sx={{
+                                                            mb: 2,
+                                                            flex: 1,
+                                                            display: '-webkit-box',
+                                                            WebkitLineClamp: 3,
+                                                            WebkitBoxOrient: 'vertical',
+                                                            overflow: 'hidden',
+                                                        }}
+                                                    >
+                                                        {portfolio.description || 'No description provided'}
+                                                    </Typography>
+
+                                                    <Divider sx={{ mb: 2 }} />
+
+                                                    {/* Stats & Date */}
+                                                    <Stack
+                                                        direction="row"
+                                                        justifyContent="space-between"
+                                                        alignItems="center"
+                                                    >
+                                                        <Stack direction="row" spacing={1}>
+                                                            {portfolio.technician?.rating > 0 && (
+                                                                <Chip
+                                                                    icon={<StarIcon sx={{ fontSize: 14 }} />}
+                                                                    label={portfolio.technician.rating.toFixed(1)}
+                                                                    size="small"
+                                                                    sx={{
+                                                                        fontWeight: 700,
+                                                                        bgcolor: '#fef3c7',
+                                                                        color: '#b45309',
+                                                                        border: '1px solid #fcd34d',
+                                                                        height: 26,
+                                                                        '& .MuiChip-icon': { color: '#f59e0b' },
+                                                                    }}
+                                                                />
+                                                            )}
+                                                        </Stack>
+                                                        <Typography variant="caption" color="text.secondary" fontWeight={500}>
+                                                            {formatDate(portfolio.created_at)}
+                                                        </Typography>
+                                                    </Stack>
+
+                                                    {/* View Button */}
+                                                    <Button
+                                                        variant="outlined"
+                                                        fullWidth
+                                                        startIcon={<ViewIcon />}
+                                                        onClick={() => handleViewPortfolio(portfolio)}
+                                                        sx={{
+                                                            mt: 2,
+                                                            borderRadius: 2,
+                                                            textTransform: 'none',
+                                                            fontWeight: 600,
+                                                            borderColor: 'divider',
+                                                            color: colors.sea || '#0f766e',
+                                                            '&:hover': {
+                                                                borderColor: colors.sea || '#0f766e',
+                                                                bgcolor: 'action.hover',
+                                                            },
+                                                        }}
+                                                    >
+                                                        View Portfolio
+                                                    </Button>
+                                                </CardContent>
+                                            </Card>
+                                        </Grid>
+                                    );
+                                })}
+                            </Grid>
+                        )}
                     </Box>
                 )}
 
-                {/* ===== DETAIL DIALOG ===== */}
-                <Dialog
-                    open={openViewDialog}
-                    onClose={handleCloseDialog}
-                    maxWidth="lg"
-                    fullWidth
-                    fullScreen={isMobile}
-                    TransitionComponent={Fade}
-                    PaperProps={{
-                        sx: {
-                            borderRadius: { xs: 0, sm: 3 },
-                            backgroundColor: '#ffffff',
-                            maxHeight: '95vh',
-                            overflow: 'hidden',
-                        }
+                {/* ── PAGINATION ────────────────────────────────────────── */}
+                <Box
+                    sx={{
+                        borderTop: '1px solid',
+                        borderColor: 'divider',
+                        bgcolor: 'action.hover',
                     }}
                 >
-                    {selectedPortfolio && (
-                        <>
-                            <DialogTitle sx={{
-                                color: colors.dark,
-                                borderBottom: `1px solid ${alpha(colors.middle, 0.15)}`,
-                                pb: 2,
-                                backgroundColor: '#ffffff',
-                                px: { xs: 2, sm: 3 },
-                            }}>
-                                <Box display="flex" justifyContent="space-between" alignItems="flex-start">
-                                    <Box minWidth={0} flex={1}>
-                                        <Typography variant="h6" sx={{ color: colors.dark, fontWeight: 700 }}>
-                                            Portfolio Details
-                                        </Typography>
-                                        <Box display="flex" alignItems="center" gap={1.5} mt={1} flexWrap="wrap">
+                    <TablePagination
+                        rowsPerPageOptions={[5, 10, 25, 50]}
+                        component="div"
+                        count={pagination.total || 0}
+                        rowsPerPage={rowsPerPage}
+                        page={page}
+                        onPageChange={(e, newPage) => setPage(newPage)}
+                        onRowsPerPageChange={(e) => {
+                            setRowsPerPage(parseInt(e.target.value, 10));
+                            setPage(0);
+                        }}
+                        sx={{
+                            '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
+                                fontWeight: 500,
+                            },
+                        }}
+                    />
+                </Box>
+            </Paper>
+
+            {/* ── ACTION MENU ───────────────────────────────────────────── */}
+            <Menu
+                anchorEl={actionMenu}
+                open={Boolean(actionMenu)}
+                onClose={handleMenuClose}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                PaperProps={{
+                    elevation: 8,
+                    sx: { borderRadius: 2, minWidth: 180, mt: 0.5 },
+                }}
+            >
+                <MenuItem onClick={() => handleAction('view')} sx={{ fontWeight: 500 }}>
+                    <ViewIcon sx={{ mr: 1.5, fontSize: 20, color: colors.sea || '#0f766e' }} />
+                    View Portfolio
+                </MenuItem>
+                {canDelete && (
+                    <MenuItem
+                        onClick={() => handleAction('delete')}
+                        sx={{ color: 'error.main', fontWeight: 500 }}
+                    >
+                        <DeleteIcon sx={{ mr: 1.5, fontSize: 20 }} />
+                        Delete
+                    </MenuItem>
+                )}
+            </Menu>
+
+            {/* ── PORTFOLIO DETAIL DIALOG ────────────────────────────────── */}
+            <Dialog
+                open={openViewDialog}
+                onClose={handleCloseDialog}
+                maxWidth="md"
+                fullWidth
+                PaperProps={{
+                    sx: {
+                        borderRadius: 3,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        maxHeight: '90vh',
+                    },
+                }}
+            >
+                {selectedPortfolio && (
+                    <>
+                        <DialogTitle sx={{ pb: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
+                            <Box display="flex" justifyContent="space-between" alignItems="flex-start">
+                                <Box flex={1} minWidth={0}>
+                                    <Typography variant="h6" fontWeight={700} color="text.primary">
+                                        Portfolio Details
+                                    </Typography>
+                                    <Stack direction="row" spacing={2} alignItems="center" mt={1} flexWrap="wrap">
+                                        <Stack direction="row" spacing={1} alignItems="center">
                                             <Avatar
-                                                src={selectedPortfolio.technician?.profile_photo || undefined}
+                                                src={selectedPortfolio.technician?.profile_photo ? getImageUrl(selectedPortfolio.technician.profile_photo) : undefined}
                                                 sx={{
-                                                    width: 36,
-                                                    height: 36,
-                                                    bgcolor: colors.sea,
-                                                    fontSize: '0.9rem',
-                                                    fontWeight: 700,
+                                                    width: 28,
+                                                    height: 28,
+                                                    bgcolor: colors.sea || '#0f766e',
+                                                    fontSize: 11,
+                                                    fontWeight: 600,
                                                 }}
                                             >
-                                                {getInitials(selectedPortfolio.technician?.name)}
+                                                {getInitials(selectedPortfolio.technician?.user?.name || selectedPortfolio.technician?.name)}
                                             </Avatar>
-                                            <Typography variant="body1" sx={{ color: colors.black, fontWeight: 600 }}>
-                                                {selectedPortfolio.technician?.name || 'Unknown'}
+                                            <Typography variant="body2" fontWeight={500}>
+                                                {selectedPortfolio.technician?.user?.name || selectedPortfolio.technician?.name || 'Unknown'}
                                             </Typography>
                                             {selectedPortfolio.technician?.verified && (
-                                                <VerifiedIcon sx={{ fontSize: 18, color: colors.salat }} />
+                                                <VerifiedIcon sx={{ fontSize: 14, color: '#10b981' }} />
                                             )}
-                                            {selectedPortfolio.technician?.area && (
-                                                <Chip
-                                                    icon={<LocationIcon sx={{ fontSize: 14 }} />}
-                                                    label={selectedPortfolio.technician.area}
-                                                    size="small"
-                                                    variant="outlined"
-                                                    sx={{
-                                                        borderColor: alpha(colors.middle, 0.3),
-                                                        fontWeight: 500,
-                                                    }}
-                                                />
-                                            )}
-                                        </Box>
-                                    </Box>
-                                    <Box display="flex" gap={0.5}>
-                                        {canDelete && (
-                                            <Tooltip title="Delete">
-                                                <IconButton
-                                                    onClick={() => {
-                                                        handleCloseDialog();
-                                                        handleDeletePortfolio(selectedPortfolio.id);
-                                                    }}
-                                                    sx={{
-                                                        color: 'error.main',
-                                                        transition: 'all 0.2s ease',
-                                                        '&:hover': {
-                                                            backgroundColor: alpha('#ef4444', 0.08),
-                                                            transform: 'scale(1.1)',
-                                                        },
-                                                    }}
-                                                >
-                                                    <DeleteIcon />
-                                                </IconButton>
-                                            </Tooltip>
-                                        )}
-                                        <IconButton onClick={handleCloseDialog} sx={{ color: colors.rain }}>
-                                            <CloseIcon />
-                                        </IconButton>
-                                    </Box>
-                                </Box>
-                            </DialogTitle>
-                            <DialogContent
-                                dividers
-                                sx={{
-                                    borderColor: alpha(colors.middle, 0.15),
-                                    backgroundColor: '#fafbfc',
-                                    p: { xs: 2, sm: 3, md: 4 },
-                                }}
-                            >
-                                <Box>
-                                    {/* Full size image */}
-                                    <Box
-                                        sx={{
-                                            width: '100%',
-                                            height: { xs: 250, sm: 350, md: 420 },
-                                            backgroundColor: '#f8fafc',
-                                            borderRadius: 2.5,
-                                            overflow: 'hidden',
-                                            display: 'flex',
-                                            justifyContent: 'center',
-                                            alignItems: 'center',
-                                            position: 'relative',
-                                            border: `1px solid ${alpha(colors.middle, 0.1)}`,
-                                        }}
-                                    >
-                                        <img
-                                            src={selectedPortfolio.image || '/placeholder-image.jpg'}
-                                            alt={selectedPortfolio.description || 'Portfolio item'}
-                                            style={{
-                                                width: '100%',
-                                                height: '100%',
-                                                objectFit: 'contain',
-                                                display: 'block',
-                                            }}
-                                        />
-                                    </Box>
-
-                                    {selectedPortfolio.description && (
-                                        <Box sx={{ mt: 3 }}>
-                                            <Typography
-                                                variant="subtitle2"
-                                                sx={{
-                                                    color: colors.rain,
-                                                    mb: 1.5,
-                                                    fontWeight: 700,
-                                                    textTransform: 'uppercase',
-                                                    letterSpacing: '0.5px',
-                                                    fontSize: '0.75rem',
-                                                }}
-                                            >
-                                                Description
-                                            </Typography>
-                                            <Paper
-                                                elevation={0}
-                                                sx={{
-                                                    p: 2.5,
-                                                    backgroundColor: '#ffffff',
-                                                    borderRadius: 2.5,
-                                                    border: `1px solid ${alpha(colors.middle, 0.1)}`,
-                                                }}
-                                            >
-                                                <Typography variant="body1" sx={{ color: colors.black, lineHeight: 1.9 }}>
-                                                    {selectedPortfolio.description}
-                                                </Typography>
-                                            </Paper>
-                                        </Box>
-                                    )}
-
-                                    {/* ─── SOCIAL LINKS (Dialog) ────────────────────────────── */}
-                                    {hasSocialLinks(selectedPortfolio) && (
-                                        <Box sx={{ mt: 3 }}>
-                                            <Typography
-                                                variant="subtitle2"
-                                                sx={{
-                                                    color: colors.rain,
-                                                    mb: 1.5,
-                                                    fontWeight: 700,
-                                                    textTransform: 'uppercase',
-                                                    letterSpacing: '0.5px',
-                                                    fontSize: '0.75rem',
-                                                }}
-                                            >
-                                                Social Links
-                                            </Typography>
-                                            <Paper
-                                                elevation={0}
-                                                sx={{
-                                                    p: 2.5,
-                                                    backgroundColor: '#ffffff',
-                                                    borderRadius: 2.5,
-                                                    border: `1px solid ${alpha(colors.middle, 0.1)}`,
-                                                }}
-                                            >
-                                                <Box display="flex" gap={1.5} flexWrap="wrap">
-                                                    {getSocialLinks(selectedPortfolio).map((link, idx) => (
-                                                        <SocialLink
-                                                            key={idx}
-                                                            platform={link.platform}
-                                                            url={link.url}
-                                                        />
-                                                    ))}
-                                                </Box>
-                                            </Paper>
-                                        </Box>
-                                    )}
-
-                                    <Divider sx={{ my: 3, borderColor: alpha(colors.middle, 0.1) }} />
-
-                                    <Grid container spacing={3}>
-                                        <Grid item xs={12} sm={6}>
-                                            <Typography
-                                                variant="caption"
-                                                sx={{
-                                                    color: colors.rain,
-                                                    display: 'block',
-                                                    fontWeight: 700,
-                                                    textTransform: 'uppercase',
-                                                    letterSpacing: '0.5px',
-                                                    fontSize: '0.7rem',
-                                                }}
-                                            >
-                                                Uploaded
-                                            </Typography>
-                                            <Typography
-                                                variant="body2"
-                                                sx={{
-                                                    color: colors.dark,
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: 1,
-                                                    mt: 0.75,
-                                                    fontWeight: 500,
-                                                }}
-                                            >
-                                                <CalendarIcon sx={{ fontSize: 18, color: colors.rain }} />
-                                                {formatDate(selectedPortfolio.created_at)}
-                                            </Typography>
-                                        </Grid>
-                                        <Grid item xs={12} sm={6}>
-                                            <Typography
-                                                variant="caption"
-                                                sx={{
-                                                    color: colors.rain,
-                                                    display: 'block',
-                                                    fontWeight: 700,
-                                                    textTransform: 'uppercase',
-                                                    letterSpacing: '0.5px',
-                                                    fontSize: '0.7rem',
-                                                }}
-                                            >
-                                                Technician
-                                            </Typography>
-                                            <Typography
-                                                variant="body2"
-                                                sx={{
-                                                    color: colors.dark,
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: 1,
-                                                    mt: 0.75,
-                                                    fontWeight: 500,
-                                                }}
-                                            >
-                                                <PersonIcon sx={{ fontSize: 18, color: colors.rain }} />
-                                                {selectedPortfolio.technician?.name || 'Unknown'}
-                                            </Typography>
-                                        </Grid>
-                                        {selectedPortfolio.technician?.email && (
-                                            <Grid item xs={12} sm={6}>
-                                                <Typography
-                                                    variant="caption"
-                                                    sx={{
-                                                        color: colors.rain,
-                                                        display: 'block',
-                                                        fontWeight: 700,
-                                                        textTransform: 'uppercase',
-                                                        letterSpacing: '0.5px',
-                                                        fontSize: '0.7rem',
-                                                    }}
-                                                >
-                                                    Email
-                                                </Typography>
-                                                <Typography variant="body2" sx={{ color: colors.dark, mt: 0.75, fontWeight: 500 }}>
-                                                    {selectedPortfolio.technician.email}
-                                                </Typography>
-                                            </Grid>
-                                        )}
-                                        {selectedPortfolio.technician?.phone && (
-                                            <Grid item xs={12} sm={6}>
-                                                <Typography
-                                                    variant="caption"
-                                                    sx={{
-                                                        color: colors.rain,
-                                                        display: 'block',
-                                                        fontWeight: 700,
-                                                        textTransform: 'uppercase',
-                                                        letterSpacing: '0.5px',
-                                                        fontSize: '0.7rem',
-                                                    }}
-                                                >
-                                                    Phone
-                                                </Typography>
-                                                <Typography variant="body2" sx={{ color: colors.dark, mt: 0.75, fontWeight: 500 }}>
-                                                    {selectedPortfolio.technician.phone}
-                                                </Typography>
-                                            </Grid>
-                                        )}
+                                        </Stack>
                                         {selectedPortfolio.technician?.area && (
-                                            <Grid item xs={12} sm={6}>
-                                                <Typography
-                                                    variant="caption"
-                                                    sx={{
-                                                        color: colors.rain,
-                                                        display: 'block',
-                                                        fontWeight: 700,
-                                                        textTransform: 'uppercase',
-                                                        letterSpacing: '0.5px',
-                                                        fontSize: '0.7rem',
-                                                    }}
-                                                >
-                                                    Area
-                                                </Typography>
-                                                <Typography variant="body2" sx={{ color: colors.dark, mt: 0.75, fontWeight: 500 }}>
-                                                    {selectedPortfolio.technician.area}
-                                                </Typography>
-                                            </Grid>
+                                            <Chip
+                                                icon={<LocationIcon sx={{ fontSize: 14 }} />}
+                                                label={selectedPortfolio.technician.area}
+                                                size="small"
+                                                variant="outlined"
+                                                sx={{ borderColor: 'divider' }}
+                                            />
                                         )}
-                                        {selectedPortfolio.technician?.services && selectedPortfolio.technician.services.length > 0 && (
-                                            <Grid item xs={12}>
-                                                <Typography
-                                                    variant="caption"
-                                                    sx={{
-                                                        color: colors.rain,
-                                                        display: 'block',
-                                                        fontWeight: 700,
-                                                        textTransform: 'uppercase',
-                                                        letterSpacing: '0.5px',
-                                                        fontSize: '0.7rem',
-                                                        mb: 1,
-                                                    }}
-                                                >
-                                                    Services Offered
-                                                </Typography>
-                                                <Box display="flex" gap={1} flexWrap="wrap">
-                                                    {selectedPortfolio.technician.services.map((service, idx) => (
-                                                        <Chip
-                                                            key={idx}
-                                                            label={service}
-                                                            size="medium"
-                                                            sx={{
-                                                                backgroundColor: alpha(colors.sea, 0.08),
-                                                                color: colors.sea,
-                                                                fontWeight: 600,
-                                                            }}
-                                                        />
-                                                    ))}
-                                                </Box>
-                                            </Grid>
-                                        )}
-                                        {selectedPortfolio.technician?.rating > 0 && (
-                                            <Grid item xs={12}>
-                                                <Typography
-                                                    variant="caption"
-                                                    sx={{
-                                                        color: colors.rain,
-                                                        display: 'block',
-                                                        fontWeight: 700,
-                                                        textTransform: 'uppercase',
-                                                        letterSpacing: '0.5px',
-                                                        fontSize: '0.7rem',
-                                                        mb: 0.75,
-                                                    }}
-                                                >
-                                                    Rating
-                                                </Typography>
-                                                <Box display="flex" alignItems="center" gap={1.5}>
-                                                    <Box display="flex" alignItems="center" gap={0.5}>
-                                                        <StarIcon sx={{ color: '#f59e0b', fontSize: 22 }} />
-                                                        <Typography variant="h6" sx={{ color: colors.dark, fontWeight: 700 }}>
-                                                            {selectedPortfolio.technician.rating.toFixed(1)}
-                                                        </Typography>
-                                                    </Box>
-                                                    <Typography variant="body2" sx={{ color: colors.rain }}>
-                                                        out of 5.0
-                                                    </Typography>
-                                                </Box>
-                                            </Grid>
-                                        )}
-                                    </Grid>
+                                        <Typography variant="caption" color="text.secondary">
+                                            <CalendarIcon sx={{ fontSize: 14, mr: 0.5, verticalAlign: 'middle' }} />
+                                            {formatDateFull(selectedPortfolio.created_at)}
+                                        </Typography>
+                                    </Stack>
                                 </Box>
-                            </DialogContent>
-                            <DialogActions sx={{
-                                p: 2.5,
-                                gap: 1.5,
-                                backgroundColor: '#ffffff',
-                                borderTop: `1px solid ${alpha(colors.middle, 0.1)}`,
-                            }}>
-                                <Button
-                                    onClick={handleCloseDialog}
-                                    variant="contained"
+                                <IconButton onClick={handleCloseDialog} size="small" sx={{ color: 'text.secondary' }}>
+                                    <ClearIcon />
+                                </IconButton>
+                            </Box>
+                        </DialogTitle>
+
+                        <DialogContent sx={{ p: 3 }}>
+                            {/* Image */}
+                            {selectedPortfolio.image && (
+                                <Box
                                     sx={{
-                                        background: `linear-gradient(135deg, ${colors.sea}, ${colors.dark})`,
-                                        px: 4,
-                                        py: 1.2,
-                                        borderRadius: 2.5,
-                                        textTransform: 'none',
-                                        fontWeight: 700,
-                                        fontSize: '0.9rem',
-                                        boxShadow: `0 4px 16px ${alpha(colors.sea, 0.3)}`,
-                                        '&:hover': {
-                                            transform: 'translateY(-2px)',
-                                            boxShadow: `0 8px 24px ${alpha(colors.sea, 0.4)}`,
-                                        },
-                                        transition: 'all 0.25s ease',
+                                        width: '100%',
+                                        maxHeight: 400,
+                                        bgcolor: 'action.hover',
+                                        borderRadius: 2,
+                                        overflow: 'hidden',
+                                        mb: 3,
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                        display: 'flex',
+                                        justifyContent: 'center',
+                                        alignItems: 'center',
+                                        p: 1,
                                     }}
                                 >
-                                    Close
-                                </Button>
-                            </DialogActions>
-                        </>
-                    )}
-                </Dialog>
-            </Paper>
+                                    <img
+                                        src={getImageUrl(selectedPortfolio.image)}
+                                        alt="Portfolio"
+                                        style={{
+                                            maxWidth: '100%',
+                                            maxHeight: '380px',
+                                            width: 'auto',
+                                            height: 'auto',
+                                            objectFit: 'contain',
+                                        }}
+                                        onError={(e) => {
+                                            e.target.style.display = 'none';
+                                        }}
+                                    />
+                                </Box>
+                            )}
+
+                            {/* Description */}
+                            {selectedPortfolio.description && (
+                                <Box mb={3}>
+                                    <Typography variant="subtitle2" fontWeight={600} gutterBottom color="text.primary">
+                                        Description
+                                    </Typography>
+                                    <Paper
+                                        variant="outlined"
+                                        sx={{
+                                            p: 2.5,
+                                            bgcolor: 'action.hover',
+                                            borderColor: 'divider',
+                                            borderRadius: 2,
+                                        }}
+                                    >
+                                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                                            {selectedPortfolio.description}
+                                        </Typography>
+                                    </Paper>
+                                </Box>
+                            )}
+
+                            <Divider sx={{ mb: 3, borderColor: 'divider' }} />
+
+                            {/* Technician Info */}
+                            <Grid container spacing={2}>
+                                <Grid item xs={12} sm={6}>
+                                    <Typography variant="subtitle2" fontWeight={600} gutterBottom color="text.primary">
+                                        Technician Information
+                                    </Typography>
+                                    <Stack spacing={1}>
+                                        <Box display="flex" alignItems="center" gap={1}>
+                                            <PersonIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
+                                            <Typography variant="body2">
+                                                {selectedPortfolio.technician?.user?.name || selectedPortfolio.technician?.name || 'Unknown'}
+                                            </Typography>
+                                        </Box>
+                                        {selectedPortfolio.technician?.area && (
+                                            <Box display="flex" alignItems="center" gap={1}>
+                                                <LocationIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
+                                                <Typography variant="body2">{selectedPortfolio.technician.area}</Typography>
+                                            </Box>
+                                        )}
+                                        {selectedPortfolio.technician?.rating > 0 && (
+                                            <Box display="flex" alignItems="center" gap={0.5}>
+                                                <StarIcon sx={{ color: '#f59e0b', fontSize: 16 }} />
+                                                <Typography variant="body2" fontWeight={500}>
+                                                    {selectedPortfolio.technician.rating.toFixed(1)}
+                                                </Typography>
+                                            </Box>
+                                        )}
+                                    </Stack>
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                    <Typography variant="subtitle2" fontWeight={600} gutterBottom color="text.primary">
+                                        Details
+                                    </Typography>
+                                    <Stack spacing={1}>
+                                        <Box display="flex" alignItems="center" gap={1}>
+                                            <CalendarIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
+                                            <Typography variant="body2">
+                                                Created: {formatDateFull(selectedPortfolio.created_at)}
+                                            </Typography>
+                                        </Box>
+                                        <Box display="flex" alignItems="center" gap={1}>
+                                            <ImageIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
+                                            <Typography variant="body2">
+                                                Portfolio #{selectedPortfolio.id}
+                                            </Typography>
+                                        </Box>
+                                    </Stack>
+                                </Grid>
+                            </Grid>
+                        </DialogContent>
+
+                        <DialogActions sx={{ p: 2.5, borderTop: '1px solid', borderColor: 'divider' }}>
+                            <Button
+                                onClick={handleCloseDialog}
+                                variant="contained"
+                                sx={{
+                                    borderRadius: 2,
+                                    fontWeight: 700,
+                                    textTransform: 'none',
+                                    px: 4,
+                                    bgcolor: colors.sea || '#0f766e',
+                                    '&:hover': { bgcolor: colors.dark || '#0d5c56' },
+                                }}
+                            >
+                                Close
+                            </Button>
+                        </DialogActions>
+                    </>
+                )}
+            </Dialog>
+
+            {/* ── CONFIRMATION DIALOG ───────────────────────────────────── */}
+            <Dialog
+                open={confirmDialog.open}
+                onClose={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+                fullWidth
+                maxWidth="xs"
+                PaperProps={{
+                    sx: {
+                        borderRadius: 3,
+                    },
+                }}
+            >
+                <DialogTitle sx={{ fontWeight: 700, pb: 1 }}>
+                    {confirmDialog.title}
+                </DialogTitle>
+                <DialogContent>
+                    <DialogContentText color="text.secondary">
+                        {confirmDialog.message}
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2.5, pt: 1 }}>
+                    <Button
+                        onClick={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+                        sx={{ fontWeight: 600, textTransform: 'none' }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={handleConfirm}
+                        variant="contained"
+                        color="error"
+                        sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 2 }}
+                    >
+                        Confirm
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 };

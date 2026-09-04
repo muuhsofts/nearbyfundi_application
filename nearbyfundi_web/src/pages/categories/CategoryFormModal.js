@@ -1,11 +1,24 @@
 // src/pages/categories/CategoryFormModal.js
 import React, { useState, useEffect } from 'react';
 import {
-    Dialog, DialogTitle, DialogContent, DialogActions,
-    TextField, Button, CircularProgress, Box,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    TextField,
+    Button,
+    CircularProgress,
+    Box,
+    Stack,
+    IconButton,
+    alpha,
 } from '@mui/material';
+import { Close as CloseIcon } from '@mui/icons-material';
 import { serviceService } from 'services/service.service';
 import { showSnackbar } from 'utils/snackbar';
+import appConfig from '../../config';
+
+const colors = appConfig.app.colors;
 
 const CategoryFormModal = ({ open, onClose, category }) => {
     const [form, setForm] = useState({ category_name: '', swahili_name: '', slug: '', description: '' });
@@ -52,10 +65,10 @@ const CategoryFormModal = ({ open, onClose, category }) => {
             };
             if (category) {
                 await serviceService.updateCategory(category.service_categoryID, payload);
-                showSnackbar({ type: 'success', message: 'Category updated' });
+                showSnackbar({ type: 'success', message: 'Category updated successfully' });
             } else {
                 await serviceService.createCategory(payload);
-                showSnackbar({ type: 'success', message: 'Category created' });
+                showSnackbar({ type: 'success', message: 'Category created successfully' });
             }
             onClose(true);
         } catch (err) {
@@ -75,11 +88,48 @@ const CategoryFormModal = ({ open, onClose, category }) => {
     };
 
     return (
-        <Dialog open={open} onClose={() => onClose(false)} maxWidth="sm" fullWidth>
+        <Dialog
+            open={open}
+            onClose={() => onClose(false)}
+            maxWidth="sm"
+            fullWidth
+            PaperProps={{
+                sx: {
+                    borderRadius: 3,
+                    border: '1px solid',
+                    borderColor: 'divider',
+                }
+            }}
+        >
             <form onSubmit={handleSubmit}>
-                <DialogTitle>{category ? 'Edit Category' : 'New Category'}</DialogTitle>
-                <DialogContent>
-                    <Box display="flex" flexDirection="column" gap={2} mt={1}>
+                <DialogTitle
+                    sx={{
+                        pb: 1.5,
+                        fontWeight: 700,
+                        fontSize: '1.2rem',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                        color: 'text.primary',
+                    }}
+                >
+                    {category ? 'Edit Category' : 'New Category'}
+                    <IconButton
+                        onClick={() => onClose(false)}
+                        size="small"
+                        sx={{
+                            color: 'text.secondary',
+                            '&:hover': { bgcolor: 'action.hover' },
+                        }}
+                    >
+                        <CloseIcon />
+                    </IconButton>
+                </DialogTitle>
+
+                <DialogContent sx={{ pt: 3, pb: 1 }}>
+                    <Stack spacing={2.5}>
                         <TextField
                             label="Category Name (English)"
                             name="category_name"
@@ -90,14 +140,43 @@ const CategoryFormModal = ({ open, onClose, category }) => {
                             helperText={errors.category_name}
                             fullWidth
                             autoFocus
+                            disabled={loading}
+                            sx={{
+                                '& .MuiOutlinedInput-root': {
+                                    borderRadius: 2,
+                                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                                        borderColor: colors.sea,
+                                    },
+                                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                        borderColor: colors.sea,
+                                        borderWidth: 2,
+                                    },
+                                },
+                            }}
                         />
+
                         <TextField
                             label="Category Name (Swahili)"
                             name="swahili_name"
                             value={form.swahili_name}
                             onChange={handleChange}
                             fullWidth
+                            disabled={loading}
+                            placeholder="e.g., Aina ya Huduma"
+                            sx={{
+                                '& .MuiOutlinedInput-root': {
+                                    borderRadius: 2,
+                                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                                        borderColor: colors.sea,
+                                    },
+                                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                        borderColor: colors.sea,
+                                        borderWidth: 2,
+                                    },
+                                },
+                            }}
                         />
+
                         <TextField
                             label="Slug (URL friendly)"
                             name="slug"
@@ -105,22 +184,76 @@ const CategoryFormModal = ({ open, onClose, category }) => {
                             onChange={handleChange}
                             helperText="Leave blank to auto-generate from name"
                             fullWidth
+                            disabled={loading}
+                            placeholder="e.g., tv-repair"
+                            sx={{
+                                '& .MuiOutlinedInput-root': {
+                                    borderRadius: 2,
+                                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                                        borderColor: colors.sea,
+                                    },
+                                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                        borderColor: colors.sea,
+                                        borderWidth: 2,
+                                    },
+                                },
+                            }}
                         />
+
                         <TextField
                             label="Description"
                             name="description"
                             value={form.description}
                             onChange={handleChange}
                             multiline
-                            rows={2}
+                            rows={3}
                             fullWidth
+                            disabled={loading}
+                            placeholder="Brief description of the category..."
+                            sx={{
+                                '& .MuiOutlinedInput-root': {
+                                    borderRadius: 2,
+                                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                                        borderColor: colors.sea,
+                                    },
+                                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                        borderColor: colors.sea,
+                                        borderWidth: 2,
+                                    },
+                                },
+                            }}
                         />
-                    </Box>
+                    </Stack>
                 </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => onClose(false)} disabled={loading}>Cancel</Button>
-                    <Button type="submit" variant="contained" disabled={loading}>
-                        {loading ? <CircularProgress size={24} /> : (category ? 'Update' : 'Create')}
+
+                <DialogActions sx={{ p: { xs: 2, sm: 3 }, pt: 1, borderTop: '1px solid', borderColor: 'divider' }}>
+                    <Button
+                        onClick={() => onClose(false)}
+                        disabled={loading}
+                        sx={{
+                            fontWeight: 600,
+                            textTransform: 'none',
+                            color: 'text.secondary',
+                            '&:hover': { bgcolor: 'action.hover' },
+                        }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        type="submit"
+                        variant="contained"
+                        disabled={loading}
+                        sx={{
+                            borderRadius: 2,
+                            fontWeight: 700,
+                            textTransform: 'none',
+                            px: 3,
+                            bgcolor: colors.sea || '#0f766e',
+                            '&:hover': { bgcolor: colors.dark || '#0d5c56' },
+                            '&:disabled': { opacity: 0.6 },
+                        }}
+                    >
+                        {loading ? <CircularProgress size={24} color="inherit" /> : (category ? 'Update' : 'Create')}
                     </Button>
                 </DialogActions>
             </form>

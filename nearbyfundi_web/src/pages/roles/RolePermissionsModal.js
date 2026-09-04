@@ -1,12 +1,33 @@
 // src/pages/roles/RolePermissionsModal.js
 import React, { useState, useEffect } from 'react';
 import {
-    Dialog, DialogTitle, DialogContent, DialogActions,
-    Button, Box, CircularProgress, Checkbox, FormControlLabel,
-    Typography, Divider, TextField, InputAdornment,
-    Accordion, AccordionSummary, AccordionDetails, useMediaQuery, useTheme
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    Button,
+    Box,
+    CircularProgress,
+    Checkbox,
+    FormControlLabel,
+    Typography,
+    Divider,
+    TextField,
+    InputAdornment,
+    Accordion,
+    AccordionSummary,
+    AccordionDetails,
+    useMediaQuery,
+    useTheme,
+    IconButton,
+    Stack,
 } from '@mui/material';
-import { Search as SearchIcon, ExpandMore as ExpandMoreIcon } from '@mui/icons-material';
+import {
+    Search as SearchIcon,
+    ExpandMore as ExpandMoreIcon,
+    Close as CloseIcon,
+    Clear as ClearIcon,
+} from '@mui/icons-material';
 import { roleService } from 'services/role.service';
 import { permissionService } from 'services/permission.service';
 import { showSnackbar } from 'utils/snackbar';
@@ -21,15 +42,17 @@ const getGroupName = (permName) => {
 
 const groupPermissions = (permissions) => {
     const groups = {};
-    permissions.forEach(perm => {
+    permissions.forEach((perm) => {
         const group = getGroupName(perm.name);
         if (!groups[group]) groups[group] = [];
         groups[group].push(perm);
     });
-    return Object.keys(groups).sort().reduce((acc, key) => {
-        acc[key] = groups[key];
-        return acc;
-    }, {});
+    return Object.keys(groups)
+        .sort()
+        .reduce((acc, key) => {
+            acc[key] = groups[key];
+            return acc;
+        }, {});
 };
 
 export default function RolePermissionsModal({ open, onClose, role }) {
@@ -56,7 +79,7 @@ export default function RolePermissionsModal({ open, onClose, role }) {
 
             const rolePermRes = await roleService.getRolePermissions(role.id);
             const current = rolePermRes.data?.status === 'success' ? rolePermRes.data.data : [];
-            const currentIds = current.map(p => p.id);
+            const currentIds = current.map((p) => p.id);
             setSelectedPermissionIds(currentIds);
         } catch (err) {
             console.error(err);
@@ -67,10 +90,8 @@ export default function RolePermissionsModal({ open, onClose, role }) {
     };
 
     const handleToggle = (permId) => {
-        setSelectedPermissionIds(prev =>
-            prev.includes(permId)
-                ? prev.filter(id => id !== permId)
-                : [...prev, permId]
+        setSelectedPermissionIds((prev) =>
+            prev.includes(permId) ? prev.filter((id) => id !== permId) : [...prev, permId]
         );
     };
 
@@ -87,9 +108,10 @@ export default function RolePermissionsModal({ open, onClose, role }) {
         }
     };
 
-    const filteredPermissions = allPermissions.filter(p =>
-        p.name.toLowerCase().includes(search.toLowerCase()) ||
-        (p.display_name && p.display_name.toLowerCase().includes(search.toLowerCase()))
+    const filteredPermissions = allPermissions.filter(
+        (p) =>
+            p.name.toLowerCase().includes(search.toLowerCase()) ||
+            (p.display_name && p.display_name.toLowerCase().includes(search.toLowerCase()))
     );
 
     const groupedPermissions = groupPermissions(filteredPermissions);
@@ -103,132 +125,188 @@ export default function RolePermissionsModal({ open, onClose, role }) {
             fullScreen={fullScreen}
             PaperProps={{
                 sx: {
-                    borderRadius: { xs: 0, sm: 2 },
-                    backgroundColor: colors.light,
-                }
+                    borderRadius: { xs: 0, sm: 3 },
+                    bgcolor: 'background.paper',
+                },
             }}
         >
-            <DialogTitle sx={{
-                pb: 1,
-                fontSize: { xs: '1.25rem', sm: '1.5rem' },
-                color: colors.dark,
-            }}>
-                Manage Permissions for "{role?.display_name || role?.name}"
-            </DialogTitle>
-            <DialogContent>
-                <Box sx={{ mb: 2 }}>
-                    <TextField
-                        label="Search permissions"
-                        size="small"
-                        fullWidth
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        InputProps={{
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <SearchIcon fontSize="small" sx={{ color: colors.rain }} />
-                                </InputAdornment>
-                            )
-                        }}
-                        sx={{
-                            '& .MuiInputBase-root': {
-                                backgroundColor: colors.sky,
-                                borderRadius: 2,
-                            },
-                            '& .MuiOutlinedInput-notchedOutline': {
-                                borderColor: colors.middle,
-                            },
-                        }}
-                    />
+            <DialogTitle
+                sx={{
+                    px: { xs: 2.5, sm: 3 },
+                    pt: 2.5,
+                    pb: 1.5,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                }}
+            >
+                <Box>
+                    <Typography variant="h6" fontWeight={800} color="text.primary">
+                        Manage Permissions
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" fontWeight={500} sx={{ mt: 0.25 }}>
+                        Role: <strong>{role?.display_name || role?.name}</strong>
+                    </Typography>
                 </Box>
+                <IconButton
+                    onClick={onClose}
+                    size="small"
+                    disabled={loading}
+                    sx={{
+                        color: 'text.secondary',
+                        mt: -0.5,
+                        '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
+                    }}
+                >
+                    <CloseIcon />
+                </IconButton>
+            </DialogTitle>
+
+            <Divider />
+
+            <DialogContent sx={{ px: { xs: 2.5, sm: 3 }, py: 2.5 }}>
+                <TextField
+                    placeholder="Search permissions…"
+                    size="small"
+                    fullWidth
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    InputProps={{
+                        startAdornment: (
+                            <InputAdornment position="start">
+                                <SearchIcon fontSize="small" color="action" />
+                            </InputAdornment>
+                        ),
+                        endAdornment: search ? (
+                            <InputAdornment position="end">
+                                <IconButton size="small" onClick={() => setSearch('')}>
+                                    <ClearIcon fontSize="small" />
+                                </IconButton>
+                            </InputAdornment>
+                        ) : null,
+                    }}
+                    sx={{
+                        mb: 2.5,
+                        '& .MuiOutlinedInput-root': {
+                            borderRadius: 2,
+                            bgcolor: 'action.hover',
+                            '& fieldset': { borderColor: 'transparent' },
+                            '&:hover fieldset': { borderColor: 'divider' },
+                            '&.Mui-focused fieldset': { borderColor: 'primary.main' },
+                        },
+                    }}
+                />
 
                 {loading ? (
-                    <Box display="flex" justifyContent="center" p={4}>
-                        <CircularProgress sx={{ color: colors.sea }} />
+                    <Box display="flex" justifyContent="center" py={6}>
+                        <CircularProgress size={36} thickness={4} />
                     </Box>
                 ) : (
-                    <Box sx={{ maxHeight: { xs: '60vh', sm: 500 }, overflowY: 'auto' }}>
+                    <Box sx={{ maxHeight: { xs: '55vh', sm: 460 }, overflowY: 'auto', pr: 0.5 }}>
                         {Object.keys(groupedPermissions).length === 0 ? (
-                            <Typography sx={{ textAlign: 'center', py: 3, color: colors.rain }}>
+                            <Typography
+                                sx={{ textAlign: 'center', py: 4, color: 'text.secondary', fontWeight: 500 }}
+                            >
                                 No permissions found
                             </Typography>
                         ) : (
-                            Object.entries(groupedPermissions).map(([groupName, perms]) => (
-                                <Accordion
-                                    key={groupName}
-                                    defaultExpanded
-                                    disableGutters
-                                    sx={{
-                                        '&:before': { display: 'none' },
-                                        border: `1px solid ${colors.middle}`,
-                                        borderRadius: '8px !important',
-                                        mb: 1,
-                                    }}
-                                >
-                                    <AccordionSummary
-                                        expandIcon={<ExpandMoreIcon sx={{ color: colors.sea }} />}
+                            <Stack spacing={1.25}>
+                                {Object.entries(groupedPermissions).map(([groupName, perms]) => (
+                                    <Accordion
+                                        key={groupName}
+                                        defaultExpanded
+                                        disableGutters
+                                        elevation={0}
                                         sx={{
-                                            px: { xs: 1, sm: 2 },
-                                            backgroundColor: colors.sky,
-                                            borderRadius: '8px',
+                                            border: '1px solid',
+                                            borderColor: 'divider',
+                                            borderRadius: '12px !important',
+                                            overflow: 'hidden',
+                                            '&:before': { display: 'none' },
                                         }}
                                     >
-                                        <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: colors.dark }}>
-                                            {groupName.charAt(0).toUpperCase() + groupName.slice(1)}
-                                            <Typography component="span" variant="body2" sx={{ ml: 1, color: colors.rain }}>
-                                                ({perms.length})
+                                        <AccordionSummary
+                                            expandIcon={<ExpandMoreIcon />}
+                                            sx={{
+                                                px: 2,
+                                                bgcolor: 'action.hover',
+                                                minHeight: 48,
+                                                '& .MuiAccordionSummary-content': { my: 1 },
+                                            }}
+                                        >
+                                            <Typography variant="subtitle2" fontWeight={700}>
+                                                {groupName.charAt(0).toUpperCase() + groupName.slice(1)}
+                                                <Typography
+                                                    component="span"
+                                                    variant="caption"
+                                                    color="text.secondary"
+                                                    sx={{ ml: 1, fontWeight: 600 }}
+                                                >
+                                                    ({perms.length})
+                                                </Typography>
                                             </Typography>
-                                        </Typography>
-                                    </AccordionSummary>
-                                    <AccordionDetails sx={{ px: { xs: 1, sm: 2 }, pt: 1 }}>
-                                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                                            {perms.map((perm) => (
-                                                <FormControlLabel
-                                                    key={perm.id}
-                                                    control={
-                                                        <Checkbox
-                                                            checked={selectedPermissionIds.includes(perm.id)}
-                                                            onChange={() => handleToggle(perm.id)}
-                                                            size="small"
-                                                            sx={{
-                                                                color: colors.rain,
-                                                                '&.Mui-checked': {
-                                                                    color: colors.sea,
-                                                                },
-                                                            }}
-                                                        />
-                                                    }
-                                                    label={
-                                                        <Box>
-                                                            <Typography variant="body2" sx={{ color: colors.black }}>
-                                                                {perm.display_name || perm.name}
-                                                            </Typography>
-                                                            <Typography variant="caption" sx={{ color: colors.rain, display: 'block' }}>
-                                                                {perm.name}
-                                                            </Typography>
-                                                        </Box>
-                                                    }
-                                                    sx={{
-                                                        alignItems: 'flex-start',
-                                                        m: 0,
-                                                        '& .MuiFormControlLabel-label': { width: '100%' }
-                                                    }}
-                                                />
-                                            ))}
-                                        </Box>
-                                    </AccordionDetails>
-                                </Accordion>
-                            ))
+                                        </AccordionSummary>
+                                        <AccordionDetails sx={{ px: 2, pt: 1, pb: 1.5 }}>
+                                            <Stack spacing={0.25}>
+                                                {perms.map((perm) => (
+                                                    <FormControlLabel
+                                                        key={perm.id}
+                                                        control={
+                                                            <Checkbox
+                                                                checked={selectedPermissionIds.includes(perm.id)}
+                                                                onChange={() => handleToggle(perm.id)}
+                                                                size="small"
+                                                                sx={{
+                                                                    color: 'text.secondary',
+                                                                    '&.Mui-checked': {
+                                                                        color: colors.sea || '#0f766e',
+                                                                    },
+                                                                }}
+                                                            />
+                                                        }
+                                                        label={
+                                                            <Box>
+                                                                <Typography variant="body2" fontWeight={500}>
+                                                                    {perm.display_name || perm.name}
+                                                                </Typography>
+                                                                <Typography
+                                                                    variant="caption"
+                                                                    color="text.secondary"
+                                                                    sx={{ display: 'block' }}
+                                                                >
+                                                                    {perm.name}
+                                                                </Typography>
+                                                            </Box>
+                                                        }
+                                                        sx={{
+                                                            alignItems: 'flex-start',
+                                                            m: 0,
+                                                            py: 0.5,
+                                                            '& .MuiFormControlLabel-label': { width: '100%' },
+                                                        }}
+                                                    />
+                                                ))}
+                                            </Stack>
+                                        </AccordionDetails>
+                                    </Accordion>
+                                ))}
+                            </Stack>
                         )}
                     </Box>
                 )}
             </DialogContent>
-            <DialogActions sx={{ p: { xs: 2, sm: 3 } }}>
+
+            <Divider />
+
+            <DialogActions sx={{ px: { xs: 2.5, sm: 3 }, py: 2, gap: 1.5 }}>
                 <Button
                     onClick={onClose}
+                    disabled={loading}
                     sx={{
-                        color: colors.rain,
-                        '&:hover': { color: colors.black }
+                        fontWeight: 600,
+                        textTransform: 'none',
+                        color: 'text.secondary',
+                        '&:hover': { bgcolor: 'action.hover' },
                     }}
                 >
                     Cancel
@@ -238,11 +316,23 @@ export default function RolePermissionsModal({ open, onClose, role }) {
                     variant="contained"
                     disabled={loading}
                     sx={{
-                        backgroundColor: colors.sea,
-                        '&:hover': { backgroundColor: colors.dark },
+                        minWidth: 130,
+                        borderRadius: 2,
+                        fontWeight: 700,
+                        textTransform: 'none',
+                        boxShadow: 'none',
+                        bgcolor: colors.sea || '#0f766e',
+                        '&:hover': {
+                            bgcolor: colors.dark || '#0d5c56',
+                            boxShadow: '0 4px 12px rgba(15,118,110,0.35)',
+                        },
                     }}
                 >
-                    Save Changes
+                    {loading ? (
+                        <CircularProgress size={22} thickness={4} sx={{ color: '#fff' }} />
+                    ) : (
+                        'Save Changes'
+                    )}
                 </Button>
             </DialogActions>
         </Dialog>

@@ -1,6 +1,7 @@
 // src/hooks/useUser.js
 import { useUsers } from 'context/UserContext';
 import { useCallback } from 'react';
+import { userService } from 'services/user.service';
 
 export const useUserManagement = () => {
     const {
@@ -55,6 +56,25 @@ export const useUserManagement = () => {
         return await getDropdown(params);
     }, [getDropdown]);
 
+    // ===== New verification methods =====
+    const verifyUserOtp = useCallback(async (id, otp) => {
+        const result = await userService.verifyUserOtp(id, otp);
+        await fetchAll();
+        return result;
+    }, [fetchAll]);
+
+    const verifyUserToken = useCallback(async (id) => {
+        const result = await userService.verifyUserToken(id);
+        await fetchAll();
+        return result;
+    }, [fetchAll]);
+
+    const markUserVerified = useCallback(async (id) => {
+        const result = await userService.markUserVerified(id);
+        await fetchAll();
+        return result;
+    }, [fetchAll]);
+
     return {
         users: items,
         user: item,
@@ -67,5 +87,9 @@ export const useUserManagement = () => {
         deleteUser,
         getUsersDropdown,
         clearError,
+        // New verification methods
+        verifyUserOtp,
+        verifyUserToken,
+        markUserVerified,
     };
 };

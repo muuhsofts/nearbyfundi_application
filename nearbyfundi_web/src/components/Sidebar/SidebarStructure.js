@@ -22,7 +22,8 @@ import {
   Subscriptions as SubscriptionsIcon,
   PrivacyTip as PrivacyPolicyIcon,
   Category as CategoryIcon,
-  AttachMoney as FinanceIcon, // Finance icon (BarChart alias)
+  AttachMoney as FinanceIcon,
+  Sms as SmsIcon, // NEW: SMS Icon
 } from '@mui/icons-material';
 
 const addIf = (condition, item) => (condition ? [item] : []);
@@ -62,7 +63,6 @@ export function getSidebarStructure(hasPermission) {
     const servicesChildren = [
       { label: 'All Services', link: '/app/services' },
     ];
-    // Add Categories if user has permission
     if (hasPermission('service-categories.view')) {
       servicesChildren.push({
         label: 'Categories',
@@ -119,6 +119,18 @@ export function getSidebarStructure(hasPermission) {
       link: '/app/requests',
       icon: <RequestsIcon />,
       children: [{ label: 'All Requests', link: '/app/requests' }],
+    });
+  }
+
+  // ----- SMS Logs (NEW) -----
+  if (hasPermission('sms.view')) {
+    structure.push({
+      id: 14,
+      label: 'SMS Logs',
+      link: '/app/sms-logs',
+      icon: <SmsIcon />,
+      children: [
+        { label: 'All SMS Logs', link: '/app/sms-logs' },]
     });
   }
 
@@ -261,6 +273,16 @@ const staticStructure = [
     link: '/app/requests',
     icon: <RequestsIcon />,
     children: [{ label: 'All Requests', link: '/app/requests' }],
+  },
+  {
+    id: 14,
+    label: 'SMS Logs',
+    link: '/app/sms-logs',
+    icon: <SmsIcon />,
+    children: [
+      { label: 'All SMS Logs', link: '/app/sms-logs' },
+      { label: 'Send SMS', link: '/app/sms-logs/send' },
+    ],
   },
   {
     id: 13,

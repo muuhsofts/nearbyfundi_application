@@ -1,21 +1,46 @@
+// src/pages/subscriptions/RateCardManagement.jsx
 import React, { useState } from 'react';
 import {
-    Box, Paper, Typography, Button, Table, TableBody, TableCell, TableContainer,
-    TableHead, TableRow, IconButton, Dialog, DialogTitle, DialogContent,
-    DialogActions, TextField, Switch, FormControlLabel, CircularProgress,
-    Alert, Chip, Grid, Card, CardContent, Tooltip, Avatar,
+    Box,
+    Paper,
+    Typography,
+    Button,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    IconButton,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    TextField,
+    Switch,
+    FormControlLabel,
+    CircularProgress,
+    Alert,
+    Chip,
+    Grid,
+    Card,
+    CardContent,
+    Tooltip,
+    Stack,
+    InputAdornment,
+    Divider,
 } from '@mui/material';
 import {
     Add as AddIcon,
     Edit as EditIcon,
     Delete as DeleteIcon,
     Refresh as RefreshIcon,
-    AttachMoney as MoneyIcon,
-    CalendarToday as CalendarIcon,
-    CurrencyExchange as CurrencyIcon,
     CheckCircle as ActiveIcon,
     Cancel as InactiveIcon,
     Warning as WarningIcon,
+    Clear as ClearIcon,
+    Close as CloseIcon,
+    Search as SearchIcon,
 } from '@mui/icons-material';
 import { usePermissions } from 'hooks/usePermissions';
 import { useRateCardForm } from 'hooks/useRateCardForm';
@@ -45,7 +70,6 @@ const RateCardManagement = () => {
 
     const [search, setSearch] = useState('');
 
-    // Delete confirmation dialog state
     const [deleteDialog, setDeleteDialog] = useState({
         open: false,
         cardId: null,
@@ -54,171 +78,366 @@ const RateCardManagement = () => {
     });
 
     if (!canManage) {
-        return <Box p={3}><Alert severity="error">You need permission to manage rate cards.</Alert></Box>;
+        return (
+            <Box p={3}>
+                <Alert severity="error" variant="filled" sx={{ borderRadius: 2 }}>
+                    You need permission to manage rate cards.
+                </Alert>
+            </Box>
+        );
     }
 
-    // Filter rate cards by search
-    const filteredCards = rateCards.filter(card =>
-        card.name?.toLowerCase().includes(search.toLowerCase()) ||
-        card.description?.toLowerCase().includes(search.toLowerCase())
+    const filteredCards = rateCards.filter(
+        (card) =>
+            card.name?.toLowerCase().includes(search.toLowerCase()) ||
+            card.description?.toLowerCase().includes(search.toLowerCase())
     );
 
-    // Stats
     const stats = {
         total: rateCards.length,
-        active: rateCards.filter(c => c.is_active).length,
-        inactive: rateCards.filter(c => !c.is_active).length,
+        active: rateCards.filter((c) => c.is_active).length,
+        inactive: rateCards.filter((c) => !c.is_active).length,
     };
 
-    // Open delete confirmation dialog
     const openDeleteDialog = (cardId, cardName) => {
-        setDeleteDialog({
-            open: true,
-            cardId,
-            cardName,
-            deleting: false,
-        });
+        setDeleteDialog({ open: true, cardId, cardName, deleting: false });
     };
 
-    // Close delete confirmation dialog
     const closeDeleteDialog = () => {
-        setDeleteDialog({
-            open: false,
-            cardId: null,
-            cardName: '',
-            deleting: false,
-        });
+        setDeleteDialog({ open: false, cardId: null, cardName: '', deleting: false });
     };
 
-    // Confirm delete
     const confirmDelete = async () => {
-        setDeleteDialog(prev => ({ ...prev, deleting: true }));
+        setDeleteDialog((prev) => ({ ...prev, deleting: true }));
         try {
             await handleDelete(deleteDialog.cardId);
             closeDeleteDialog();
         } catch (error) {
-            setDeleteDialog(prev => ({ ...prev, deleting: false }));
+            setDeleteDialog((prev) => ({ ...prev, deleting: false }));
         }
     };
 
     return (
-        <Box p={{ xs: 1, sm: 2 }}>
+        <Box sx={{ width: '100%', p: { xs: 1.5, sm: 2.5 }, bgcolor: 'background.default' }}>
             {/* Stats Cards */}
             <Grid container spacing={2} sx={{ mb: 3 }}>
                 <Grid item xs={4}>
-                    <Card sx={{ borderLeft: '4px solid #3b82f6', bgcolor: '#eff6ff' }}>
-                        <CardContent>
-                            <Typography variant="caption" color="textSecondary">Total Rate Cards</Typography>
-                            <Typography variant="h5" fontWeight="600" color="#1e40af">{stats.total}</Typography>
+                    <Card
+                        elevation={0}
+                        sx={{
+                            borderRadius: 3,
+                            border: '1px solid',
+                            borderColor: 'divider',
+                            background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
+                            height: '100%',
+                        }}
+                    >
+                        <CardContent sx={{ p: 2.25 }}>
+                            <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
+                                Total Rate Cards
+                            </Typography>
+                            <Typography variant="h4" fontWeight={800} color="#0369a1" sx={{ mt: 0.5, lineHeight: 1.1 }}>
+                                {stats.total}
+                            </Typography>
                         </CardContent>
                     </Card>
                 </Grid>
                 <Grid item xs={4}>
-                    <Card sx={{ borderLeft: '4px solid #10b981', bgcolor: '#ecfdf5' }}>
-                        <CardContent>
-                            <Typography variant="caption" color="textSecondary">Active</Typography>
-                            <Typography variant="h5" fontWeight="600" color="#065f46">{stats.active}</Typography>
+                    <Card
+                        elevation={0}
+                        sx={{
+                            borderRadius: 3,
+                            border: '1px solid',
+                            borderColor: 'divider',
+                            background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)',
+                            height: '100%',
+                        }}
+                    >
+                        <CardContent sx={{ p: 2.25 }}>
+                            <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
+                                Active
+                            </Typography>
+                            <Typography variant="h4" fontWeight={800} color="#047857" sx={{ mt: 0.5, lineHeight: 1.1 }}>
+                                {stats.active}
+                            </Typography>
                         </CardContent>
                     </Card>
                 </Grid>
                 <Grid item xs={4}>
-                    <Card sx={{ borderLeft: '4px solid #ef4444', bgcolor: '#fef2f2' }}>
-                        <CardContent>
-                            <Typography variant="caption" color="textSecondary">Inactive</Typography>
-                            <Typography variant="h5" fontWeight="600" color="#991b1b">{stats.inactive}</Typography>
+                    <Card
+                        elevation={0}
+                        sx={{
+                            borderRadius: 3,
+                            border: '1px solid',
+                            borderColor: 'divider',
+                            background: 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)',
+                            height: '100%',
+                        }}
+                    >
+                        <CardContent sx={{ p: 2.25 }}>
+                            <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
+                                Inactive
+                            </Typography>
+                            <Typography variant="h4" fontWeight={800} color="#b91c1c" sx={{ mt: 0.5, lineHeight: 1.1 }}>
+                                {stats.inactive}
+                            </Typography>
                         </CardContent>
                     </Card>
                 </Grid>
             </Grid>
 
-            <Paper sx={{ borderRadius: 2, overflow: 'hidden', border: `1px solid ${colors.middle}` }}>
+            {/* Main Panel */}
+            <Paper
+                elevation={0}
+                sx={{
+                    borderRadius: 3,
+                    overflow: 'hidden',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    bgcolor: 'background.paper',
+                }}
+            >
                 {/* Header */}
-                <Box sx={{ p: { xs: 2, sm: 3 }, borderBottom: `1px solid ${colors.middle}` }}>
-                    <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
-                        <Typography variant="h5" fontWeight="600" sx={{ color: colors.dark }}>
-                            Rate Cards
-                        </Typography>
-                        <Box display="flex" gap={1} flexWrap="wrap">
+                <Box
+                    sx={{
+                        px: { xs: 2, sm: 3 },
+                        py: 2.5,
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                    }}
+                >
+                    <Stack
+                        direction={{ xs: 'column', sm: 'row' }}
+                        justifyContent="space-between"
+                        alignItems={{ xs: 'stretch', sm: 'center' }}
+                        spacing={2}
+                    >
+                        <Box>
+                            <Typography variant="h5" fontWeight={800} color="text.primary">
+                                Rate Cards
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                                Manage subscription plans and pricing
+                            </Typography>
+                        </Box>
+
+                        <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
                             <TextField
-                                placeholder="Search..."
+                                placeholder="Search rate cards…"
                                 size="small"
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
-                                sx={{ minWidth: 200 }}
+                                InputProps={{
+                                    startAdornment: (
+                                        <InputAdornment position="start">
+                                            <SearchIcon fontSize="small" color="action" />
+                                        </InputAdornment>
+                                    ),
+                                    endAdornment: search ? (
+                                        <InputAdornment position="end">
+                                            <IconButton size="small" onClick={() => setSearch('')}>
+                                                <ClearIcon fontSize="small" />
+                                            </IconButton>
+                                        </InputAdornment>
+                                    ) : null,
+                                }}
+                                sx={{
+                                    minWidth: { xs: '100%', sm: 220 },
+                                    '& .MuiOutlinedInput-root': {
+                                        borderRadius: 2,
+                                        bgcolor: 'action.hover',
+                                        '& fieldset': { borderColor: 'transparent' },
+                                        '&:hover fieldset': { borderColor: 'divider' },
+                                        '&.Mui-focused fieldset': { borderColor: 'primary.main' },
+                                    },
+                                }}
                             />
-                            <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
-                                Add
+                            <Button
+                                variant="contained"
+                                startIcon={<AddIcon />}
+                                onClick={openCreate}
+                                sx={{
+                                    borderRadius: 2,
+                                    fontWeight: 700,
+                                    textTransform: 'none',
+                                    px: 2.5,
+                                    boxShadow: 'none',
+                                    bgcolor: colors.salat || '#10b981',
+                                    '&:hover': {
+                                        bgcolor: colors.dark || '#047857',
+                                        boxShadow: '0 4px 12px rgba(16,185,129,0.35)',
+                                    },
+                                }}
+                            >
+                                Add Rate Card
                             </Button>
-                            <IconButton onClick={refresh}><RefreshIcon /></IconButton>
-                        </Box>
-                    </Box>
+                            <IconButton
+                                onClick={refresh}
+                                sx={{
+                                    border: '1px solid',
+                                    borderColor: 'divider',
+                                    borderRadius: 2,
+                                    color: 'text.secondary',
+                                    '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
+                                }}
+                            >
+                                <RefreshIcon />
+                            </IconButton>
+                        </Stack>
+                    </Stack>
                 </Box>
 
                 {/* Table */}
                 {loading ? (
-                    <Box sx={{ p: 4, textAlign: 'center' }}>
-                        <CircularProgress />
+                    <Box sx={{ py: 8, textAlign: 'center' }}>
+                        <CircularProgress size={36} thickness={4} />
                     </Box>
                 ) : error ? (
                     <Box sx={{ p: 3 }}>
-                        <Alert severity="error">{error}</Alert>
+                        <Alert severity="error" variant="filled" sx={{ borderRadius: 2 }}>
+                            {error}
+                        </Alert>
                     </Box>
                 ) : (
                     <TableContainer>
                         <Table>
-                            <TableHead sx={{ backgroundColor: colors.sky }}>
-                                <TableRow>
-                                    <TableCell sx={{ fontWeight: 'bold' }}>Name</TableCell>
-                                    <TableCell sx={{ fontWeight: 'bold' }}>Price</TableCell>
-                                    <TableCell sx={{ fontWeight: 'bold' }}>Duration</TableCell>
-                                    <TableCell sx={{ fontWeight: 'bold' }}>Currency</TableCell>
-                                    <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
-                                    <TableCell sx={{ fontWeight: 'bold' }}>Order</TableCell>
-                                    <TableCell sx={{ fontWeight: 'bold' }} align="right">Actions</TableCell>
+                            <TableHead>
+                                <TableRow
+                                    sx={{
+                                        bgcolor: 'action.hover',
+                                        '& th': {
+                                            fontWeight: 700,
+                                            fontSize: '0.8125rem',
+                                            color: 'text.secondary',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: 0.6,
+                                            borderBottom: '1px solid',
+                                            borderColor: 'divider',
+                                            py: 1.75,
+                                        },
+                                    }}
+                                >
+                                    <TableCell>Name</TableCell>
+                                    <TableCell>Price</TableCell>
+                                    <TableCell>Duration</TableCell>
+                                    <TableCell>Currency</TableCell>
+                                    <TableCell>Status</TableCell>
+                                    <TableCell>Order</TableCell>
+                                    <TableCell align="right">Actions</TableCell>
                                 </TableRow>
                             </TableHead>
                             <TableBody>
                                 {filteredCards.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
-                                            <Typography color="textSecondary">
-                                                {search ? 'No rate cards match your search' : 'No rate cards found'}
+                                        <TableCell colSpan={7} align="center" sx={{ py: 8 }}>
+                                            <Typography color="text.secondary" fontWeight={500}>
+                                                {search
+                                                    ? 'No rate cards match your search'
+                                                    : 'No rate cards found'}
                                             </Typography>
                                         </TableCell>
                                     </TableRow>
                                 ) : (
-                                    filteredCards.map(card => (
-                                        <TableRow key={card.id} hover>
-                                            <TableCell>
-                                                <Typography fontWeight="500">{card.name}</Typography>
+                                    filteredCards.map((card) => (
+                                        <TableRow
+                                            key={card.id}
+                                            hover
+                                            sx={{
+                                                '&:last-child td': { borderBottom: 0 },
+                                                transition: 'background-color 0.15s',
+                                            }}
+                                        >
+                                            <TableCell sx={{ py: 2 }}>
+                                                <Typography variant="body2" fontWeight={600}>
+                                                    {card.name}
+                                                </Typography>
                                                 {card.description && (
-                                                    <Typography variant="caption" color="textSecondary">
+                                                    <Typography
+                                                        variant="caption"
+                                                        color="text.secondary"
+                                                        sx={{ display: 'block', mt: 0.25 }}
+                                                    >
                                                         {card.description}
                                                     </Typography>
                                                 )}
                                             </TableCell>
                                             <TableCell>
-                                                <Typography fontWeight="600" color="#004472">
+                                                <Typography
+                                                    variant="body2"
+                                                    fontWeight={700}
+                                                    color={colors.sea || '#0f766e'}
+                                                >
                                                     {card.price}
                                                 </Typography>
                                             </TableCell>
-                                            <TableCell>{card.duration_days} days</TableCell>
                                             <TableCell>
-                                                <Chip label={card.currency} size="small" variant="outlined" />
+                                                <Typography variant="body2" fontWeight={500}>
+                                                    {card.duration_days} days
+                                                </Typography>
                                             </TableCell>
                                             <TableCell>
                                                 <Chip
-                                                    label={card.is_active ? 'Active' : 'Inactive'}
-                                                    color={card.is_active ? 'success' : 'default'}
+                                                    label={card.currency}
                                                     size="small"
-                                                    icon={card.is_active ? <ActiveIcon /> : <InactiveIcon />}
+                                                    sx={{
+                                                        fontWeight: 700,
+                                                        bgcolor: 'action.hover',
+                                                        border: '1px solid',
+                                                        borderColor: 'divider',
+                                                        height: 26,
+                                                    }}
                                                 />
                                             </TableCell>
-                                            <TableCell>{card.display_order}</TableCell>
+                                            <TableCell>
+                                                {card.is_active ? (
+                                                    <Chip
+                                                        icon={<ActiveIcon sx={{ fontSize: 16 }} />}
+                                                        label="Active"
+                                                        size="small"
+                                                        sx={{
+                                                            fontWeight: 700,
+                                                            bgcolor: '#d1fae5',
+                                                            color: '#047857',
+                                                            border: '1.5px solid #10b981',
+                                                            height: 28,
+                                                            '& .MuiChip-icon': { color: '#047857' },
+                                                        }}
+                                                    />
+                                                ) : (
+                                                    <Chip
+                                                        icon={<InactiveIcon sx={{ fontSize: 16 }} />}
+                                                        label="Inactive"
+                                                        size="small"
+                                                        sx={{
+                                                            fontWeight: 700,
+                                                            bgcolor: '#f3f4f6',
+                                                            color: '#4b5563',
+                                                            border: '1.5px solid #9ca3af',
+                                                            height: 28,
+                                                            '& .MuiChip-icon': { color: '#4b5563' },
+                                                        }}
+                                                    />
+                                                )}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Typography variant="body2" fontWeight={500}>
+                                                    {card.display_order}
+                                                </Typography>
+                                            </TableCell>
                                             <TableCell align="right">
                                                 <Tooltip title="Edit">
-                                                    <IconButton size="small" onClick={() => openEdit(card)}>
-                                                        <EditIcon />
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={() => openEdit(card)}
+                                                        sx={{
+                                                            color: 'text.secondary',
+                                                            '&:hover': {
+                                                                bgcolor: 'action.hover',
+                                                                color: 'text.primary',
+                                                            },
+                                                        }}
+                                                    >
+                                                        <EditIcon fontSize="small" />
                                                     </IconButton>
                                                 </Tooltip>
                                                 <Tooltip title="Delete">
@@ -226,8 +445,11 @@ const RateCardManagement = () => {
                                                         size="small"
                                                         color="error"
                                                         onClick={() => openDeleteDialog(card.id, card.name)}
+                                                        sx={{
+                                                            '&:hover': { bgcolor: 'error.lighter' },
+                                                        }}
                                                     >
-                                                        <DeleteIcon />
+                                                        <DeleteIcon fontSize="small" />
                                                     </IconButton>
                                                 </Tooltip>
                                             </TableCell>
@@ -241,123 +463,232 @@ const RateCardManagement = () => {
             </Paper>
 
             {/* Form Modal */}
-            <Dialog open={openModal} onClose={closeModal} maxWidth="sm" fullWidth>
-                <DialogTitle sx={{ bgcolor: colors.sky }}>
-                    <Typography variant="h6">
-                        {editing ? 'Edit Rate Card' : 'Create New Rate Card'}
-                    </Typography>
+            <Dialog
+                open={openModal}
+                onClose={closeModal}
+                maxWidth="sm"
+                fullWidth
+                PaperProps={{ sx: { borderRadius: 3 } }}
+            >
+                <DialogTitle
+                    sx={{
+                        px: 3,
+                        pt: 2.5,
+                        pb: 1.5,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-start',
+                    }}
+                >
+                    <Box>
+                        <Typography variant="h6" fontWeight={800}>
+                            {editing ? 'Edit Rate Card' : 'Create New Rate Card'}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                            {editing ? 'Update plan details' : 'Define a new subscription plan'}
+                        </Typography>
+                    </Box>
+                    <IconButton
+                        onClick={closeModal}
+                        size="small"
+                        sx={{
+                            color: 'text.secondary',
+                            mt: -0.5,
+                            '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
+                        }}
+                    >
+                        <CloseIcon />
+                    </IconButton>
                 </DialogTitle>
-                <DialogContent sx={{ pt: 3 }}>
-                    <Grid container spacing={2}>
-                        <Grid item xs={12}>
-                            <TextField
-                                label="Name *"
-                                fullWidth
-                                value={form.name || ''}
-                                onChange={(e) => handleChange('name', e.target.value)}
-                                required
-                            />
-                        </Grid>
-                        <Grid item xs={6}>
+
+                <Divider />
+
+                <DialogContent sx={{ px: 3, py: 2.5 }}>
+                    <Stack spacing={2.25}>
+                        <TextField
+                            label="Name *"
+                            fullWidth
+                            size="small"
+                            value={form.name || ''}
+                            onChange={(e) => handleChange('name', e.target.value)}
+                            required
+                            sx={{
+                                '& .MuiOutlinedInput-root': {
+                                    borderRadius: 2,
+                                    bgcolor: 'action.hover',
+                                    '& fieldset': { borderColor: 'transparent' },
+                                    '&:hover fieldset': { borderColor: 'divider' },
+                                    '&.Mui-focused fieldset': { borderColor: 'primary.main' },
+                                },
+                            }}
+                        />
+                        <Stack direction="row" spacing={2}>
                             <TextField
                                 label="Price *"
                                 fullWidth
+                                size="small"
                                 type="number"
                                 value={form.price || ''}
                                 onChange={(e) => handleChange('price', parseFloat(e.target.value) || 0)}
-                                InputProps={{ startAdornment: <Typography>$</Typography> }}
+                                InputProps={{
+                                    startAdornment: (
+                                        <InputAdornment position="start">
+                                            <Typography fontWeight={600}>$</Typography>
+                                        </InputAdornment>
+                                    ),
+                                }}
+                                sx={{
+                                    '& .MuiOutlinedInput-root': {
+                                        borderRadius: 2,
+                                        bgcolor: 'action.hover',
+                                        '& fieldset': { borderColor: 'transparent' },
+                                        '&:hover fieldset': { borderColor: 'divider' },
+                                        '&.Mui-focused fieldset': { borderColor: 'primary.main' },
+                                    },
+                                }}
                             />
-                        </Grid>
-                        <Grid item xs={6}>
                             <TextField
                                 label="Currency *"
                                 fullWidth
+                                size="small"
                                 value={form.currency || 'TZS'}
                                 onChange={(e) => handleChange('currency', e.target.value)}
+                                sx={{
+                                    '& .MuiOutlinedInput-root': {
+                                        borderRadius: 2,
+                                        bgcolor: 'action.hover',
+                                        '& fieldset': { borderColor: 'transparent' },
+                                        '&:hover fieldset': { borderColor: 'divider' },
+                                        '&.Mui-focused fieldset': { borderColor: 'primary.main' },
+                                    },
+                                }}
                             />
-                        </Grid>
-                        <Grid item xs={12}>
-                            <TextField
-                                label="Duration (days) *"
-                                fullWidth
-                                type="number"
-                                value={form.duration_days || 1}
-                                onChange={(e) => handleChange('duration_days', parseInt(e.target.value) || 1)}
-                            />
-                        </Grid>
-                        <Grid item xs={12}>
-                            <TextField
-                                label="Description"
-                                fullWidth
-                                multiline
-                                rows={2}
-                                value={form.description || ''}
-                                onChange={(e) => handleChange('description', e.target.value)}
-                            />
-                        </Grid>
-                        <Grid item xs={12}>
-                            <TextField
-                                label="Display Order"
-                                fullWidth
-                                type="number"
-                                value={form.display_order || 0}
-                                onChange={(e) => handleChange('display_order', parseInt(e.target.value) || 0)}
-                            />
-                        </Grid>
-                        <Grid item xs={12}>
-                            <FormControlLabel
-                                control={
-                                    <Switch
-                                        checked={form.is_active}
-                                        onChange={(e) => handleChange('is_active', e.target.checked)}
-                                        color="success"
-                                    />
-                                }
-                                label="Active"
-                            />
-                        </Grid>
-                    </Grid>
+                        </Stack>
+                        <TextField
+                            label="Duration (days) *"
+                            fullWidth
+                            size="small"
+                            type="number"
+                            value={form.duration_days || 1}
+                            onChange={(e) => handleChange('duration_days', parseInt(e.target.value) || 1)}
+                            sx={{
+                                '& .MuiOutlinedInput-root': {
+                                    borderRadius: 2,
+                                    bgcolor: 'action.hover',
+                                    '& fieldset': { borderColor: 'transparent' },
+                                    '&:hover fieldset': { borderColor: 'divider' },
+                                    '&.Mui-focused fieldset': { borderColor: 'primary.main' },
+                                },
+                            }}
+                        />
+                        <TextField
+                            label="Description"
+                            fullWidth
+                            size="small"
+                            multiline
+                            rows={2}
+                            value={form.description || ''}
+                            onChange={(e) => handleChange('description', e.target.value)}
+                            sx={{
+                                '& .MuiOutlinedInput-root': {
+                                    borderRadius: 2,
+                                    bgcolor: 'action.hover',
+                                    '& fieldset': { borderColor: 'transparent' },
+                                    '&:hover fieldset': { borderColor: 'divider' },
+                                    '&.Mui-focused fieldset': { borderColor: 'primary.main' },
+                                },
+                            }}
+                        />
+                        <TextField
+                            label="Display Order"
+                            fullWidth
+                            size="small"
+                            type="number"
+                            value={form.display_order || 0}
+                            onChange={(e) => handleChange('display_order', parseInt(e.target.value) || 0)}
+                            sx={{
+                                '& .MuiOutlinedInput-root': {
+                                    borderRadius: 2,
+                                    bgcolor: 'action.hover',
+                                    '& fieldset': { borderColor: 'transparent' },
+                                    '&:hover fieldset': { borderColor: 'divider' },
+                                    '&.Mui-focused fieldset': { borderColor: 'primary.main' },
+                                },
+                            }}
+                        />
+                        <FormControlLabel
+                            control={
+                                <Switch
+                                    checked={form.is_active}
+                                    onChange={(e) => handleChange('is_active', e.target.checked)}
+                                    color="success"
+                                />
+                            }
+                            label={<Typography fontWeight={600}>Active</Typography>}
+                        />
+                    </Stack>
                 </DialogContent>
-                <DialogActions sx={{ p: 2, borderTop: `1px solid ${colors.middle}` }}>
-                    <Button onClick={closeModal}>Cancel</Button>
+
+                <Divider />
+
+                <DialogActions sx={{ px: 3, py: 2, gap: 1.5 }}>
+                    <Button
+                        onClick={closeModal}
+                        sx={{ fontWeight: 600, textTransform: 'none', color: 'text.secondary' }}
+                    >
+                        Cancel
+                    </Button>
                     <Button
                         onClick={handleSave}
                         variant="contained"
-                        color="primary"
                         disabled={!form.name || !form.price}
+                        sx={{
+                            minWidth: 110,
+                            borderRadius: 2,
+                            fontWeight: 700,
+                            textTransform: 'none',
+                            boxShadow: 'none',
+                            bgcolor: colors.sea || '#0f766e',
+                            '&:hover': {
+                                bgcolor: colors.dark || '#0d5c56',
+                                boxShadow: '0 4px 12px rgba(15,118,110,0.35)',
+                            },
+                        }}
                     >
                         {editing ? 'Update' : 'Create'}
                     </Button>
                 </DialogActions>
             </Dialog>
 
-            {/* ========================================== */}
-            {/* DELETE CONFIRMATION DIALOG */}
-            {/* ========================================== */}
+            {/* Delete Confirmation Dialog */}
             <Dialog
                 open={deleteDialog.open}
                 onClose={closeDeleteDialog}
                 maxWidth="xs"
                 fullWidth
+                PaperProps={{ sx: { borderRadius: 3 } }}
             >
-                <DialogTitle sx={{
-                    bgcolor: '#fef2f2',
-                    color: '#991b1b',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1,
-                }}>
+                <DialogTitle
+                    sx={{
+                        bgcolor: '#fef2f2',
+                        color: '#991b1b',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1.5,
+                        py: 2,
+                    }}
+                >
                     <WarningIcon sx={{ color: '#ef4444' }} />
-                    <Typography variant="h6" fontWeight="600" color="#991b1b">
+                    <Typography variant="h6" fontWeight={700} color="#991b1b">
                         Delete Rate Card
                     </Typography>
                 </DialogTitle>
                 <DialogContent sx={{ pt: 3 }}>
-                    <Box sx={{ textAlign: 'center', py: 2 }}>
+                    <Box sx={{ textAlign: 'center', py: 1 }}>
                         <Box
                             sx={{
-                                width: 80,
-                                height: 80,
+                                width: 72,
+                                height: 72,
                                 borderRadius: '50%',
                                 bgcolor: '#fef2f2',
                                 display: 'flex',
@@ -367,42 +698,42 @@ const RateCardManagement = () => {
                                 mb: 2,
                             }}
                         >
-                            <DeleteIcon sx={{ fontSize: 40, color: '#ef4444' }} />
+                            <DeleteIcon sx={{ fontSize: 36, color: '#ef4444' }} />
                         </Box>
-                        <Typography variant="h6" fontWeight="600" gutterBottom>
+                        <Typography variant="h6" fontWeight={700} gutterBottom>
                             Are you sure?
                         </Typography>
-                        <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
                             You are about to delete the rate card:
                         </Typography>
                         <Typography
                             variant="body1"
-                            fontWeight="600"
+                            fontWeight={700}
                             sx={{
-                                color: '#991b1b',
-                                bgcolor: '#fef2f2',
+                                color: '#b91c1c',
+                                bgcolor: '#fee2e2',
                                 py: 1,
                                 px: 2,
-                                borderRadius: 1,
+                                borderRadius: 2,
                                 display: 'inline-block',
+                                border: '1px solid #fecaca',
                             }}
                         >
                             "{deleteDialog.cardName}"
                         </Typography>
-                        <Typography variant="body2" color="textSecondary" sx={{ mt: 2 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
                             This action cannot be undone.
-                            {deleteDialog.cardName && (
-                                <span style={{ display: 'block', marginTop: 8, color: '#991b1b', fontWeight: 500 }}>
-                                    ⚠️ All data related to this rate card will be permanently removed.
-                                </span>
-                            )}
+                            <Box component="span" sx={{ display: 'block', mt: 1, color: '#b91c1c', fontWeight: 600 }}>
+                                ⚠️ All data related to this rate card will be permanently removed.
+                            </Box>
                         </Typography>
                     </Box>
                 </DialogContent>
-                <DialogActions sx={{ p: 2, borderTop: `1px solid ${colors.middle}` }}>
+                <DialogActions sx={{ px: 3, pb: 2.5, gap: 1.5 }}>
                     <Button
                         onClick={closeDeleteDialog}
                         disabled={deleteDialog.deleting}
+                        sx={{ fontWeight: 600, textTransform: 'none' }}
                     >
                         Cancel
                     </Button>
@@ -411,9 +742,14 @@ const RateCardManagement = () => {
                         variant="contained"
                         color="error"
                         disabled={deleteDialog.deleting}
-                        startIcon={deleteDialog.deleting ? <CircularProgress size={16} color="inherit" /> : null}
+                        startIcon={
+                            deleteDialog.deleting ? (
+                                <CircularProgress size={16} color="inherit" />
+                            ) : null
+                        }
+                        sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 2 }}
                     >
-                        {deleteDialog.deleting ? 'Deleting...' : 'Delete'}
+                        {deleteDialog.deleting ? 'Deleting…' : 'Delete'}
                     </Button>
                 </DialogActions>
             </Dialog>

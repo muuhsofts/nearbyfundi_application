@@ -10,25 +10,7 @@ import {
     Paper,
     Typography,
     Box,
-    Avatar,
-    Chip,
-    Stack,
-    LinearProgress,
-    useTheme,
 } from '@mui/material';
-import {
-    Person as PersonIcon,
-    Build as BuildIcon,
-    Verified as VerifiedIcon,
-    OnlinePrediction as OnlineIcon,
-    OfflineBolt as OfflineIcon,
-    Star as StarIcon,
-    Category as CategoryIcon,
-} from '@mui/icons-material';
-import StatusChip from './StatusChip';
-import appConfig from '../../../config';
-
-const colors = appConfig.app.colors;
 
 const ReportTable = ({
                          columns,
@@ -41,35 +23,68 @@ const ReportTable = ({
                          loading,
                          emptyMessage = 'No data found',
                      }) => {
-    const theme = useTheme();
-
     if (loading) {
         return (
-            <Box display="flex" justifyContent="center" py={4}>
-                <Typography color={colors.rain}>Loading...</Typography>
+            <Box display="flex" justifyContent="center" py={6}>
+                <Typography color="text.secondary" fontWeight={500}>
+                    Loading…
+                </Typography>
             </Box>
         );
     }
 
     if (!rows || rows.length === 0) {
         return (
-            <Box display="flex" justifyContent="center" py={4}>
-                <Typography color={colors.rain}>{emptyMessage}</Typography>
-            </Box>
+            <Paper
+                elevation={0}
+                sx={{
+                    py: 8,
+                    textAlign: 'center',
+                    borderRadius: 3,
+                    border: '1px dashed',
+                    borderColor: 'divider',
+                    bgcolor: 'action.hover',
+                }}
+            >
+                <Typography color="text.secondary" fontWeight={500}>
+                    {emptyMessage}
+                </Typography>
+            </Paper>
         );
     }
 
     return (
-        <Paper sx={{ width: '100%', overflow: 'hidden', border: `1px solid ${colors.middle}` }}>
+        <Paper
+            elevation={0}
+            sx={{
+                width: '100%',
+                overflow: 'hidden',
+                borderRadius: 3,
+                border: '1px solid',
+                borderColor: 'divider',
+            }}
+        >
             <TableContainer>
                 <Table stickyHeader>
                     <TableHead>
-                        <TableRow sx={{ backgroundColor: colors.sky }}>
+                        <TableRow
+                            sx={{
+                                bgcolor: 'action.hover',
+                                '& th': {
+                                    fontWeight: 700,
+                                    fontSize: '0.8125rem',
+                                    color: 'text.secondary',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: 0.6,
+                                    borderBottom: '1px solid',
+                                    borderColor: 'divider',
+                                    py: 1.75,
+                                    bgcolor: 'action.hover',
+                                },
+                            }}
+                        >
                             {columns.map((col) => (
-                                <TableCell
-                                    key={col.key}
-                                    sx={{ fontWeight: 'bold', color: colors.dark, minWidth: col.minWidth || 'auto' }}
-                                >
+                                <TableCell key={col.key} sx={{ minWidth: col.minWidth || 'auto' }}>
                                     {col.label}
                                 </TableCell>
                             ))}
@@ -87,10 +102,12 @@ const ReportTable = ({
                 onPageChange={onPageChange}
                 onRowsPerPageChange={onRowsPerPageChange}
                 sx={{
+                    borderTop: '1px solid',
+                    borderColor: 'divider',
+                    bgcolor: 'action.hover',
                     '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
-                        color: colors.black,
+                        fontWeight: 500,
                     },
-                    '.MuiTablePagination-actions': { color: colors.sea },
                 }}
             />
         </Paper>

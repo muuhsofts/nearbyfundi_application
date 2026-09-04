@@ -1,19 +1,52 @@
 // src/pages/audit/AuditList.js
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-    Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
-    IconButton, InputAdornment, Menu, MenuItem, Paper, Table,
-    TableBody, TableCell, TableContainer, TableHead, TablePagination,
-    TableRow, TextField, Typography, FormControl, InputLabel, Select,
-    Grid, Card, CardContent, CircularProgress, useTheme, useMediaQuery,
-    Divider, Tooltip, Alert
+    Box,
+    Button,
+    Chip,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    IconButton,
+    InputAdornment,
+    Menu,
+    MenuItem,
+    Paper,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TablePagination,
+    TableRow,
+    TextField,
+    Typography,
+    FormControl,
+    InputLabel,
+    Select,
+    Grid,
+    Card,
+    CardContent,
+    CircularProgress,
+    useTheme,
+    useMediaQuery,
+    Divider,
+    Alert,
+    Stack,
+    Avatar,
 } from '@mui/material';
 import {
-    Refresh as RefreshIcon, Search as SearchIcon, MoreVert as MoreVertIcon,
-    Visibility as ViewIcon, Person as PersonIcon,
-    AccessTime as TimeIcon, Public as IpIcon, Http as MethodIcon,
-    Link as UrlIcon, DeviceHub as UserAgentIcon,
-    DataUsage as DataIcon
+    Refresh as RefreshIcon,
+    Search as SearchIcon,
+    MoreVert as MoreVertIcon,
+    Visibility as ViewIcon,
+    Person as PersonIcon,
+    AccessTime as TimeIcon,
+    Public as IpIcon,
+    Http as MethodIcon,
+    Clear as ClearIcon,
+    Close as CloseIcon,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -40,7 +73,6 @@ const headCells = [
 export default function AuditList() {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-    const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
     const showTableView = useMediaQuery(theme.breakpoints.up('md'));
 
     const { can } = usePermissions();
@@ -69,21 +101,12 @@ export default function AuditList() {
     const [selectedAudit, setSelectedAudit] = useState(null);
     const [actionMenu, setActionMenu] = useState(null);
 
-    // Load filter options (modules & actions)
     useEffect(() => {
         if (canView) {
-            loadFilters();
-        }
-    }, [canView]);
-
-    const loadFilters = async () => {
-        try {
             setModules(['auth', 'user', 'technician', 'request', 'post', 'service', 'portfolio', 'report', 'profile']);
             setActions(['create', 'update', 'delete', 'view', 'login', 'logout', 'verify', 'reset', 'forgot_password', 'update_profile']);
-        } catch (err) {
-            console.error(err);
         }
-    };
+    }, [canView]);
 
     const fetchAudits = useCallback(async () => {
         if (!canView) return;
@@ -116,13 +139,11 @@ export default function AuditList() {
             } else {
                 setAudits([]);
                 setTotal(0);
-                if (response?.data?.message) {
-                    setError(response.data.message);
-                }
+                if (response?.data?.message) setError(response.data.message);
             }
-        } catch (error) {
-            console.error('Audit error:', error);
-            setError(error.message || 'Failed to load audit trails');
+        } catch (err) {
+            console.error('Audit error:', err);
+            setError(err.message || 'Failed to load audit trails');
             showSnackbar({ type: 'error', message: 'Failed to load audit trails' });
         } finally {
             setLoading(false);
@@ -130,9 +151,7 @@ export default function AuditList() {
     }, [page, rowsPerPage, search, moduleFilter, actionFilter, fromDate, toDate, canView]);
 
     useEffect(() => {
-        if (canView) {
-            fetchAudits();
-        }
+        if (canView) fetchAudits();
     }, [fetchAudits, canView]);
 
     const fetchStats = useCallback(async () => {
@@ -140,17 +159,18 @@ export default function AuditList() {
         setStatsLoading(true);
         try {
             const totalRecords = audits.length;
-            const today = audits.filter(a => new Date(a.created_at).toDateString() === new Date().toDateString()).length;
-            const thisWeek = audits.filter(a => {
+            const today = audits.filter(
+                (a) => new Date(a.created_at).toDateString() === new Date().toDateString()
+            ).length;
+            const thisWeek = audits.filter((a) => {
                 const date = new Date(a.created_at);
                 const now = new Date();
                 const weekStart = new Date(now.setDate(now.getDate() - now.getDay()));
                 return date >= weekStart;
             }).length;
 
-            // Group by user
             const userMap = {};
-            audits.forEach(a => {
+            audits.forEach((a) => {
                 const userName = a.user?.name || a.user_name || 'Unknown';
                 const userEmail = a.user?.email || a.user_email || 'unknown@email.com';
                 const key = `${userName}-${userEmail}`;
@@ -163,9 +183,9 @@ export default function AuditList() {
 
             setStats({
                 total: totalRecords,
-                today: today,
+                today,
                 this_week: thisWeek,
-                by_user: byUser
+                by_user: byUser,
             });
         } catch (err) {
             console.error(err);
@@ -175,9 +195,7 @@ export default function AuditList() {
     }, [audits, canView]);
 
     useEffect(() => {
-        if (canView) {
-            fetchStats();
-        }
+        if (canView) fetchStats();
     }, [fetchStats, canView]);
 
     const handleMenuOpen = (event, audit) => {
@@ -193,7 +211,7 @@ export default function AuditList() {
     };
 
     const formatDate = (dateStr) => {
-        if (!dateStr) return '-';
+        if (!dateStr) return '—';
         try {
             return new Date(dateStr).toLocaleString('en-US', {
                 year: 'numeric',
@@ -201,24 +219,27 @@ export default function AuditList() {
                 day: 'numeric',
                 hour: '2-digit',
                 minute: '2-digit',
-                second: '2-digit'
+                second: '2-digit',
             });
         } catch {
-            return '-';
+            return '—';
         }
     };
 
     if (!canView) {
         return (
-            <Box sx={{ p: 2 }}>
-                <Paper sx={{
-                    p: 4,
-                    textAlign: 'center',
-                    backgroundColor: colors.light,
-                    border: `1px solid ${colors.middle}`,
-                    borderRadius: 2
-                }}>
-                    <Typography variant="h5" color="error" gutterBottom>
+            <Box p={3}>
+                <Paper
+                    elevation={0}
+                    sx={{
+                        p: 4,
+                        textAlign: 'center',
+                        borderRadius: 3,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                    }}
+                >
+                    <Typography color="error" fontWeight={600} variant="h6" gutterBottom>
                         Access Denied
                     </Typography>
                     <Typography color="text.secondary">
@@ -234,11 +255,20 @@ export default function AuditList() {
             <Box p={3}>
                 <Alert
                     severity="error"
+                    variant="filled"
                     action={
-                        <Button color="inherit" size="small" onClick={() => { setError(null); fetchAudits(); }}>
+                        <Button
+                            color="inherit"
+                            size="small"
+                            onClick={() => {
+                                setError(null);
+                                fetchAudits();
+                            }}
+                        >
                             Retry
                         </Button>
                     }
+                    sx={{ borderRadius: 2 }}
                 >
                     {error}
                 </Alert>
@@ -246,188 +276,230 @@ export default function AuditList() {
         );
     }
 
-    // Audit Card Component for mobile/tablet view
-    const AuditCard = ({ audit }) => {
-        const userName = audit.user?.name || audit.user_name || 'Unknown';
-        const userEmail = audit.user?.email || audit.user_email || 'No email';
-
-        return (
-            <Card sx={{
-                mb: 2,
-                borderRadius: 2,
-                overflow: 'hidden',
-                border: `1px solid ${colors.middle}`,
-            }}>
-                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 }, backgroundColor: colors.light }}>
-                    {/* Header: Date & Action */}
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <TimeIcon fontSize="small" sx={{ color: colors.rain }} />
-                            <Typography variant="body2" sx={{ color: colors.rain }}>
-                                {formatDate(audit.created_at)}
-                            </Typography>
-                        </Box>
-                        <Chip
-                            label={audit.action}
-                            size="small"
-                            sx={{
-                                backgroundColor: colors.wave,
-                                color: colors.sea,
-                            }}
-                        />
-                    </Box>
-
-                    {/* User info */}
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-                        <PersonIcon fontSize="small" sx={{ color: colors.rain }} />
-                        <Typography variant="body2" fontWeight="medium" sx={{ color: colors.dark }}>
-                            {userName}
-                        </Typography>
-                        <Typography variant="caption" sx={{ color: colors.rain }}>
-                            ({userEmail})
-                        </Typography>
-                    </Box>
-
-                    {/* Module & IP */}
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Typography variant="caption" sx={{ color: colors.rain }}>Module:</Typography>
-                            <Typography variant="body2" sx={{ color: colors.black }}>{audit.module || '-'}</Typography>
-                        </Box>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <IpIcon fontSize="small" sx={{ fontSize: 14, color: colors.rain }} />
-                            <Typography variant="caption" fontFamily="monospace" sx={{ color: colors.rain }}>{audit.ip_address}</Typography>
-                        </Box>
-                    </Box>
-
-                    {/* Method */}
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                        <MethodIcon fontSize="small" sx={{ color: colors.rain }} />
-                        <Typography variant="caption" sx={{ color: colors.rain }}>Method:</Typography>
-                        <Chip
-                            label={audit.request_method || 'N/A'}
-                            size="small"
-                            variant="outlined"
-                            sx={{
-                                height: 20,
-                                fontSize: '0.7rem',
-                                borderColor: colors.middle,
-                            }}
-                        />
-                    </Box>
-
-                    {/* Description snippet */}
-                    <Divider sx={{ my: 1, borderColor: colors.middle }} />
-                    <Typography variant="body2" sx={{ wordBreak: 'break-word', color: colors.black }}>
-                        {audit.description || 'No description'}
-                    </Typography>
-
-                    {/* Action button */}
-                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1.5 }}>
-                        <Button
-                            size="small"
-                            startIcon={<ViewIcon />}
-                            onClick={(e) => handleMenuOpen(e, audit)}
-                            sx={{
-                                borderRadius: 2,
-                                color: colors.sea,
-                                '&:hover': {
-                                    backgroundColor: colors.wave,
-                                }
-                            }}
-                        >
-                            View Details
-                        </Button>
-                    </Box>
-                </CardContent>
-            </Card>
-        );
-    };
-
     return (
         <LocalizationProvider dateAdapter={AdapterDateFns}>
-            <Box sx={{ width: '100%', p: { xs: 1, sm: 2 }, m: 0 }}>
-                <Paper sx={{
-                    width: '100%',
-                    borderRadius: { xs: 1, sm: 2 },
-                    overflow: 'hidden',
-                    boxShadow: { xs: 0, sm: 1 },
-                    backgroundColor: colors.light,
-                    border: `1px solid ${colors.middle}`,
-                }}>
-                    {/* Header */}
-                    <Box sx={{ p: { xs: 2, sm: 3 }, borderBottom: `1px solid ${colors.middle}` }}>
-                        <Typography variant="h5" fontWeight="600" gutterBottom sx={{ fontSize: { xs: '1.5rem', sm: '1.75rem' }, color: colors.dark }}>
-                            Audit Trails
-                        </Typography>
-
-                        {/* Filters - Responsive stack */}
+            <Box sx={{ width: '100%', p: { xs: 1.5, sm: 2.5 }, m: 0, bgcolor: 'background.default' }}>
+                {/* Stats Cards */}
+                {statsLoading ? (
+                    <Box display="flex" justifyContent="center" py={3} mb={2}>
+                        <CircularProgress size={28} thickness={4} />
+                    </Box>
+                ) : (
+                    stats && (
                         <Grid container spacing={2} sx={{ mb: 3 }}>
+                            <Grid item xs={6} sm={6} md={3}>
+                                <Card
+                                    elevation={0}
+                                    sx={{
+                                        borderRadius: 3,
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                        background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
+                                        height: '100%',
+                                    }}
+                                >
+                                    <CardContent sx={{ p: 2.25 }}>
+                                        <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
+                                            Total Records
+                                        </Typography>
+                                        <Typography variant="h4" fontWeight={800} color="#0369a1" sx={{ mt: 0.5, lineHeight: 1.1 }}>
+                                            {stats.total ?? 0}
+                                        </Typography>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+                            <Grid item xs={6} sm={6} md={3}>
+                                <Card
+                                    elevation={0}
+                                    sx={{
+                                        borderRadius: 3,
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                        background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)',
+                                        height: '100%',
+                                    }}
+                                >
+                                    <CardContent sx={{ p: 2.25 }}>
+                                        <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
+                                            Today
+                                        </Typography>
+                                        <Typography variant="h4" fontWeight={800} color="#047857" sx={{ mt: 0.5, lineHeight: 1.1 }}>
+                                            {stats.today ?? 0}
+                                        </Typography>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+                            <Grid item xs={6} sm={6} md={3}>
+                                <Card
+                                    elevation={0}
+                                    sx={{
+                                        borderRadius: 3,
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                        background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+                                        height: '100%',
+                                    }}
+                                >
+                                    <CardContent sx={{ p: 2.25 }}>
+                                        <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
+                                            This Week
+                                        </Typography>
+                                        <Typography variant="h4" fontWeight={800} color="#b45309" sx={{ mt: 0.5, lineHeight: 1.1 }}>
+                                            {stats.this_week ?? 0}
+                                        </Typography>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+                            <Grid item xs={6} sm={6} md={3}>
+                                <Card
+                                    elevation={0}
+                                    sx={{
+                                        borderRadius: 3,
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                        background: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)',
+                                        height: '100%',
+                                    }}
+                                >
+                                    <CardContent sx={{ p: 2.25 }}>
+                                        <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
+                                            Top Users
+                                        </Typography>
+                                        <Box sx={{ mt: 0.75 }}>
+                                            {stats.by_user && stats.by_user.length > 0 ? (
+                                                stats.by_user.slice(0, 3).map((u, idx) => (
+                                                    <Typography key={idx} variant="caption" component="div" fontWeight={600} color="text.primary">
+                                                        {u.user_name}: {u.count}
+                                                    </Typography>
+                                                ))
+                                            ) : (
+                                                <Typography variant="caption" color="text.secondary">
+                                                    No data
+                                                </Typography>
+                                            )}
+                                        </Box>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+                        </Grid>
+                    )
+                )}
+
+                {/* Main Panel */}
+                <Paper
+                    elevation={0}
+                    sx={{
+                        width: '100%',
+                        borderRadius: 3,
+                        overflow: 'hidden',
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        bgcolor: 'background.paper',
+                    }}
+                >
+                    {/* Header + Filters */}
+                    <Box
+                        sx={{
+                            px: { xs: 2, sm: 3 },
+                            py: 2.5,
+                            borderBottom: '1px solid',
+                            borderColor: 'divider',
+                        }}
+                    >
+                        <Box mb={2.5}>
+                            <Typography variant="h5" fontWeight={800} color="text.primary">
+                                Audit Trails
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                                Track every action performed in the system
+                            </Typography>
+                        </Box>
+
+                        <Grid container spacing={1.5} alignItems="center">
                             <Grid item xs={12} sm={6} md={3}>
                                 <TextField
-                                    fullWidth size="small"
-                                    label="Global Search"
+                                    fullWidth
+                                    size="small"
+                                    placeholder="Search…"
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
                                     InputProps={{
-                                        startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" sx={{ color: colors.rain }} /></InputAdornment>,
+                                        startAdornment: (
+                                            <InputAdornment position="start">
+                                                <SearchIcon fontSize="small" color="action" />
+                                            </InputAdornment>
+                                        ),
+                                        endAdornment: search ? (
+                                            <InputAdornment position="end">
+                                                <IconButton size="small" onClick={() => setSearch('')}>
+                                                    <ClearIcon fontSize="small" />
+                                                </IconButton>
+                                            </InputAdornment>
+                                        ) : null,
                                     }}
                                     sx={{
-                                        '& .MuiInputBase-root': {
-                                            backgroundColor: colors.sky,
+                                        '& .MuiOutlinedInput-root': {
                                             borderRadius: 2,
-                                        },
-                                        '& .MuiOutlinedInput-notchedOutline': {
-                                            borderColor: colors.middle,
+                                            bgcolor: 'action.hover',
+                                            '& fieldset': { borderColor: 'transparent' },
+                                            '&:hover fieldset': { borderColor: 'divider' },
+                                            '&.Mui-focused fieldset': { borderColor: 'primary.main' },
                                         },
                                     }}
                                 />
                             </Grid>
+
                             <Grid item xs={12} sm={6} md={2}>
                                 <FormControl fullWidth size="small">
-                                    <InputLabel sx={{ color: colors.rain }}>Module</InputLabel>
+                                    <InputLabel>Module</InputLabel>
                                     <Select
                                         value={moduleFilter}
                                         label="Module"
                                         onChange={(e) => setModuleFilter(e.target.value)}
                                         sx={{
-                                            '& .MuiOutlinedInput-notchedOutline': {
-                                                borderColor: colors.middle,
-                                            },
-                                            '& .MuiInputBase-root': {
-                                                backgroundColor: colors.sky,
-                                            },
+                                            borderRadius: 2,
+                                            bgcolor: 'action.hover',
+                                            '& .MuiOutlinedInput-notchedOutline': { borderColor: 'transparent' },
+                                            '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' },
                                         }}
                                     >
                                         <MenuItem value="all">All Modules</MenuItem>
-                                        {modules.map(m => <MenuItem key={m} value={m}>{m}</MenuItem>)}
+                                        {modules.map((m) => (
+                                            <MenuItem key={m} value={m}>
+                                                {m}
+                                            </MenuItem>
+                                        ))}
                                     </Select>
                                 </FormControl>
                             </Grid>
+
                             <Grid item xs={12} sm={6} md={2}>
                                 <FormControl fullWidth size="small">
-                                    <InputLabel sx={{ color: colors.rain }}>Action</InputLabel>
+                                    <InputLabel>Action</InputLabel>
                                     <Select
                                         value={actionFilter}
                                         label="Action"
                                         onChange={(e) => setActionFilter(e.target.value)}
                                         sx={{
-                                            '& .MuiOutlinedInput-notchedOutline': {
-                                                borderColor: colors.middle,
-                                            },
-                                            '& .MuiInputBase-root': {
-                                                backgroundColor: colors.sky,
-                                            },
+                                            borderRadius: 2,
+                                            bgcolor: 'action.hover',
+                                            '& .MuiOutlinedInput-notchedOutline': { borderColor: 'transparent' },
+                                            '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' },
                                         }}
                                     >
                                         <MenuItem value="all">All Actions</MenuItem>
-                                        {actions.map(a => <MenuItem key={a} value={a}>{a}</MenuItem>)}
+                                        {actions.map((a) => (
+                                            <MenuItem key={a} value={a}>
+                                                {a}
+                                            </MenuItem>
+                                        ))}
                                     </Select>
                                 </FormControl>
                             </Grid>
+
                             <Grid item xs={12} sm={6} md={1.5}>
                                 <DatePicker
-                                    label="From Date"
+                                    label="From"
                                     value={fromDate}
                                     onChange={setFromDate}
                                     slotProps={{
@@ -435,21 +507,21 @@ export default function AuditList() {
                                             size: 'small',
                                             fullWidth: true,
                                             sx: {
-                                                '& .MuiInputBase-root': {
-                                                    backgroundColor: colors.sky,
+                                                '& .MuiOutlinedInput-root': {
                                                     borderRadius: 2,
+                                                    bgcolor: 'action.hover',
+                                                    '& fieldset': { borderColor: 'transparent' },
+                                                    '&:hover fieldset': { borderColor: 'divider' },
                                                 },
-                                                '& .MuiOutlinedInput-notchedOutline': {
-                                                    borderColor: colors.middle,
-                                                },
-                                            }
-                                        }
+                                            },
+                                        },
                                     }}
                                 />
                             </Grid>
+
                             <Grid item xs={12} sm={6} md={1.5}>
                                 <DatePicker
-                                    label="To Date"
+                                    label="To"
                                     value={toDate}
                                     onChange={setToDate}
                                     slotProps={{
@@ -457,129 +529,81 @@ export default function AuditList() {
                                             size: 'small',
                                             fullWidth: true,
                                             sx: {
-                                                '& .MuiInputBase-root': {
-                                                    backgroundColor: colors.sky,
+                                                '& .MuiOutlinedInput-root': {
                                                     borderRadius: 2,
+                                                    bgcolor: 'action.hover',
+                                                    '& fieldset': { borderColor: 'transparent' },
+                                                    '&:hover fieldset': { borderColor: 'divider' },
                                                 },
-                                                '& .MuiOutlinedInput-notchedOutline': {
-                                                    borderColor: colors.middle,
-                                                },
-                                            }
-                                        }
+                                            },
+                                        },
                                     }}
                                 />
                             </Grid>
-                            <Grid item xs={6} sm={6} md={1}>
+
+                            <Grid item xs={12} sm={6} md={2}>
                                 <Button
                                     variant="outlined"
                                     startIcon={<RefreshIcon />}
                                     onClick={fetchAudits}
                                     fullWidth
                                     sx={{
-                                        height: '40px',
-                                        borderColor: colors.middle,
-                                        color: colors.sea,
+                                        height: 40,
+                                        borderRadius: 2,
+                                        fontWeight: 600,
+                                        textTransform: 'none',
+                                        borderColor: 'divider',
+                                        color: 'text.primary',
                                         '&:hover': {
-                                            borderColor: colors.sea,
-                                            backgroundColor: colors.wave,
-                                        }
+                                            borderColor: 'text.primary',
+                                            bgcolor: 'action.hover',
+                                        },
                                     }}
                                 >
                                     Refresh
                                 </Button>
                             </Grid>
                         </Grid>
-
-                        {/* Statistics cards - Responsive */}
-                        {statsLoading ? (
-                            <Box display="flex" justifyContent="center" py={2}>
-                                <CircularProgress size={24} sx={{ color: colors.sea }} />
-                            </Box>
-                        ) : stats && (
-                            <Grid container spacing={2} sx={{ mb: 2 }}>
-                                <Grid item xs={6} sm={6} md={3}>
-                                    <Card variant="outlined" sx={{
-                                        borderRadius: 2,
-                                        borderColor: colors.middle,
-                                    }}>
-                                        <CardContent sx={{ py: 1.5, px: 2 }}>
-                                            <Typography variant="body2" sx={{ color: colors.rain }}>Total Records</Typography>
-                                            <Typography variant="h5" fontWeight="bold" sx={{ color: colors.dark }}>{stats.total ?? 0}</Typography>
-                                        </CardContent>
-                                    </Card>
-                                </Grid>
-                                <Grid item xs={6} sm={6} md={3}>
-                                    <Card variant="outlined" sx={{
-                                        borderRadius: 2,
-                                        borderColor: colors.middle,
-                                    }}>
-                                        <CardContent sx={{ py: 1.5, px: 2 }}>
-                                            <Typography variant="body2" sx={{ color: colors.rain }}>Today</Typography>
-                                            <Typography variant="h5" fontWeight="bold" sx={{ color: colors.dark }}>{stats.today ?? 0}</Typography>
-                                        </CardContent>
-                                    </Card>
-                                </Grid>
-                                <Grid item xs={6} sm={6} md={3}>
-                                    <Card variant="outlined" sx={{
-                                        borderRadius: 2,
-                                        borderColor: colors.middle,
-                                    }}>
-                                        <CardContent sx={{ py: 1.5, px: 2 }}>
-                                            <Typography variant="body2" sx={{ color: colors.rain }}>This Week</Typography>
-                                            <Typography variant="h5" fontWeight="bold" sx={{ color: colors.dark }}>{stats.this_week ?? 0}</Typography>
-                                        </CardContent>
-                                    </Card>
-                                </Grid>
-                                <Grid item xs={12} sm={12} md={3}>
-                                    <Card variant="outlined" sx={{
-                                        borderRadius: 2,
-                                        borderColor: colors.middle,
-                                        height: '100%'
-                                    }}>
-                                        <CardContent sx={{ py: 1.5, px: 2 }}>
-                                            <Typography variant="body2" sx={{ color: colors.rain }}>Top Users</Typography>
-                                            <Box sx={{ mt: 0.5 }}>
-                                                {stats.by_user && stats.by_user.length > 0 ? (
-                                                    stats.by_user.slice(0, 3).map((u, idx) => (
-                                                        <Typography key={idx} variant="caption" component="div" sx={{ color: colors.black }}>
-                                                            {u.user_name}: {u.count}
-                                                        </Typography>
-                                                    ))
-                                                ) : (
-                                                    <Typography variant="caption" sx={{ color: colors.rain }}>No data</Typography>
-                                                )}
-                                            </Box>
-                                        </CardContent>
-                                    </Card>
-                                </Grid>
-                            </Grid>
-                        )}
                     </Box>
 
-                    {/* Records: Cards on mobile/tablet, Table on desktop */}
+                    {/* Table / Cards */}
                     {showTableView ? (
-                        <TableContainer sx={{ width: '100%', overflowX: 'auto' }}>
-                            <Table sx={{ width: '100%', minWidth: 1000 }}>
+                        <TableContainer>
+                            <Table sx={{ minWidth: 1000 }}>
                                 <TableHead>
-                                    <TableRow sx={{ backgroundColor: colors.sky }}>
+                                    <TableRow
+                                        sx={{
+                                            bgcolor: 'action.hover',
+                                            '& th': {
+                                                fontWeight: 700,
+                                                fontSize: '0.8125rem',
+                                                color: 'text.secondary',
+                                                textTransform: 'uppercase',
+                                                letterSpacing: 0.6,
+                                                borderBottom: '1px solid',
+                                                borderColor: 'divider',
+                                                py: 1.75,
+                                            },
+                                        }}
+                                    >
                                         {headCells.map((cell) => (
-                                            <TableCell key={cell.id} sx={{ fontWeight: 'bold', color: colors.dark }}>
-                                                {cell.label}
-                                            </TableCell>
+                                            <TableCell key={cell.id}>{cell.label}</TableCell>
                                         ))}
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
                                     {loading ? (
                                         <TableRow>
-                                            <TableCell colSpan={8} align="center">
-                                                <CircularProgress size={32} sx={{ color: colors.sea, my: 3 }} />
+                                            <TableCell colSpan={8} align="center" sx={{ py: 8 }}>
+                                                <CircularProgress size={36} thickness={4} />
                                             </TableCell>
                                         </TableRow>
                                     ) : audits.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={8} align="center">
-                                                <Typography sx={{ py: 3, color: colors.rain }}>No audit records found</Typography>
+                                            <TableCell colSpan={8} align="center" sx={{ py: 8 }}>
+                                                <Typography color="text.secondary" fontWeight={500}>
+                                                    No audit records found
+                                                </Typography>
                                             </TableCell>
                                         </TableRow>
                                     ) : (
@@ -587,34 +611,99 @@ export default function AuditList() {
                                             const userName = audit.user?.name || audit.user_name || 'Unknown';
                                             const userEmail = audit.user?.email || audit.user_email || 'No email';
                                             return (
-                                                <TableRow key={`${audit.created_at}-${idx}`} hover>
-                                                    <TableCell sx={{ color: colors.black }}>{formatDate(audit.created_at)}</TableCell>
+                                                <TableRow
+                                                    key={`${audit.created_at}-${idx}`}
+                                                    hover
+                                                    sx={{
+                                                        '&:last-child td': { borderBottom: 0 },
+                                                        transition: 'background-color 0.15s',
+                                                    }}
+                                                >
+                                                    <TableCell sx={{ py: 2 }}>
+                                                        <Typography variant="body2" fontWeight={500} color="text.secondary">
+                                                            {formatDate(audit.created_at)}
+                                                        </Typography>
+                                                    </TableCell>
                                                     <TableCell>
-                                                        <strong style={{ color: colors.dark }}>{userName}</strong><br />
-                                                        <small style={{ color: colors.rain }}>{userEmail}</small>
+                                                        <Stack direction="row" spacing={1.25} alignItems="center">
+                                                            <Avatar
+                                                                sx={{
+                                                                    width: 34,
+                                                                    height: 34,
+                                                                    bgcolor: colors.sea || '#0f766e',
+                                                                    fontSize: 13,
+                                                                    fontWeight: 700,
+                                                                }}
+                                                            >
+                                                                {userName.charAt(0).toUpperCase()}
+                                                            </Avatar>
+                                                            <Box>
+                                                                <Typography variant="body2" fontWeight={600}>
+                                                                    {userName}
+                                                                </Typography>
+                                                                <Typography variant="caption" color="text.secondary">
+                                                                    {userEmail}
+                                                                </Typography>
+                                                            </Box>
+                                                        </Stack>
                                                     </TableCell>
                                                     <TableCell>
                                                         <Chip
                                                             label={audit.action}
                                                             size="small"
                                                             sx={{
-                                                                backgroundColor: colors.wave,
-                                                                color: colors.sea,
+                                                                fontWeight: 700,
+                                                                bgcolor: 'action.hover',
+                                                                color: 'text.primary',
+                                                                border: '1px solid',
+                                                                borderColor: 'divider',
+                                                                height: 26,
                                                             }}
                                                         />
                                                     </TableCell>
-                                                    <TableCell sx={{ color: colors.black }}>{audit.module || '-'}</TableCell>
-                                                    <TableCell sx={{ maxWidth: 250, wordBreak: 'break-word', color: colors.black }}>
-                                                        {audit.description?.substring(0, 60) || 'No description'}
-                                                        {audit.description?.length > 60 && '...'}
+                                                    <TableCell>
+                                                        <Typography variant="body2" fontWeight={500}>
+                                                            {audit.module || '—'}
+                                                        </Typography>
                                                     </TableCell>
-                                                    <TableCell sx={{ color: colors.black }}>{audit.ip_address}</TableCell>
-                                                    <TableCell sx={{ color: colors.black }}>{audit.request_method || 'N/A'}</TableCell>
+                                                    <TableCell sx={{ maxWidth: 260 }}>
+                                                        <Typography
+                                                            variant="body2"
+                                                            color="text.secondary"
+                                                            sx={{ wordBreak: 'break-word' }}
+                                                        >
+                                                            {audit.description?.substring(0, 55) || 'No description'}
+                                                            {audit.description?.length > 55 && '…'}
+                                                        </Typography>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Typography variant="body2" fontFamily="monospace" fontWeight={500}>
+                                                            {audit.ip_address || '—'}
+                                                        </Typography>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Chip
+                                                            label={audit.request_method || 'N/A'}
+                                                            size="small"
+                                                            variant="outlined"
+                                                            sx={{
+                                                                height: 24,
+                                                                fontWeight: 600,
+                                                                borderColor: 'divider',
+                                                            }}
+                                                        />
+                                                    </TableCell>
                                                     <TableCell align="center">
                                                         <IconButton
                                                             size="small"
                                                             onClick={(e) => handleMenuOpen(e, audit)}
-                                                            sx={{ color: colors.rain }}
+                                                            sx={{
+                                                                color: 'text.secondary',
+                                                                '&:hover': {
+                                                                    bgcolor: 'action.hover',
+                                                                    color: 'text.primary',
+                                                                },
+                                                            }}
                                                         >
                                                             <MoreVertIcon />
                                                         </IconButton>
@@ -627,23 +716,148 @@ export default function AuditList() {
                             </Table>
                         </TableContainer>
                     ) : (
-                        <Box sx={{ p: { xs: 2, sm: 3 } }}>
+                        <Box sx={{ p: { xs: 2, sm: 2.5 } }}>
                             {loading ? (
-                                <Box display="flex" justifyContent="center" py={4}>
-                                    <CircularProgress sx={{ color: colors.sea }} />
+                                <Box display="flex" justifyContent="center" py={6}>
+                                    <CircularProgress size={36} thickness={4} />
                                 </Box>
                             ) : audits.length === 0 ? (
-                                <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', borderColor: colors.middle }}>
-                                    <Typography sx={{ color: colors.rain }}>No audit records found</Typography>
+                                <Paper
+                                    variant="outlined"
+                                    sx={{
+                                        p: 5,
+                                        textAlign: 'center',
+                                        borderRadius: 3,
+                                        borderStyle: 'dashed',
+                                    }}
+                                >
+                                    <Typography color="text.secondary" fontWeight={500}>
+                                        No audit records found
+                                    </Typography>
                                 </Paper>
                             ) : (
-                                audits.map((audit, idx) => <AuditCard key={`${audit.created_at}-${idx}`} audit={audit} />)
+                                <Stack spacing={2}>
+                                    {audits.map((audit, idx) => {
+                                        const userName = audit.user?.name || audit.user_name || 'Unknown';
+                                        const userEmail = audit.user?.email || audit.user_email || 'No email';
+                                        return (
+                                            <Card
+                                                key={`${audit.created_at}-${idx}`}
+                                                elevation={0}
+                                                sx={{
+                                                    borderRadius: 3,
+                                                    border: '1px solid',
+                                                    borderColor: 'divider',
+                                                    overflow: 'hidden',
+                                                }}
+                                            >
+                                                <CardContent sx={{ p: 2.25 }}>
+                                                    <Stack
+                                                        direction="row"
+                                                        justifyContent="space-between"
+                                                        alignItems="flex-start"
+                                                        mb={1.5}
+                                                    >
+                                                        <Stack direction="row" spacing={1} alignItems="center">
+                                                            <TimeIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+                                                            <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                                                                {formatDate(audit.created_at)}
+                                                            </Typography>
+                                                        </Stack>
+                                                        <Chip
+                                                            label={audit.action}
+                                                            size="small"
+                                                            sx={{
+                                                                fontWeight: 700,
+                                                                bgcolor: 'action.hover',
+                                                                border: '1px solid',
+                                                                borderColor: 'divider',
+                                                                height: 26,
+                                                            }}
+                                                        />
+                                                    </Stack>
+
+                                                    <Stack direction="row" spacing={1.25} alignItems="center" mb={1.5}>
+                                                        <Avatar
+                                                            sx={{
+                                                                width: 36,
+                                                                height: 36,
+                                                                bgcolor: colors.sea || '#0f766e',
+                                                                fontSize: 14,
+                                                                fontWeight: 700,
+                                                            }}
+                                                        >
+                                                            {userName.charAt(0).toUpperCase()}
+                                                        </Avatar>
+                                                        <Box>
+                                                            <Typography variant="body2" fontWeight={600}>
+                                                                {userName}
+                                                            </Typography>
+                                                            <Typography variant="caption" color="text.secondary">
+                                                                {userEmail}
+                                                            </Typography>
+                                                        </Box>
+                                                    </Stack>
+
+                                                    <Stack direction="row" justifyContent="space-between" mb={1}>
+                                                        <Typography variant="body2" color="text.secondary">
+                                                            Module: <strong>{audit.module || '—'}</strong>
+                                                        </Typography>
+                                                        <Stack direction="row" spacing={0.5} alignItems="center">
+                                                            <IpIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                                                            <Typography variant="caption" fontFamily="monospace">
+                                                                {audit.ip_address}
+                                                            </Typography>
+                                                        </Stack>
+                                                    </Stack>
+
+                                                    <Stack direction="row" spacing={1} alignItems="center" mb={1.5}>
+                                                        <MethodIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                                                        <Chip
+                                                            label={audit.request_method || 'N/A'}
+                                                            size="small"
+                                                            variant="outlined"
+                                                            sx={{ height: 22, fontWeight: 600 }}
+                                                        />
+                                                    </Stack>
+
+                                                    <Divider sx={{ my: 1.5 }} />
+
+                                                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                                                        {audit.description || 'No description'}
+                                                    </Typography>
+
+                                                    <Box display="flex" justifyContent="flex-end">
+                                                        <Button
+                                                            size="small"
+                                                            startIcon={<ViewIcon />}
+                                                            onClick={(e) => handleMenuOpen(e, audit)}
+                                                            sx={{
+                                                                fontWeight: 600,
+                                                                textTransform: 'none',
+                                                                color: colors.sea || '#0f766e',
+                                                            }}
+                                                        >
+                                                            View Details
+                                                        </Button>
+                                                    </Box>
+                                                </CardContent>
+                                            </Card>
+                                        );
+                                    })}
+                                </Stack>
                             )}
                         </Box>
                     )}
 
                     {/* Pagination */}
-                    <Box sx={{ borderTop: `1px solid ${colors.middle}`, py: { xs: 1, sm: 0 } }}>
+                    <Box
+                        sx={{
+                            borderTop: '1px solid',
+                            borderColor: 'divider',
+                            bgcolor: 'action.hover',
+                        }}
+                    >
                         <TablePagination
                             rowsPerPageOptions={[5, 10, 25, 50]}
                             component="div"
@@ -657,13 +871,8 @@ export default function AuditList() {
                             }}
                             sx={{
                                 '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
-                                    fontSize: { xs: '0.75rem', sm: '0.875rem' },
-                                    color: colors.black,
+                                    fontWeight: 500,
                                 },
-                                '.MuiTablePagination-actions': {
-                                    color: colors.sea,
-                                    ml: { xs: 0, sm: 1 }
-                                }
                             }}
                         />
                     </Box>
@@ -676,9 +885,13 @@ export default function AuditList() {
                     onClose={handleMenuClose}
                     anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                     transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                    PaperProps={{
+                        elevation: 8,
+                        sx: { borderRadius: 2, minWidth: 160, mt: 0.5 },
+                    }}
                 >
-                    <MenuItem onClick={handleViewDetails} sx={{ color: colors.sea }}>
-                        <ViewIcon sx={{ mr: 1, fontSize: 20 }} /> View Details
+                    <MenuItem onClick={handleViewDetails} sx={{ fontWeight: 500 }}>
+                        <ViewIcon sx={{ mr: 1.5, fontSize: 20 }} /> View Details
                     </MenuItem>
                 </Menu>
 
@@ -690,121 +903,170 @@ export default function AuditList() {
                     fullWidth
                     PaperProps={{
                         sx: {
-                            m: { xs: 2, sm: 0 },
-                            borderRadius: { xs: 2, sm: 1 },
-                            backgroundColor: colors.light,
-                        }
+                            borderRadius: { xs: 0, sm: 3 },
+                            bgcolor: 'background.paper',
+                        },
                     }}
                 >
-                    <DialogTitle sx={{ pb: 1, color: colors.dark }}>Audit Trail Details</DialogTitle>
-                    <DialogContent dividers sx={{ borderColor: colors.middle }}>
+                    <DialogTitle
+                        sx={{
+                            px: { xs: 2.5, sm: 3 },
+                            pt: 2.5,
+                            pb: 1.5,
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'flex-start',
+                        }}
+                    >
+                        <Box>
+                            <Typography variant="h6" fontWeight={800}>
+                                Audit Trail Details
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                                Full record information
+                            </Typography>
+                        </Box>
+                        <IconButton
+                            onClick={() => setViewModalOpen(false)}
+                            size="small"
+                            sx={{
+                                color: 'text.secondary',
+                                mt: -0.5,
+                                '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
+                            }}
+                        >
+                            <CloseIcon />
+                        </IconButton>
+                    </DialogTitle>
+
+                    <Divider />
+
+                    <DialogContent sx={{ px: { xs: 2.5, sm: 3 }, py: 2.5 }}>
                         {selectedAudit && (
-                            <Box component="dl" sx={{
-                                display: 'grid',
-                                gridTemplateColumns: { xs: '1fr', sm: '120px 1fr' },
-                                gap: 1,
-                                '& dt': {
-                                    fontWeight: 'bold',
-                                    color: colors.rain,
-                                    fontSize: '0.875rem',
-                                    mt: 0.5
-                                },
-                                '& dd': {
-                                    m: 0,
-                                    wordBreak: 'break-all',
-                                    fontSize: '0.875rem',
-                                    color: colors.black,
-                                    mb: 1
-                                }
-                            }}>
-                                <dt>Date & Time:</dt>
+                            <Box
+                                component="dl"
+                                sx={{
+                                    display: 'grid',
+                                    gridTemplateColumns: { xs: '1fr', sm: '140px 1fr' },
+                                    gap: 1.25,
+                                    '& dt': {
+                                        fontWeight: 700,
+                                        color: 'text.secondary',
+                                        fontSize: '0.8125rem',
+                                        mt: 0.5,
+                                    },
+                                    '& dd': {
+                                        m: 0,
+                                        wordBreak: 'break-all',
+                                        fontSize: '0.875rem',
+                                        color: 'text.primary',
+                                        mb: 0.75,
+                                        fontWeight: 500,
+                                    },
+                                }}
+                            >
+                                <dt>Date & Time</dt>
                                 <dd>{formatDate(selectedAudit.created_at)}</dd>
 
-                                <dt>User:</dt>
+                                <dt>User</dt>
                                 <dd>
-                                    {selectedAudit.user?.name || selectedAudit.user_name || 'Unknown'}
-                                    ({selectedAudit.user?.email || selectedAudit.user_email || 'No email'})
+                                    {selectedAudit.user?.name || selectedAudit.user_name || 'Unknown'} (
+                                    {selectedAudit.user?.email || selectedAudit.user_email || 'No email'})
                                 </dd>
 
-                                <dt>Role:</dt>
+                                <dt>Role</dt>
                                 <dd>{selectedAudit.user?.role || selectedAudit.user_role || 'N/A'}</dd>
 
-                                <dt>Action:</dt>
+                                <dt>Action</dt>
                                 <dd>{selectedAudit.action}</dd>
 
-                                <dt>Module:</dt>
-                                <dd>{selectedAudit.module || '-'}</dd>
+                                <dt>Module</dt>
+                                <dd>{selectedAudit.module || '—'}</dd>
 
-                                <dt>Description:</dt>
+                                <dt>Description</dt>
                                 <dd>{selectedAudit.description || 'No description'}</dd>
 
-                                <dt>IP Address:</dt>
-                                <dd>{selectedAudit.ip_address}</dd>
+                                <dt>IP Address</dt>
+                                <dd style={{ fontFamily: 'monospace' }}>{selectedAudit.ip_address}</dd>
 
-                                <dt>Request Method:</dt>
+                                <dt>Request Method</dt>
                                 <dd>{selectedAudit.request_method || 'N/A'}</dd>
 
-                                <dt>Request URL:</dt>
+                                <dt>Request URL</dt>
                                 <dd style={{ wordBreak: 'break-all' }}>{selectedAudit.request_url || 'N/A'}</dd>
 
-                                <dt>User Agent:</dt>
+                                <dt>User Agent</dt>
                                 <dd style={{ wordBreak: 'break-all' }}>{selectedAudit.user_agent || 'N/A'}</dd>
 
                                 {selectedAudit.old_data && (
                                     <>
-                                        <dt>Old Data:</dt>
+                                        <dt>Old Data</dt>
                                         <dd>
-                                            <pre style={{
-                                                whiteSpace: 'pre-wrap',
-                                                margin: 0,
-                                                fontSize: '0.75rem',
-                                                color: colors.black,
-                                                backgroundColor: colors.sky,
-                                                padding: '8px',
-                                                borderRadius: '4px',
-                                                maxHeight: '200px',
-                                                overflow: 'auto'
-                                            }}>
+                                            <Box
+                                                component="pre"
+                                                sx={{
+                                                    whiteSpace: 'pre-wrap',
+                                                    m: 0,
+                                                    fontSize: '0.75rem',
+                                                    bgcolor: 'action.hover',
+                                                    p: 1.5,
+                                                    borderRadius: 2,
+                                                    maxHeight: 200,
+                                                    overflow: 'auto',
+                                                    border: '1px solid',
+                                                    borderColor: 'divider',
+                                                }}
+                                            >
                                                 {JSON.stringify(selectedAudit.old_data, null, 2)}
-                                            </pre>
+                                            </Box>
                                         </dd>
                                     </>
                                 )}
 
                                 {selectedAudit.new_data && (
                                     <>
-                                        <dt>New Data:</dt>
+                                        <dt>New Data</dt>
                                         <dd>
-                                            <pre style={{
-                                                whiteSpace: 'pre-wrap',
-                                                margin: 0,
-                                                fontSize: '0.75rem',
-                                                color: colors.black,
-                                                backgroundColor: colors.sky,
-                                                padding: '8px',
-                                                borderRadius: '4px',
-                                                maxHeight: '200px',
-                                                overflow: 'auto'
-                                            }}>
+                                            <Box
+                                                component="pre"
+                                                sx={{
+                                                    whiteSpace: 'pre-wrap',
+                                                    m: 0,
+                                                    fontSize: '0.75rem',
+                                                    bgcolor: 'action.hover',
+                                                    p: 1.5,
+                                                    borderRadius: 2,
+                                                    maxHeight: 200,
+                                                    overflow: 'auto',
+                                                    border: '1px solid',
+                                                    borderColor: 'divider',
+                                                }}
+                                            >
                                                 {JSON.stringify(selectedAudit.new_data, null, 2)}
-                                            </pre>
+                                            </Box>
                                         </dd>
                                     </>
                                 )}
                             </Box>
                         )}
                     </DialogContent>
-                    <DialogActions sx={{ p: 2 }}>
+
+                    <Divider />
+
+                    <DialogActions sx={{ px: { xs: 2.5, sm: 3 }, py: 2 }}>
                         <Button
                             onClick={() => setViewModalOpen(false)}
-                            variant="outlined"
+                            variant="contained"
                             sx={{
-                                borderColor: colors.middle,
-                                color: colors.sea,
+                                borderRadius: 2,
+                                fontWeight: 700,
+                                textTransform: 'none',
+                                boxShadow: 'none',
+                                bgcolor: colors.sea || '#0f766e',
                                 '&:hover': {
-                                    borderColor: colors.sea,
-                                    backgroundColor: colors.wave,
-                                }
+                                    bgcolor: colors.dark || '#0d5c56',
+                                    boxShadow: '0 4px 12px rgba(15,118,110,0.35)',
+                                },
                             }}
                         >
                             Close

@@ -1,8 +1,20 @@
+// src/pages/about/AboutFormModal.js
 import React, { useState, useEffect } from 'react';
 import {
-    Dialog, DialogTitle, DialogContent, DialogActions,
-    TextField, Button, Box, CircularProgress, useMediaQuery,
-    useTheme, Typography, IconButton
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    TextField,
+    Button,
+    Box,
+    CircularProgress,
+    useMediaQuery,
+    useTheme,
+    Typography,
+    IconButton,
+    Stack,
+    alpha,
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
 import { showSnackbar } from 'utils/snackbar';
@@ -57,20 +69,56 @@ export default function AboutFormModal({ open, onClose, aboutData, createAbout, 
     };
 
     return (
-        <Dialog open={open} onClose={() => onClose(false)} maxWidth="md" fullWidth fullScreen={fullScreen}
-                PaperProps={{ sx: { borderRadius: { xs: 0, sm: 2 }, backgroundColor: colors.light, margin: fullScreen ? 0 : 2 } }}>
+        <Dialog
+            open={open}
+            onClose={() => onClose(false)}
+            maxWidth="md"
+            fullWidth
+            fullScreen={fullScreen}
+            PaperProps={{
+                sx: {
+                    borderRadius: { xs: 0, sm: 3 },
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    margin: fullScreen ? 0 : 2,
+                }
+            }}
+        >
             <form onSubmit={handleSubmit}>
-                <DialogTitle sx={{ pb: 1, fontSize: { xs: '1.25rem', sm: '1.5rem' }, display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: colors.dark }}>
+                <DialogTitle
+                    sx={{
+                        pb: 1.5,
+                        fontWeight: 700,
+                        fontSize: { xs: '1.2rem', sm: '1.4rem' },
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                        color: 'text.primary',
+                    }}
+                >
                     {aboutData ? 'Edit About Page' : 'Create About Page'}
-                    <IconButton onClick={() => onClose(false)} size="small" sx={{ p: 0.5, color: colors.rain, '&:hover': { color: colors.black } }}>
+                    <IconButton
+                        onClick={() => onClose(false)}
+                        size="small"
+                        sx={{
+                            color: 'text.secondary',
+                            '&:hover': { bgcolor: 'action.hover' },
+                        }}
+                    >
                         <CloseIcon />
                     </IconButton>
                 </DialogTitle>
-                <DialogContent>
-                    <Box display="flex" flexDirection="column" gap={2} mt={1}>
-                        <Typography variant="body2" sx={{ color: colors.rain }}>
-                            {aboutData ? 'Update the about page content below.' : 'Create new about page content.'}
+
+                <DialogContent sx={{ pt: 3, pb: 1 }}>
+                    <Stack spacing={2.5}>
+                        <Typography variant="body2" color="text.secondary">
+                            {aboutData
+                                ? 'Update the about page content below.'
+                                : 'Create new about page content.'}
                         </Typography>
+
                         <TextField
                             label="Content"
                             name="content"
@@ -79,27 +127,65 @@ export default function AboutFormModal({ open, onClose, aboutData, createAbout, 
                             required
                             fullWidth
                             multiline
-                            rows={12}
+                            rows={14}
                             error={!!errors.content}
                             helperText={errors.content}
                             placeholder="Enter about page content..."
                             disabled={loading}
                             sx={{
-                                '& .MuiInputBase-root': { fontFamily: 'inherit', fontSize: '1rem', lineHeight: 1.8, backgroundColor: colors.sky, borderRadius: 2 },
-                                '& .MuiOutlinedInput-notchedOutline': { borderColor: colors.middle },
-                                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: colors.sea },
-                                '& .Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: colors.sea },
-                                '& .MuiInputLabel-root': { color: colors.rain },
-                                '& .MuiInputLabel-root.Mui-focused': { color: colors.sea },
+                                '& .MuiOutlinedInput-root': {
+                                    borderRadius: 2,
+                                    fontFamily: 'inherit',
+                                    fontSize: '1rem',
+                                    lineHeight: 1.8,
+                                    bgcolor: 'action.hover',
+                                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                                        borderColor: colors.sea,
+                                    },
+                                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                        borderColor: colors.sea,
+                                        borderWidth: 2,
+                                    },
+                                },
+                                '& .MuiInputLabel-root': {
+                                    color: 'text.secondary',
+                                    '&.Mui-focused': {
+                                        color: colors.sea,
+                                    },
+                                },
                             }}
                         />
-                    </Box>
+                    </Stack>
                 </DialogContent>
-                <DialogActions sx={{ p: { xs: 2, sm: 3 }, pt: 0 }}>
-                    <Button onClick={() => onClose(false)} sx={{ color: colors.rain, '&:hover': { color: colors.black } }}>Cancel</Button>
-                    <Button type="submit" variant="contained" disabled={loading}
-                            sx={{ backgroundColor: colors.sea, '&:hover': { backgroundColor: colors.dark } }}>
-                        {loading ? <CircularProgress size={24} sx={{ color: colors.light }} /> : (aboutData ? 'Update' : 'Create')}
+
+                <DialogActions sx={{ p: { xs: 2, sm: 3 }, pt: 1, borderTop: '1px solid', borderColor: 'divider' }}>
+                    <Button
+                        onClick={() => onClose(false)}
+                        disabled={loading}
+                        sx={{
+                            fontWeight: 600,
+                            textTransform: 'none',
+                            color: 'text.secondary',
+                            '&:hover': { bgcolor: 'action.hover' },
+                        }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        type="submit"
+                        variant="contained"
+                        disabled={loading}
+                        sx={{
+                            borderRadius: 2,
+                            fontWeight: 700,
+                            textTransform: 'none',
+                            px: 3,
+                            bgcolor: colors.sea || '#0f766e',
+                            '&:hover': { bgcolor: colors.dark || '#0d5c56' },
+                            '&:disabled': { opacity: 0.6 },
+                        }}
+                    >
+                        {loading ? <CircularProgress size={24} color="inherit" /> : (aboutData ? 'Update' : 'Create')}
                     </Button>
                 </DialogActions>
             </form>

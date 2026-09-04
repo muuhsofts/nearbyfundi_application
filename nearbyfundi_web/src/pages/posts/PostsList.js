@@ -1,91 +1,138 @@
 // src/pages/posts/PostsList.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     Box,
     Paper,
     Typography,
-    Grid,
-    Card,
-    CardContent,
-    Avatar,
-    Chip,
+    Button,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    TablePagination,
+    TableSortLabel,
+    TextField,
+    InputAdornment,
     IconButton,
+    Chip,
+    Menu,
+    MenuItem,
     Dialog,
     DialogTitle,
     DialogContent,
     DialogActions,
-    Button,
-    TextField,
-    InputAdornment,
     CircularProgress,
-    Alert,
-    Stack,
-    Pagination,
-    FormControl,
-    InputLabel,
-    Select,
-    MenuItem,
     useMediaQuery,
     useTheme,
+    Card,
+    CardContent,
     Divider,
-    Skeleton,
-    Tooltip,
-    Fade,
-    Grow,
-    Autocomplete,
-    Badge,
-    alpha,
+    Avatar,
+    Stack,
+    Grid,
+    DialogContentText,
 } from '@mui/material';
 import {
-    Close as CloseIcon,
     Search as SearchIcon,
     Refresh as RefreshIcon,
-    Person as PersonIcon,
-    Verified as VerifiedIcon,
-    LocationOn as LocationIcon,
-    Star as StarIcon,
-    CalendarToday as CalendarIcon,
-    Visibility as VisibilityIcon,
+    MoreVert as MoreVertIcon,
+    Delete as DeleteIcon,
+    Visibility as ViewIcon,
     Favorite as FavoriteIcon,
     Comment as CommentIcon,
-    ZoomIn as ZoomInIcon,
-    Image as ImageIcon,
-    FilterList as FilterIcon,
+    Person as PersonIcon,
+    LocationOn as LocationIcon,
+    Verified as VerifiedIcon,
+    Star as StarIcon,
+    CalendarToday as CalendarIcon,
     Clear as ClearIcon,
-    Dashboard as DashboardIcon,
-    TrendingUp as TrendingUpIcon,
-    People as PeopleIcon,
-    ChatBubble as ChatBubbleIcon,
+    PhotoCamera as PhotoCameraIcon,
+    Description as DescriptionIcon,
 } from '@mui/icons-material';
 import { postService } from 'services/post.service';
 import { technicianService } from 'services/technician.service';
+import { usePermissions } from 'hooks/usePermissions';
+import { showSnackbar } from 'utils/snackbar';
 import { format } from 'date-fns';
 import appConfig from '../../config';
 
 const colors = appConfig.app.colors;
 
+// Status styles for posts
+const statusStyles = {
+    published: {
+        color: '#047857',
+        bg: '#d1fae5',
+        border: '#10b981',
+        label: 'Published',
+    },
+    draft: {
+        color: '#4b5563',
+        bg: '#f3f4f6',
+        border: '#9ca3af',
+        label: 'Draft',
+    },
+    pending: {
+        color: '#b45309',
+        bg: '#fef3c7',
+        border: '#f59e0b',
+        label: 'Pending',
+    },
+    archived: {
+        color: '#6b7280',
+        bg: '#e5e7eb',
+        border: '#9ca3af',
+        label: 'Archived',
+    },
+};
+
+const headCells = [
+    { id: 'post', label: 'Post', disableSort: true },
+    { id: 'technician', label: 'Technician', disableSort: true },
+    { id: 'likes', label: 'Likes' },
+    { id: 'comments', label: 'Comments' },
+    { id: 'status', label: 'Status' },
+    { id: 'created_at', label: 'Created' },
+    { id: 'actions', label: 'Actions', disableSort: true },
+];
+
 const PostsList = () => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const isTablet = useMediaQuery(theme.breakpoints.down('md'));
+    const showTableView = useMediaQuery(theme.breakpoints.up('md'));
+
+    const { can } = usePermissions();
+    const canView = can('posts.view');
+    const canDelete = can('posts.delete');
 
     const [posts, setPosts] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
-    const [pagination, setPagination] = useState({ total: 0, per_page: 15, current_page: 1, last_page: 1 });
+    const [pagination, setPagination] = useState({ total: 0, per_page: 10, current_page: 1, last_page: 1 });
 
     const [search, setSearch] = useState('');
-    const [selectedTechnician, setSelectedTechnician] = useState(null);
+    const [technicianFilter, setTechnicianFilter] = useState('all');
     const [technicians, setTechnicians] = useState([]);
     const [loadingTechnicians, setLoadingTechnicians] = useState(false);
-    const [page, setPage] = useState(1);
-    const [perPage, setPerPage] = useState(15);
+    const [page, setPage] = useState(0);
+    const [rowsPerPage, setRowsPerPage] = useState(10);
+    const [order, setOrder] = useState('desc');
+    const [orderBy, setOrderBy] = useState('created_at');
     const [selectedPost, setSelectedPost] = useState(null);
     const [openViewDialog, setOpenViewDialog] = useState(false);
+    const [actionMenu, setActionMenu] = useState(null);
+    const [selectedPostForMenu, setSelectedPostForMenu] = useState(null);
+    const [confirmDialog, setConfirmDialog] = useState({
+        open: false,
+        title: '',
+        message: '',
+        action: null,
+    });
     const [imageLoaded, setImageLoaded] = useState({});
-    const [hoveredCard, setHoveredCard] = useState(null);
-    const [showFilters, setShowFilters] = useState(false);
 
+    // ── EXISTING LOGIC: Load technicians ────────────────────────────────
     const loadTechnicians = async () => {
         setLoadingTechnicians(true);
         try {
@@ -114,69 +161,65 @@ const PostsList = () => {
         loadTechnicians();
     }, []);
 
+    // ── EXISTING LOGIC: Load posts ──────────────────────────────────────
     const loadPosts = async () => {
+        if (!canView) return;
+
         setLoading(true);
-        setError(null);
         try {
             const params = {
-                page,
-                per_page: perPage,
+                page: page + 1,
+                per_page: rowsPerPage,
                 search: search || undefined,
+                technician_id: technicianFilter === 'all' ? undefined : technicianFilter,
             };
-
-            if (selectedTechnician) {
-                params.technician_id = selectedTechnician.id;
-            }
 
             const response = await postService.getAllPosts(params);
 
             if (response?.data?.status === 'success') {
                 const data = response.data.data;
-
-                let postsData = [];
-                let paginationData = {};
-
                 if (data && data.data) {
-                    postsData = data.data;
-                    paginationData = {
+                    setPosts(data.data);
+                    setPagination({
                         total: data.total || 0,
-                        per_page: data.per_page || perPage,
+                        per_page: data.per_page || rowsPerPage,
                         current_page: data.current_page || 1,
                         last_page: data.last_page || 1,
-                    };
+                    });
                 } else if (Array.isArray(data)) {
-                    postsData = data;
-                    paginationData = {
+                    setPosts(data);
+                    setPagination({
                         total: data.length,
-                        per_page: perPage,
+                        per_page: rowsPerPage,
                         current_page: 1,
                         last_page: 1,
-                    };
+                    });
                 } else {
-                    postsData = [];
+                    setPosts([]);
                 }
-
-                setPosts(postsData);
-                setPagination(paginationData);
             } else {
                 setPosts([]);
             }
         } catch (err) {
             console.error('Posts error:', err);
-            setError(err.message || 'Failed to load posts');
+            showSnackbar({ type: 'error', message: err.message || 'Failed to load posts' });
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        loadPosts();
-    }, [page, perPage, search, selectedTechnician]);
+        if (canView) {
+            loadPosts();
+        }
+    }, [page, rowsPerPage, search, technicianFilter, canView]);
 
-    const handleRefresh = () => {
+    // ── EXISTING LOGIC: Refresh ─────────────────────────────────────────
+    const refreshAll = () => {
         loadPosts();
     };
 
+    // ── EXISTING LOGIC: View post ───────────────────────────────────────
     const handleViewPost = async (post) => {
         try {
             const response = await postService.getPost(post.id);
@@ -197,14 +240,88 @@ const PostsList = () => {
         setSelectedPost(null);
     };
 
-    const handleImageLoad = (id) => {
-        setImageLoaded(prev => ({ ...prev, [id]: true }));
+    // ── EXISTING LOGIC: Delete post ─────────────────────────────────────
+    const handleDeletePost = async (id) => {
+        try {
+            await postService.deletePost(id);
+            showSnackbar({ type: 'success', message: 'Post deleted successfully' });
+            await loadPosts();
+            return true;
+        } catch (err) {
+            console.error('Delete error:', err);
+            const errorMessage = err.response?.data?.message || 'Failed to delete post';
+            showSnackbar({ type: 'error', message: errorMessage });
+            throw err;
+        }
     };
 
-    const handleClearFilters = () => {
-        setSelectedTechnician(null);
-        setSearch('');
-        setPage(1);
+    // ── EXISTING LOGIC: Confirm dialog ──────────────────────────────────
+    const openConfirmDialog = (title, message, actionFn) => {
+        setConfirmDialog({ open: true, title, message, action: actionFn });
+    };
+
+    const handleConfirm = async () => {
+        if (!confirmDialog.action) return;
+        const action = confirmDialog.action;
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+
+        try {
+            await action();
+        } catch (err) {
+            console.error('Confirm action failed:', err);
+        }
+    };
+
+    // ── EXISTING LOGIC: Sorting ─────────────────────────────────────────
+    const handleRequestSort = (property) => {
+        const isAsc = orderBy === property && order === 'asc';
+        setOrder(isAsc ? 'desc' : 'asc');
+        setOrderBy(property);
+    };
+
+    // ── Client-side sorting (UI only) ──────────────────────────────────
+    const sortedPosts = useMemo(() => {
+        const sorted = [...posts];
+        sorted.sort((a, b) => {
+            let aValue, bValue;
+
+            switch (orderBy) {
+                case 'likes':
+                    aValue = a.likes_count || 0;
+                    bValue = b.likes_count || 0;
+                    break;
+                case 'comments':
+                    aValue = a.comments_count || 0;
+                    bValue = b.comments_count || 0;
+                    break;
+                case 'status':
+                    aValue = a.status || 'published';
+                    bValue = b.status || 'published';
+                    break;
+                case 'created_at':
+                    aValue = a.created_at || '';
+                    bValue = b.created_at || '';
+                    break;
+                default:
+                    aValue = a[orderBy] || '';
+                    bValue = b[orderBy] || '';
+            }
+
+            if (typeof aValue === 'string') {
+                aValue = aValue.toLowerCase();
+                bValue = bValue.toLowerCase();
+            }
+
+            if (aValue < bValue) return order === 'asc' ? -1 : 1;
+            if (aValue > bValue) return order === 'asc' ? 1 : -1;
+            return 0;
+        });
+        return sorted;
+    }, [posts, orderBy, order]);
+
+    // ── EXISTING HELPERS ─────────────────────────────────────────────────
+    const handleImageLoad = (id) => {
+        setImageLoaded(prev => ({ ...prev, [id]: true }));
     };
 
     const getInitials = (name) => {
@@ -217,1302 +334,1072 @@ const PostsList = () => {
             .substring(0, 2);
     };
 
-    const formatDate = (date) => {
-        if (!date) return 'N/A';
-        const now = new Date();
-        const past = new Date(date);
-        const diffTime = Math.abs(now - past);
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-        if (diffDays === 0) return 'Today';
-        if (diffDays === 1) return 'Yesterday';
-        if (diffDays < 7) return `${diffDays} days ago`;
-        if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-
-        return format(past, 'MMM d, yyyy');
-    };
-
     const getImageUrl = (image) => {
         if (!image) return null;
-
         if (image.startsWith('http://') || image.startsWith('https://')) {
             return image;
         }
-
         const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
         const cleanPath = image.replace(/^\/+/, '');
         return `${baseUrl}/storage/${cleanPath}`;
     };
 
-    const groupPostsByTechnician = () => {
-        const groups = {};
-        posts.forEach(post => {
-            const techId = post.technician?.id;
-            if (!techId) {
-                if (!groups['unknown']) {
-                    groups['unknown'] = {
-                        technician: null,
-                        posts: []
-                    };
-                }
-                groups['unknown'].posts.push(post);
-                return;
-            }
-            if (!groups[techId]) {
-                groups[techId] = {
-                    technician: post.technician,
-                    posts: []
-                };
-            }
-            groups[techId].posts.push(post);
-        });
-        return Object.values(groups);
+    const formatDate = (dateStr) => {
+        if (!dateStr) return '-';
+        try {
+            return format(new Date(dateStr), 'MMM d, yyyy');
+        } catch {
+            return '-';
+        }
     };
 
-    const technicianGroups = groupPostsByTechnician();
-
-    const renderSkeletons = () => {
-        const count = isMobile ? 2 : isTablet ? 4 : 6;
-        return Array.from({ length: count }).map((_, index) => (
-            <Grid item xs={12} sm={6} md={4} key={`skeleton-${index}`}>
-                <Card sx={{ borderRadius: 3, overflow: 'hidden', height: '100%' }}>
-                    <Skeleton variant="rectangular" height={250} animation="wave" />
-                    <CardContent>
-                        <Skeleton variant="text" width="80%" height={28} animation="wave" />
-                        <Skeleton variant="text" width="100%" height={20} animation="wave" />
-                        <Skeleton variant="text" width="60%" height={20} animation="wave" />
-                        <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Skeleton variant="circular" width={32} height={32} animation="wave" />
-                            <Skeleton variant="text" width="40%" height={20} animation="wave" />
-                        </Box>
-                    </CardContent>
-                </Card>
-            </Grid>
-        ));
+    const formatDateFull = (dateStr) => {
+        if (!dateStr) return '-';
+        try {
+            return format(new Date(dateStr), 'MMM d, yyyy h:mm a');
+        } catch {
+            return '-';
+        }
     };
 
-    if (error) {
+    // ── UI Helper: Status chip ──────────────────────────────────────────
+    const getStatusChip = (status) => {
+        const s = statusStyles[status] || statusStyles.published;
+        return (
+            <Chip
+                label={s.label}
+                size="small"
+                sx={{
+                    backgroundColor: s.bg,
+                    color: s.color,
+                    fontWeight: 700,
+                    border: `1.5px solid ${s.border}`,
+                    height: 28,
+                    '& .MuiChip-label': { px: 1.5 },
+                }}
+            />
+        );
+    };
+
+    // ── UI: Action menu handlers ────────────────────────────────────────
+    const handleMenuOpen = (event, post) => {
+        setSelectedPostForMenu(post);
+        setActionMenu(event.currentTarget);
+    };
+
+    const handleMenuClose = () => {
+        setActionMenu(null);
+        setSelectedPostForMenu(null);
+    };
+
+    const handleAction = async (actionType) => {
+        if (!selectedPostForMenu) return;
+        handleMenuClose();
+
+        switch (actionType) {
+            case 'view':
+                handleViewPost(selectedPostForMenu);
+                break;
+            case 'delete':
+                openConfirmDialog(
+                    'Delete Post',
+                    `Are you sure you want to delete "${selectedPostForMenu.title || 'Untitled'}"?`,
+                    () => handleDeletePost(selectedPostForMenu.id)
+                );
+                break;
+            default:
+                break;
+        }
+    };
+
+    // ── Summary stats ──────────────────────────────────────────────────
+    const totalPosts = pagination.total || 0;
+    const totalLikes = posts.reduce((acc, p) => acc + (p.likes_count || 0), 0);
+    const totalComments = posts.reduce((acc, p) => acc + (p.comments_count || 0), 0);
+    const uniqueTechnicians = new Set(posts.map(p => p.technician?.id).filter(Boolean)).size;
+
+    // ── Permission check ──────────────────────────────────────────────
+    if (!canView) {
         return (
             <Box p={3}>
-                <Alert
-                    severity="error"
-                    action={
-                        <Button color="inherit" size="small" onClick={() => { setError(null); loadPosts(); }}>
-                            Retry
-                        </Button>
-                    }
+                <Paper
+                    elevation={0}
+                    sx={{
+                        p: 4,
+                        textAlign: 'center',
+                        borderRadius: 3,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                    }}
                 >
-                    {error}
-                </Alert>
+                    <Typography color="error" fontWeight={600}>
+                        You do not have permission to view posts.
+                    </Typography>
+                </Paper>
             </Box>
         );
     }
 
+    // ── RENDER ──────────────────────────────────────────────────────────
     return (
-        <Box sx={{
-            width: '100%',
-            p: { xs: 1.5, sm: 2.5, md: 3.5 },
-            background: `linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)`,
-            minHeight: '100vh',
-        }}>
-            {/* Main Container */}
-            <Paper sx={{
-                width: '100%',
-                borderRadius: { xs: 2, sm: 3 },
-                overflow: 'hidden',
-                boxShadow: '0 8px 40px rgba(0,0,0,0.06)',
-                p: { xs: 2, sm: 3, md: 4 },
-                backgroundColor: 'rgba(255,255,255,0.95)',
-                backdropFilter: 'blur(10px)',
-                border: '1px solid rgba(0,0,0,0.04)',
-            }}>
-                {/* ===== HEADER SECTION ===== */}
+        <Box sx={{ width: '100%', p: { xs: 1.5, sm: 2.5 }, m: 0, bgcolor: 'background.default' }}>
+            <Paper
+                elevation={0}
+                sx={{
+                    width: '100%',
+                    borderRadius: 3,
+                    overflow: 'hidden',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    bgcolor: 'background.paper',
+                }}
+            >
+                {/* ── HEADER ────────────────────────────────────────────── */}
                 <Box
                     sx={{
-                        display: 'flex',
-                        alignItems: { xs: 'flex-start', sm: 'center' },
-                        justifyContent: 'space-between',
-                        flexDirection: { xs: 'column', sm: 'row' },
-                        gap: 2,
-                        mb: 3,
+                        px: { xs: 2, sm: 3 },
+                        py: 2.5,
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
                     }}
                 >
-                    <Box display="flex" alignItems="center" gap={2}>
-                        <Box
-                            sx={{
-                                width: 52,
-                                height: 52,
-                                borderRadius: 2.5,
-                                background: `linear-gradient(135deg, ${colors.sea}15, ${colors.sea}08)`,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                border: `1px solid ${colors.sea}20`,
-                            }}
-                        >
-                            <CommentIcon sx={{ color: colors.sea, fontSize: 28 }} />
-                        </Box>
+                    <Stack
+                        direction={{ xs: 'column', sm: 'row' }}
+                        justifyContent="space-between"
+                        alignItems={{ xs: 'stretch', sm: 'center' }}
+                        spacing={2}
+                        mb={2.5}
+                    >
                         <Box>
-                            <Typography
-                                variant="h5"
-                                fontWeight="800"
-                                sx={{
-                                    fontSize: { xs: '1.3rem', sm: '1.6rem', md: '1.9rem' },
-                                    color: colors.dark,
-                                    letterSpacing: '-0.5px',
-                                    lineHeight: 1.2,
-                                }}
-                            >
-                                Posts
+                            <Typography variant="h5" fontWeight={800} color="text.primary">
+                                Post Management
                             </Typography>
-                            <Typography
-                                variant="body2"
-                                sx={{
-                                    color: colors.rain,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 0.5,
-                                    mt: 0.25,
-                                }}
-                            >
-                                Technician posts and updates
+                            <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                                Manage technician posts and engagement
                             </Typography>
                         </Box>
-                    </Box>
 
-                    <Box display="flex" gap={1.5} alignItems="center" flexWrap="wrap" sx={{ width: { xs: '100%', sm: 'auto' } }}>
-                        <Button
-                            variant="outlined"
-                            startIcon={<FilterIcon />}
-                            onClick={() => setShowFilters(!showFilters)}
-                            size="medium"
+                        <Stack direction="row" spacing={1.5} alignItems="center" justifyContent={{ xs: 'space-between', sm: 'flex-end' }}>
+                            <Button
+                                variant="contained"
+                                startIcon={<RefreshIcon />}
+                                onClick={refreshAll}
+                                disabled={loading}
+                                size={isMobile ? 'small' : 'medium'}
+                                sx={{
+                                    borderRadius: 2,
+                                    fontWeight: 600,
+                                    textTransform: 'none',
+                                    px: 2.5,
+                                    boxShadow: 'none',
+                                    bgcolor: 'primary.main',
+                                    '&:hover': {
+                                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                    },
+                                }}
+                            >
+                                Refresh
+                            </Button>
+                        </Stack>
+                    </Stack>
+
+                    {/* ── FILTERS ──────────────────────────────────────── */}
+                    <Stack
+                        direction={{ xs: 'column', sm: 'row' }}
+                        spacing={1.5}
+                        alignItems={{ xs: 'stretch', sm: 'center' }}
+                        flexWrap="wrap"
+                    >
+                        <TextField
+                            select
+                            label="Technician"
+                            size="small"
+                            value={technicianFilter}
+                            onChange={(e) => { setTechnicianFilter(e.target.value); setPage(0); }}
                             sx={{
-                                borderColor: showFilters ? colors.sea : colors.middle,
-                                color: showFilters ? colors.sea : colors.rain,
-                                height: 44,
-                                borderRadius: 2.5,
-                                textTransform: 'none',
-                                fontWeight: 600,
-                                fontSize: '0.875rem',
-                                px: 2.5,
-                                transition: 'all 0.2s ease',
-                                '&:hover': {
-                                    borderColor: colors.sea,
-                                    backgroundColor: alpha(colors.sea, 0.06),
-                                    transform: 'translateY(-1px)',
+                                minWidth: { xs: '100%', sm: 180 },
+                                flexGrow: { xs: 1, sm: 0 },
+                                '& .MuiOutlinedInput-root': {
+                                    borderRadius: 2,
+                                    bgcolor: 'action.hover',
+                                    '& fieldset': { borderColor: 'transparent' },
+                                    '&:hover fieldset': { borderColor: 'divider' },
+                                    '&.Mui-focused fieldset': { borderColor: 'primary.main' },
                                 },
                             }}
                         >
-                            {showFilters ? 'Hide Filters' : 'Show Filters'}
-                            {(selectedTechnician || search) && (
-                                <Badge
-                                    badgeContent={1}
-                                    color="primary"
-                                    sx={{
-                                        '& .MuiBadge-badge': {
-                                            backgroundColor: colors.sea,
-                                            fontSize: '0.6rem',
-                                            height: 18,
-                                            minWidth: 18,
-                                        },
-                                    }}
-                                />
-                            )}
-                        </Button>
+                            <MenuItem value="all">All Technicians</MenuItem>
+                            {technicians.map((tech) => (
+                                <MenuItem key={tech.id} value={tech.id}>
+                                    {tech.user?.name || tech.name || 'Unknown'}
+                                </MenuItem>
+                            ))}
+                        </TextField>
+
                         <TextField
                             placeholder="Search posts..."
                             size="small"
                             value={search}
-                            onChange={(e) => setSearch(e.target.value)}
+                            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
                             InputProps={{
                                 startAdornment: (
                                     <InputAdornment position="start">
-                                        <SearchIcon fontSize="small" sx={{ color: colors.rain }} />
+                                        <SearchIcon fontSize="small" color="action" />
                                     </InputAdornment>
                                 ),
-                                endAdornment: search && (
+                                endAdornment: search ? (
                                     <InputAdornment position="end">
                                         <IconButton size="small" onClick={() => setSearch('')}>
                                             <ClearIcon fontSize="small" />
                                         </IconButton>
                                     </InputAdornment>
-                                ),
+                                ) : null,
                             }}
                             sx={{
-                                width: { xs: '100%', sm: 200, md: 260 },
-                                '& .MuiInputBase-root': {
-                                    backgroundColor: '#f8fafc',
-                                    borderRadius: 2.5,
-                                    height: 44,
-                                    transition: 'all 0.25s ease',
-                                    '&:hover': {
-                                        backgroundColor: '#f1f5f9',
-                                    },
-                                    '&.Mui-focused': {
-                                        backgroundColor: '#ffffff',
-                                        boxShadow: `0 0 0 3px ${alpha(colors.sea, 0.15)}`,
-                                        transform: 'scale(1.01)',
-                                    },
-                                },
-                                '& .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: colors.middle + '50',
+                                minWidth: { xs: '100%', sm: 260 },
+                                flexGrow: { xs: 1, sm: 0 },
+                                '& .MuiOutlinedInput-root': {
+                                    borderRadius: 2,
+                                    bgcolor: 'action.hover',
+                                    '& fieldset': { borderColor: 'transparent' },
+                                    '&:hover fieldset': { borderColor: 'divider' },
+                                    '&.Mui-focused fieldset': { borderColor: 'primary.main' },
                                 },
                             }}
                         />
-                        <Button
-                            variant="contained"
-                            startIcon={<RefreshIcon />}
-                            onClick={handleRefresh}
-                            disabled={loading}
-                            sx={{
-                                background: `linear-gradient(135deg, ${colors.sea}, ${colors.dark})`,
-                                height: 44,
-                                minWidth: 110,
-                                borderRadius: 2.5,
-                                textTransform: 'none',
-                                fontWeight: 700,
-                                fontSize: '0.875rem',
-                                boxShadow: `0 4px 16px ${alpha(colors.sea, 0.3)}`,
-                                '&:hover': {
-                                    transform: 'translateY(-2px)',
-                                    boxShadow: `0 8px 24px ${alpha(colors.sea, 0.4)}`,
-                                },
-                                transition: 'all 0.25s ease',
-                            }}
-                        >
-                            Refresh
-                        </Button>
-                    </Box>
+                    </Stack>
                 </Box>
 
-                {/* ===== FILTERS SECTION ===== */}
-                {showFilters && (
-                    <Fade in={showFilters}>
-                        <Box
-                            sx={{
-                                p: 3,
-                                mb: 3,
-                                background: `linear-gradient(135deg, #f8fafc, #f1f5f9)`,
-                                borderRadius: 2.5,
-                                border: `1px solid ${alpha(colors.middle, 0.2)}`,
-                            }}
-                        >
-                            <Box display="flex" alignItems="center" justifyContent="space-between" mb={2.5}>
-                                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: colors.dark }}>
-                                    Filters
-                                </Typography>
-                                {(selectedTechnician || search) && (
-                                    <Button
-                                        size="small"
-                                        startIcon={<ClearIcon />}
-                                        onClick={handleClearFilters}
-                                        sx={{
-                                            color: colors.rain,
-                                            textTransform: 'none',
-                                            fontWeight: 600,
-                                            '&:hover': {
-                                                color: colors.dark,
-                                                backgroundColor: alpha(colors.dark, 0.04),
-                                            },
-                                        }}
-                                    >
-                                        Clear All
-                                    </Button>
-                                )}
-                            </Box>
-
-                            <Grid container spacing={2.5}>
-                                <Grid item xs={12} md={6}>
-                                    <TextField
-                                        fullWidth
-                                        placeholder="Search posts by title or content..."
-                                        size="medium"
-                                        value={search}
-                                        onChange={(e) => setSearch(e.target.value)}
-                                        InputProps={{
-                                            startAdornment: (
-                                                <InputAdornment position="start">
-                                                    <SearchIcon fontSize="small" sx={{ color: colors.rain }} />
-                                                </InputAdornment>
-                                            ),
-                                            endAdornment: search && (
-                                                <InputAdornment position="end">
-                                                    <IconButton size="small" onClick={() => setSearch('')}>
-                                                        <ClearIcon fontSize="small" />
-                                                    </IconButton>
-                                                </InputAdornment>
-                                            ),
-                                        }}
-                                        sx={{
-                                            '& .MuiInputBase-root': {
-                                                backgroundColor: '#ffffff',
-                                                borderRadius: 2,
-                                            },
-                                            '& .MuiOutlinedInput-notchedOutline': {
-                                                borderColor: alpha(colors.middle, 0.3),
-                                            },
-                                            '& .MuiInputBase-root:hover .MuiOutlinedInput-notchedOutline': {
-                                                borderColor: colors.sea,
-                                            },
-                                            '& .MuiInputBase-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                                                borderColor: colors.sea,
-                                                borderWidth: 2,
-                                            },
-                                        }}
-                                    />
-                                </Grid>
-                                <Grid item xs={12} md={6}>
-                                    <Autocomplete
-                                        fullWidth
-                                        size="medium"
-                                        options={technicians}
-                                        loading={loadingTechnicians}
-                                        value={selectedTechnician}
-                                        onChange={(event, newValue) => {
-                                            setSelectedTechnician(newValue);
-                                            setPage(1);
-                                        }}
-                                        getOptionLabel={(option) => option.user?.name || option.name || ''}
-                                        isOptionEqualToValue={(option, value) => option.id === value?.id}
-                                        renderOption={(props, option) => (
-                                            <Box component="li" {...props} sx={{ py: 1.5, px: 2 }}>
-                                                <Box display="flex" alignItems="center" gap={2}>
-                                                    <Avatar
-                                                        src={option.profile_photo ? getImageUrl(option.profile_photo) : undefined}
-                                                        sx={{ width: 36, height: 36, bgcolor: colors.sea, fontWeight: 600 }}
-                                                    >
-                                                        {getInitials(option.user?.name || option.name)}
-                                                    </Avatar>
-                                                    <Box>
-                                                        <Typography variant="body2" sx={{ fontWeight: 600, color: colors.dark }}>
-                                                            {option.user?.name || option.name}
-                                                        </Typography>
-                                                        {option.area && (
-                                                            <Typography variant="caption" sx={{ color: colors.rain, display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                                                <LocationIcon sx={{ fontSize: 12 }} />
-                                                                {option.area}
-                                                            </Typography>
-                                                        )}
-                                                    </Box>
-                                                    {option.verified && (
-                                                        <VerifiedIcon sx={{ fontSize: 16, color: colors.salat }} />
-                                                    )}
-                                                </Box>
-                                            </Box>
-                                        )}
-                                        renderInput={(params) => (
-                                            <TextField
-                                                {...params}
-                                                placeholder="Filter by technician..."
-                                                InputProps={{
-                                                    ...params.InputProps,
-                                                    startAdornment: (
-                                                        <>
-                                                            <InputAdornment position="start">
-                                                                <PersonIcon fontSize="small" sx={{ color: colors.rain }} />
-                                                            </InputAdornment>
-                                                            {params.InputProps.startAdornment}
-                                                        </>
-                                                    ),
-                                                    endAdornment: (
-                                                        <>
-                                                            {selectedTechnician && (
-                                                                <IconButton
-                                                                    size="small"
-                                                                    onClick={() => setSelectedTechnician(null)}
-                                                                    sx={{ mr: 0.5 }}
-                                                                >
-                                                                    <ClearIcon fontSize="small" />
-                                                                </IconButton>
-                                                            )}
-                                                            {params.InputProps.endAdornment}
-                                                        </>
-                                                    ),
-                                                }}
-                                                sx={{
-                                                    '& .MuiInputBase-root': {
-                                                        backgroundColor: '#ffffff',
-                                                        borderRadius: 2,
-                                                    },
-                                                    '& .MuiOutlinedInput-notchedOutline': {
-                                                        borderColor: alpha(colors.middle, 0.3),
-                                                    },
-                                                    '& .MuiInputBase-root:hover .MuiOutlinedInput-notchedOutline': {
-                                                        borderColor: colors.sea,
-                                                    },
-                                                    '& .MuiInputBase-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                                                        borderColor: colors.sea,
-                                                        borderWidth: 2,
-                                                    },
-                                                }}
-                                            />
-                                        )}
-                                    />
-                                </Grid>
-                            </Grid>
-
-                            {/* Active filters chips */}
-                            {(selectedTechnician || search) && (
-                                <Box display="flex" gap={1.5} mt={2.5} flexWrap="wrap">
-                                    {search && (
-                                        <Chip
-                                            label={`Search: "${search}"`}
-                                            size="medium"
-                                            onDelete={() => setSearch('')}
-                                            sx={{
-                                                backgroundColor: alpha(colors.sea, 0.12),
-                                                color: colors.sea,
-                                                fontWeight: 600,
-                                            }}
-                                        />
-                                    )}
-                                    {selectedTechnician && (
-                                        <Chip
-                                            avatar={
-                                                <Avatar
-                                                    src={selectedTechnician.profile_photo ? getImageUrl(selectedTechnician.profile_photo) : undefined}
-                                                    sx={{ width: 24, height: 24 }}
-                                                >
-                                                    {getInitials(selectedTechnician.user?.name || selectedTechnician.name)}
-                                                </Avatar>
-                                            }
-                                            label={selectedTechnician.user?.name || selectedTechnician.name}
-                                            size="medium"
-                                            onDelete={() => setSelectedTechnician(null)}
-                                            sx={{
-                                                backgroundColor: alpha(colors.sea, 0.12),
-                                                color: colors.sea,
-                                                fontWeight: 600,
-                                            }}
-                                        />
-                                    )}
-                                </Box>
-                            )}
-                        </Box>
-                    </Fade>
-                )}
-
-                {/* ===== STATISTICS BANNER ===== */}
-                {posts.length > 0 && (
-                    <Box
-                        sx={{
-                            display: 'grid',
-                            gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(4, 1fr)' },
-                            gap: 2,
-                            mb: 4,
-                            p: 2.5,
-                            background: `linear-gradient(135deg, ${alpha(colors.sea, 0.04)}, ${alpha(colors.sea, 0.01)})`,
-                            borderRadius: 2.5,
-                            border: `1px solid ${alpha(colors.middle, 0.15)}`,
-                        }}
-                    >
-                        <Box display="flex" alignItems="center" gap={1.5}>
-                            <Box sx={{
-                                p: 1,
-                                borderRadius: 2,
-                                background: alpha(colors.sea, 0.12),
-                            }}>
-                                <ChatBubbleIcon sx={{ fontSize: 22, color: colors.sea }} />
-                            </Box>
-                            <Box>
-                                <Typography variant="h6" sx={{ color: colors.dark, fontWeight: 700, lineHeight: 1.2 }}>
-                                    {pagination.total || posts.length}
-                                </Typography>
-                                <Typography variant="caption" sx={{ color: colors.rain, fontWeight: 500 }}>
-                                    Posts
-                                </Typography>
-                            </Box>
-                        </Box>
-
-                        <Box display="flex" alignItems="center" gap={1.5}>
-                            <Box sx={{
-                                p: 1,
-                                borderRadius: 2,
-                                background: alpha('#8b5cf6', 0.12),
-                            }}>
-                                <PeopleIcon sx={{ fontSize: 22, color: '#8b5cf6' }} />
-                            </Box>
-                            <Box>
-                                <Typography variant="h6" sx={{ color: colors.dark, fontWeight: 700, lineHeight: 1.2 }}>
-                                    {technicianGroups.filter(g => g.technician !== null).length}
-                                </Typography>
-                                <Typography variant="caption" sx={{ color: colors.rain, fontWeight: 500 }}>
-                                    Technicians
-                                </Typography>
-                            </Box>
-                        </Box>
-
-                        <Box display="flex" alignItems="center" gap={1.5}>
-                            <Box sx={{
-                                p: 1,
-                                borderRadius: 2,
-                                background: alpha('#ef4444', 0.12),
-                            }}>
-                                <FavoriteIcon sx={{ fontSize: 22, color: '#ef4444' }} />
-                            </Box>
-                            <Box>
-                                <Typography variant="h6" sx={{ color: colors.dark, fontWeight: 700, lineHeight: 1.2 }}>
-                                    {posts.reduce((acc, p) => acc + (p.likes_count || 0), 0)}
-                                </Typography>
-                                <Typography variant="caption" sx={{ color: colors.rain, fontWeight: 500 }}>
-                                    Likes
-                                </Typography>
-                            </Box>
-                        </Box>
-
-                        <Box display="flex" alignItems="center" gap={1.5}>
-                            <Box sx={{
-                                p: 1,
-                                borderRadius: 2,
-                                background: alpha('#f59e0b', 0.12),
-                            }}>
-                                <TrendingUpIcon sx={{ fontSize: 22, color: '#f59e0b' }} />
-                            </Box>
-                            <Box>
-                                <Typography variant="h6" sx={{ color: colors.dark, fontWeight: 700, lineHeight: 1.2 }}>
-                                    {posts.filter(p => p.created_at && new Date(p.created_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)).length}
-                                </Typography>
-                                <Typography variant="caption" sx={{ color: colors.rain, fontWeight: 500 }}>
-                                    This week
-                                </Typography>
-                            </Box>
-                        </Box>
-                    </Box>
-                )}
-
-                {/* ===== POSTS GRID ===== */}
-                {loading && posts.length === 0 ? (
-                    <Grid container spacing={3}>
-                        {renderSkeletons()}
-                    </Grid>
-                ) : posts.length === 0 ? (
-                    <Box
-                        textAlign="center"
-                        py={10}
-                        sx={{
-                            background: `linear-gradient(135deg, #f8fafc, #f1f5f9)`,
-                            borderRadius: 3,
-                            border: `2px dashed ${alpha(colors.middle, 0.3)}`,
-                        }}
-                    >
-                        <CommentIcon sx={{ fontSize: 72, color: alpha(colors.middle, 0.5), mb: 2 }} />
-                        <Typography variant="h5" sx={{ color: colors.dark, fontWeight: 600, mb: 1 }}>
-                            No posts found
-                        </Typography>
-                        <Typography variant="body2" sx={{ color: colors.rain }}>
-                            {search || selectedTechnician ? 'No results match your filters' : 'Posts will appear here once created'}
-                        </Typography>
-                        {(search || selectedTechnician) && (
-                            <Button
-                                variant="outlined"
-                                onClick={handleClearFilters}
-                                sx={{
-                                    mt: 3,
-                                    borderColor: colors.middle,
-                                    borderRadius: 2.5,
-                                    textTransform: 'none',
-                                    fontWeight: 600,
-                                    '&:hover': {
-                                        borderColor: colors.sea,
-                                        backgroundColor: alpha(colors.sea, 0.06),
-                                    },
-                                }}
-                            >
-                                Clear Filters
-                            </Button>
-                        )}
-                    </Box>
-                ) : (
-                    <Stack spacing={4}>
-                        {technicianGroups.map((group, groupIndex) => (
-                            <Box key={groupIndex}>
-                                {/* Technician Header */}
-                                <Paper
+                {/* ── SUMMARY CARDS ────────────────────────────────────── */}
+                <Box sx={{ px: { xs: 2, sm: 3 }, pt: 2.5, pb: 1 }}>
+                    <Grid container spacing={2}>
+                        {[
+                            { label: 'Total Posts', value: totalPosts, color: '#3b82f6', bg: '#eff6ff', icon: <DescriptionIcon sx={{ fontSize: 18 }} /> },
+                            { label: 'Technicians', value: uniqueTechnicians, color: '#8b5cf6', bg: '#f3e8ff', icon: <PersonIcon sx={{ fontSize: 18 }} /> },
+                            { label: 'Total Likes', value: totalLikes, color: '#ef4444', bg: '#fef2f2', icon: <FavoriteIcon sx={{ fontSize: 18 }} /> },
+                            { label: 'Total Comments', value: totalComments, color: '#10b981', bg: '#ecfdf5', icon: <CommentIcon sx={{ fontSize: 18 }} /> },
+                        ].map((item, idx) => (
+                            <Grid item xs={6} sm={3} key={idx}>
+                                <Card
                                     elevation={0}
                                     sx={{
-                                        p: 2.5,
-                                        mb: 2.5,
-                                        background: `linear-gradient(135deg, #f8fafc, #ffffff)`,
-                                        borderRadius: 2.5,
-                                        border: `1px solid ${alpha(colors.middle, 0.15)}`,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between',
-                                        flexWrap: 'wrap',
-                                        gap: 2,
-                                        transition: 'all 0.3s ease',
-                                        '&:hover': {
-                                            borderColor: alpha(colors.sea, 0.3),
-                                            boxShadow: '0 4px 20px rgba(0,0,0,0.04)',
+                                        borderRadius: 2,
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                        backgroundColor: item.bg,
+                                        height: '100%',
+                                    }}
+                                >
+                                    <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                                        <Box display="flex" alignItems="center" justifyContent="space-between">
+                                            <Typography variant="caption" sx={{ color: item.color, fontWeight: 600 }}>
+                                                {item.label}
+                                            </Typography>
+                                            {item.icon}
+                                        </Box>
+                                        <Typography variant="h4" sx={{ color: item.color, fontWeight: 700 }}>
+                                            {item.value}
+                                        </Typography>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+                        ))}
+                    </Grid>
+                </Box>
+
+                {/* ── TABLE (DESKTOP) ───────────────────────────────────── */}
+                {showTableView ? (
+                    <TableContainer>
+                        <Table sx={{ minWidth: 900 }}>
+                            <TableHead>
+                                <TableRow
+                                    sx={{
+                                        bgcolor: 'action.hover',
+                                        '& th': {
+                                            fontWeight: 700,
+                                            fontSize: '0.8125rem',
+                                            color: 'text.secondary',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: 0.6,
+                                            borderBottom: '1px solid',
+                                            borderColor: 'divider',
+                                            py: 1.75,
                                         },
                                     }}
                                 >
-                                    <Box display="flex" alignItems="center" gap={2.5}>
-                                        <Avatar
-                                            src={group.technician?.profile_photo ? getImageUrl(group.technician.profile_photo) : undefined}
-                                            sx={{
-                                                width: 56,
-                                                height: 56,
-                                                bgcolor: colors.sea,
-                                                fontSize: '1.2rem',
-                                                fontWeight: 700,
-                                                border: `3px solid ${alpha(colors.sea, 0.15)}`,
-                                            }}
-                                        >
-                                            {group.technician ? getInitials(group.technician.user?.name || group.technician.name) : '?'}
-                                        </Avatar>
-                                        <Box>
-                                            <Box display="flex" alignItems="center" gap={1.5}>
-                                                <Typography variant="h6" fontWeight="700" sx={{ color: colors.dark, fontSize: '1.05rem' }}>
-                                                    {group.technician?.user?.name || group.technician?.name || 'Unknown Technician'}
-                                                </Typography>
-                                                {group.technician?.verified && (
-                                                    <VerifiedIcon sx={{ fontSize: 18, color: colors.salat }} />
-                                                )}
-                                            </Box>
-                                            <Box display="flex" alignItems="center" gap={2.5} flexWrap="wrap" sx={{ mt: 0.75 }}>
-                                                {group.technician?.area && (
-                                                    <Box display="flex" alignItems="center" gap={0.75}>
-                                                        <LocationIcon sx={{ fontSize: 16, color: colors.rain }} />
-                                                        <Typography variant="body2" sx={{ color: colors.rain }}>
-                                                            {group.technician.area}
-                                                        </Typography>
-                                                    </Box>
-                                                )}
-                                                {group.technician?.rating > 0 && (
-                                                    <Box display="flex" alignItems="center" gap={0.75}>
-                                                        <StarIcon sx={{ fontSize: 16, color: '#f59e0b' }} />
-                                                        <Typography variant="body2" sx={{ color: colors.dark, fontWeight: 600 }}>
-                                                            {group.technician.rating.toFixed(1)}
-                                                        </Typography>
-                                                    </Box>
-                                                )}
-                                            </Box>
-                                        </Box>
-                                    </Box>
-                                    <Chip
-                                        icon={<CommentIcon sx={{ fontSize: 18 }} />}
-                                        label={`${group.posts.length} post${group.posts.length !== 1 ? 's' : ''}`}
-                                        sx={{
-                                            backgroundColor: alpha(colors.sea, 0.12),
-                                            color: colors.sea,
-                                            fontWeight: 700,
-                                            fontSize: '0.85rem',
-                                            height: 36,
-                                            '& .MuiChip-icon': {
-                                                color: colors.sea,
-                                            },
-                                        }}
-                                    />
-                                </Paper>
+                                    {headCells.map((cell) => (
+                                        <TableCell key={cell.id} sx={{ whiteSpace: 'nowrap' }}>
+                                            {!cell.disableSort ? (
+                                                <TableSortLabel
+                                                    active={orderBy === cell.id}
+                                                    direction={orderBy === cell.id ? order : 'asc'}
+                                                    onClick={() => handleRequestSort(cell.id)}
+                                                >
+                                                    {cell.label}
+                                                </TableSortLabel>
+                                            ) : (
+                                                cell.label
+                                            )}
+                                        </TableCell>
+                                    ))}
+                                </TableRow>
+                            </TableHead>
 
-                                {/* Posts Grid */}
-                                <Grid container spacing={3}>
-                                    {group.posts.map((post, index) => {
-                                        const isHovered = hoveredCard === post.id;
+                            <TableBody>
+                                {loading ? (
+                                    <TableRow>
+                                        <TableCell colSpan={headCells.length} align="center" sx={{ py: 8 }}>
+                                            <CircularProgress size={36} thickness={4} />
+                                        </TableCell>
+                                    </TableRow>
+                                ) : sortedPosts.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={headCells.length} align="center" sx={{ py: 8 }}>
+                                            <Typography color="text.secondary" fontWeight={500}>
+                                                No posts found
+                                            </Typography>
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    sortedPosts.map((post) => {
                                         const imageUrl = post.image ? getImageUrl(post.image) : null;
-
                                         return (
-                                            <Grid item xs={12} sm={6} md={4} key={post.id}>
-                                                <Grow in={true} timeout={300 + (index * 50)}>
-                                                    <Card
-                                                        sx={{
-                                                            borderRadius: 3,
-                                                            overflow: 'hidden',
-                                                            height: '100%',
-                                                            display: 'flex',
-                                                            flexDirection: 'column',
-                                                            transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-                                                            border: `1px solid ${alpha(colors.middle, 0.15)}`,
-                                                            backgroundColor: '#ffffff',
-                                                            '&:hover': {
-                                                                transform: 'translateY(-6px)',
-                                                                boxShadow: '0 12px 40px rgba(0,0,0,0.08)',
-                                                                borderColor: alpha(colors.sea, 0.3),
-                                                            },
-                                                            cursor: 'pointer',
-                                                        }}
-                                                        onClick={() => handleViewPost(post)}
-                                                        onMouseEnter={() => setHoveredCard(post.id)}
-                                                        onMouseLeave={() => setHoveredCard(null)}
-                                                    >
-                                                        {/* Image Section */}
-                                                        <Box
-                                                            sx={{
-                                                                position: 'relative',
-                                                                width: '100%',
-                                                                paddingTop: '56.25%',
-                                                                backgroundColor: '#f8fafc',
-                                                                overflow: 'hidden',
-                                                                flexShrink: 0,
-                                                            }}
-                                                        >
-                                                            {imageUrl ? (
-                                                                <>
-                                                                    {!imageLoaded[post.id] && (
-                                                                        <Box
-                                                                            sx={{
-                                                                                position: 'absolute',
-                                                                                top: 0,
-                                                                                left: 0,
-                                                                                width: '100%',
-                                                                                height: '100%',
-                                                                                display: 'flex',
-                                                                                alignItems: 'center',
-                                                                                justifyContent: 'center',
-                                                                                backgroundColor: '#f8fafc',
-                                                                                zIndex: 1,
-                                                                            }}
-                                                                        >
-                                                                            <CircularProgress size={40} sx={{ color: colors.sea }} />
-                                                                        </Box>
-                                                                    )}
-                                                                    <img
-                                                                        src={imageUrl}
-                                                                        alt={post.title || 'Post image'}
-                                                                        style={{
-                                                                            position: 'absolute',
-                                                                            top: 0,
-                                                                            left: 0,
-                                                                            width: '100%',
-                                                                            height: '100%',
-                                                                            objectFit: 'cover',
-                                                                            display: 'block',
-                                                                            transition: 'transform 0.6s ease',
-                                                                            transform: isHovered ? 'scale(1.05)' : 'scale(1)',
-                                                                        }}
-                                                                        onLoad={() => handleImageLoad(post.id)}
-                                                                        onError={(e) => {
-                                                                            console.error('Image load error:', imageUrl);
-                                                                            e.target.style.display = 'none';
-                                                                            setImageLoaded(prev => ({ ...prev, [post.id]: true }));
-                                                                        }}
-                                                                    />
-                                                                    <Box
-                                                                        sx={{
-                                                                            position: 'absolute',
-                                                                            top: 0,
-                                                                            left: 0,
-                                                                            right: 0,
-                                                                            bottom: 0,
-                                                                            background: 'linear-gradient(to top, rgba(0,0,0,0.1), transparent)',
-                                                                            opacity: isHovered ? 1 : 0,
-                                                                            transition: 'opacity 0.4s ease',
-                                                                            display: 'flex',
-                                                                            alignItems: 'center',
-                                                                            justifyContent: 'center',
-                                                                            zIndex: 2,
-                                                                        }}
-                                                                    >
-                                                                        <ZoomInIcon
-                                                                            sx={{
-                                                                                fontSize: 40,
-                                                                                color: 'white',
-                                                                                opacity: 0.7,
-                                                                                transform: isHovered ? 'scale(1)' : 'scale(0.8)',
-                                                                                transition: 'all 0.4s ease',
-                                                                            }}
-                                                                        />
-                                                                    </Box>
-                                                                </>
-                                                            ) : (
-                                                                <Box
-                                                                    sx={{
-                                                                        position: 'absolute',
-                                                                        top: 0,
-                                                                        left: 0,
+                                            <TableRow
+                                                key={post.id}
+                                                hover
+                                                sx={{
+                                                    '&:last-child td': { borderBottom: 0 },
+                                                    transition: 'background-color 0.15s',
+                                                }}
+                                            >
+                                                {/* Post */}
+                                                <TableCell sx={{ py: 2 }}>
+                                                    <Stack direction="row" spacing={1.5} alignItems="center">
+                                                        {imageUrl ? (
+                                                            <Box
+                                                                sx={{
+                                                                    width: 48,
+                                                                    height: 48,
+                                                                    borderRadius: 1.5,
+                                                                    overflow: 'hidden',
+                                                                    flexShrink: 0,
+                                                                    bgcolor: 'action.hover',
+                                                                    border: '1px solid',
+                                                                    borderColor: 'divider',
+                                                                }}
+                                                            >
+                                                                <img
+                                                                    src={imageUrl}
+                                                                    alt=""
+                                                                    style={{
                                                                         width: '100%',
                                                                         height: '100%',
-                                                                        display: 'flex',
-                                                                        alignItems: 'center',
-                                                                        justifyContent: 'center',
-                                                                        backgroundColor: '#f1f5f9',
+                                                                        objectFit: 'cover',
                                                                     }}
-                                                                >
-                                                                    <ImageIcon sx={{ fontSize: 64, color: alpha(colors.middle, 0.5) }} />
-                                                                </Box>
-                                                            )}
-                                                        </Box>
-
-                                                        {/* Content */}
-                                                        <CardContent sx={{ p: 2.5, flex: 1, display: 'flex', flexDirection: 'column' }}>
-                                                            <Typography
-                                                                variant="subtitle1"
-                                                                fontWeight="700"
+                                                                    onError={(e) => {
+                                                                        e.target.style.display = 'none';
+                                                                    }}
+                                                                />
+                                                            </Box>
+                                                        ) : (
+                                                            <Box
                                                                 sx={{
-                                                                    color: colors.dark,
-                                                                    mb: 1,
-                                                                    fontSize: '1.05rem',
-                                                                    lineHeight: 1.3,
-                                                                    display: '-webkit-box',
-                                                                    WebkitLineClamp: 2,
-                                                                    WebkitBoxOrient: 'vertical',
-                                                                    overflow: 'hidden',
+                                                                    width: 48,
+                                                                    height: 48,
+                                                                    borderRadius: 1.5,
+                                                                    bgcolor: 'action.hover',
+                                                                    border: '1px solid',
+                                                                    borderColor: 'divider',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    flexShrink: 0,
                                                                 }}
                                                             >
+                                                                <PhotoCameraIcon sx={{ color: 'text.disabled', fontSize: 24 }} />
+                                                            </Box>
+                                                        )}
+                                                        <Box>
+                                                            <Typography variant="body2" fontWeight={600} color="text.primary" noWrap sx={{ maxWidth: 180 }}>
                                                                 {post.title || 'Untitled'}
                                                             </Typography>
-
-                                                            <Typography
-                                                                variant="body2"
-                                                                sx={{
-                                                                    color: colors.black,
-                                                                    lineHeight: 1.7,
-                                                                    fontSize: '0.875rem',
-                                                                    flex: 1,
-                                                                    mb: 1.5,
-                                                                    display: '-webkit-box',
-                                                                    WebkitLineClamp: 3,
-                                                                    WebkitBoxOrient: 'vertical',
-                                                                    overflow: 'hidden',
-                                                                }}
-                                                            >
-                                                                {post.content}
+                                                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                                                {post.content?.substring(0, 45)}...
                                                             </Typography>
+                                                        </Box>
+                                                    </Stack>
+                                                </TableCell>
 
-                                                            <Divider sx={{ my: 1.5, borderColor: alpha(colors.middle, 0.15) }} />
+                                                {/* Technician */}
+                                                <TableCell>
+                                                    <Stack direction="row" spacing={1} alignItems="center">
+                                                        <Avatar
+                                                            src={post.technician?.profile_photo ? getImageUrl(post.technician.profile_photo) : undefined}
+                                                            sx={{
+                                                                width: 32,
+                                                                height: 32,
+                                                                bgcolor: colors.sea || '#0f766e',
+                                                                fontSize: 12,
+                                                                fontWeight: 600,
+                                                            }}
+                                                        >
+                                                            {getInitials(post.technician?.user?.name || post.technician?.name)}
+                                                        </Avatar>
+                                                        <Box>
+                                                            <Typography variant="body2" fontWeight={500}>
+                                                                {post.technician?.user?.name || post.technician?.name || '—'}
+                                                            </Typography>
+                                                            {post.technician?.verified && (
+                                                                <VerifiedIcon sx={{ fontSize: 12, color: '#10b981', display: 'block' }} />
+                                                            )}
+                                                        </Box>
+                                                    </Stack>
+                                                </TableCell>
 
-                                                            {/* Footer */}
-                                                            <Box
-                                                                display="flex"
-                                                                alignItems="center"
-                                                                justifyContent="space-between"
-                                                                flexWrap="wrap"
-                                                                gap={1}
-                                                            >
-                                                                <Box display="flex" alignItems="center" gap={1}>
-                                                                    <Avatar
-                                                                        src={post.technician?.profile_photo ? getImageUrl(post.technician.profile_photo) : undefined}
-                                                                        sx={{
-                                                                            width: 28,
-                                                                            height: 28,
-                                                                            bgcolor: colors.sea,
-                                                                            fontSize: '0.6rem',
-                                                                            fontWeight: 700,
-                                                                        }}
-                                                                    >
-                                                                        {getInitials(post.technician?.user?.name || post.technician?.name)}
-                                                                    </Avatar>
-                                                                    <Typography variant="caption" sx={{ color: colors.rain, fontWeight: 500 }}>
-                                                                        {post.technician?.user?.name || post.technician?.name || 'Unknown'}
-                                                                    </Typography>
-                                                                </Box>
-                                                                <Box display="flex" alignItems="center" gap={0.75}>
-                                                                    <CalendarIcon sx={{ fontSize: 14, color: colors.rain }} />
-                                                                    <Typography variant="caption" sx={{ color: colors.rain, fontWeight: 500 }}>
-                                                                        {formatDate(post.created_at)}
-                                                                    </Typography>
-                                                                </Box>
-                                                            </Box>
+                                                {/* Likes */}
+                                                <TableCell>
+                                                    <Chip
+                                                        icon={<FavoriteIcon sx={{ fontSize: 14 }} />}
+                                                        label={post.likes_count || 0}
+                                                        size="small"
+                                                        sx={{
+                                                            fontWeight: 700,
+                                                            bgcolor: '#fef2f2',
+                                                            color: '#ef4444',
+                                                            border: '1px solid #fecaca',
+                                                            height: 28,
+                                                            '& .MuiChip-icon': { color: '#ef4444' },
+                                                        }}
+                                                    />
+                                                </TableCell>
 
-                                                            {/* Stats */}
-                                                            <Box
-                                                                display="flex"
-                                                                alignItems="center"
-                                                                gap={2}
-                                                                sx={{ mt: 1.5, pt: 1.5, borderTop: `1px solid ${alpha(colors.middle, 0.1)}` }}
-                                                            >
-                                                                {post.likes_count > 0 && (
-                                                                    <Box display="flex" alignItems="center" gap={0.5}>
-                                                                        <FavoriteIcon sx={{ fontSize: 16, color: '#ef4444' }} />
-                                                                        <Typography variant="body2" sx={{ color: colors.rain, fontWeight: 600 }}>
-                                                                            {post.likes_count}
-                                                                        </Typography>
-                                                                    </Box>
-                                                                )}
-                                                                {post.comments_count > 0 && (
-                                                                    <Box display="flex" alignItems="center" gap={0.5}>
-                                                                        <CommentIcon sx={{ fontSize: 16, color: colors.sea }} />
-                                                                        <Typography variant="body2" sx={{ color: colors.rain, fontWeight: 600 }}>
-                                                                            {post.comments_count}
-                                                                        </Typography>
-                                                                    </Box>
-                                                                )}
-                                                                {post.likes_count === 0 && post.comments_count === 0 && (
-                                                                    <Typography variant="caption" sx={{ color: colors.rain, fontStyle: 'italic' }}>
-                                                                        No interactions yet
-                                                                    </Typography>
-                                                                )}
-                                                            </Box>
-                                                        </CardContent>
-                                                    </Card>
-                                                </Grow>
-                                            </Grid>
+                                                {/* Comments */}
+                                                <TableCell>
+                                                    <Chip
+                                                        icon={<CommentIcon sx={{ fontSize: 14 }} />}
+                                                        label={post.comments_count || 0}
+                                                        size="small"
+                                                        sx={{
+                                                            fontWeight: 700,
+                                                            bgcolor: '#ecfdf5',
+                                                            color: '#10b981',
+                                                            border: '1px solid #a7f3d0',
+                                                            height: 28,
+                                                            '& .MuiChip-icon': { color: '#10b981' },
+                                                        }}
+                                                    />
+                                                </TableCell>
+
+                                                {/* Status */}
+                                                <TableCell>
+                                                    {getStatusChip(post.status)}
+                                                </TableCell>
+
+                                                {/* Created */}
+                                                <TableCell>
+                                                    <Typography variant="body2" fontWeight={500} color="text.secondary">
+                                                        {formatDate(post.created_at)}
+                                                    </Typography>
+                                                </TableCell>
+
+                                                {/* Actions */}
+                                                <TableCell align="center">
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={(e) => handleMenuOpen(e, post)}
+                                                        sx={{
+                                                            color: 'text.secondary',
+                                                            '&:hover': {
+                                                                bgcolor: 'action.hover',
+                                                                color: 'text.primary',
+                                                            },
+                                                        }}
+                                                    >
+                                                        <MoreVertIcon />
+                                                    </IconButton>
+                                                </TableCell>
+                                            </TableRow>
                                         );
-                                    })}
-                                </Grid>
+                                    })
+                                )}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                ) : (
+                    /* ── MOBILE/TABLET CARDS ──────────────────────────────── */
+                    <Box sx={{ p: { xs: 2, sm: 2.5 } }}>
+                        {loading ? (
+                            <Box display="flex" justifyContent="center" py={6}>
+                                <CircularProgress size={36} thickness={4} />
                             </Box>
-                        ))}
-                    </Stack>
-                )}
-
-                {/* ===== PAGINATION ===== */}
-                {posts.length > 0 && (
-                    <Box
-                        display="flex"
-                        justifyContent="center"
-                        alignItems="center"
-                        mt={4.5}
-                        gap={2.5}
-                        flexWrap="wrap"
-                        sx={{
-                            pt: 3.5,
-                            borderTop: `1px solid ${alpha(colors.middle, 0.15)}`,
-                        }}
-                    >
-                        <Pagination
-                            count={pagination.last_page || 1}
-                            page={page}
-                            onChange={(e, value) => setPage(value)}
-                            sx={{
-                                '& .MuiPaginationItem-root': {
-                                    borderRadius: 2,
-                                    fontWeight: 600,
-                                    fontSize: '0.9rem',
-                                    transition: 'all 0.2s ease',
-                                    '&:hover': {
-                                        backgroundColor: alpha(colors.sea, 0.08),
-                                    },
-                                },
-                                '& .Mui-selected': {
-                                    background: `linear-gradient(135deg, ${colors.sea}, ${colors.dark}) !important`,
-                                    color: '#ffffff !important',
-                                    boxShadow: `0 4px 16px ${alpha(colors.sea, 0.3)}`,
-                                    '&:hover': {
-                                        transform: 'translateY(-2px)',
-                                        boxShadow: `0 8px 24px ${alpha(colors.sea, 0.4)}`,
-                                    },
-                                },
-                            }}
-                            size={isMobile ? "small" : "medium"}
-                        />
-                        <FormControl size="small" sx={{ minWidth: 110 }}>
-                            <InputLabel sx={{ color: colors.rain, fontWeight: 500 }}>Per Page</InputLabel>
-                            <Select
-                                value={perPage}
-                                label="Per Page"
-                                onChange={(e) => {
-                                    setPerPage(e.target.value);
-                                    setPage(1);
-                                }}
+                        ) : sortedPosts.length === 0 ? (
+                            <Paper
+                                variant="outlined"
                                 sx={{
-                                    borderRadius: 2.5,
-                                    fontWeight: 600,
-                                    '& .MuiOutlinedInput-notchedOutline': {
-                                        borderColor: alpha(colors.middle, 0.3),
-                                    },
-                                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                                        borderColor: colors.sea,
-                                    },
+                                    p: 5,
+                                    textAlign: 'center',
+                                    borderRadius: 3,
+                                    borderStyle: 'dashed',
                                 }}
                             >
-                                <MenuItem value={10}>10</MenuItem>
-                                <MenuItem value={15}>15</MenuItem>
-                                <MenuItem value={25}>25</MenuItem>
-                                <MenuItem value={50}>50</MenuItem>
-                            </Select>
-                        </FormControl>
-                        <Typography variant="body2" sx={{ color: colors.rain, fontWeight: 500 }}>
-                            {pagination.total || posts.length} total posts
-                        </Typography>
+                                <Typography color="text.secondary" fontWeight={500}>
+                                    No posts found
+                                </Typography>
+                            </Paper>
+                        ) : (
+                            <Grid container spacing={2}>
+                                {sortedPosts.map((post) => {
+                                    const imageUrl = post.image ? getImageUrl(post.image) : null;
+                                    return (
+                                        <Grid item xs={12} sm={6} lg={4} key={post.id}>
+                                            <Card
+                                                elevation={0}
+                                                sx={{
+                                                    borderRadius: 3,
+                                                    border: '1px solid',
+                                                    borderColor: 'divider',
+                                                    overflow: 'hidden',
+                                                    height: '100%',
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    transition: 'box-shadow 0.2s',
+                                                    '&:hover': {
+                                                        boxShadow: 2,
+                                                    },
+                                                }}
+                                            >
+                                                {/* Image Header */}
+                                                {imageUrl ? (
+                                                    <Box
+                                                        sx={{
+                                                            width: '100%',
+                                                            height: 160,
+                                                            overflow: 'hidden',
+                                                            bgcolor: 'action.hover',
+                                                            position: 'relative',
+                                                        }}
+                                                    >
+                                                        <img
+                                                            src={imageUrl}
+                                                            alt={post.title || 'Post image'}
+                                                            style={{
+                                                                width: '100%',
+                                                                height: '100%',
+                                                                objectFit: 'cover',
+                                                            }}
+                                                            onError={(e) => {
+                                                                e.target.style.display = 'none';
+                                                            }}
+                                                        />
+                                                        <Box
+                                                            sx={{
+                                                                position: 'absolute',
+                                                                top: 8,
+                                                                right: 8,
+                                                            }}
+                                                        >
+                                                            {getStatusChip(post.status)}
+                                                        </Box>
+                                                    </Box>
+                                                ) : (
+                                                    <Box
+                                                        sx={{
+                                                            width: '100%',
+                                                            height: 160,
+                                                            bgcolor: 'action.hover',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            flexDirection: 'column',
+                                                            borderBottom: '1px solid',
+                                                            borderColor: 'divider',
+                                                            position: 'relative',
+                                                        }}
+                                                    >
+                                                        <PhotoCameraIcon sx={{ color: 'text.disabled', fontSize: 48 }} />
+                                                        <Typography variant="caption" color="text.disabled" sx={{ mt: 1 }}>
+                                                            No Image
+                                                        </Typography>
+                                                        <Box
+                                                            sx={{
+                                                                position: 'absolute',
+                                                                top: 8,
+                                                                right: 8,
+                                                            }}
+                                                        >
+                                                            {getStatusChip(post.status)}
+                                                        </Box>
+                                                    </Box>
+                                                )}
+
+                                                <CardContent sx={{ p: 2.5, flex: 1, display: 'flex', flexDirection: 'column' }}>
+                                                    {/* Title & Menu */}
+                                                    <Stack
+                                                        direction="row"
+                                                        justifyContent="space-between"
+                                                        alignItems="flex-start"
+                                                        mb={1}
+                                                    >
+                                                        <Typography variant="h6" fontWeight={700} noWrap sx={{ maxWidth: '80%' }}>
+                                                            {post.title || 'Untitled'}
+                                                        </Typography>
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={(e) => handleMenuOpen(e, post)}
+                                                            sx={{ color: 'text.secondary', mt: -0.5 }}
+                                                        >
+                                                            <MoreVertIcon fontSize="small" />
+                                                        </IconButton>
+                                                    </Stack>
+
+                                                    {/* Content Preview */}
+                                                    <Typography
+                                                        variant="body2"
+                                                        color="text.secondary"
+                                                        sx={{
+                                                            mb: 2,
+                                                            display: '-webkit-box',
+                                                            WebkitLineClamp: 2,
+                                                            WebkitBoxOrient: 'vertical',
+                                                            overflow: 'hidden',
+                                                            flex: 1,
+                                                        }}
+                                                    >
+                                                        {post.content || 'No content'}
+                                                    </Typography>
+
+                                                    {/* Technician Info */}
+                                                    <Stack
+                                                        direction="row"
+                                                        spacing={1}
+                                                        alignItems="center"
+                                                        sx={{ mb: 2 }}
+                                                    >
+                                                        <Avatar
+                                                            src={post.technician?.profile_photo ? getImageUrl(post.technician.profile_photo) : undefined}
+                                                            sx={{
+                                                                width: 28,
+                                                                height: 28,
+                                                                bgcolor: colors.sea || '#0f766e',
+                                                                fontSize: 11,
+                                                                fontWeight: 600,
+                                                            }}
+                                                        >
+                                                            {getInitials(post.technician?.user?.name || post.technician?.name)}
+                                                        </Avatar>
+                                                        <Typography variant="body2" fontWeight={500}>
+                                                            {post.technician?.user?.name || post.technician?.name || '—'}
+                                                        </Typography>
+                                                        {post.technician?.verified && (
+                                                            <VerifiedIcon sx={{ fontSize: 14, color: '#10b981' }} />
+                                                        )}
+                                                    </Stack>
+
+                                                    {/* Divider */}
+                                                    <Divider sx={{ mb: 2 }} />
+
+                                                    {/* Stats & Date */}
+                                                    <Stack
+                                                        direction="row"
+                                                        justifyContent="space-between"
+                                                        alignItems="center"
+                                                        flexWrap="wrap"
+                                                        gap={1}
+                                                    >
+                                                        <Stack direction="row" spacing={1}>
+                                                            <Chip
+                                                                icon={<FavoriteIcon sx={{ fontSize: 14 }} />}
+                                                                label={post.likes_count || 0}
+                                                                size="small"
+                                                                sx={{
+                                                                    fontWeight: 700,
+                                                                    bgcolor: '#fef2f2',
+                                                                    color: '#ef4444',
+                                                                    border: '1px solid #fecaca',
+                                                                    height: 26,
+                                                                    '& .MuiChip-icon': { color: '#ef4444' },
+                                                                }}
+                                                            />
+                                                            <Chip
+                                                                icon={<CommentIcon sx={{ fontSize: 14 }} />}
+                                                                label={post.comments_count || 0}
+                                                                size="small"
+                                                                sx={{
+                                                                    fontWeight: 700,
+                                                                    bgcolor: '#ecfdf5',
+                                                                    color: '#10b981',
+                                                                    border: '1px solid #a7f3d0',
+                                                                    height: 26,
+                                                                    '& .MuiChip-icon': { color: '#10b981' },
+                                                                }}
+                                                            />
+                                                        </Stack>
+                                                        <Typography variant="caption" color="text.secondary" fontWeight={500}>
+                                                            {formatDate(post.created_at)}
+                                                        </Typography>
+                                                    </Stack>
+
+                                                    {/* View Button */}
+                                                    <Button
+                                                        variant="outlined"
+                                                        fullWidth
+                                                        startIcon={<ViewIcon />}
+                                                        onClick={() => handleViewPost(post)}
+                                                        sx={{
+                                                            mt: 2,
+                                                            borderRadius: 2,
+                                                            textTransform: 'none',
+                                                            fontWeight: 600,
+                                                            borderColor: 'divider',
+                                                            color: colors.sea || '#0f766e',
+                                                            '&:hover': {
+                                                                borderColor: colors.sea || '#0f766e',
+                                                                bgcolor: 'action.hover',
+                                                            },
+                                                        }}
+                                                    >
+                                                        View Post
+                                                    </Button>
+                                                </CardContent>
+                                            </Card>
+                                        </Grid>
+                                    );
+                                })}
+                            </Grid>
+                        )}
                     </Box>
                 )}
 
-                {/* ===== POST DETAIL DIALOG ===== */}
-                <Dialog
-                    open={openViewDialog}
-                    onClose={handleCloseDialog}
-                    maxWidth="md"
-                    fullWidth
-                    fullScreen={isMobile}
-                    TransitionComponent={Fade}
-                    PaperProps={{
-                        sx: {
-                            borderRadius: { xs: 0, sm: 3 },
-                            backgroundColor: '#ffffff',
-                            maxHeight: '95vh',
-                            overflow: 'hidden',
-                        }
+                {/* ── PAGINATION ────────────────────────────────────────── */}
+                <Box
+                    sx={{
+                        borderTop: '1px solid',
+                        borderColor: 'divider',
+                        bgcolor: 'action.hover',
                     }}
                 >
-                    {selectedPost && (
-                        <>
-                            <DialogTitle sx={{
-                                color: colors.dark,
-                                borderBottom: `1px solid ${alpha(colors.middle, 0.15)}`,
-                                pb: 2,
-                                backgroundColor: '#ffffff',
-                                px: { xs: 2, sm: 3 },
-                            }}>
-                                <Box display="flex" justifyContent="space-between" alignItems="flex-start">
-                                    <Box minWidth={0} flex={1}>
-                                        <Typography variant="h6" sx={{ color: colors.dark, fontWeight: 700 }}>
-                                            {selectedPost.title || 'Untitled'}
-                                        </Typography>
-                                        <Box display="flex" alignItems="center" gap={1.5} mt={1} flexWrap="wrap">
+                    <TablePagination
+                        rowsPerPageOptions={[5, 10, 25, 50]}
+                        component="div"
+                        count={pagination.total || 0}
+                        rowsPerPage={rowsPerPage}
+                        page={page}
+                        onPageChange={(e, newPage) => setPage(newPage)}
+                        onRowsPerPageChange={(e) => {
+                            setRowsPerPage(parseInt(e.target.value, 10));
+                            setPage(0);
+                        }}
+                        sx={{
+                            '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
+                                fontWeight: 500,
+                            },
+                        }}
+                    />
+                </Box>
+            </Paper>
+
+            {/* ── ACTION MENU ───────────────────────────────────────────── */}
+            <Menu
+                anchorEl={actionMenu}
+                open={Boolean(actionMenu)}
+                onClose={handleMenuClose}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                PaperProps={{
+                    elevation: 8,
+                    sx: { borderRadius: 2, minWidth: 180, mt: 0.5 },
+                }}
+            >
+                <MenuItem onClick={() => handleAction('view')} sx={{ fontWeight: 500 }}>
+                    <ViewIcon sx={{ mr: 1.5, fontSize: 20, color: colors.sea || '#0f766e' }} />
+                    View Post
+                </MenuItem>
+                {canDelete && (
+                    <MenuItem
+                        onClick={() => handleAction('delete')}
+                        sx={{ color: 'error.main', fontWeight: 500 }}
+                    >
+                        <DeleteIcon sx={{ mr: 1.5, fontSize: 20 }} />
+                        Delete
+                    </MenuItem>
+                )}
+            </Menu>
+
+            {/* ── POST DETAIL DIALOG ────────────────────────────────────── */}
+            <Dialog
+                open={openViewDialog}
+                onClose={handleCloseDialog}
+                maxWidth="md"
+                fullWidth
+                PaperProps={{
+                    sx: {
+                        borderRadius: 3,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        maxHeight: '90vh',
+                    },
+                }}
+            >
+                {selectedPost && (
+                    <>
+                        <DialogTitle sx={{ pb: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
+                            <Box display="flex" justifyContent="space-between" alignItems="flex-start">
+                                <Box flex={1} minWidth={0}>
+                                    <Typography variant="h6" fontWeight={700} color="text.primary">
+                                        {selectedPost.title || 'Untitled'}
+                                    </Typography>
+                                    <Stack direction="row" spacing={2} alignItems="center" mt={1} flexWrap="wrap">
+                                        <Stack direction="row" spacing={1} alignItems="center">
                                             <Avatar
                                                 src={selectedPost.technician?.profile_photo ? getImageUrl(selectedPost.technician.profile_photo) : undefined}
                                                 sx={{
-                                                    width: 36,
-                                                    height: 36,
-                                                    bgcolor: colors.sea,
-                                                    fontSize: '0.9rem',
-                                                    fontWeight: 700,
+                                                    width: 28,
+                                                    height: 28,
+                                                    bgcolor: colors.sea || '#0f766e',
+                                                    fontSize: 11,
+                                                    fontWeight: 600,
                                                 }}
                                             >
                                                 {getInitials(selectedPost.technician?.user?.name || selectedPost.technician?.name)}
                                             </Avatar>
-                                            <Typography variant="body1" sx={{ color: colors.black, fontWeight: 600 }}>
+                                            <Typography variant="body2" fontWeight={500}>
                                                 {selectedPost.technician?.user?.name || selectedPost.technician?.name || 'Unknown'}
                                             </Typography>
                                             {selectedPost.technician?.verified && (
-                                                <VerifiedIcon sx={{ fontSize: 18, color: colors.salat }} />
+                                                <VerifiedIcon sx={{ fontSize: 14, color: '#10b981' }} />
                                             )}
-                                            {selectedPost.technician?.area && (
-                                                <Chip
-                                                    icon={<LocationIcon sx={{ fontSize: 14 }} />}
-                                                    label={selectedPost.technician.area}
-                                                    size="small"
-                                                    variant="outlined"
-                                                    sx={{
-                                                        borderColor: alpha(colors.middle, 0.3),
-                                                        fontWeight: 500,
-                                                    }}
-                                                />
-                                            )}
-                                        </Box>
-                                    </Box>
-                                    <IconButton onClick={handleCloseDialog} sx={{ color: colors.rain }}>
-                                        <CloseIcon />
-                                    </IconButton>
+                                        </Stack>
+                                        <Typography variant="caption" color="text.secondary">
+                                            <CalendarIcon sx={{ fontSize: 14, mr: 0.5, verticalAlign: 'middle' }} />
+                                            {formatDateFull(selectedPost.created_at)}
+                                        </Typography>
+                                        {getStatusChip(selectedPost.status)}
+                                    </Stack>
                                 </Box>
-                            </DialogTitle>
-                            <DialogContent
-                                dividers
-                                sx={{
-                                    borderColor: alpha(colors.middle, 0.15),
-                                    backgroundColor: '#fafbfc',
-                                    p: { xs: 2, sm: 3, md: 4 },
-                                }}
-                            >
-                                <Box>
-                                    {selectedPost.image && (
-                                        <Box
-                                            sx={{
-                                                width: '100%',
-                                                maxHeight: 400,
-                                                backgroundColor: '#f8fafc',
-                                                borderRadius: 2.5,
-                                                overflow: 'hidden',
-                                                display: 'flex',
-                                                justifyContent: 'center',
-                                                alignItems: 'center',
-                                                mb: 3,
-                                                p: 2,
-                                                border: `1px solid ${alpha(colors.middle, 0.1)}`,
-                                            }}
-                                        >
-                                            <img
-                                                src={getImageUrl(selectedPost.image)}
-                                                alt={selectedPost.title || 'Post image'}
-                                                style={{
-                                                    maxWidth: '100%',
-                                                    maxHeight: '400px',
-                                                    width: 'auto',
-                                                    height: 'auto',
-                                                    objectFit: 'contain',
-                                                    display: 'block',
-                                                }}
-                                                onError={(e) => {
-                                                    console.error('Dialog image error:', getImageUrl(selectedPost.image));
-                                                    e.target.style.display = 'none';
-                                                }}
-                                            />
-                                        </Box>
-                                    )}
+                                <IconButton onClick={handleCloseDialog} size="small" sx={{ color: 'text.secondary' }}>
+                                    <ClearIcon />
+                                </IconButton>
+                            </Box>
+                        </DialogTitle>
 
-                                    {selectedPost.content && (
-                                        <Box>
-                                            <Typography
-                                                variant="subtitle2"
-                                                sx={{
-                                                    color: colors.rain,
-                                                    mb: 1.5,
-                                                    fontWeight: 700,
-                                                    textTransform: 'uppercase',
-                                                    letterSpacing: '0.5px',
-                                                    fontSize: '0.75rem',
-                                                }}
-                                            >
-                                                Content
-                                            </Typography>
-                                            <Paper
-                                                elevation={0}
-                                                sx={{
-                                                    p: 2.5,
-                                                    backgroundColor: '#ffffff',
-                                                    borderRadius: 2.5,
-                                                    border: `1px solid ${alpha(colors.middle, 0.1)}`,
-                                                }}
-                                            >
-                                                <Typography
-                                                    variant="body1"
-                                                    sx={{
-                                                        color: colors.black,
-                                                        lineHeight: 1.9,
-                                                        whiteSpace: 'pre-wrap',
-                                                    }}
-                                                >
-                                                    {selectedPost.content}
-                                                </Typography>
-                                            </Paper>
-                                        </Box>
-                                    )}
-
-                                    <Divider sx={{ my: 3, borderColor: alpha(colors.middle, 0.1) }} />
-
-                                    <Grid container spacing={3}>
-                                        <Grid item xs={12} sm={6}>
-                                            <Typography
-                                                variant="caption"
-                                                sx={{
-                                                    color: colors.rain,
-                                                    display: 'block',
-                                                    fontWeight: 700,
-                                                    textTransform: 'uppercase',
-                                                    letterSpacing: '0.5px',
-                                                    fontSize: '0.7rem',
-                                                }}
-                                            >
-                                                Posted
-                                            </Typography>
-                                            <Typography
-                                                variant="body2"
-                                                sx={{
-                                                    color: colors.dark,
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: 1,
-                                                    mt: 0.75,
-                                                    fontWeight: 500,
-                                                }}
-                                            >
-                                                <CalendarIcon sx={{ fontSize: 18, color: colors.rain }} />
-                                                {formatDate(selectedPost.created_at)}
-                                            </Typography>
-                                        </Grid>
-                                        <Grid item xs={12}>
-                                            <Box display="flex" gap={3}>
-                                                <Box display="flex" alignItems="center" gap={1}>
-                                                    <FavoriteIcon sx={{ fontSize: 22, color: '#ef4444' }} />
-                                                    <Typography variant="body1" sx={{ color: colors.dark, fontWeight: 600 }}>
-                                                        {selectedPost.likes_count || 0} Likes
-                                                    </Typography>
-                                                </Box>
-                                                <Box display="flex" alignItems="center" gap={1}>
-                                                    <CommentIcon sx={{ fontSize: 22, color: colors.sea }} />
-                                                    <Typography variant="body1" sx={{ color: colors.dark, fontWeight: 600 }}>
-                                                        {selectedPost.comments_count || 0} Comments
-                                                    </Typography>
-                                                </Box>
-                                            </Box>
-                                        </Grid>
-                                    </Grid>
-
-                                    {/* Comments Section */}
-                                    {selectedPost.comments && selectedPost.comments.length > 0 && (
-                                        <>
-                                            <Divider sx={{ my: 3, borderColor: alpha(colors.middle, 0.1) }} />
-                                            <Typography
-                                                variant="subtitle2"
-                                                sx={{
-                                                    color: colors.dark,
-                                                    mb: 2,
-                                                    fontWeight: 700,
-                                                    fontSize: '0.95rem',
-                                                }}
-                                            >
-                                                Comments ({selectedPost.comments.length})
-                                            </Typography>
-                                            <Stack spacing={2}>
-                                                {selectedPost.comments.map((comment, idx) => (
-                                                    <Paper
-                                                        key={idx}
-                                                        elevation={0}
-                                                        sx={{
-                                                            p: 2,
-                                                            backgroundColor: '#ffffff',
-                                                            borderRadius: 2.5,
-                                                            border: `1px solid ${alpha(colors.middle, 0.1)}`,
-                                                        }}
-                                                    >
-                                                        <Box display="flex" alignItems="flex-start" gap={1.5}>
-                                                            <Avatar
-                                                                src={comment.user?.profile_photo ? getImageUrl(comment.user.profile_photo) : undefined}
-                                                                sx={{
-                                                                    width: 32,
-                                                                    height: 32,
-                                                                    bgcolor: colors.sea,
-                                                                    fontSize: '0.7rem',
-                                                                    fontWeight: 700,
-                                                                    flexShrink: 0,
-                                                                }}
-                                                            >
-                                                                {getInitials(comment.user?.name || comment.name)}
-                                                            </Avatar>
-                                                            <Box flex={1}>
-                                                                <Box display="flex" alignItems="center" gap={1.5}>
-                                                                    <Typography variant="body2" sx={{ fontWeight: 700, color: colors.dark }}>
-                                                                        {comment.user?.name || comment.name || 'Unknown'}
-                                                                    </Typography>
-                                                                    <Typography variant="caption" sx={{ color: colors.rain, fontSize: '0.65rem' }}>
-                                                                        {formatDate(comment.created_at)}
-                                                                    </Typography>
-                                                                </Box>
-                                                                <Typography variant="body2" sx={{ color: colors.black, mt: 0.5 }}>
-                                                                    {comment.content || comment.comment}
-                                                                </Typography>
-                                                            </Box>
-                                                        </Box>
-                                                    </Paper>
-                                                ))}
-                                            </Stack>
-                                        </>
-                                    )}
-                                </Box>
-                            </DialogContent>
-                            <DialogActions sx={{
-                                p: 2.5,
-                                gap: 1.5,
-                                backgroundColor: '#ffffff',
-                                borderTop: `1px solid ${alpha(colors.middle, 0.1)}`,
-                            }}>
-                                <Button
-                                    onClick={handleCloseDialog}
-                                    variant="contained"
+                        <DialogContent sx={{ p: 3 }}>
+                            {/* Image */}
+                            {selectedPost.image && (
+                                <Box
                                     sx={{
-                                        background: `linear-gradient(135deg, ${colors.sea}, ${colors.dark})`,
-                                        px: 4,
-                                        py: 1.2,
-                                        borderRadius: 2.5,
-                                        textTransform: 'none',
-                                        fontWeight: 700,
-                                        fontSize: '0.9rem',
-                                        boxShadow: `0 4px 16px ${alpha(colors.sea, 0.3)}`,
-                                        '&:hover': {
-                                            transform: 'translateY(-2px)',
-                                            boxShadow: `0 8px 24px ${alpha(colors.sea, 0.4)}`,
-                                        },
-                                        transition: 'all 0.25s ease',
+                                        width: '100%',
+                                        maxHeight: 400,
+                                        bgcolor: 'action.hover',
+                                        borderRadius: 2,
+                                        overflow: 'hidden',
+                                        mb: 3,
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                        display: 'flex',
+                                        justifyContent: 'center',
+                                        alignItems: 'center',
+                                        p: 1,
                                     }}
                                 >
-                                    Close
-                                </Button>
-                            </DialogActions>
-                        </>
-                    )}
-                </Dialog>
-            </Paper>
+                                    <img
+                                        src={getImageUrl(selectedPost.image)}
+                                        alt={selectedPost.title || 'Post image'}
+                                        style={{
+                                            maxWidth: '100%',
+                                            maxHeight: '380px',
+                                            width: 'auto',
+                                            height: 'auto',
+                                            objectFit: 'contain',
+                                        }}
+                                        onError={(e) => {
+                                            e.target.style.display = 'none';
+                                        }}
+                                    />
+                                </Box>
+                            )}
+
+                            {/* Content */}
+                            <Box mb={3}>
+                                <Typography variant="subtitle2" fontWeight={600} gutterBottom color="text.primary">
+                                    Content
+                                </Typography>
+                                <Paper
+                                    variant="outlined"
+                                    sx={{
+                                        p: 2.5,
+                                        bgcolor: 'action.hover',
+                                        borderColor: 'divider',
+                                        borderRadius: 2,
+                                    }}
+                                >
+                                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                                        {selectedPost.content || 'No content provided'}
+                                    </Typography>
+                                </Paper>
+                            </Box>
+
+                            <Divider sx={{ mb: 3, borderColor: 'divider' }} />
+
+                            {/* Stats */}
+                            <Grid container spacing={2}>
+                                <Grid item xs={12} sm={6}>
+                                    <Typography variant="subtitle2" fontWeight={600} gutterBottom color="text.primary">
+                                        Engagement
+                                    </Typography>
+                                    <Stack direction="row" spacing={3}>
+                                        <Box display="flex" alignItems="center" gap={1}>
+                                            <FavoriteIcon sx={{ color: '#ef4444' }} />
+                                            <Box>
+                                                <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1 }}>
+                                                    {selectedPost.likes_count || 0}
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary">Likes</Typography>
+                                            </Box>
+                                        </Box>
+                                        <Box display="flex" alignItems="center" gap={1}>
+                                            <CommentIcon sx={{ color: colors.sea || '#0f766e' }} />
+                                            <Box>
+                                                <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1 }}>
+                                                    {selectedPost.comments_count || 0}
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary">Comments</Typography>
+                                            </Box>
+                                        </Box>
+                                    </Stack>
+                                </Grid>
+                                {selectedPost.technician?.area && (
+                                    <Grid item xs={12} sm={6}>
+                                        <Typography variant="subtitle2" fontWeight={600} gutterBottom color="text.primary">
+                                            Technician Info
+                                        </Typography>
+                                        <Box display="flex" alignItems="center" gap={1}>
+                                            <LocationIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
+                                            <Typography variant="body2">{selectedPost.technician.area}</Typography>
+                                        </Box>
+                                        {selectedPost.technician?.rating > 0 && (
+                                            <Box display="flex" alignItems="center" gap={0.5} mt={0.5}>
+                                                <StarIcon sx={{ color: '#f59e0b', fontSize: 16 }} />
+                                                <Typography variant="body2" fontWeight={500}>
+                                                    {selectedPost.technician.rating.toFixed(1)}
+                                                </Typography>
+                                            </Box>
+                                        )}
+                                    </Grid>
+                                )}
+                            </Grid>
+
+                            {/* Comments Section */}
+                            {selectedPost.comments && selectedPost.comments.length > 0 && (
+                                <>
+                                    <Divider sx={{ my: 3, borderColor: 'divider' }} />
+                                    <Box>
+                                        <Typography variant="subtitle2" fontWeight={600} gutterBottom color="text.primary">
+                                            Comments ({selectedPost.comments.length})
+                                        </Typography>
+                                        <Stack spacing={2}>
+                                            {selectedPost.comments.map((comment, idx) => (
+                                                <Paper
+                                                    key={idx}
+                                                    variant="outlined"
+                                                    sx={{
+                                                        p: 2,
+                                                        borderColor: 'divider',
+                                                        borderRadius: 2,
+                                                        bgcolor: 'action.hover',
+                                                    }}
+                                                >
+                                                    <Box display="flex" alignItems="flex-start" gap={1.5}>
+                                                        <Avatar
+                                                            src={comment.user?.profile_photo ? getImageUrl(comment.user.profile_photo) : undefined}
+                                                            sx={{
+                                                                width: 32,
+                                                                height: 32,
+                                                                bgcolor: colors.sea || '#0f766e',
+                                                                fontSize: 12,
+                                                                fontWeight: 600,
+                                                            }}
+                                                        >
+                                                            {getInitials(comment.user?.name || comment.name)}
+                                                        </Avatar>
+                                                        <Box flex={1}>
+                                                            <Box display="flex" alignItems="center" gap={1.5}>
+                                                                <Typography variant="body2" fontWeight={600}>
+                                                                    {comment.user?.name || comment.name || 'Unknown'}
+                                                                </Typography>
+                                                                <Typography variant="caption" color="text.secondary">
+                                                                    {formatDateFull(comment.created_at)}
+                                                                </Typography>
+                                                            </Box>
+                                                            <Typography variant="body2" sx={{ mt: 0.5 }}>
+                                                                {comment.content || comment.comment}
+                                                            </Typography>
+                                                        </Box>
+                                                    </Box>
+                                                </Paper>
+                                            ))}
+                                        </Stack>
+                                    </Box>
+                                </>
+                            )}
+                        </DialogContent>
+
+                        <DialogActions sx={{ p: 2.5, borderTop: '1px solid', borderColor: 'divider' }}>
+                            <Button
+                                onClick={handleCloseDialog}
+                                variant="contained"
+                                sx={{
+                                    borderRadius: 2,
+                                    fontWeight: 700,
+                                    textTransform: 'none',
+                                    px: 4,
+                                    bgcolor: colors.sea || '#0f766e',
+                                    '&:hover': { bgcolor: colors.dark || '#0d5c56' },
+                                }}
+                            >
+                                Close
+                            </Button>
+                        </DialogActions>
+                    </>
+                )}
+            </Dialog>
+
+            {/* ── CONFIRMATION DIALOG ───────────────────────────────────── */}
+            <Dialog
+                open={confirmDialog.open}
+                onClose={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+                fullWidth
+                maxWidth="xs"
+                PaperProps={{
+                    sx: {
+                        borderRadius: 3,
+                    },
+                }}
+            >
+                <DialogTitle sx={{ fontWeight: 700, pb: 1 }}>
+                    {confirmDialog.title}
+                </DialogTitle>
+                <DialogContent>
+                    <DialogContentText color="text.secondary">
+                        {confirmDialog.message}
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2.5, pt: 1 }}>
+                    <Button
+                        onClick={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+                        sx={{ fontWeight: 600, textTransform: 'none' }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={handleConfirm}
+                        variant="contained"
+                        color="error"
+                        sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 2 }}
+                    >
+                        Confirm
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 };

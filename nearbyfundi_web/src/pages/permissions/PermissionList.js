@@ -1,16 +1,46 @@
 // src/pages/permissions/PermissionsList.js
 import React, { useState, useEffect } from 'react';
 import {
-    Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
-    IconButton, InputAdornment, Menu, MenuItem, Paper, Table, TableBody,
-    TableCell, TableContainer, TableHead, TablePagination, TableRow,
-    TextField, Typography, useTheme, useMediaQuery, Card, CardContent,
-    Divider, Tooltip, CircularProgress, Alert
+    Box,
+    Button,
+    Chip,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    IconButton,
+    InputAdornment,
+    Menu,
+    MenuItem,
+    Paper,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TablePagination,
+    TableRow,
+    TextField,
+    Typography,
+    useTheme,
+    useMediaQuery,
+    Card,
+    CardContent,
+    Divider,
+    CircularProgress,
+    Alert,
+    Stack,
 } from '@mui/material';
 import {
-    Add as AddIcon, Edit as EditIcon, Refresh as RefreshIcon,
-    Search as SearchIcon, MoreVert as MoreVertIcon,
-    Label as LabelIcon, Shield as ShieldIcon, Description as DescriptionIcon
+    Add as AddIcon,
+    Edit as EditIcon,
+    Refresh as RefreshIcon,
+    Search as SearchIcon,
+    MoreVert as MoreVertIcon,
+    Label as LabelIcon,
+    Shield as ShieldIcon,
+    Description as DescriptionIcon,
+    Clear as ClearIcon,
 } from '@mui/icons-material';
 import PermissionFormModal from './PermissionFormModal';
 import { showSnackbar } from 'utils/snackbar';
@@ -49,7 +79,12 @@ export default function PermissionsList() {
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
-    const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', action: null });
+    const [confirmDialog, setConfirmDialog] = useState({
+        open: false,
+        title: '',
+        message: '',
+        action: null,
+    });
 
     const fetchPermissions = async () => {
         if (!canView) return;
@@ -59,9 +94,8 @@ export default function PermissionsList() {
             const response = await permissionService.getPermissions({
                 page: page + 1,
                 per_page: rowsPerPage,
-                search: search || undefined
+                search: search || undefined,
             });
-            console.log('Permissions response:', response);
 
             if (response?.data?.status === 'success') {
                 const data = response.data.data;
@@ -82,9 +116,9 @@ export default function PermissionsList() {
                     setError(response.data.message);
                 }
             }
-        } catch (error) {
-            console.error('Permissions error:', error);
-            setError(error.message || 'Failed to load permissions');
+        } catch (err) {
+            console.error('Permissions error:', err);
+            setError(err.message || 'Failed to load permissions');
             showSnackbar({ type: 'error', message: 'Failed to load permissions' });
             setPermissions([]);
             setTotal(0);
@@ -94,9 +128,7 @@ export default function PermissionsList() {
     };
 
     useEffect(() => {
-        if (canView) {
-            fetchPermissions();
-        }
+        if (canView) fetchPermissions();
     }, [page, rowsPerPage, search, canView]);
 
     const handleMenuOpen = (event, perm) => {
@@ -105,10 +137,6 @@ export default function PermissionsList() {
     };
 
     const handleMenuClose = () => setActionMenu(null);
-
-    const openConfirmDialog = (title, message, actionFn) => {
-        setConfirmDialog({ open: true, title, message, action: actionFn });
-    };
 
     const handleEdit = () => {
         setEditingPermission(selectedPermission);
@@ -129,7 +157,7 @@ export default function PermissionsList() {
 
     const handleConfirm = async () => {
         if (!confirmDialog.action) return;
-        setConfirmDialog(prev => ({ ...prev, open: false }));
+        setConfirmDialog((prev) => ({ ...prev, open: false }));
         try {
             await confirmDialog.action();
             fetchPermissions();
@@ -140,15 +168,18 @@ export default function PermissionsList() {
 
     if (!canView) {
         return (
-            <Box sx={{ p: 2 }}>
-                <Paper sx={{
-                    p: 4,
-                    textAlign: 'center',
-                    backgroundColor: colors.light,
-                    border: `1px solid ${colors.middle}`,
-                    borderRadius: 2
-                }}>
-                    <Typography variant="h5" color="error" gutterBottom>
+            <Box p={3}>
+                <Paper
+                    elevation={0}
+                    sx={{
+                        p: 4,
+                        textAlign: 'center',
+                        borderRadius: 3,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                    }}
+                >
+                    <Typography color="error" fontWeight={600} variant="h6" gutterBottom>
                         Access Denied
                     </Typography>
                     <Typography color="text.secondary">
@@ -164,11 +195,20 @@ export default function PermissionsList() {
             <Box p={3}>
                 <Alert
                     severity="error"
+                    variant="filled"
                     action={
-                        <Button color="inherit" size="small" onClick={() => { setError(null); fetchPermissions(); }}>
+                        <Button
+                            color="inherit"
+                            size="small"
+                            onClick={() => {
+                                setError(null);
+                                fetchPermissions();
+                            }}
+                        >
                             Retry
                         </Button>
                     }
+                    sx={{ borderRadius: 2 }}
                 >
                     {error}
                 </Alert>
@@ -176,177 +216,225 @@ export default function PermissionsList() {
         );
     }
 
-    const PermissionCard = ({ permission }) => (
-        <Card sx={{
-            mb: 2,
-            borderRadius: 2,
-            overflow: 'hidden',
-            border: `1px solid ${colors.middle}`,
-        }}>
-            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 }, backgroundColor: colors.light }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
-                    <Chip
-                        label={permission.name}
-                        size="small"
-                        icon={<LabelIcon sx={{ color: colors.sea }} />}
-                        sx={{
-                            maxWidth: 'calc(100% - 40px)',
-                            backgroundColor: colors.wave,
-                            color: colors.sea,
-                            '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' }
-                        }}
-                    />
-                    <IconButton
-                        size="small"
-                        onClick={(e) => handleMenuOpen(e, permission)}
-                        sx={{ ml: 1, color: colors.rain }}
-                    >
-                        <MoreVertIcon fontSize="small" />
-                    </IconButton>
-                </Box>
-                <Typography variant="body1" fontWeight="medium" sx={{ mb: 0.5, color: colors.dark }}>
-                    {permission.display_name || permission.name}
-                </Typography>
-                {permission.description && (
-                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 1 }}>
-                        <DescriptionIcon fontSize="small" sx={{ color: colors.rain, mt: 0.2 }} />
-                        <Typography variant="body2" sx={{ color: colors.black }}>
-                            {permission.description}
-                        </Typography>
-                    </Box>
-                )}
-                <Divider sx={{ my: 1, borderColor: colors.middle }} />
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <ShieldIcon fontSize="small" sx={{ color: colors.rain }} />
-                    <Typography variant="caption" sx={{ color: colors.rain }}>
-                        Guard: {permission.guard_name}
-                    </Typography>
-                </Box>
-            </CardContent>
-        </Card>
-    );
-
     return (
-        <Box sx={{ width: '100%', p: { xs: 1, sm: 2 }, m: 0 }}>
-            <Paper sx={{
-                width: '100%',
-                borderRadius: { xs: 1, sm: 2 },
-                overflow: 'hidden',
-                boxShadow: { xs: 0, sm: 1 },
-                backgroundColor: colors.light,
-                border: `1px solid ${colors.middle}`,
-            }}>
+        <Box sx={{ width: '100%', p: { xs: 1.5, sm: 2.5 }, m: 0, bgcolor: 'background.default' }}>
+            <Paper
+                elevation={0}
+                sx={{
+                    width: '100%',
+                    borderRadius: 3,
+                    overflow: 'hidden',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    bgcolor: 'background.paper',
+                }}
+            >
                 {/* Header */}
-                <Box sx={{ p: { xs: 2, sm: 3 }, borderBottom: `1px solid ${colors.middle}` }}>
-                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={2} flexWrap="wrap" gap={1}>
-                        <Typography variant="h5" fontWeight="600" sx={{ fontSize: { xs: '1.5rem', sm: '1.75rem' }, color: colors.dark }}>
-                            Permissions
-                        </Typography>
+                <Box
+                    sx={{
+                        px: { xs: 2, sm: 3 },
+                        py: 2.5,
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                    }}
+                >
+                    <Stack
+                        direction={{ xs: 'column', sm: 'row' }}
+                        justifyContent="space-between"
+                        alignItems={{ xs: 'stretch', sm: 'center' }}
+                        spacing={2}
+                        mb={2.5}
+                    >
+                        <Box>
+                            <Typography variant="h5" fontWeight={800} color="text.primary">
+                                Permissions
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                                Manage system permissions and access keys
+                            </Typography>
+                        </Box>
+
                         {canCreate && (
                             <Button
                                 variant="contained"
                                 startIcon={<AddIcon />}
                                 onClick={handleCreate}
-                                size={isMobile ? "small" : "medium"}
+                                size={isMobile ? 'small' : 'medium'}
                                 sx={{
                                     borderRadius: 2,
-                                    backgroundColor: colors.salat,
-                                    '&:hover': { backgroundColor: colors.dark }
+                                    fontWeight: 700,
+                                    textTransform: 'none',
+                                    px: 2.5,
+                                    boxShadow: 'none',
+                                    bgcolor: colors.salat || '#10b981',
+                                    '&:hover': {
+                                        bgcolor: colors.dark || '#047857',
+                                        boxShadow: '0 4px 12px rgba(16,185,129,0.35)',
+                                    },
                                 }}
                             >
                                 Add Permission
                             </Button>
                         )}
-                    </Box>
-                    <Box display="flex" gap={2} flexWrap="wrap" alignItems="center">
+                    </Stack>
+
+                    <Stack
+                        direction={{ xs: 'column', sm: 'row' }}
+                        spacing={1.5}
+                        alignItems={{ xs: 'stretch', sm: 'center' }}
+                    >
                         <TextField
-                            label="Search"
+                            placeholder="Search permissions…"
                             size="small"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             InputProps={{
-                                startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" sx={{ color: colors.rain }} /></InputAdornment>
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <SearchIcon fontSize="small" color="action" />
+                                    </InputAdornment>
+                                ),
+                                endAdornment: search ? (
+                                    <InputAdornment position="end">
+                                        <IconButton size="small" onClick={() => setSearch('')}>
+                                            <ClearIcon fontSize="small" />
+                                        </IconButton>
+                                    </InputAdornment>
+                                ) : null,
                             }}
                             sx={{
-                                minWidth: { xs: '100%', sm: 250 },
+                                minWidth: { xs: '100%', sm: 260 },
                                 flexGrow: { xs: 1, sm: 0 },
-                                '& .MuiInputBase-root': {
-                                    backgroundColor: colors.sky,
+                                '& .MuiOutlinedInput-root': {
                                     borderRadius: 2,
-                                },
-                                '& .MuiOutlinedInput-notchedOutline': {
-                                    borderColor: colors.middle,
+                                    bgcolor: 'action.hover',
+                                    '& fieldset': { borderColor: 'transparent' },
+                                    '&:hover fieldset': { borderColor: 'divider' },
+                                    '&.Mui-focused fieldset': { borderColor: 'primary.main' },
                                 },
                             }}
                         />
+
                         <Button
                             variant="outlined"
                             startIcon={<RefreshIcon />}
                             onClick={fetchPermissions}
-                            size={isMobile ? "small" : "medium"}
+                            size={isMobile ? 'small' : 'medium'}
                             sx={{
-                                borderColor: colors.middle,
-                                color: colors.sea,
+                                borderRadius: 2,
+                                fontWeight: 600,
+                                textTransform: 'none',
+                                borderColor: 'divider',
+                                color: 'text.primary',
                                 '&:hover': {
-                                    borderColor: colors.sea,
-                                    backgroundColor: colors.wave,
-                                }
+                                    borderColor: 'text.primary',
+                                    bgcolor: 'action.hover',
+                                },
                             }}
                         >
                             Refresh
                         </Button>
-                    </Box>
+                    </Stack>
                 </Box>
 
-                {/* Records: Cards on mobile/tablet, Table on desktop */}
+                {/* Table / Cards */}
                 {showTableView ? (
-                    <TableContainer sx={{ width: '100%', overflowX: 'auto' }}>
-                        <Table sx={{ width: '100%', minWidth: 800 }}>
+                    <TableContainer>
+                        <Table sx={{ minWidth: 800 }}>
                             <TableHead>
-                                <TableRow sx={{ backgroundColor: colors.sky }}>
+                                <TableRow
+                                    sx={{
+                                        bgcolor: 'action.hover',
+                                        '& th': {
+                                            fontWeight: 700,
+                                            fontSize: '0.8125rem',
+                                            color: 'text.secondary',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: 0.6,
+                                            borderBottom: '1px solid',
+                                            borderColor: 'divider',
+                                            py: 1.75,
+                                        },
+                                    }}
+                                >
                                     {headCells.map((cell) => (
-                                        <TableCell key={cell.id} sx={{ fontWeight: 'bold', color: colors.dark }}>
-                                            {cell.label}
-                                        </TableCell>
+                                        <TableCell key={cell.id}>{cell.label}</TableCell>
                                     ))}
                                 </TableRow>
                             </TableHead>
                             <TableBody>
                                 {loading ? (
                                     <TableRow>
-                                        <TableCell colSpan={5} align="center">
-                                            <CircularProgress size={32} sx={{ color: colors.sea, my: 3 }} />
+                                        <TableCell colSpan={5} align="center" sx={{ py: 8 }}>
+                                            <CircularProgress size={36} thickness={4} />
                                         </TableCell>
                                     </TableRow>
                                 ) : permissions.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={5} align="center">
-                                            <Typography sx={{ py: 3, color: colors.rain }}>No permissions found</Typography>
+                                        <TableCell colSpan={5} align="center" sx={{ py: 8 }}>
+                                            <Typography color="text.secondary" fontWeight={500}>
+                                                No permissions found
+                                            </Typography>
                                         </TableCell>
                                     </TableRow>
                                 ) : (
                                     permissions.map((perm) => (
-                                        <TableRow key={perm.id} hover>
-                                            <TableCell>
+                                        <TableRow
+                                            key={perm.id}
+                                            hover
+                                            sx={{
+                                                '&:last-child td': { borderBottom: 0 },
+                                                transition: 'background-color 0.15s',
+                                            }}
+                                        >
+                                            <TableCell sx={{ py: 2 }}>
                                                 <Chip
+                                                    icon={<LabelIcon sx={{ fontSize: 16 }} />}
                                                     label={perm.name}
                                                     size="small"
                                                     sx={{
-                                                        backgroundColor: colors.wave,
-                                                        color: colors.sea,
+                                                        fontWeight: 700,
+                                                        bgcolor: 'action.hover',
+                                                        color: 'text.primary',
+                                                        border: '1px solid',
+                                                        borderColor: 'divider',
+                                                        height: 28,
+                                                        '& .MuiChip-icon': {
+                                                            color: colors.sea || '#0f766e',
+                                                        },
                                                     }}
                                                 />
                                             </TableCell>
-                                            <TableCell sx={{ color: colors.black }}>{perm.display_name || perm.name}</TableCell>
-                                            <TableCell sx={{ maxWidth: 300, wordBreak: 'break-word', color: colors.black }}>
-                                                {perm.description || '-'}
+                                            <TableCell>
+                                                <Typography variant="body2" fontWeight={600}>
+                                                    {perm.display_name || perm.name}
+                                                </Typography>
                                             </TableCell>
-                                            <TableCell sx={{ color: colors.black }}>{perm.guard_name}</TableCell>
+                                            <TableCell sx={{ maxWidth: 320 }}>
+                                                <Typography
+                                                    variant="body2"
+                                                    color="text.secondary"
+                                                    sx={{ wordBreak: 'break-word' }}
+                                                >
+                                                    {perm.description || '—'}
+                                                </Typography>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Typography variant="body2" fontWeight={500}>
+                                                    {perm.guard_name}
+                                                </Typography>
+                                            </TableCell>
                                             <TableCell align="center">
                                                 <IconButton
                                                     size="small"
                                                     onClick={(e) => handleMenuOpen(e, perm)}
-                                                    sx={{ color: colors.rain }}
+                                                    sx={{
+                                                        color: 'text.secondary',
+                                                        '&:hover': {
+                                                            bgcolor: 'action.hover',
+                                                            color: 'text.primary',
+                                                        },
+                                                    }}
                                                 >
                                                     <MoreVertIcon />
                                                 </IconButton>
@@ -358,23 +446,113 @@ export default function PermissionsList() {
                         </Table>
                     </TableContainer>
                 ) : (
-                    <Box sx={{ p: { xs: 2, sm: 3 } }}>
+                    <Box sx={{ p: { xs: 2, sm: 2.5 } }}>
                         {loading ? (
-                            <Box display="flex" justifyContent="center" py={4}>
-                                <CircularProgress sx={{ color: colors.sea }} />
+                            <Box display="flex" justifyContent="center" py={6}>
+                                <CircularProgress size={36} thickness={4} />
                             </Box>
                         ) : permissions.length === 0 ? (
-                            <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', borderColor: colors.middle }}>
-                                <Typography sx={{ color: colors.rain }}>No permissions found</Typography>
+                            <Paper
+                                variant="outlined"
+                                sx={{
+                                    p: 5,
+                                    textAlign: 'center',
+                                    borderRadius: 3,
+                                    borderStyle: 'dashed',
+                                }}
+                            >
+                                <Typography color="text.secondary" fontWeight={500}>
+                                    No permissions found
+                                </Typography>
                             </Paper>
                         ) : (
-                            permissions.map((perm) => <PermissionCard key={perm.id} permission={perm} />)
+                            <Stack spacing={2}>
+                                {permissions.map((perm) => (
+                                    <Card
+                                        key={perm.id}
+                                        elevation={0}
+                                        sx={{
+                                            borderRadius: 3,
+                                            border: '1px solid',
+                                            borderColor: 'divider',
+                                            overflow: 'hidden',
+                                        }}
+                                    >
+                                        <CardContent sx={{ p: 2.25 }}>
+                                            <Stack
+                                                direction="row"
+                                                justifyContent="space-between"
+                                                alignItems="flex-start"
+                                                mb={1.5}
+                                            >
+                                                <Chip
+                                                    icon={<LabelIcon sx={{ fontSize: 16 }} />}
+                                                    label={perm.name}
+                                                    size="small"
+                                                    sx={{
+                                                        fontWeight: 700,
+                                                        bgcolor: 'action.hover',
+                                                        border: '1px solid',
+                                                        borderColor: 'divider',
+                                                        height: 28,
+                                                        maxWidth: 'calc(100% - 48px)',
+                                                        '& .MuiChip-icon': {
+                                                            color: colors.sea || '#0f766e',
+                                                        },
+                                                        '& .MuiChip-label': {
+                                                            overflow: 'hidden',
+                                                            textOverflow: 'ellipsis'  ,
+                                                        },
+                                                    }}
+                                                />
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={(e) => handleMenuOpen(e, perm)}
+                                                    sx={{ color: 'text.secondary' }}
+                                                >
+                                                    <MoreVertIcon fontSize="small" />
+                                                </IconButton>
+                                            </Stack>
+
+                                            <Typography variant="body1" fontWeight={700} mb={0.75}>
+                                                {perm.display_name || perm.name}
+                                            </Typography>
+
+                                            {perm.description && (
+                                                <Stack direction="row" spacing={1} alignItems="flex-start" mb={1.5}>
+                                                    <DescriptionIcon
+                                                        sx={{ fontSize: 18, color: 'text.secondary', mt: 0.2 }}
+                                                    />
+                                                    <Typography variant="body2" color="text.secondary">
+                                                        {perm.description}
+                                                    </Typography>
+                                                </Stack>
+                                            )}
+
+                                            <Divider sx={{ my: 1.5 }} />
+
+                                            <Stack direction="row" spacing={1} alignItems="center">
+                                                <ShieldIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                                                <Typography variant="caption" color="text.secondary" fontWeight={500}>
+                                                    Guard: {perm.guard_name}
+                                                </Typography>
+                                            </Stack>
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                            </Stack>
                         )}
                     </Box>
                 )}
 
                 {/* Pagination */}
-                <Box sx={{ borderTop: `1px solid ${colors.middle}`, py: { xs: 1, sm: 0 } }}>
+                <Box
+                    sx={{
+                        borderTop: '1px solid',
+                        borderColor: 'divider',
+                        bgcolor: 'action.hover',
+                    }}
+                >
                     <TablePagination
                         rowsPerPageOptions={[5, 10, 25, 50]}
                         component="div"
@@ -388,12 +566,8 @@ export default function PermissionsList() {
                         }}
                         sx={{
                             '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
-                                fontSize: { xs: '0.75rem', sm: '0.875rem' },
-                                color: colors.black,
+                                fontWeight: 500,
                             },
-                            '.MuiTablePagination-actions': {
-                                color: colors.sea,
-                            }
                         }}
                     />
                 </Box>
@@ -406,10 +580,14 @@ export default function PermissionsList() {
                 onClose={handleMenuClose}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                 transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                PaperProps={{
+                    elevation: 8,
+                    sx: { borderRadius: 2, minWidth: 160, mt: 0.5 },
+                }}
             >
                 {canEdit && (
-                    <MenuItem onClick={handleEdit} sx={{ color: colors.sea }}>
-                        <EditIcon sx={{ mr: 1, fontSize: 20 }} /> Edit
+                    <MenuItem onClick={handleEdit} sx={{ fontWeight: 500 }}>
+                        <EditIcon sx={{ mr: 1.5, fontSize: 20, color: colors.sea || '#0f766e' }} /> Edit
                     </MenuItem>
                 )}
             </Menu>
@@ -420,37 +598,30 @@ export default function PermissionsList() {
                 permission={editingPermission}
             />
 
-            {/* Confirmation Dialog */}
+            {/* Confirm Dialog */}
             <Dialog
                 open={confirmDialog.open}
-                onClose={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+                onClose={() => setConfirmDialog((prev) => ({ ...prev, open: false }))}
                 fullWidth
                 maxWidth="xs"
-                PaperProps={{
-                    sx: {
-                        borderRadius: 2,
-                        backgroundColor: colors.light,
-                    }
-                }}
+                PaperProps={{ sx: { borderRadius: 3 } }}
             >
-                <DialogTitle sx={{ color: colors.dark }}>{confirmDialog.title}</DialogTitle>
+                <DialogTitle sx={{ fontWeight: 700, pb: 1 }}>{confirmDialog.title}</DialogTitle>
                 <DialogContent>
-                    <Typography sx={{ color: colors.black }}>{confirmDialog.message}</Typography>
+                    <Typography color="text.secondary">{confirmDialog.message}</Typography>
                 </DialogContent>
-                <DialogActions sx={{ p: 2, pt: 0 }}>
+                <DialogActions sx={{ px: 3, pb: 2.5, pt: 1 }}>
                     <Button
-                        onClick={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
-                        sx={{ color: colors.rain }}
+                        onClick={() => setConfirmDialog((prev) => ({ ...prev, open: false }))}
+                        sx={{ fontWeight: 600, textTransform: 'none' }}
                     >
                         Cancel
                     </Button>
                     <Button
                         onClick={handleConfirm}
                         variant="contained"
-                        sx={{
-                            backgroundColor: 'error.main',
-                            '&:hover': { backgroundColor: 'error.dark' },
-                        }}
+                        color="error"
+                        sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 2 }}
                     >
                         Confirm
                     </Button>

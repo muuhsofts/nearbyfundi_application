@@ -1,17 +1,49 @@
-// src/pages/otp/OtpList.js
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-    Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
-    IconButton, InputAdornment, Paper, Table, TableBody, TableCell,
-    TableContainer, TableHead, TablePagination, TableRow, TextField,
-    Typography, FormControl, InputLabel, Select, MenuItem, Grid, Card,
-    CardContent, CircularProgress, Tooltip, useTheme, useMediaQuery,
-    Divider, Alert
+    Box,
+    Button,
+    Chip,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    IconButton,
+    InputAdornment,
+    Paper,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TablePagination,
+    TableRow,
+    TextField,
+    Typography,
+    FormControl,
+    InputLabel,
+    Select,
+    MenuItem,
+    Grid,
+    Card,
+    CardContent,
+    CircularProgress,
+    Tooltip,
+    useTheme,
+    useMediaQuery,
+    Alert,
+    Stack,
 } from '@mui/material';
 import {
-    Refresh as RefreshIcon, Search as SearchIcon, DeleteSweep as CleanupIcon,
-    CheckCircle as UsedIcon, Cancel as UnusedIcon, Email as EmailIcon,
-    Schedule as ScheduleIcon, Computer as IpIcon, Label as TypeIcon
+    Refresh as RefreshIcon,
+    Search as SearchIcon,
+    DeleteSweep as CleanupIcon,
+    CheckCircle as UsedIcon,
+    Cancel as UnusedIcon,
+    Email as EmailIcon,
+    Schedule as ScheduleIcon,
+    Computer as IpIcon,
+    Label as TypeIcon,
+    Clear as ClearIcon,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -82,7 +114,6 @@ export default function OtpList() {
                 end_date: endDate ? endDate.toISOString().split('T')[0] : undefined,
             };
             const response = await otpService.getOtps(params);
-            console.log('OTP response:', response);
 
             if (response?.data?.status === 'success') {
                 const data = response.data.data;
@@ -102,13 +133,11 @@ export default function OtpList() {
                 setOtps([]);
                 setTotal(0);
                 setStats(null);
-                if (response?.data?.message) {
-                    setError(response.data.message);
-                }
+                if (response?.data?.message) setError(response.data.message);
             }
-        } catch (error) {
-            console.error('OTP error:', error);
-            setError(error.message || 'Failed to load OTP records');
+        } catch (err) {
+            console.error('OTP error:', err);
+            setError(err.message || 'Failed to load OTP records');
             showSnackbar({ type: 'error', message: 'Failed to load OTP records' });
             setOtps([]);
             setTotal(0);
@@ -119,9 +148,7 @@ export default function OtpList() {
     }, [page, rowsPerPage, email, typeFilter, usedFilter, expiredFilter, startDate, endDate, canView]);
 
     useEffect(() => {
-        if (canView) {
-            fetchOtps();
-        }
+        if (canView) fetchOtps();
     }, [fetchOtps, canView]);
 
     const handleCleanupExpired = () => {
@@ -133,7 +160,10 @@ export default function OtpList() {
                 try {
                     const response = await otpService.cleanup();
                     if (response?.data?.status === 'success') {
-                        showSnackbar({ type: 'success', message: response.data.message || 'Cleanup completed' });
+                        showSnackbar({
+                            type: 'success',
+                            message: response.data.message || 'Cleanup completed',
+                        });
                         fetchOtps();
                     } else {
                         throw new Error(response?.data?.message || 'Cleanup failed');
@@ -141,13 +171,13 @@ export default function OtpList() {
                 } catch (err) {
                     showSnackbar({ type: 'error', message: err.message });
                 }
-            }
+            },
         });
     };
 
     const handleConfirm = async () => {
         if (!confirmDialog.action) return;
-        setConfirmDialog(prev => ({ ...prev, open: false }));
+        setConfirmDialog((prev) => ({ ...prev, open: false }));
         try {
             await confirmDialog.action();
         } catch (err) {
@@ -155,17 +185,35 @@ export default function OtpList() {
         }
     };
 
+    const formatDate = (dateStr) => {
+        if (!dateStr) return '—';
+        try {
+            return new Date(dateStr).toLocaleString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+            });
+        } catch {
+            return '—';
+        }
+    };
+
     if (!canView) {
         return (
-            <Box sx={{ p: 2 }}>
-                <Paper sx={{
-                    p: 4,
-                    textAlign: 'center',
-                    backgroundColor: colors.light,
-                    border: `1px solid ${colors.middle}`,
-                    borderRadius: 2
-                }}>
-                    <Typography variant="h5" color="error" gutterBottom>
+            <Box p={3}>
+                <Paper
+                    elevation={0}
+                    sx={{
+                        p: 4,
+                        textAlign: 'center',
+                        borderRadius: 3,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                    }}
+                >
+                    <Typography color="error" fontWeight={600} variant="h6" gutterBottom>
                         Access Denied
                     </Typography>
                     <Typography color="text.secondary">
@@ -181,11 +229,20 @@ export default function OtpList() {
             <Box p={3}>
                 <Alert
                     severity="error"
+                    variant="filled"
                     action={
-                        <Button color="inherit" size="small" onClick={() => { setError(null); fetchOtps(); }}>
+                        <Button
+                            color="inherit"
+                            size="small"
+                            onClick={() => {
+                                setError(null);
+                                fetchOtps();
+                            }}
+                        >
                             Retry
                         </Button>
                     }
+                    sx={{ borderRadius: 2 }}
                 >
                     {error}
                 </Alert>
@@ -207,432 +264,632 @@ export default function OtpList() {
         { value: 'false', label: 'Unused' },
     ];
 
-    const formatDate = (dateStr) => {
-        if (!dateStr) return '-';
-        try {
-            return new Date(dateStr).toLocaleString('en-US', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-        } catch {
-            return '-';
-        }
-    };
-
-    const OtpCard = ({ otp }) => {
-        const isExpired = new Date(otp.expires_at) < new Date();
-        return (
-            <Card sx={{
-                mb: 2,
-                borderRadius: 2,
-                overflow: 'hidden',
-                border: `1px solid ${colors.middle}`,
-            }}>
-                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 }, backgroundColor: colors.light }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                            <EmailIcon fontSize="small" sx={{ color: colors.rain }} />
-                            <Typography variant="body1" fontWeight="medium" sx={{ wordBreak: 'break-all', color: colors.dark }}>
-                                {otp.email}
-                            </Typography>
-                        </Box>
-                        <Chip
-                            label={otp.is_used ? "Used" : "Unused"}
-                            size="small"
-                            icon={otp.is_used ? <UsedIcon sx={{ fontSize: 14 }} /> : <UnusedIcon sx={{ fontSize: 14 }} />}
-                            sx={{
-                                backgroundColor: otp.is_used ? colors.salat : colors.sky,
-                                color: otp.is_used ? colors.light : colors.rain,
-                            }}
-                        />
-                    </Box>
-
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <TypeIcon fontSize="small" sx={{ color: colors.rain }} />
-                            <Typography variant="body2" sx={{ color: colors.black }}>{otp.type}</Typography>
-                        </Box>
-                        <Typography variant="body2" fontWeight="bold" fontFamily="monospace" sx={{ color: colors.sea }}>
-                            {otp.otp}
-                        </Typography>
-                    </Box>
-
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                        <ScheduleIcon fontSize="small" sx={{ color: colors.rain }} />
-                        <Typography variant="caption" sx={{ color: isExpired ? 'error.main' : colors.rain }}>
-                            Expires: {formatDate(otp.expires_at)}
-                            {isExpired && " (Expired)"}
-                        </Typography>
-                    </Box>
-
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
-                        <Typography variant="caption" sx={{ color: colors.rain }}>
-                            Created: {formatDate(otp.created_at)}
-                        </Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <IpIcon fontSize="small" sx={{ fontSize: 14, color: colors.rain }} />
-                            <Typography variant="caption" sx={{ color: colors.rain }}>
-                                {otp.ip_address || '-'}
-                            </Typography>
-                        </Box>
-                    </Box>
-                </CardContent>
-            </Card>
-        );
-    };
-
     return (
         <LocalizationProvider dateAdapter={AdapterDateFns}>
-            <Box sx={{ width: '100%', p: { xs: 1, sm: 2 }, m: 0 }}>
-                <Paper sx={{
-                    width: '100%',
-                    borderRadius: { xs: 1, sm: 2 },
-                    overflow: 'hidden',
-                    boxShadow: { xs: 0, sm: 1 },
-                    backgroundColor: colors.light,
-                    border: `1px solid ${colors.middle}`,
-                }}>
-                    {/* Header and Stats */}
-                    <Box sx={{ p: { xs: 2, sm: 3 }, borderBottom: `1px solid ${colors.middle}` }}>
-                        <Typography variant="h5" fontWeight="600" gutterBottom sx={{ fontSize: { xs: '1.5rem', sm: '1.75rem' }, color: colors.dark }}>
-                            OTP Management
-                        </Typography>
+            <Box sx={{ width: '100%', p: { xs: 1.5, sm: 2.5 }, m: 0, bgcolor: 'background.default' }}>
+                {/* Stats Cards */}
+                {stats && (
+                    <Grid container spacing={2} sx={{ mb: 3 }}>
+                        <Grid item xs={6} sm={4} md={2.4}>
+                            <Card
+                                elevation={0}
+                                sx={{
+                                    borderRadius: 3,
+                                    border: '1px solid',
+                                    borderColor: 'divider',
+                                    background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
+                                    height: '100%',
+                                }}
+                            >
+                                <CardContent sx={{ p: 2.25 }}>
+                                    <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
+                                        Total OTPs
+                                    </Typography>
+                                    <Typography variant="h4" fontWeight={800} color="#0369a1" sx={{ mt: 0.5, lineHeight: 1.1 }}>
+                                        {stats.total ?? 0}
+                                    </Typography>
+                                </CardContent>
+                            </Card>
+                        </Grid>
+                        <Grid item xs={6} sm={4} md={2.4}>
+                            <Card
+                                elevation={0}
+                                sx={{
+                                    borderRadius: 3,
+                                    border: '1px solid',
+                                    borderColor: 'divider',
+                                    background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)',
+                                    height: '100%',
+                                }}
+                            >
+                                <CardContent sx={{ p: 2.25 }}>
+                                    <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
+                                        Used
+                                    </Typography>
+                                    <Typography variant="h4" fontWeight={800} color="#047857" sx={{ mt: 0.5, lineHeight: 1.1 }}>
+                                        {stats.used ?? 0}
+                                    </Typography>
+                                </CardContent>
+                            </Card>
+                        </Grid>
+                        <Grid item xs={6} sm={4} md={2.4}>
+                            <Card
+                                elevation={0}
+                                sx={{
+                                    borderRadius: 3,
+                                    border: '1px solid',
+                                    borderColor: 'divider',
+                                    background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+                                    height: '100%',
+                                }}
+                            >
+                                <CardContent sx={{ p: 2.25 }}>
+                                    <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
+                                        Unused
+                                    </Typography>
+                                    <Typography variant="h4" fontWeight={800} color="#b45309" sx={{ mt: 0.5, lineHeight: 1.1 }}>
+                                        {stats.unused ?? 0}
+                                    </Typography>
+                                </CardContent>
+                            </Card>
+                        </Grid>
+                        <Grid item xs={6} sm={4} md={2.4}>
+                            <Card
+                                elevation={0}
+                                sx={{
+                                    borderRadius: 3,
+                                    border: '1px solid',
+                                    borderColor: 'divider',
+                                    background: 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)',
+                                    height: '100%',
+                                }}
+                            >
+                                <CardContent sx={{ p: 2.25 }}>
+                                    <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
+                                        Expired
+                                    </Typography>
+                                    <Typography variant="h4" fontWeight={800} color="#b91c1c" sx={{ mt: 0.5, lineHeight: 1.1 }}>
+                                        {stats.expired ?? 0}
+                                    </Typography>
+                                </CardContent>
+                            </Card>
+                        </Grid>
+                        <Grid item xs={12} sm={8} md={2.4}>
+                            <Card
+                                elevation={0}
+                                sx={{
+                                    borderRadius: 3,
+                                    border: '1px solid',
+                                    borderColor: 'divider',
+                                    background: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)',
+                                    height: '100%',
+                                }}
+                            >
+                                <CardContent sx={{ p: 2.25 }}>
+                                    <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
+                                        By Type
+                                    </Typography>
+                                    <Typography variant="caption" component="div" fontWeight={600} color="text.primary" sx={{ mt: 0.75 }}>
+                                        {stats.by_type?.map((t) => `${t.type}: ${t.count}`).join(', ') || 'N/A'}
+                                    </Typography>
+                                </CardContent>
+                            </Card>
+                        </Grid>
+                    </Grid>
+                )}
 
-                        {/* Stats Cards */}
-                        {stats && (
-                            <Grid container spacing={2} sx={{ mb: 3 }}>
-                                <Grid item xs={6} sm={4} md={2.4}>
-                                    <Card variant="outlined" sx={{
-                                        borderRadius: 2,
-                                        borderColor: colors.middle,
-                                    }}>
-                                        <CardContent sx={{ py: 1.5, px: 2 }}>
-                                            <Typography variant="body2" sx={{ color: colors.rain }}>Total OTPs</Typography>
-                                            <Typography variant="h5" fontWeight="bold" sx={{ color: colors.dark }}>{stats.total ?? 0}</Typography>
-                                        </CardContent>
-                                    </Card>
-                                </Grid>
-                                <Grid item xs={6} sm={4} md={2.4}>
-                                    <Card variant="outlined" sx={{
-                                        borderRadius: 2,
-                                        borderColor: colors.middle,
-                                    }}>
-                                        <CardContent sx={{ py: 1.5, px: 2 }}>
-                                            <Typography variant="body2" sx={{ color: colors.rain }}>Used</Typography>
-                                            <Typography variant="h5" fontWeight="bold" sx={{ color: colors.salat }}>{stats.used ?? 0}</Typography>
-                                        </CardContent>
-                                    </Card>
-                                </Grid>
-                                <Grid item xs={6} sm={4} md={2.4}>
-                                    <Card variant="outlined" sx={{
-                                        borderRadius: 2,
-                                        borderColor: colors.middle,
-                                    }}>
-                                        <CardContent sx={{ py: 1.5, px: 2 }}>
-                                            <Typography variant="body2" sx={{ color: colors.rain }}>Unused</Typography>
-                                            <Typography variant="h5" fontWeight="bold" sx={{ color: '#f59e0b' }}>{stats.unused ?? 0}</Typography>
-                                        </CardContent>
-                                    </Card>
-                                </Grid>
-                                <Grid item xs={6} sm={4} md={2.4}>
-                                    <Card variant="outlined" sx={{
-                                        borderRadius: 2,
-                                        borderColor: colors.middle,
-                                    }}>
-                                        <CardContent sx={{ py: 1.5, px: 2 }}>
-                                            <Typography variant="body2" sx={{ color: colors.rain }}>Expired</Typography>
-                                            <Typography variant="h5" fontWeight="bold" sx={{ color: 'error.main' }}>{stats.expired ?? 0}</Typography>
-                                        </CardContent>
-                                    </Card>
-                                </Grid>
-                                <Grid item xs={12} sm={8} md={2.4}>
-                                    <Card variant="outlined" sx={{
-                                        borderRadius: 2,
-                                        borderColor: colors.middle,
-                                        height: '100%'
-                                    }}>
-                                        <CardContent sx={{ py: 1.5, px: 2 }}>
-                                            <Typography variant="body2" sx={{ color: colors.rain }}>By Type</Typography>
-                                            <Typography variant="caption" component="div" sx={{ mt: 0.5, color: colors.black }}>
-                                                {stats.by_type?.map(t => `${t.type}: ${t.count}`).join(', ') || 'N/A'}
-                                            </Typography>
-                                        </CardContent>
-                                    </Card>
-                                </Grid>
-                            </Grid>
-                        )}
+                {/* Main Panel */}
+                <Paper
+                    elevation={0}
+                    sx={{
+                        width: '100%',
+                        borderRadius: 3,
+                        overflow: 'hidden',
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        bgcolor: 'background.paper',
+                    }}
+                >
+                    {/* Header + Filters */}
+                    <Box
+                        sx={{
+                            px: { xs: 2, sm: 3 },
+                            py: 2.5,
+                            borderBottom: '1px solid',
+                            borderColor: 'divider',
+                        }}
+                    >
+                        <Stack
+                            direction={{ xs: 'column', sm: 'row' }}
+                            justifyContent="space-between"
+                            alignItems={{ xs: 'stretch', sm: 'center' }}
+                            spacing={2}
+                            mb={2.5}
+                        >
+                            <Box>
+                                <Typography variant="h5" fontWeight={800} color="text.primary">
+                                    OTP Management
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                                    View and manage one-time passwords
+                                </Typography>
+                            </Box>
 
-                        {/* Filters */}
-                        <Box sx={{ mb: 2 }}>
-                            <Grid container spacing={2}>
-                                <Grid item xs={12} sm={6} md={2}>
-                                    <TextField
-                                        fullWidth
-                                        size="small"
-                                        label="Email"
-                                        value={email}
-                                        onChange={(e) => setEmail(e.target.value)}
-                                        InputProps={{
-                                            startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" sx={{ color: colors.rain }} /></InputAdornment>
-                                        }}
-                                        sx={{
-                                            '& .MuiInputBase-root': {
-                                                backgroundColor: colors.sky,
-                                                borderRadius: 2,
-                                            },
-                                            '& .MuiOutlinedInput-notchedOutline': {
-                                                borderColor: colors.middle,
-                                            },
-                                        }}
-                                    />
-                                </Grid>
-                                <Grid item xs={12} sm={6} md={2}>
-                                    <FormControl fullWidth size="small">
-                                        <InputLabel sx={{ color: colors.rain }}>Type</InputLabel>
-                                        <Select
-                                            value={typeFilter}
-                                            label="Type"
-                                            onChange={(e) => setTypeFilter(e.target.value)}
-                                            sx={{
-                                                '& .MuiOutlinedInput-notchedOutline': {
-                                                    borderColor: colors.middle,
-                                                },
-                                                '& .MuiInputBase-root': {
-                                                    backgroundColor: colors.sky,
-                                                },
-                                            }}
-                                        >
-                                            {typeOptions.map(opt => <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>)}
-                                        </Select>
-                                    </FormControl>
-                                </Grid>
-                                <Grid item xs={12} sm={6} md={2}>
-                                    <FormControl fullWidth size="small">
-                                        <InputLabel sx={{ color: colors.rain }}>Used Status</InputLabel>
-                                        <Select
-                                            value={usedFilter}
-                                            label="Used Status"
-                                            onChange={(e) => setUsedFilter(e.target.value)}
-                                            sx={{
-                                                '& .MuiOutlinedInput-notchedOutline': {
-                                                    borderColor: colors.middle,
-                                                },
-                                                '& .MuiInputBase-root': {
-                                                    backgroundColor: colors.sky,
-                                                },
-                                            }}
-                                        >
-                                            {usedOptions.map(opt => <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>)}
-                                        </Select>
-                                    </FormControl>
-                                </Grid>
-                                <Grid item xs={12} sm={6} md={2}>
-                                    <FormControl fullWidth size="small">
-                                        <InputLabel sx={{ color: colors.rain }}>Expired Only</InputLabel>
-                                        <Select
-                                            value={expiredFilter}
-                                            label="Expired Only"
-                                            onChange={(e) => setExpiredFilter(e.target.value === 'true')}
-                                            sx={{
-                                                '& .MuiOutlinedInput-notchedOutline': {
-                                                    borderColor: colors.middle,
-                                                },
-                                                '& .MuiInputBase-root': {
-                                                    backgroundColor: colors.sky,
-                                                },
-                                            }}
-                                        >
-                                            <MenuItem value="false">All</MenuItem>
-                                            <MenuItem value="true">Expired Only</MenuItem>
-                                        </Select>
-                                    </FormControl>
-                                </Grid>
-                                <Grid item xs={12} sm={6} md={1.5}>
-                                    <DatePicker
-                                        label="Start Date"
-                                        value={startDate}
-                                        onChange={setStartDate}
-                                        slotProps={{
-                                            textField: {
-                                                size: 'small',
-                                                fullWidth: true,
-                                                sx: {
-                                                    '& .MuiInputBase-root': {
-                                                        backgroundColor: colors.sky,
-                                                        borderRadius: 2,
-                                                    },
-                                                    '& .MuiOutlinedInput-notchedOutline': {
-                                                        borderColor: colors.middle,
-                                                    },
-                                                }
-                                            }
-                                        }}
-                                    />
-                                </Grid>
-                                <Grid item xs={12} sm={6} md={1.5}>
-                                    <DatePicker
-                                        label="End Date"
-                                        value={endDate}
-                                        onChange={setEndDate}
-                                        slotProps={{
-                                            textField: {
-                                                size: 'small',
-                                                fullWidth: true,
-                                                sx: {
-                                                    '& .MuiInputBase-root': {
-                                                        backgroundColor: colors.sky,
-                                                        borderRadius: 2,
-                                                    },
-                                                    '& .MuiOutlinedInput-notchedOutline': {
-                                                        borderColor: colors.middle,
-                                                    },
-                                                }
-                                            }
-                                        }}
-                                    />
-                                </Grid>
-                                <Grid item xs={6} sm={6} md={1}>
-                                    <Button
-                                        variant="outlined"
-                                        startIcon={<RefreshIcon />}
-                                        onClick={fetchOtps}
-                                        fullWidth
-                                        sx={{
-                                            height: '40px',
-                                            borderColor: colors.middle,
-                                            color: colors.sea,
-                                            '&:hover': {
-                                                borderColor: colors.sea,
-                                                backgroundColor: colors.wave,
-                                            }
-                                        }}
-                                    >
-                                        Refresh
-                                    </Button>
-                                </Grid>
-                            </Grid>
-                        </Box>
-
-                        {/* Cleanup Buttons */}
-                        {canCleanup && (
-                            <Box display="flex" gap={1} justifyContent={{ xs: 'center', sm: 'flex-end' }} flexWrap="wrap" mb={2}>
+                            {canCleanup && (
                                 <Tooltip title="Delete expired & unused OTPs">
                                     <Button
                                         variant="contained"
                                         startIcon={<CleanupIcon />}
                                         onClick={handleCleanupExpired}
-                                        size={isMobile ? "small" : "medium"}
+                                        size={isMobile ? 'small' : 'medium'}
                                         sx={{
                                             borderRadius: 2,
-                                            backgroundColor: '#f59e0b',
-                                            '&:hover': { backgroundColor: '#d97706' }
+                                            fontWeight: 700,
+                                            textTransform: 'none',
+                                            boxShadow: 'none',
+                                            bgcolor: '#f59e0b',
+                                            '&:hover': {
+                                                bgcolor: '#d97706',
+                                                boxShadow: '0 4px 12px rgba(245,158,11,0.35)',
+                                            },
                                         }}
                                     >
                                         Cleanup Expired
                                     </Button>
                                 </Tooltip>
-                            </Box>
-                        )}
+                            )}
+                        </Stack>
+
+                        <Grid container spacing={1.5} alignItems="center">
+                            <Grid item xs={12} sm={6} md={2.2}>
+                                <TextField
+                                    fullWidth
+                                    size="small"
+                                    placeholder="Search email…"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    InputProps={{
+                                        startAdornment: (
+                                            <InputAdornment position="start">
+                                                <SearchIcon fontSize="small" color="action" />
+                                            </InputAdornment>
+                                        ),
+                                        endAdornment: email ? (
+                                            <InputAdornment position="end">
+                                                <IconButton size="small" onClick={() => setEmail('')}>
+                                                    <ClearIcon fontSize="small" />
+                                                </IconButton>
+                                            </InputAdornment>
+                                        ) : null,
+                                    }}
+                                    sx={{
+                                        '& .MuiOutlinedInput-root': {
+                                            borderRadius: 2,
+                                            bgcolor: 'action.hover',
+                                            '& fieldset': { borderColor: 'transparent' },
+                                            '&:hover fieldset': { borderColor: 'divider' },
+                                            '&.Mui-focused fieldset': { borderColor: 'primary.main' },
+                                        },
+                                    }}
+                                />
+                            </Grid>
+
+                            <Grid item xs={12} sm={6} md={1.8}>
+                                <FormControl fullWidth size="small">
+                                    <InputLabel>Type</InputLabel>
+                                    <Select
+                                        value={typeFilter}
+                                        label="Type"
+                                        onChange={(e) => setTypeFilter(e.target.value)}
+                                        sx={{
+                                            borderRadius: 2,
+                                            bgcolor: 'action.hover',
+                                            '& .MuiOutlinedInput-notchedOutline': { borderColor: 'transparent' },
+                                            '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' },
+                                        }}
+                                    >
+                                        {typeOptions.map((opt) => (
+                                            <MenuItem key={opt.value} value={opt.value}>
+                                                {opt.label}
+                                            </MenuItem>
+                                        ))}
+                                    </Select>
+                                </FormControl>
+                            </Grid>
+
+                            <Grid item xs={12} sm={6} md={1.8}>
+                                <FormControl fullWidth size="small">
+                                    <InputLabel>Used Status</InputLabel>
+                                    <Select
+                                        value={usedFilter}
+                                        label="Used Status"
+                                        onChange={(e) => setUsedFilter(e.target.value)}
+                                        sx={{
+                                            borderRadius: 2,
+                                            bgcolor: 'action.hover',
+                                            '& .MuiOutlinedInput-notchedOutline': { borderColor: 'transparent' },
+                                            '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' },
+                                        }}
+                                    >
+                                        {usedOptions.map((opt) => (
+                                            <MenuItem key={opt.value} value={opt.value}>
+                                                {opt.label}
+                                            </MenuItem>
+                                        ))}
+                                    </Select>
+                                </FormControl>
+                            </Grid>
+
+                            <Grid item xs={12} sm={6} md={1.6}>
+                                <FormControl fullWidth size="small">
+                                    <InputLabel>Expired</InputLabel>
+                                    <Select
+                                        value={expiredFilter ? 'true' : 'false'}
+                                        label="Expired"
+                                        onChange={(e) => setExpiredFilter(e.target.value === 'true')}
+                                        sx={{
+                                            borderRadius: 2,
+                                            bgcolor: 'action.hover',
+                                            '& .MuiOutlinedInput-notchedOutline': { borderColor: 'transparent' },
+                                            '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' },
+                                        }}
+                                    >
+                                        <MenuItem value="false">All</MenuItem>
+                                        <MenuItem value="true">Expired Only</MenuItem>
+                                    </Select>
+                                </FormControl>
+                            </Grid>
+
+                            <Grid item xs={12} sm={6} md={1.6}>
+                                <DatePicker
+                                    label="Start"
+                                    value={startDate}
+                                    onChange={setStartDate}
+                                    slotProps={{
+                                        textField: {
+                                            size: 'small',
+                                            fullWidth: true,
+                                            sx: {
+                                                '& .MuiOutlinedInput-root': {
+                                                    borderRadius: 2,
+                                                    bgcolor: 'action.hover',
+                                                    '& fieldset': { borderColor: 'transparent' },
+                                                    '&:hover fieldset': { borderColor: 'divider' },
+                                                },
+                                            },
+                                        },
+                                    }}
+                                />
+                            </Grid>
+
+                            <Grid item xs={12} sm={6} md={1.6}>
+                                <DatePicker
+                                    label="End"
+                                    value={endDate}
+                                    onChange={setEndDate}
+                                    slotProps={{
+                                        textField: {
+                                            size: 'small',
+                                            fullWidth: true,
+                                            sx: {
+                                                '& .MuiOutlinedInput-root': {
+                                                    borderRadius: 2,
+                                                    bgcolor: 'action.hover',
+                                                    '& fieldset': { borderColor: 'transparent' },
+                                                    '&:hover fieldset': { borderColor: 'divider' },
+                                                },
+                                            },
+                                        },
+                                    }}
+                                />
+                            </Grid>
+
+                            <Grid item xs={12} sm={6} md={1.4}>
+                                <Button
+                                    variant="outlined"
+                                    startIcon={<RefreshIcon />}
+                                    onClick={fetchOtps}
+                                    fullWidth
+                                    sx={{
+                                        height: 40,
+                                        borderRadius: 2,
+                                        fontWeight: 600,
+                                        textTransform: 'none',
+                                        borderColor: 'divider',
+                                        color: 'text.primary',
+                                        '&:hover': {
+                                            borderColor: 'text.primary',
+                                            bgcolor: 'action.hover',
+                                        },
+                                    }}
+                                >
+                                    Refresh
+                                </Button>
+                            </Grid>
+                        </Grid>
                     </Box>
 
-                    {/* Records */}
+                    {/* Table / Cards */}
                     {showTableView ? (
-                        <TableContainer sx={{ width: '100%', overflowX: 'auto' }}>
-                            <Table sx={{ width: '100%', minWidth: 800 }}>
+                        <TableContainer>
+                            <Table sx={{ minWidth: 900 }}>
                                 <TableHead>
-                                    <TableRow sx={{ backgroundColor: colors.sky }}>
+                                    <TableRow
+                                        sx={{
+                                            bgcolor: 'action.hover',
+                                            '& th': {
+                                                fontWeight: 700,
+                                                fontSize: '0.8125rem',
+                                                color: 'text.secondary',
+                                                textTransform: 'uppercase',
+                                                letterSpacing: 0.6,
+                                                borderBottom: '1px solid',
+                                                borderColor: 'divider',
+                                                py: 1.75,
+                                            },
+                                        }}
+                                    >
                                         {headCells.map((cell) => (
-                                            <TableCell key={cell.id} sx={{ fontWeight: 'bold', color: colors.dark }}>
-                                                {cell.label}
-                                            </TableCell>
+                                            <TableCell key={cell.id}>{cell.label}</TableCell>
                                         ))}
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
                                     {loading ? (
                                         <TableRow>
-                                            <TableCell colSpan={headCells.length} align="center">
-                                                <CircularProgress size={32} sx={{ color: colors.sea, my: 3 }} />
+                                            <TableCell colSpan={headCells.length} align="center" sx={{ py: 8 }}>
+                                                <CircularProgress size={36} thickness={4} />
                                             </TableCell>
                                         </TableRow>
                                     ) : otps.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={headCells.length} align="center">
-                                                <Typography sx={{ py: 3, color: colors.rain }}>
+                                            <TableCell colSpan={headCells.length} align="center" sx={{ py: 8 }}>
+                                                <Typography color="text.secondary" fontWeight={500}>
                                                     No OTP records found
                                                 </Typography>
                                             </TableCell>
                                         </TableRow>
                                     ) : (
-                                        otps.map((otp) => (
-                                            <TableRow key={otp.id} hover>
-                                                <TableCell sx={{ color: colors.black }}>{otp.email}</TableCell>
-                                                <TableCell>
-                                                    <Chip
-                                                        label={otp.type}
-                                                        size="small"
-                                                        sx={{
-                                                            backgroundColor: colors.wave,
-                                                            color: colors.sea,
-                                                        }}
-                                                    />
-                                                </TableCell>
-                                                <TableCell>
-                                                    <code style={{ color: colors.sea, fontWeight: 'bold' }}>{otp.otp}</code>
-                                                </TableCell>
-                                                <TableCell>
-                                                    {otp.is_used ? (
+                                        otps.map((otp) => {
+                                            const isExpired = new Date(otp.expires_at) < new Date();
+                                            return (
+                                                <TableRow
+                                                    key={otp.id}
+                                                    hover
+                                                    sx={{
+                                                        '&:last-child td': { borderBottom: 0 },
+                                                        transition: 'background-color 0.15s',
+                                                    }}
+                                                >
+                                                    <TableCell sx={{ py: 2 }}>
+                                                        <Typography variant="body2" fontWeight={600}>
+                                                            {otp.email}
+                                                        </Typography>
+                                                    </TableCell>
+                                                    <TableCell>
                                                         <Chip
-                                                            icon={<UsedIcon sx={{ fontSize: 14 }} />}
-                                                            label="Used"
+                                                            label={otp.type}
                                                             size="small"
                                                             sx={{
-                                                                backgroundColor: colors.salat,
-                                                                color: colors.light,
+                                                                fontWeight: 700,
+                                                                bgcolor: 'action.hover',
+                                                                color: 'text.primary',
+                                                                border: '1px solid',
+                                                                borderColor: 'divider',
+                                                                height: 26,
                                                             }}
                                                         />
-                                                    ) : (
-                                                        <Chip
-                                                            icon={<UnusedIcon sx={{ fontSize: 14 }} />}
-                                                            label="Unused"
-                                                            size="small"
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Typography
+                                                            component="code"
+                                                            variant="body2"
+                                                            fontWeight={700}
                                                             sx={{
-                                                                backgroundColor: colors.sky,
-                                                                color: colors.rain,
+                                                                fontFamily: 'monospace',
+                                                                color: colors.sea || '#0f766e',
+                                                                letterSpacing: 1,
                                                             }}
-                                                        />
-                                                    )}
-                                                </TableCell>
-                                                <TableCell sx={{ color: colors.black }}>{formatDate(otp.expires_at)}</TableCell>
-                                                <TableCell sx={{ color: colors.black }}>{formatDate(otp.created_at)}</TableCell>
-                                                <TableCell sx={{ color: colors.black }}>{otp.ip_address || '-'}</TableCell>
-                                            </TableRow>
-                                        ))
+                                                        >
+                                                            {otp.otp}
+                                                        </Typography>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {otp.is_used ? (
+                                                            <Chip
+                                                                icon={<UsedIcon sx={{ fontSize: 16 }} />}
+                                                                label="Used"
+                                                                size="small"
+                                                                sx={{
+                                                                    fontWeight: 700,
+                                                                    bgcolor: '#d1fae5',
+                                                                    color: '#047857',
+                                                                    border: '1.5px solid #10b981',
+                                                                    height: 26,
+                                                                    '& .MuiChip-icon': { color: '#047857' },
+                                                                }}
+                                                            />
+                                                        ) : (
+                                                            <Chip
+                                                                icon={<UnusedIcon sx={{ fontSize: 16 }} />}
+                                                                label="Unused"
+                                                                size="small"
+                                                                sx={{
+                                                                    fontWeight: 700,
+                                                                    bgcolor: '#f3f4f6',
+                                                                    color: '#4b5563',
+                                                                    border: '1.5px solid #9ca3af',
+                                                                    height: 26,
+                                                                    '& .MuiChip-icon': { color: '#4b5563' },
+                                                                }}
+                                                            />
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Typography
+                                                            variant="body2"
+                                                            fontWeight={500}
+                                                            color={isExpired ? 'error.main' : 'text.secondary'}
+                                                        >
+                                                            {formatDate(otp.expires_at)}
+                                                            {isExpired && ' (Expired)'}
+                                                        </Typography>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Typography variant="body2" fontWeight={500} color="text.secondary">
+                                                            {formatDate(otp.created_at)}
+                                                        </Typography>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Typography variant="body2" fontFamily="monospace" fontWeight={500}>
+                                                            {otp.ip_address || '—'}
+                                                        </Typography>
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })
                                     )}
                                 </TableBody>
                             </Table>
                         </TableContainer>
                     ) : (
-                        <Box sx={{ p: { xs: 2, sm: 3 } }}>
+                        <Box sx={{ p: { xs: 2, sm: 2.5 } }}>
                             {loading ? (
-                                <Box display="flex" justifyContent="center" py={4}>
-                                    <CircularProgress sx={{ color: colors.sea }} />
+                                <Box display="flex" justifyContent="center" py={6}>
+                                    <CircularProgress size={36} thickness={4} />
                                 </Box>
                             ) : otps.length === 0 ? (
-                                <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', borderColor: colors.middle }}>
-                                    <Typography sx={{ color: colors.rain }}>No OTP records found</Typography>
+                                <Paper
+                                    variant="outlined"
+                                    sx={{
+                                        p: 5,
+                                        textAlign: 'center',
+                                        borderRadius: 3,
+                                        borderStyle: 'dashed',
+                                    }}
+                                >
+                                    <Typography color="text.secondary" fontWeight={500}>
+                                        No OTP records found
+                                    </Typography>
                                 </Paper>
                             ) : (
-                                otps.map((otp) => <OtpCard key={otp.id} otp={otp} />)
+                                <Stack spacing={2}>
+                                    {otps.map((otp) => {
+                                        const isExpired = new Date(otp.expires_at) < new Date();
+                                        return (
+                                            <Card
+                                                key={otp.id}
+                                                elevation={0}
+                                                sx={{
+                                                    borderRadius: 3,
+                                                    border: '1px solid',
+                                                    borderColor: 'divider',
+                                                    overflow: 'hidden',
+                                                }}
+                                            >
+                                                <CardContent sx={{ p: 2.25 }}>
+                                                    <Stack
+                                                        direction="row"
+                                                        justifyContent="space-between"
+                                                        alignItems="flex-start"
+                                                        mb={1.5}
+                                                    >
+                                                        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                                                            <EmailIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+                                                            <Typography variant="body2" fontWeight={600} sx={{ wordBreak: 'break-all' }}>
+                                                                {otp.email}
+                                                            </Typography>
+                                                        </Stack>
+                                                        {otp.is_used ? (
+                                                            <Chip
+                                                                icon={<UsedIcon sx={{ fontSize: 14 }} />}
+                                                                label="Used"
+                                                                size="small"
+                                                                sx={{
+                                                                    fontWeight: 700,
+                                                                    bgcolor: '#d1fae5',
+                                                                    color: '#047857',
+                                                                    border: '1.5px solid #10b981',
+                                                                    height: 26,
+                                                                }}
+                                                            />
+                                                        ) : (
+                                                            <Chip
+                                                                icon={<UnusedIcon sx={{ fontSize: 14 }} />}
+                                                                label="Unused"
+                                                                size="small"
+                                                                sx={{
+                                                                    fontWeight: 700,
+                                                                    bgcolor: '#f3f4f6',
+                                                                    color: '#4b5563',
+                                                                    border: '1.5px solid #9ca3af',
+                                                                    height: 26,
+                                                                }}
+                                                            />
+                                                        )}
+                                                    </Stack>
+
+                                                    <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1.5}>
+                                                        <Stack direction="row" spacing={1} alignItems="center">
+                                                            <TypeIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                                                            <Typography variant="body2" fontWeight={500}>
+                                                                {otp.type}
+                                                            </Typography>
+                                                        </Stack>
+                                                        <Typography
+                                                            component="code"
+                                                            variant="body2"
+                                                            fontWeight={700}
+                                                            sx={{
+                                                                fontFamily: 'monospace',
+                                                                color: colors.sea || '#0f766e',
+                                                                letterSpacing: 1,
+                                                            }}
+                                                        >
+                                                            {otp.otp}
+                                                        </Typography>
+                                                    </Stack>
+
+                                                    <Stack direction="row" spacing={1} alignItems="center" mb={1}>
+                                                        <ScheduleIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                                                        <Typography
+                                                            variant="caption"
+                                                            fontWeight={500}
+                                                            color={isExpired ? 'error.main' : 'text.secondary'}
+                                                        >
+                                                            Expires: {formatDate(otp.expires_at)}
+                                                            {isExpired && ' (Expired)'}
+                                                        </Typography>
+                                                    </Stack>
+
+                                                    <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                                        <Typography variant="caption" color="text.secondary" fontWeight={500}>
+                                                            Created: {formatDate(otp.created_at)}
+                                                        </Typography>
+                                                        <Stack direction="row" spacing={0.5} alignItems="center">
+                                                            <IpIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                                                            <Typography variant="caption" color="text.secondary" fontFamily="monospace">
+                                                                {otp.ip_address || '—'}
+                                                            </Typography>
+                                                        </Stack>
+                                                    </Stack>
+                                                </CardContent>
+                                            </Card>
+                                        );
+                                    })}
+                                </Stack>
                             )}
                         </Box>
                     )}
 
                     {/* Pagination */}
-                    <Box sx={{ borderTop: `1px solid ${colors.middle}`, py: { xs: 1, sm: 0 } }}>
+                    <Box
+                        sx={{
+                            borderTop: '1px solid',
+                            borderColor: 'divider',
+                            bgcolor: 'action.hover',
+                        }}
+                    >
                         <TablePagination
                             rowsPerPageOptions={[5, 10, 25, 50, 100]}
                             component="div"
@@ -640,53 +897,43 @@ export default function OtpList() {
                             rowsPerPage={rowsPerPage}
                             page={page}
                             onPageChange={(e, newPage) => setPage(newPage)}
-                            onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
+                            onRowsPerPageChange={(e) => {
+                                setRowsPerPage(parseInt(e.target.value, 10));
+                                setPage(0);
+                            }}
                             sx={{
                                 '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
-                                    fontSize: { xs: '0.75rem', sm: '0.875rem' },
-                                    color: colors.black,
+                                    fontWeight: 500,
                                 },
-                                '.MuiTablePagination-actions': {
-                                    color: colors.sea,
-                                    ml: { xs: 0, sm: 1 }
-                                }
                             }}
                         />
                     </Box>
                 </Paper>
 
-                {/* Confirmation Dialog */}
+                {/* Confirm Dialog */}
                 <Dialog
                     open={confirmDialog.open}
-                    onClose={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+                    onClose={() => setConfirmDialog((prev) => ({ ...prev, open: false }))}
                     fullWidth
                     maxWidth="xs"
-                    PaperProps={{
-                        sx: {
-                            m: { xs: 2, sm: 0 },
-                            borderRadius: { xs: 2, sm: 1 },
-                            backgroundColor: colors.light,
-                        }
-                    }}
+                    PaperProps={{ sx: { borderRadius: 3 } }}
                 >
-                    <DialogTitle sx={{ color: colors.dark }}>{confirmDialog.title}</DialogTitle>
+                    <DialogTitle sx={{ fontWeight: 700, pb: 1 }}>{confirmDialog.title}</DialogTitle>
                     <DialogContent>
-                        <Typography sx={{ color: colors.black }}>{confirmDialog.message}</Typography>
+                        <Typography color="text.secondary">{confirmDialog.message}</Typography>
                     </DialogContent>
-                    <DialogActions sx={{ p: 2, pt: 0 }}>
+                    <DialogActions sx={{ px: 3, pb: 2.5, pt: 1 }}>
                         <Button
-                            onClick={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
-                            sx={{ color: colors.rain }}
+                            onClick={() => setConfirmDialog((prev) => ({ ...prev, open: false }))}
+                            sx={{ fontWeight: 600, textTransform: 'none' }}
                         >
                             Cancel
                         </Button>
                         <Button
                             onClick={handleConfirm}
                             variant="contained"
-                            sx={{
-                                backgroundColor: 'error.main',
-                                '&:hover': { backgroundColor: 'error.dark' },
-                            }}
+                            color="error"
+                            sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 2 }}
                         >
                             Confirm
                         </Button>
