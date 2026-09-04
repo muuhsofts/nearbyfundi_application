@@ -139,7 +139,7 @@ export default function Login() {
                         sx={{
                             flex: { xs: 'none', md: '0 0 42%' },
                             background: 'linear-gradient(160deg, #0a5c5f 0%, #0d7377 50%, #14919b 100%)',
-                            color: 'white',
+                            color: '#ffffff',
                             position: 'relative',
                             overflow: 'hidden',
                             p: { xs: 4, md: 5 },
@@ -181,21 +181,23 @@ export default function Login() {
                                     letterSpacing: 1,
                                     mb: 1,
                                     fontSize: { xs: '1.9rem', md: '2.5rem' },
+                                    color: '#ffffff',
                                 }}
                             >
                                 WELCOME
                             </Typography>
                             <Typography
                                 variant="h6"
-                                fontWeight={600}
-                                sx={{ opacity: 0.95, mb: 1.5, letterSpacing: 0.5 }}
+                                fontWeight={700}
+                                sx={{ color: '#ffffff', mb: 1.5, letterSpacing: 0.5 }}
                             >
                                 NearbyFundi
                             </Typography>
                             <Typography
                                 variant="body2"
                                 sx={{
-                                    opacity: 0.85,
+                                    color: '#f8fafc',
+                                    fontWeight: 500,
                                     maxWidth: 270,
                                     lineHeight: 1.7,
                                     display: { xs: 'none', sm: 'block' },
@@ -219,12 +221,12 @@ export default function Login() {
                     >
                         <Typography
                             variant="h4"
-                            fontWeight={700}
-                            sx={{ color: '#1e293b', mb: 0.5, letterSpacing: -0.5 }}
+                            fontWeight={800}
+                            sx={{ color: '#0f172a', mb: 0.5, letterSpacing: -0.5 }}
                         >
                             Sign in
                         </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
+                        <Typography variant="body2" sx={{ color: '#334155', fontWeight: 500, mb: 4 }}>
                             Sign in to find trusted technicians near you
                         </Typography>
 
@@ -242,18 +244,28 @@ export default function Login() {
                                         '& .MuiOutlinedInput-root': {
                                             borderRadius: 2,
                                             bgcolor: '#f1f5f9',
-                                            '& fieldset': { border: 'none' },
-                                            '&:hover': { bgcolor: '#e2e8f0' },
-                                            '&.Mui-focused': {
-                                                bgcolor: '#fff',
-                                                boxShadow: `0 0 0 2px ${alpha('#0d7377', 0.3)}`,
+                                            color: '#0f172a',
+                                            fontWeight: 500,
+                                            '& fieldset': {
+                                                borderColor: '#cbd5e1',
+                                            },
+                                            '&:hover fieldset': {
+                                                borderColor: '#94a3b8',
+                                            },
+                                            '&.Mui-focused fieldset': {
+                                                borderColor: '#0d7377',
+                                            },
+                                            '& input::placeholder': {
+                                                color: '#64748b',
+                                                opacity: 1,
+                                                fontWeight: 500,
                                             },
                                         },
                                     }}
                                     InputProps={{
                                         startAdornment: (
                                             <InputAdornment position="start">
-                                                <PersonOutline sx={{ color: '#94a3b8' }} />
+                                                <PersonOutline sx={{ color: '#475569' }} />
                                             </InputAdornment>
                                         ),
                                     }}
@@ -270,18 +282,28 @@ export default function Login() {
                                         '& .MuiOutlinedInput-root': {
                                             borderRadius: 2,
                                             bgcolor: '#f1f5f9',
-                                            '& fieldset': { border: 'none' },
-                                            '&:hover': { bgcolor: '#e2e8f0' },
-                                            '&.Mui-focused': {
-                                                bgcolor: '#fff',
-                                                boxShadow: `0 0 0 2px ${alpha('#0d7377', 0.3)}`,
+                                            color: '#0f172a',
+                                            fontWeight: 500,
+                                            '& fieldset': {
+                                                borderColor: '#cbd5e1',
+                                            },
+                                            '&:hover fieldset': {
+                                                borderColor: '#94a3b8',
+                                            },
+                                            '&.Mui-focused fieldset': {
+                                                borderColor: '#0d7377',
+                                            },
+                                            '& input::placeholder': {
+                                                color: '#64748b',
+                                                opacity: 1,
+                                                fontWeight: 500,
                                             },
                                         },
                                     }}
                                     InputProps={{
                                         startAdornment: (
                                             <InputAdornment position="start">
-                                                <LockOutlined sx={{ color: '#94a3b8' }} />
+                                                <LockOutlined sx={{ color: '#475569' }} />
                                             </InputAdornment>
                                         ),
                                         endAdornment: (
@@ -292,7 +314,7 @@ export default function Login() {
                                                     sx={{
                                                         textTransform: 'none',
                                                         color: '#0d7377',
-                                                        fontWeight: 600,
+                                                        fontWeight: 700,
                                                         minWidth: 'auto',
                                                         px: 1,
                                                     }}
@@ -305,7 +327,7 @@ export default function Login() {
                                 />
 
                                 {error && (
-                                    <Typography color="error" variant="body2">
+                                    <Typography color="error" variant="body2" sx={{ fontWeight: 600 }}>
                                         {error}
                                     </Typography>
                                 )}
@@ -318,13 +340,13 @@ export default function Login() {
                                                 onChange={(e) => setRememberMe(e.target.checked)}
                                                 size="small"
                                                 sx={{
-                                                    color: '#94a3b8',
+                                                    color: '#64748b',
                                                     '&.Mui-checked': { color: '#0d7377' },
                                                 }}
                                             />
                                         }
                                         label={
-                                            <Typography variant="body2" color="text.secondary">
+                                            <Typography variant="body2" sx={{ color: '#334155', fontWeight: 600 }}>
                                                 Remember me
                                             </Typography>
                                         }
@@ -337,7 +359,7 @@ export default function Login() {
                                         sx={{
                                             color: '#0d7377',
                                             fontSize: '0.875rem',
-                                            fontWeight: 500,
+                                            fontWeight: 600,
                                         }}
                                     >
                                         Forgot Password?
@@ -354,9 +376,9 @@ export default function Login() {
                                         borderRadius: 2,
                                         textTransform: 'none',
                                         fontSize: '1rem',
-                                        fontWeight: 600,
+                                        fontWeight: 700,
                                         bgcolor: '#0d5c5f',
-                                        color: '#fff',
+                                        color: '#ffffff',
                                         boxShadow: '0 4px 14px rgba(13, 92, 95, 0.35)',
                                         '&:hover': {
                                             bgcolor: '#0a4a4d',
@@ -364,7 +386,7 @@ export default function Login() {
                                         },
                                         '&.Mui-disabled': {
                                             bgcolor: alpha('#0d5c5f', 0.5),
-                                            color: '#fff',
+                                            color: '#ffffff',
                                         },
                                     }}
                                 >
@@ -380,14 +402,14 @@ export default function Login() {
                         <Typography
                             variant="body2"
                             align="center"
-                            sx={{ mt: 4, color: '#64748b' }}
+                            sx={{ mt: 4, color: '#334155', fontWeight: 500 }}
                         >
                             Don’t have an account?{' '}
                             <Link
                                 component="button"
                                 underline="hover"
                                 onClick={() => navigate('/register')}
-                                sx={{ color: '#0d7377', fontWeight: 600 }}
+                                sx={{ color: '#0d7377', fontWeight: 700 }}
                             >
                                 Sign Up
                             </Link>

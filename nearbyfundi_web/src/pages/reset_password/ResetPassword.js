@@ -168,7 +168,7 @@ export default function ResetPassword() {
                                 p: { xs: 4, sm: 5, md: 6 },
                                 borderRadius: 4,
                                 boxShadow: '0 20px 60px rgba(0,0,0,0.06)',
-                                border: `1px solid ${alpha('#006B5E', 0.08)}`,
+                                border: `1px solid ${alpha('#006B5E', 0.15)}`,
                                 bgcolor: '#ffffff',
                             }}
                         >
@@ -183,17 +183,17 @@ export default function ResetPassword() {
                                     }}
                                     sx={{ width: 50, height: 50, mx: 'auto', mb: 2 }}
                                 />
-                                <Typography variant="h4" fontWeight="700" gutterBottom sx={{ color: '#1a1a2e' }}>
+                                <Typography variant="h4" fontWeight="800" gutterBottom sx={{ color: '#0f172a' }}>
                                     Reset Password
                                 </Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                    Enter the OTP sent to <strong style={{ color: '#006B5E' }}>{email}</strong>
+                                <Typography variant="body2" sx={{ color: '#334155', fontWeight: 500 }}>
+                                    Enter the OTP sent to <strong style={{ color: '#006B5E', fontWeight: 700 }}>{email}</strong>
                                 </Typography>
                             </Box>
 
                             <form onSubmit={handleSubmit}>
                                 <Box sx={{ mb: 3 }}>
-                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+                                    <Typography variant="caption" display="block" sx={{ mb: 2, color: '#334155', fontWeight: 600, fontSize: '0.85rem' }}>
                                         Enter 6-digit OTP
                                     </Typography>
                                     <Box
@@ -217,7 +217,8 @@ export default function ResetPassword() {
                                                     style: {
                                                         textAlign: 'center',
                                                         fontSize: '1.5rem',
-                                                        fontWeight: 600,
+                                                        fontWeight: 700,
+                                                        color: '#0f172a',
                                                         width: '44px',
                                                         height: '56px',
                                                         padding: '0',
@@ -226,9 +227,9 @@ export default function ResetPassword() {
                                                 sx={{
                                                     '& .MuiInputBase-root': {
                                                         borderRadius: 2,
-                                                        bgcolor: '#f8f9fa',
+                                                        bgcolor: '#f8fafc',
                                                         '& .MuiOutlinedInput-notchedOutline': {
-                                                            borderColor: '#e0e0e0',
+                                                            borderColor: '#cbd5e1',
                                                         },
                                                         '&:hover .MuiOutlinedInput-notchedOutline': {
                                                             borderColor: '#006B5E',
@@ -243,7 +244,7 @@ export default function ResetPassword() {
                                             />
                                         ))}
                                     </Box>
-                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1, textAlign: 'center' }}>
+                                    <Typography variant="caption" display="block" sx={{ mt: 1, textAlign: 'center', color: '#475569', fontWeight: 500 }}>
                                         Check your email for the OTP code
                                     </Typography>
                                 </Box>
@@ -257,24 +258,38 @@ export default function ResetPassword() {
                                     required
                                     sx={{
                                         mb: 2,
+                                        '& .MuiInputLabel-root': {
+                                            color: '#475569',
+                                            fontWeight: 500,
+                                            '&.Mui-focused': { color: '#006B5E' },
+                                        },
                                         '& .MuiInputBase-root': {
                                             borderRadius: 2,
                                             py: 0.5,
-                                            bgcolor: '#f8f9fa',
+                                            bgcolor: '#f8fafc',
+                                            color: '#0f172a',
+                                            fontWeight: 500,
                                         },
                                         '& .MuiOutlinedInput-notchedOutline': {
-                                            borderColor: '#e0e0e0',
+                                            borderColor: '#cbd5e1',
+                                        },
+                                        '&:hover .MuiOutlinedInput-notchedOutline': {
+                                            borderColor: '#94a3b8',
+                                        },
+                                        '& .MuiFormHelperText-root': {
+                                            color: '#475569',
+                                            fontWeight: 500,
                                         },
                                     }}
                                     InputProps={{
                                         startAdornment: (
                                             <InputAdornment position="start">
-                                                <LockIcon color="action" fontSize="small" />
+                                                <LockIcon sx={{ color: '#475569' }} fontSize="small" />
                                             </InputAdornment>
                                         ),
                                         endAdornment: (
                                             <InputAdornment position="end">
-                                                <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" size="small">
+                                                <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" size="small" sx={{ color: '#006B5E' }}>
                                                     {showPassword ? <VisibilityOff /> : <Visibility />}
                                                 </IconButton>
                                             </InputAdornment>
@@ -292,24 +307,34 @@ export default function ResetPassword() {
                                     required
                                     sx={{
                                         mb: 1,
+                                        '& .MuiInputLabel-root': {
+                                            color: '#475569',
+                                            fontWeight: 500,
+                                            '&.Mui-focused': { color: '#006B5E' },
+                                        },
                                         '& .MuiInputBase-root': {
                                             borderRadius: 2,
                                             py: 0.5,
-                                            bgcolor: '#f8f9fa',
+                                            bgcolor: '#f8fafc',
+                                            color: '#0f172a',
+                                            fontWeight: 500,
                                         },
                                         '& .MuiOutlinedInput-notchedOutline': {
-                                            borderColor: '#e0e0e0',
+                                            borderColor: '#cbd5e1',
+                                        },
+                                        '&:hover .MuiOutlinedInput-notchedOutline': {
+                                            borderColor: '#94a3b8',
                                         },
                                     }}
                                     InputProps={{
                                         startAdornment: (
                                             <InputAdornment position="start">
-                                                <LockIcon color="action" fontSize="small" />
+                                                <LockIcon sx={{ color: '#475569' }} fontSize="small" />
                                             </InputAdornment>
                                         ),
                                         endAdornment: (
                                             <InputAdornment position="end">
-                                                <IconButton onClick={() => setShowConfirm(!showConfirm)} edge="end" size="small">
+                                                <IconButton onClick={() => setShowConfirm(!showConfirm)} edge="end" size="small" sx={{ color: '#006B5E' }}>
                                                     {showConfirm ? <VisibilityOff /> : <Visibility />}
                                                 </IconButton>
                                             </InputAdornment>
@@ -318,7 +343,7 @@ export default function ResetPassword() {
                                 />
 
                                 {error && (
-                                    <Alert severity="error" sx={{ mt: 2 }}>
+                                    <Alert severity="error" sx={{ mt: 2, fontWeight: 600 }}>
                                         {error}
                                     </Alert>
                                 )}
@@ -332,10 +357,11 @@ export default function ResetPassword() {
                                         mt: 3,
                                         py: 1.8,
                                         fontSize: '1.1rem',
-                                        fontWeight: 600,
+                                        fontWeight: 700,
                                         borderRadius: 2,
                                         textTransform: 'none',
                                         background: 'linear-gradient(135deg, #006B5E 0%, #00897B 100%)',
+                                        color: '#ffffff',
                                         '&:hover': {
                                             transform: 'translateY(-2px)',
                                             boxShadow: 4,
@@ -351,7 +377,7 @@ export default function ResetPassword() {
                                     variant="text"
                                     startIcon={<ArrowBackIcon />}
                                     onClick={() => navigate('/forgot-password')}
-                                    sx={{ mt: 2, textTransform: 'none', color: '#006B5E' }}
+                                    sx={{ mt: 2, textTransform: 'none', color: '#006B5E', fontWeight: 700 }}
                                 >
                                     Back
                                 </Button>

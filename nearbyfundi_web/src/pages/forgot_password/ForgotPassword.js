@@ -71,7 +71,7 @@ export default function ForgotPassword() {
                                 p: { xs: 4, sm: 5, md: 6 },
                                 borderRadius: 4,
                                 boxShadow: '0 20px 60px rgba(0,0,0,0.06)',
-                                border: `1px solid ${alpha('#006B5E', 0.08)}`,
+                                border: `1px solid ${alpha('#006B5E', 0.15)}`,
                                 bgcolor: '#ffffff',
                             }}
                         >
@@ -86,10 +86,10 @@ export default function ForgotPassword() {
                                     }}
                                     sx={{ width: 50, height: 50, mx: 'auto', mb: 2 }}
                                 />
-                                <Typography variant="h4" fontWeight="700" gutterBottom sx={{ color: '#1a1a2e' }}>
+                                <Typography variant="h4" fontWeight="800" gutterBottom sx={{ color: '#0f172a' }}>
                                     Forgot Password?
                                 </Typography>
-                                <Typography variant="body2" color="text.secondary">
+                                <Typography variant="body2" sx={{ color: '#334155', fontWeight: 500 }}>
                                     Enter your email to receive a password reset OTP
                                 </Typography>
                             </Box>
@@ -104,26 +104,39 @@ export default function ForgotPassword() {
                                     required
                                     autoFocus
                                     sx={{
+                                        '& .MuiInputLabel-root': {
+                                            color: '#475569',
+                                            fontWeight: 500,
+                                            '&.Mui-focused': { color: '#006B5E' },
+                                        },
                                         '& .MuiInputBase-root': {
                                             borderRadius: 2,
                                             py: 0.5,
-                                            bgcolor: '#f8f9fa',
+                                            bgcolor: '#f8fafc',
+                                            color: '#0f172a',
+                                            fontWeight: 500,
                                         },
                                         '& .MuiOutlinedInput-notchedOutline': {
-                                            borderColor: '#e0e0e0',
+                                            borderColor: '#cbd5e1',
+                                        },
+                                        '&:hover .MuiOutlinedInput-notchedOutline': {
+                                            borderColor: '#94a3b8',
+                                        },
+                                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                            borderColor: '#006B5E',
                                         },
                                     }}
                                     InputProps={{
                                         startAdornment: (
                                             <InputAdornment position="start">
-                                                <EmailIcon color="action" fontSize="small" />
+                                                <EmailIcon sx={{ color: '#475569' }} fontSize="small" />
                                             </InputAdornment>
                                         ),
                                     }}
                                 />
 
                                 {error && (
-                                    <Typography color="error" variant="body2" sx={{ mt: 2 }}>
+                                    <Typography color="error" variant="body2" sx={{ mt: 2, fontWeight: 600 }}>
                                         {error}
                                     </Typography>
                                 )}
@@ -137,10 +150,11 @@ export default function ForgotPassword() {
                                         mt: 3,
                                         py: 1.8,
                                         fontSize: '1.1rem',
-                                        fontWeight: 600,
+                                        fontWeight: 700,
                                         borderRadius: 2,
                                         textTransform: 'none',
                                         background: 'linear-gradient(135deg, #006B5E 0%, #00897B 100%)',
+                                        color: '#ffffff',
                                         '&:hover': {
                                             transform: 'translateY(-2px)',
                                             boxShadow: 4,
@@ -156,7 +170,7 @@ export default function ForgotPassword() {
                                     variant="text"
                                     startIcon={<ArrowBackIcon />}
                                     onClick={() => navigate('/login')}
-                                    sx={{ mt: 2, textTransform: 'none', color: '#006B5E' }}
+                                    sx={{ mt: 2, textTransform: 'none', color: '#006B5E', fontWeight: 700 }}
                                 >
                                     Back to Login
                                 </Button>
