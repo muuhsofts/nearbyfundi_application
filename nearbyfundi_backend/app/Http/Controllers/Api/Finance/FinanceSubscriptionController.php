@@ -12,54 +12,63 @@ class FinanceSubscriptionController extends BaseApiController
 {
     use FinanceRangeTrait;
 
-    public function summary(Request $request)
-    {
-        [$start, $end, $range] = $this->resolveRange($request);
-        $status = $request->input('status');
+   public function summary(Request $request)
+{
+    [$start, $end, $range] = $this->resolveRange($request);
+    $status = $request->input('status');
 
-        $query = Subscription::whereBetween('created_at', [$start, $end]);
-        if ($status && $status !== 'all') $query->where('status', $status);
+    $baseQuery = Subscription::whereBetween('created_at', [$start, $end]);
+    if ($status && $status !== 'all') {
+        $baseQuery->where('status', $status);
+    }
 
-        $breakdown = (clone $query)
-            ->selectRaw('status, count(*) as total, sum(amount_paid) as revenue')
-            ->groupBy('status')
-            ->get()
-            ->map(fn ($r) => ['status' => $r->status, 'total' => (int) $r->total, 'revenue' => (float) $r->revenue]);
+    // Total count and revenue
+    $totalCount = (clone $baseQuery)->count();
+    $totalRevenue = (float) (clone $baseQuery)->sum('amount_paid');
 
-        return $this->successResponse([
-            'range' => ['start' => $start->toDateString(), 'end' => $end->toDateString(), 'label' => $range],
-            'totals' => [
-                'count'   => (clone $query)->count(),
-                'revenue' => (float) (clone $query)->sum('amount_paid'),
-            ],
-            'status_breakdown' => $breakdown,
+    // Active subscriptions: status='active' AND (expiry_date IS NULL OR expiry_date > now)
+    $activeCount = (clone $baseQuery)
+        ->where('status', 'active')
+        ->where(function($q) {
+            $q->whereNull('expiry_date')
+              ->orWhere('expiry_date', '>', now());
+        })
+        ->count();
+
+    // Expired subscriptions: status='expired' OR (status='active' AND expiry_date <= now)
+    $expiredCount = (clone $baseQuery)
+        ->where(function($q) {
+            $q->where('status', 'expired')
+              ->orWhere(function($sub) {
+                  $sub->where('status', 'active')
+                      ->whereNotNull('expiry_date')
+                      ->where('expiry_date', '<=', now());
+              });
+        })
+        ->count();
+
+    // Status breakdown
+    $breakdown = (clone $baseQuery)
+        ->selectRaw('status, count(*) as total, sum(amount_paid) as revenue')
+        ->groupBy('status')
+        ->get()
+        ->map(fn ($r) => [
+            'status' => $r->status, 
+            'total' => (int) $r->total, 
+            'revenue' => (float) $r->revenue
         ]);
-    }
 
-    public function trends(Request $request)
-    {
-        [$start, $end, $range] = $this->resolveRange($request);
-        $granularity = $this->resolveGranularity($request, $range);
-        $unit = $this->bucketUnit($granularity);
-        $status = $request->input('status');
-
-        $buckets = [];
-        foreach (CarbonPeriod::create($start, "1 {$unit}", $end) as $date) {
-            $bStart = $date->copy()->startOf($unit);
-            $bEnd = $date->copy()->endOf($unit);
-            $q = Subscription::whereBetween('created_at', [$bStart, $bEnd]);
-            if ($status && $status !== 'all') $q->where('status', $status);
-
-            $buckets[] = [
-                'label'   => $this->bucketLabel($bStart, $unit),
-                'date'    => $bStart->toDateString(),
-                'count'   => (clone $q)->count(),
-                'revenue' => (float) (clone $q)->sum('amount_paid'),
-            ];
-        }
-
-        return $this->successResponse(['granularity' => $granularity, 'buckets' => $buckets]);
-    }
+    return $this->successResponse([
+        'range' => ['start' => $start->toDateString(), 'end' => $end->toDateString(), 'label' => $range],
+        'totals' => [
+            'count'   => $totalCount,
+            'revenue' => $totalRevenue,
+            'active'  => $activeCount,
+            'expired' => $expiredCount,
+        ],
+        'status_breakdown' => $breakdown,
+    ]);
+}
 
     public function table(Request $request)
     {

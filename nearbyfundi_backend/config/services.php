@@ -32,9 +32,16 @@ return [
     ],
 
     'google' => [
-    'client_id'     => env('GOOGLE_CLIENT_ID'),
-    'client_secret' => env('GOOGLE_CLIENT_SECRET'),
-    'redirect'      => env('GOOGLE_REDIRECT_URI'),
+        'client_id'     => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect'      => env('GOOGLE_REDIRECT_URI'),
+    ],
+
+    'rafikisms' => [
+        'base_url'  => env('RAFIKISMS_BASE_URL', 'https://api.rafikisms.com'),
+        'api_key'   => env('RAFIKISMS_API_KEY'),
+        'sender_id' => env('RAFIKISMS_SENDER_ID', 'OG ONEGROUP'),
+        'timeout'   => env('RAFIKISMS_TIMEOUT', 15),
     ],
 
 ];

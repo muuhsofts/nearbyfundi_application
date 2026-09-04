@@ -4,34 +4,40 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\User;
 use App\Models\Otp;
+use App\Models\SmsLog;
 use App\Traits\Auditable;
+use App\Services\OtpDeliveryService;
+use App\Services\RafikiSmsService;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
+use Throwable;
+use Exception;
 
 class UserManagementController extends BaseApiController
 {
     use Auditable;
 
     /**
-     * Lean technician columns reused across list/detail endpoints so the
-     * frontend always gets a predictable shape (id + verification fields).
+     * Lean technician columns reused across list/detail endpoints
      */
-    private function technicianRelation()
+    private function technicianRelation(): array
     {
         return ['technician:id,user_id,verified,verification_status,is_online'];
     }
 
-    // ===== LIST =====
+    // ===== LIST ENDPOINTS =====
+
     public function index(Request $request)
     {
         $this->checkPermission('users.view');
 
         $query = User::with(array_merge(['roles'], $this->technicianRelation()));
 
-        // Apply filters
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
@@ -57,12 +63,12 @@ class UserManagementController extends BaseApiController
         return $this->successResponse([
             'data' => $users->items(),
             'pagination' => [
-                'total' => $users->total(),
-                'per_page' => $users->perPage(),
+                'total'        => $users->total(),
+                'per_page'     => $users->perPage(),
                 'current_page' => $users->currentPage(),
-                'last_page' => $users->lastPage(),
-                'from' => $users->firstItem(),
-                'to' => $users->lastItem(),
+                'last_page'    => $users->lastPage(),
+                'from'         => $users->firstItem(),
+                'to'           => $users->lastItem(),
             ]
         ], 'Users retrieved successfully');
     }
@@ -87,10 +93,10 @@ class UserManagementController extends BaseApiController
         return $this->successResponse([
             'data' => $users->items(),
             'pagination' => [
-                'total' => $users->total(),
-                'per_page' => $users->perPage(),
+                'total'        => $users->total(),
+                'per_page'     => $users->perPage(),
                 'current_page' => $users->currentPage(),
-                'last_page' => $users->lastPage(),
+                'last_page'    => $users->lastPage(),
             ]
         ], 'Customers retrieved successfully');
     }
@@ -115,10 +121,10 @@ class UserManagementController extends BaseApiController
         return $this->successResponse([
             'data' => $users->items(),
             'pagination' => [
-                'total' => $users->total(),
-                'per_page' => $users->perPage(),
+                'total'        => $users->total(),
+                'per_page'     => $users->perPage(),
                 'current_page' => $users->currentPage(),
-                'last_page' => $users->lastPage(),
+                'last_page'    => $users->lastPage(),
             ]
         ], 'Fundis retrieved successfully');
     }
@@ -126,6 +132,7 @@ class UserManagementController extends BaseApiController
     public function stats()
     {
         $this->checkPermission('users.view');
+
         return $this->successResponse([
             'total'        => User::count(),
             'customers'    => User::role('CUSTOMER')->count(),
@@ -142,12 +149,13 @@ class UserManagementController extends BaseApiController
     }
 
     // ===== DROPDOWNS =====
+
     public function dropdownUsers(Request $request)
     {
         $this->checkPermission('users.view');
 
         $search = $request->get('search');
-        $role = $request->get('role');
+        $role   = $request->get('role');
 
         $query = User::query();
 
@@ -175,8 +183,7 @@ class UserManagementController extends BaseApiController
         $this->checkPermission('users.view');
 
         $search = $request->get('search');
-
-        $query = User::role('CUSTOMER');
+        $query  = User::role('CUSTOMER');
 
         if ($search) {
             $query->where(function ($q) use ($search) {
@@ -197,8 +204,8 @@ class UserManagementController extends BaseApiController
     {
         $this->checkPermission('users.view');
 
-        $search = $request->get('search');
-        $verified = $request->get('verified');
+        $search    = $request->get('search');
+        $verified  = $request->get('verified');
         $serviceId = $request->get('service_id');
 
         $query = User::role('FUNDI')
@@ -232,12 +239,12 @@ class UserManagementController extends BaseApiController
         $fundis->each(function ($fundi) {
             if ($fundi->technician) {
                 $fundi->technician_profile = [
-                    'id' => $fundi->technician->id,
-                    'profile_photo' => $fundi->technician->profile_photo,
-                    'verified' => $fundi->technician->verified,
+                    'id'                  => $fundi->technician->id,
+                    'profile_photo'       => $fundi->technician->profile_photo,
+                    'verified'            => $fundi->technician->verified,
                     'verification_status' => $fundi->technician->verification_status,
-                    'rating' => $fundi->technician->rating,
-                    'is_online' => $fundi->technician->is_online,
+                    'rating'              => $fundi->technician->rating,
+                    'is_online'           => $fundi->technician->is_online,
                 ];
             }
         });
@@ -249,7 +256,7 @@ class UserManagementController extends BaseApiController
     {
         $this->checkPermission('users.view');
 
-        $search = $request->get('search');
+        $search       = $request->get('search');
         $excludeRoles = $request->get('exclude_roles', []);
 
         $query = User::where('is_active', true);
@@ -276,6 +283,7 @@ class UserManagementController extends BaseApiController
     }
 
     // ===== SHOW, CREATE, UPDATE, DELETE =====
+
     public function show($id)
     {
         $this->checkPermission('users.view');
@@ -283,7 +291,7 @@ class UserManagementController extends BaseApiController
         return $this->successResponse($user);
     }
 
-    public function store(Request $request)
+    public function store(Request $request, OtpDeliveryService $otpDelivery)
     {
         $this->checkPermission('users.create');
 
@@ -297,20 +305,170 @@ class UserManagementController extends BaseApiController
         ]);
 
         $user = User::create([
-            'name'       => $data['name'],
-            'email'      => $data['email'],
-            'password'   => Hash::make($data['password']),
-            'phone'      => $data['phone'] ?? null,
-            'status'     => $data['status'] ?? 'active',
-            'is_active'  => ($data['status'] ?? 'active') === 'active',
-            'email_verified_at' => now(),
+            'name'              => $data['name'],
+            'email'             => $data['email'],
+            'password'          => Hash::make($data['password']),
+            'phone'             => $data['phone'] ?? null,
+            'status'            => 'pending',
+            'is_active'         => false,
+            'email_verified_at' => null,
         ]);
 
         $user->assignRole($data['role']);
 
-        $this->logAudit('create_user', 'user', $user->id, "User created: {$user->email}");
+        // Generate and deliver OTP
+        Otp::where('email', $user->email)
+            ->where('type', Otp::TYPE_EMAIL_VERIFICATION)
+            ->delete();
 
-        return $this->created($user->load('roles'), 'User created successfully.');
+        $otp = Otp::create([
+            'email'      => $user->email,
+            'otp'        => Otp::generateOtp(),
+            'token'      => Otp::generateToken(),
+            'type'       => Otp::TYPE_EMAIL_VERIFICATION,
+            'name'       => $user->name,
+            'expires_at' => Carbon::now()->addMinutes(10),
+            'is_used'    => false,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
+
+        $delivery = $otpDelivery->deliver($user, $otp, method_exists($otp, 'getVerificationUrl') ? $otp->getVerificationUrl() : null);
+
+        $this->logAudit('create_user', 'user', $user->id, "User created: {$user->email} (OTP sent via {$delivery['channel']})");
+
+        return $this->created([
+            'user'        => $user->load('roles'),
+            'otp_channel' => $delivery['channel'],
+            'otp_sent_to' => $delivery['otp_sent_to'] ?? ($delivery['channel'] === 'sms' ? $user->phone : $user->email),
+        ], 'User created successfully. OTP sent for verification.');
+    }
+
+    // ===== USER VERIFICATION METHODS =====
+
+    /**
+     * Verify the OTP provided for a user (Admin verification endpoint)
+     */
+    public function verifyOtp(Request $request, $id)
+    {
+        $this->checkPermission('users.edit');
+
+        $request->validate([
+            'otp' => 'required|string|size:6',
+        ]);
+
+        $user = User::findOrFail($id);
+
+        // Check if user is already verified
+        if ($user->email_verified_at) {
+            return $this->errorResponse('User is already verified.', 422);
+        }
+
+        $otpRecord = Otp::where('email', $user->email)
+            ->where('type', Otp::TYPE_EMAIL_VERIFICATION)
+            ->where('is_used', false)
+            ->orderBy('created_at', 'desc')
+            ->first();
+
+        if (!$otpRecord) {
+            return $this->errorResponse('No valid OTP found. Please request a new one.', 400);
+        }
+
+        if ($otpRecord->expires_at->isPast()) {
+            return $this->errorResponse('OTP has expired. Please request a new one.', 400);
+        }
+
+        if ($otpRecord->otp !== $request->otp) {
+            return $this->errorResponse('Invalid OTP code.', 400);
+        }
+
+        // Mark OTP as used and activate user
+        $otpRecord->update(['is_used' => true]);
+
+        $user->update([
+            'status'            => 'active',
+            'is_active'         => true,
+            'email_verified_at' => Carbon::now(),
+        ]);
+
+        $this->logAudit('verify_otp_admin', 'user', $user->id, "User #{$user->id} successfully verified OTP by admin");
+
+        return $this->successResponse([
+            'user' => $user->fresh()->load('roles'),
+        ], 'User verified and activated successfully.');
+    }
+
+    /**
+     * Verify user via token URL (Admin can also verify via token)
+     */
+    public function verifyUserToken(Request $request, $id)
+    {
+        $this->checkPermission('users.edit');
+
+        $user = User::findOrFail($id);
+
+        if ($user->email_verified_at) {
+            return $this->errorResponse('User is already verified.', 422);
+        }
+
+        // Find the latest verification token
+        $otpRecord = Otp::where('email', $user->email)
+            ->where('type', Otp::TYPE_EMAIL_VERIFICATION)
+            ->where('is_used', false)
+            ->where('expires_at', '>', Carbon::now())
+            ->orderBy('created_at', 'desc')
+            ->first();
+
+        if (!$otpRecord) {
+            return $this->errorResponse('No valid verification token found. Please resend OTP.', 400);
+        }
+
+        // Mark OTP as used and activate user
+        $otpRecord->update(['is_used' => true]);
+
+        $user->update([
+            'status'            => 'active',
+            'is_active'         => true,
+            'email_verified_at' => Carbon::now(),
+        ]);
+
+        $this->logAudit('verify_user_token_admin', 'user', $user->id, "User #{$user->id} verified via token by admin");
+
+        return $this->successResponse([
+            'user' => $user->fresh()->load('roles'),
+        ], 'User verified successfully.');
+    }
+
+    /**
+     * Mark user as verified without OTP (Admin override)
+     */
+    public function markVerified(Request $request, $id)
+    {
+        $this->checkPermission('users.edit');
+
+        $user = User::findOrFail($id);
+
+        if ($user->email_verified_at) {
+            return $this->errorResponse('User is already verified.', 422);
+        }
+
+        // Mark all pending OTPs as used
+        Otp::where('email', $user->email)
+            ->where('type', Otp::TYPE_EMAIL_VERIFICATION)
+            ->where('is_used', false)
+            ->update(['is_used' => true]);
+
+        $user->update([
+            'status'            => 'active',
+            'is_active'         => true,
+            'email_verified_at' => Carbon::now(),
+        ]);
+
+        $this->logAudit('mark_verified_admin', 'user', $user->id, "User #{$user->id} marked as verified by admin override");
+
+        return $this->successResponse([
+            'user' => $user->fresh()->load('roles'),
+        ], 'User marked as verified successfully.');
     }
 
     public function update(Request $request, $id)
@@ -318,7 +476,7 @@ class UserManagementController extends BaseApiController
         $this->checkPermission('users.edit');
         $user = User::findOrFail($id);
 
-        $data = $request->validate([
+        $request->validate([
             'name'   => 'sometimes|string|max:255',
             'email'  => 'sometimes|email|unique:users,email,' . $id,
             'phone'  => 'nullable|string|max:20',
@@ -327,11 +485,8 @@ class UserManagementController extends BaseApiController
         ]);
 
         $old = $user->toArray();
-
-        // Update user data
         $user->update($request->only(['name', 'email', 'phone', 'status']));
 
-        // Update role if provided
         if ($request->has('role')) {
             $user->syncRoles([$request->role]);
         }
@@ -353,6 +508,7 @@ class UserManagementController extends BaseApiController
     }
 
     // ===== SOFT DELETE RESTORE & FORCE =====
+
     public function trashed(Request $request)
     {
         $this->checkPermission('users.view');
@@ -373,10 +529,10 @@ class UserManagementController extends BaseApiController
         return $this->successResponse([
             'data' => $users->items(),
             'pagination' => [
-                'total' => $users->total(),
-                'per_page' => $users->perPage(),
+                'total'        => $users->total(),
+                'per_page'     => $users->perPage(),
                 'current_page' => $users->currentPage(),
-                'last_page' => $users->lastPage(),
+                'last_page'    => $users->lastPage(),
             ]
         ], 'Deleted users retrieved successfully');
     }
@@ -400,6 +556,7 @@ class UserManagementController extends BaseApiController
     }
 
     // ===== ACTIVATE, DEACTIVATE, SUSPEND =====
+
     public function activate($id)
     {
         $this->checkPermission('users.edit');
@@ -433,7 +590,8 @@ class UserManagementController extends BaseApiController
         return $this->successResponse($user->load('roles'), 'User suspended.');
     }
 
-    // ===== RESET PASSWORD =====
+    // ===== PASSWORD RESETS =====
+
     public function resetPassword(Request $request, $id)
     {
         $this->checkPermission('users.edit');
@@ -451,7 +609,7 @@ class UserManagementController extends BaseApiController
         return $this->successResponse([
             'message' => 'Password reset successfully',
             'user_id' => $user->id,
-            'email' => $user->email,
+            'email'   => $user->email,
         ], 'Password reset successfully.');
     }
 
@@ -466,27 +624,28 @@ class UserManagementController extends BaseApiController
 
         try {
             Mail::send('emails.password-reset-admin', [
-                'user' => $user,
+                'user'     => $user,
                 'password' => $newPassword,
             ], function ($message) use ($user) {
                 $message->to($user->email)
                         ->subject('Your Password Has Been Reset');
             });
-        } catch (\Exception $e) {
-            \Log::error('Password reset email failed: ' . $e->getMessage());
+        } catch (Exception $e) {
+            Log::error('Password reset email failed: ' . $e->getMessage());
         }
 
         $this->logAudit('reset_user_password_random', 'user', $id, "Password reset for user #{$id}");
 
         return $this->successResponse([
             'new_password' => $newPassword,
-            'user_id' => $user->id,
-            'email' => $user->email,
+            'user_id'      => $user->id,
+            'email'        => $user->email,
         ], 'Password reset successfully.');
     }
 
-    // ===== RESEND OTP =====
-    public function resendOtp(Request $request, $id)
+    // ===== OTP RESEND =====
+
+    public function resendOtp(Request $request, $id, OtpDeliveryService $otpDelivery)
     {
         $this->checkPermission('users.edit');
 
@@ -496,38 +655,43 @@ class UserManagementController extends BaseApiController
             return $this->errorResponse('User is already verified.', 422);
         }
 
-        $otpCode = rand(100000, 999999);
-        $expiresAt = Carbon::now()->addMinutes(10);
-
-        Otp::where('email', $user->email)->delete();
+        Otp::where('email', $user->email)
+            ->where('type', Otp::TYPE_EMAIL_VERIFICATION)
+            ->delete();
 
         $otp = Otp::create([
-            'email' => $user->email,
-            'otp' => $otpCode,
-            'expires_at' => $expiresAt,
-            'is_used' => false,
+            'email'      => $user->email,
+            'otp'        => Otp::generateOtp(),
+            'token'      => Otp::generateToken(),
+            'type'       => Otp::TYPE_EMAIL_VERIFICATION,
+            'name'       => $user->name,
+            'expires_at' => Carbon::now()->addMinutes(10),
+            'is_used'    => false,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
         ]);
 
-        try {
-            Mail::send('emails.otp', ['otp' => $otpCode, 'user' => $user], function ($message) use ($user) {
-                $message->to($user->email)
-                        ->subject('Your OTP Code');
-            });
+        $delivery = $otpDelivery->deliver($user, $otp, $otp->getVerificationUrl());
 
-            $this->logAudit('resend_otp', 'user', $user->id, "OTP resent to user #{$user->id}");
+        $this->logAudit(
+            'resend_otp',
+            'user',
+            $user->id,
+            "OTP resent to user #{$user->id} (via {$delivery['channel']})"
+        );
 
-            return $this->successResponse([
-                'otp_expires_at' => $expiresAt->toDateTimeString(),
-                'otp_sent_to' => $user->email,
-            ], 'OTP has been resent successfully.');
-
-        } catch (\Exception $e) {
-            \Log::error('OTP sending failed: ' . $e->getMessage());
-            return $this->errorResponse('Failed to send OTP. Please try again later.', 500);
+        if (!$delivery['success']) {
+            return $this->errorResponse('Failed to send OTP via SMS or email. Please try again later.', 500);
         }
+
+        return $this->successResponse([
+            'otp_expires_at' => $otp->expires_at->toDateTimeString(),
+            'otp_channel'    => $delivery['channel'],
+            'otp_sent_to'    => $delivery['channel'] === 'sms' ? $user->phone : $user->email,
+        ], 'OTP has been resent successfully.');
     }
 
-    public function resendOtpPhone($id)
+    public function resendOtpPhone(Request $request, $id, OtpDeliveryService $otpDelivery)
     {
         $this->checkPermission('users.edit');
 
@@ -541,64 +705,140 @@ class UserManagementController extends BaseApiController
             return $this->errorResponse('User is already verified.', 422);
         }
 
-        $otpCode = rand(100000, 999999);
-        $expiresAt = Carbon::now()->addMinutes(10);
-
-        Otp::where('email', $user->email)->delete();
+        Otp::where('email', $user->email)
+            ->where('type', Otp::TYPE_EMAIL_VERIFICATION)
+            ->delete();
 
         $otp = Otp::create([
-            'email' => $user->email,
-            'otp' => $otpCode,
-            'expires_at' => $expiresAt,
-            'is_used' => false,
+            'email'      => $user->email,
+            'otp'        => Otp::generateOtp(),
+            'token'      => Otp::generateToken(),
+            'type'       => Otp::TYPE_EMAIL_VERIFICATION,
+            'name'       => $user->name,
+            'expires_at' => Carbon::now()->addMinutes(10),
+            'is_used'    => false,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
         ]);
 
-        $this->logAudit('resend_otp_phone', 'user', $user->id, "OTP resent to phone for user #{$user->id}");
+        $delivery = $otpDelivery->deliver($user, $otp, $otp->getVerificationUrl());
+
+        $this->logAudit(
+            'resend_otp_phone',
+            'user',
+            $user->id,
+            "OTP resend to phone attempted for user #{$user->id} (actual channel: {$delivery['channel']})"
+        );
+
+        if (!$delivery['success']) {
+            return $this->errorResponse('Failed to send OTP via SMS or email. Please try again later.', 500);
+        }
 
         return $this->successResponse([
-            'otp_expires_at' => $expiresAt->toDateTimeString(),
-            'otp_sent_to' => $user->phone,
-        ], 'OTP has been resent to your phone.');
+            'otp_expires_at' => $otp->expires_at->toDateTimeString(),
+            'otp_channel'    => $delivery['channel'],
+            'otp_sent_to'    => $delivery['channel'] === 'sms' ? $user->phone : $user->email,
+        ], $delivery['channel'] === 'sms'
+            ? 'OTP has been resent to your phone.'
+            : 'Could not reach phone via SMS — OTP was sent to email instead.');
     }
 
-    public function sendPasswordResetOtp(Request $request, $id)
+    public function sendPasswordResetOtp(Request $request, $id, RafikiSmsService $sms)
     {
         $this->checkPermission('users.edit');
 
         $user = User::findOrFail($id);
 
-        $token = Str::random(60);
+        $token     = Str::random(60);
         $expiresAt = Carbon::now()->addHours(24);
 
-        \DB::table('password_reset_tokens')->updateOrInsert(
+        DB::table('password_reset_tokens')->updateOrInsert(
             ['email' => $user->email],
             [
-                'token' => Hash::make($token),
+                'token'      => Hash::make($token),
                 'created_at' => Carbon::now(),
                 'expires_at' => $expiresAt,
             ]
         );
 
-        try {
-            Mail::send('emails.password-reset', [
-                'user' => $user,
-                'token' => $token,
-                'expires_at' => $expiresAt->toDateTimeString()
-            ], function ($message) use ($user) {
-                $message->to($user->email)
-                        ->subject('Password Reset Request');
-            });
+        $resetUrl = rtrim(config('app.frontend_url'), '/') .
+            '/reset-password?email=' . urlencode($user->email) . '&token=' . $token;
 
-            $this->logAudit('send_password_reset', 'user', $user->id, "Password reset link sent to user #{$user->id}");
+        $channel  = 'email';
+        $smsError = null;
 
-            return $this->successResponse([
-                'reset_token' => $token,
-                'expires_at' => $expiresAt->toDateTimeString(),
-            ], 'Password reset link has been sent to the user.');
+        if (!empty($user->phone)) {
+            $messageText = "Reset your password using this link: {$resetUrl} (expires in 24h)";
+            try {
+                $result     = $sms->sendSms($user->phone, $messageText);
+                $httpStatus = $result['http_status'] ?? 500;
+                $status     = $result['status'] ?? null;
 
-        } catch (\Exception $e) {
-            \Log::error('Password reset email failed: ' . $e->getMessage());
-            return $this->errorResponse('Failed to send password reset email.', 500);
+                $isSuccess = ($httpStatus === 200 || $httpStatus === 201) 
+                    && ($status === 'success' || $status === true || isset($result['message_id']));
+
+                SmsLog::create([
+                    'user_id'       => $user->id,
+                    'recipient'     => $user->phone,
+                    'message'       => $messageText,
+                    'status'        => $isSuccess ? 'sent' : 'failed',
+                    'message_id'    => $result['message_id'] ?? $result['id'] ?? null,
+                    'response_data' => $result,
+                    'error_message' => $isSuccess ? null : ($result['message'] ?? 'RafikiSMS returned non-success response.'),
+                ]);
+
+                if ($isSuccess) {
+                    $channel = 'sms';
+                } else {
+                    $smsError = $result['message'] ?? 'RafikiSMS returned non-success response.';
+                }
+            } catch (Throwable $e) {
+                $smsError = $e->getMessage();
+
+                SmsLog::create([
+                    'user_id'       => $user->id,
+                    'recipient'     => $user->phone,
+                    'message'       => $messageText,
+                    'status'        => 'failed',
+                    'error_message' => $e->getMessage(),
+                ]);
+            }
+
+            if ($smsError) {
+                Log::warning('Password reset SMS failed, falling back to email', [
+                    'user_id' => $user->id,
+                    'error'   => $smsError,
+                ]);
+            }
         }
+
+        if ($channel === 'email') {
+            try {
+                Mail::send('emails.password-reset', [
+                    'user'       => $user,
+                    'token'      => $token,
+                    'expires_at' => $expiresAt->toDateTimeString()
+                ], function ($message) use ($user) {
+                    $message->to($user->email)
+                            ->subject('Password Reset Request');
+                });
+            } catch (Throwable $e) {
+                Log::error('Password reset email failed: ' . $e->getMessage());
+                return $this->errorResponse('Failed to send password reset link via SMS or email.', 500);
+            }
+        }
+
+        $this->logAudit(
+            'send_password_reset',
+            'user',
+            $user->id,
+            "Password reset link sent to user #{$user->id} (via {$channel})"
+        );
+
+        return $this->successResponse([
+            'reset_token' => $token,
+            'expires_at'  => $expiresAt->toDateTimeString(),
+            'sent_via'    => $channel,
+        ], 'Password reset link has been sent to the user.');
     }
 }

@@ -34,6 +34,7 @@ use App\Http\Controllers\Api\PrivacyPolicyController;
 use App\Http\Controllers\Api\Finance\FinanceSubscriptionController;
 use App\Http\Controllers\Api\Finance\FinanceTechnicianController;
 use App\Http\Controllers\Api\Finance\FinanceCustomerController;
+use App\Http\Controllers\Api\SmsLogController;
 
 
 Route::get('/health', fn() => response()->json(['status' => 'ok', 'timestamp' => now()]));
@@ -224,25 +225,41 @@ Route::prefix('v7')->middleware(['auth:sanctum', 'active.session'])->group(funct
 // V8 – USER MANAGEMENT
 // =============================================
 Route::prefix('v8')->middleware(['auth:sanctum', 'active.session'])->group(function () {
+    // ===== USER CRUD =====
     Route::get('/users', [UserManagementController::class, 'index']);
     Route::get('/users/{id}', [UserManagementController::class, 'show']);
     Route::post('/users', [UserManagementController::class, 'store']);
     Route::put('/users/{id}', [UserManagementController::class, 'update']);
     Route::delete('/users/{id}', [UserManagementController::class, 'destroy']);
+    
+    // ===== SOFT DELETE =====
     Route::get('/users/trashed', [UserManagementController::class, 'trashed']);
     Route::post('/users/{id}/restore', [UserManagementController::class, 'restore']);
     Route::delete('/users/{id}/force', [UserManagementController::class, 'forceDelete']);
+    
+    // ===== STATUS MANAGEMENT =====
     Route::patch('/users/{id}/activate', [UserManagementController::class, 'activate']);
     Route::patch('/users/{id}/deactivate', [UserManagementController::class, 'deactivate']);
     Route::patch('/users/{id}/suspend', [UserManagementController::class, 'suspend']);
+    
+    // ===== PASSWORD & OTP =====
     Route::post('/users/{id}/reset-password', [UserManagementController::class, 'resetPassword']);
     Route::post('/users/{id}/reset-password-random', [UserManagementController::class, 'resetPasswordRandom']);
     Route::post('/users/{id}/resend-otp', [UserManagementController::class, 'resendOtp']);
     Route::post('/users/{id}/resend-otp-phone', [UserManagementController::class, 'resendOtpPhone']);
     Route::post('/users/{id}/send-password-reset', [UserManagementController::class, 'sendPasswordResetOtp']);
+    
+    // ===== USER VERIFICATION (NEW) =====
+    Route::post('/users/{id}/verify-otp', [UserManagementController::class, 'verifyOtp']);
+    Route::post('/users/{id}/verify-token', [UserManagementController::class, 'verifyUserToken']);
+    Route::post('/users/{id}/mark-verified', [UserManagementController::class, 'markVerified']);
+    
+    // ===== USER LISTINGS =====
     Route::get('/customers', [UserManagementController::class, 'customers']);
     Route::get('/fundis', [UserManagementController::class, 'fundis']);
     Route::get('/stats', [UserManagementController::class, 'stats']);
+    
+    // ===== DROPDOWNS =====
     Route::get('/dropdown/users', [UserManagementController::class, 'dropdownUsers']);
     Route::get('/dropdown/customers', [UserManagementController::class, 'dropdownCustomers']);
     Route::get('/dropdown/fundis', [UserManagementController::class, 'dropdownFundis']);
@@ -510,6 +527,38 @@ Route::prefix('v21')
             Route::get('export', [FinanceCustomerController::class, 'export']);
         });
     });
+
+
+ // =============================================
+// V22 – SMS Logs (Direct Database Access)
+// =============================================
+Route::prefix('v22')
+    ->middleware(['auth:sanctum', 'active.session'])
+    ->group(function () {
+        // SMS Logs - requires sms.view permission
+        Route::middleware(['permission:sms.view'])->group(function () {
+            Route::get('sms-logs', [SmsLogController::class, 'index']);
+            Route::get('users/{userId}/sms-logs', [SmsLogController::class, 'getUserSmsLogs']);
+            Route::get('sms-balance', [SmsLogController::class, 'balance']);
+            Route::get('sms-stats', [SmsLogController::class, 'stats']);
+        });
+
+        // Send SMS - requires sms.send permission
+        Route::middleware(['permission:sms.send'])->group(function () {
+            Route::post('send-sms', [SmsLogController::class, 'sendSms']);
+        });
+
+        // Resend SMS - requires sms.resend permission
+        Route::middleware(['permission:sms.resend'])->group(function () {
+            Route::post('sms-logs/{id}/resend', [SmsLogController::class, 'resendSms']);
+        });
+
+        // Delete SMS Log - requires sms.delete permission
+        Route::middleware(['permission:sms.delete'])->group(function () {
+            Route::delete('sms-logs/{id}', [SmsLogController::class, 'deleteSmsLog']);
+        });
+    });
+
 
 // =============================================
 // Public tracking endpoint 

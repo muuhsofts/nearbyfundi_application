@@ -6,14 +6,13 @@ use App\Models\User;
 use App\Models\Otp;
 use App\Models\FailedLoginAttempt;
 use App\Models\UserSession;
-use App\Mail\OtpMail;
 use App\Traits\Auditable;
 use App\Models\Technician;
+use App\Services\OtpDeliveryService;
 use Carbon\Carbon;
 use App\Services\GeocodingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\DB;
 use Google_Client;
 use Illuminate\Support\Facades\Log;
@@ -23,70 +22,60 @@ use Laravel\Socialite\Facades\Socialite;
 
 class AuthController extends BaseApiController
 {
-    use Auditable;
+   use Auditable;
 
     // ------------------ CUSTOMER REGISTRATION ------------------
-    public function register(Request $request)
+    public function register(Request $request, OtpDeliveryService $otpDelivery)
     {
         $data = $request->validate([
             'name'     => 'required|string|max:255',
             'email'    => 'required|email|unique:users',
             'password' => 'required|string|min:8|confirmed',
-            'phone'    => 'nullable|string|max:20',
+            'phone'    => 'required|string|unique:users,phone|max:20',
+            'role'     => 'nullable|string|in:CUSTOMER,FUNDI',
         ]);
 
-        DB::beginTransaction();
-        try {
-            $role = Role::where('name', 'CUSTOMER')->firstOrFail();
+        $user = User::create([
+            'name'              => $data['name'],
+            'email'             => $data['email'],
+            'phone'             => $data['phone'],
+            'password'          => Hash::make($data['password']),
+            'status'            => 'pending',
+            'is_active'         => false,
+            'email_verified_at' => null,
+        ]);
 
-            $user = User::create([
-                'name'       => $data['name'],
-                'email'      => $data['email'],
-                'password'   => Hash::make($data['password']),
-                'phone'      => $data['phone'] ?? null,
-                'status'     => 'pending',
-                'is_active'  => false,
-                'locale'     => 'en',
-            ]);
+        $role = $data['role'] ?? 'CUSTOMER';
+        $user->assignRole($role);
 
-            $user->assignRole($role);
+        // Clear existing verification OTPs
+        Otp::where('email', $user->email)
+            ->where('type', Otp::TYPE_EMAIL_VERIFICATION)
+            ->delete();
 
-            $otp = Otp::create([
-                'email'      => $user->email,
-                'otp'        => Otp::generateOtp(),
-                'token'      => Otp::generateToken(),
-                'type'       => Otp::TYPE_EMAIL_VERIFICATION,
-                'name'       => $user->name,
-                'expires_at' => Carbon::now()->addMinutes(10),
-                'is_used'    => false,
-                'ip_address' => $request->ip(),
-                'user_agent' => $request->userAgent(),
-            ]);
+        $otp = Otp::create([
+            'email'      => $user->email,
+            'otp'        => Otp::generateOtp(),
+            'token'      => Otp::generateToken(),
+            'type'       => Otp::TYPE_EMAIL_VERIFICATION,
+            'name'       => $user->name,
+            'expires_at' => Carbon::now()->addMinutes(10),
+            'is_used'    => false,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
 
-            Mail::to($user->email)->send(
-                new OtpMail(
-                    $otp->otp,
-                    $user->email,
-                    $user->name,
-                    Otp::TYPE_EMAIL_VERIFICATION,
-                    $otp->getVerificationUrl()
-                )
-            );
+        $delivery = $otpDelivery->deliver($user, $otp, $otp->getVerificationUrl());
 
-            DB::commit();
-
-            $this->logAudit('register', 'auth', 'user', "Customer registered: {$user->email}");
-
-            return $this->created(['email' => $user->email], 'Registration successful. Please verify email.');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Registration failed: ' . $e->getMessage());
-            return $this->serverError('Registration failed: ' . $e->getMessage());
-        }
+        return $this->created([
+            'user'        => $user,
+            'otp_channel' => $delivery['channel'],
+            'sent_to'     => $delivery['channel'] === 'sms' ? $user->phone : $user->email,
+        ], 'Registration successful. Please enter the OTP sent to verify your account.');
     }
 
     // ------------------ FUNDI REGISTRATION ------------------
-    public function registerFundi(Request $request, GeocodingService $geocoder)
+    public function registerFundi(Request $request, GeocodingService $geocoder, OtpDeliveryService $otpDelivery)
     {
         $data = $request->validate([
             'name'          => 'required|string|max:255',
@@ -163,21 +152,31 @@ class AuthController extends BaseApiController
                 'user_agent' => $request->userAgent(),
             ]);
 
-            Mail::to($user->email)->send(
-                new OtpMail(
-                    $otp->otp,
-                    $user->email,
-                    $user->name,
-                    Otp::TYPE_EMAIL_VERIFICATION,
-                    $otp->getVerificationUrl()
-                )
-            );
+            $delivery = $otpDelivery->deliver($user, $otp, $otp->getVerificationUrl());
 
             DB::commit();
 
-            $this->logAudit('register_fundi', 'auth', 'user', "Fundi registered: {$user->email}");
+            $this->logAudit(
+                'register_fundi',
+                'auth',
+                'user',
+                "Fundi registered: {$user->email} (OTP sent via {$delivery['channel']})"
+            );
 
-            return $this->created(['email' => $user->email], 'Fundi registered. Verify email and wait for admin approval.');
+            if (!$delivery['success']) {
+                Log::error('OTP delivery failed on both channels during fundi registration', [
+                    'user_id'     => $user->id,
+                    'sms_error'   => $delivery['sms_error'] ?? null,
+                    'email_error' => $delivery['email_error'] ?? null,
+                ]);
+            }
+
+            return $this->created([
+                'email'       => $user->email,
+                'otp_channel' => $delivery['channel'],
+            ], 'Fundi registered. Verify your ' .
+                ($delivery['channel'] === 'sms' ? 'phone' : 'email') .
+                ' and wait for admin approval.');
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Fundi registration failed: ' . $e->getMessage());
@@ -186,7 +185,7 @@ class AuthController extends BaseApiController
     }
 
     // ------------------ RESEND OTP ------------------
-    public function resendOtp(Request $request)
+    public function resendOtp(Request $request, OtpDeliveryService $otpDelivery)
     {
         $request->validate(['email' => 'required|email|exists:users,email']);
 
@@ -208,65 +207,56 @@ class AuthController extends BaseApiController
             'user_agent' => $request->userAgent(),
         ]);
 
-        Mail::to($user->email)->send(
-            new OtpMail(
-                $otp->otp,
-                $user->email,
-                $user->name,
-                Otp::TYPE_EMAIL_VERIFICATION,
-                $otp->getVerificationUrl()
-            )
+        $delivery = $otpDelivery->deliver($user, $otp, $otp->getVerificationUrl());
+
+        $this->logAudit(
+            'resend_otp',
+            'auth',
+            'user',
+            "OTP resent to {$user->email} (via {$delivery['channel']})"
         );
 
-        return $this->successResponse(['email' => $user->email], 'OTP resent successfully.');
+        return $this->successResponse([
+            'email'       => $user->email,
+            'otp_channel' => $delivery['channel'],
+        ], 'OTP resent successfully.');
     }
 
     // ------------------ OTP VERIFICATION ------------------
     public function verifyOtp(Request $request)
-{
-    $request->validate([
-        'email' => 'required|email',
-        'otp'   => 'required|string|size:6',
-        'fcm_token' => 'nullable|string|min:10',
-    ]);
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'otp'   => 'required|string|size:6',
+        ]);
 
-    $otp = Otp::where('email', $request->email)
-        ->where('otp', $request->otp)
-        ->whereIn('type', [Otp::TYPE_REGISTRATION, Otp::TYPE_EMAIL_VERIFICATION])
-        ->latest()
-        ->first();
+        $otpRecord = Otp::where('email', $request->email)
+            ->where('otp', $request->otp)
+            ->where('type', Otp::TYPE_EMAIL_VERIFICATION)
+            ->where('is_used', false)
+            ->where('expires_at', '>', Carbon::now())
+            ->first();
 
-    if (!$otp || !$otp->isValid()) {
-        return $this->badRequest('Invalid or expired OTP.');
+        if (!$otpRecord) {
+            return $this->errorResponse('Invalid or expired OTP code.', 422);
+        }
+
+        $otpRecord->update(['is_used' => true]);
+
+        $user = User::where('email', $request->email)->firstOrFail();
+        $user->update([
+            'status'            => 'active',
+            'is_active'         => true,
+            'email_verified_at' => Carbon::now(),
+        ]);
+
+        $token = $user->createToken('auth_token')->plainTextToken;
+
+        return $this->successResponse([
+            'user'  => $user->load('roles'),
+            'token' => $token,
+        ], 'Account verified and activated successfully.');
     }
-
-    $user = User::where('email', $request->email)->firstOrFail();
-    $user->update([
-        'email_verified_at' => now(),
-        'status'            => 'active',
-        'is_active'         => true,
-    ]);
-
-    $otp->markAsUsed();
-
-    // Store FCM token if provided
-    if ($request->filled('fcm_token')) {
-        $this->storeFcmToken($user, $request->fcm_token);
-    }
-
-    $token = $user->createToken('auth_token')->plainTextToken;
-    $this->createSession($user, $request, $token);
-
-    $this->logAudit('verify_email', 'auth', 'user', "Email verified: {$user->email}");
-
-    return $this->successResponse([
-        'user'  => $user->only(['id', 'name', 'email', 'phone', 'locale', 'fcm_device_token']),
-        'roles' => $user->getRoleNames(),
-        'token' => $token,
-    ], 'Email verified.');
-}
-
-
 
     // ------------------ EMAIL VERIFICATION VIA TOKEN ------------------
     public function verifyToken(Request $request)
@@ -316,211 +306,195 @@ class AuthController extends BaseApiController
         ]);
     }
 
-// ------------------ LOGIN (supports email OR phone) ------------------
-public function login(Request $request)
-{
-    $request->validate([
-        'email'    => 'required|string',
-        'password' => 'required|string',
-    ]);
+    // ------------------ LOGIN (supports email OR phone) ------------------
+    public function login(Request $request)
+    {
+        $request->validate([
+            'email'    => 'required|string',
+            'password' => 'required|string',
+        ]);
 
-    $login = $request->email;
-    $user = User::where('email', $login)->first() ?? User::where('phone', $login)->first();
+        $login = $request->email;
+        $user = User::where('email', $login)->first() ?? User::where('phone', $login)->first();
 
-    if (!$user || !Hash::check($request->password, $user->password)) {
-        FailedLoginAttempt::record($login, $request->ip());
-        $this->logAudit('login_failed', 'auth', 'user', "Failed login for: {$login}");
-        return $this->unauthorized('Invalid credentials.');
-    }
-
-    if (is_null($user->email_verified_at)) {
-        return $this->forbidden('Please verify your email first.');
-    }
-
-    if (!$user->is_active || $user->status !== 'active') {
-        return $this->forbidden('Account is not active.');
-    }
-
-    // ✅ NEW: Check technician verification (if user is FUNDI)
-    if ($user->hasRole('FUNDI')) {
-        $technician = Technician::where('user_id', $user->id)->first();
-        if (!$technician || !$technician->verified || $technician->verification_status !== 'approved') {
-            return $this->forbidden('Your technician account is not verified. Please wait for admin approval.');
-        }
-    }
-
-    // Generate token and respond
-    $token = $user->createToken('auth_token')->plainTextToken;
-    $this->createSession($user, $request, $token);
-
-    $user->update([
-        'last_login_at' => now(),
-        'last_login_ip' => $request->ip(),
-    ]);
-
-    if ($request->filled('fcm_token')) {
-        $this->storeFcmToken($user, $request->fcm_token);
-    }
-
-    $this->logAudit('login', 'auth', 'user', "User logged in: {$user->email}");
-
-    return $this->successResponse([
-        'user'  => $user->only(['id', 'name', 'email', 'phone', 'locale', 'fcm_device_token']),
-        'roles' => $user->getRoleNames(),
-        'token' => $token,
-    ], 'Login successful.');
-}
-
-
-public function googleLogin(Request $request)
-{
-    $request->validate([
-        'id_token'  => 'required|string',
-        'fcm_token' => 'nullable|string|min:10',
-    ]);
-
-    try {
-        $client = new Google_Client(['client_id' => config('services.google.client_id')]);
-        $payload = $client->verifyIdToken($request->id_token);
-
-        if (!$payload) {
-            return $this->unauthorized('Invalid Google token.');
+        if (!$user || !Hash::check($request->password, $user->password)) {
+            FailedLoginAttempt::record($login, $request->ip());
+            $this->logAudit('login_failed', 'auth', 'user', "Failed login for: {$login}");
+            return $this->unauthorized('Invalid credentials.');
         }
 
-        $email    = $payload['email'];
-        $name     = $payload['name'] ?? 'Google User';
-        $googleId = $payload['sub'];
+        if (is_null($user->email_verified_at)) {
+            return $this->forbidden('Please verify your email first.');
+        }
 
-        // Find existing user or create a new Customer
-        $user = User::where('email', $email)->first();
+        if (!$user->is_active || $user->status !== 'active') {
+            return $this->forbidden('Account is not active.');
+        }
 
-        if (!$user) {
-            $user = User::create([
-                'name'              => $name,
-                'email'             => $email,
-                'google_id'         => $googleId,
-                'password'          => bcrypt(\Str::random(24)),
-                'email_verified_at' => now(),
-                'status'            => 'active',
-                'is_active'         => true,
-            ]);
-
-            $user->assignRole('CUSTOMER');
-            $this->logAudit('register_google', 'auth', 'user', "Customer registered via Google ID Token: {$user->email}");
-        } else {
-            if (!$user->email_verified_at) {
-                $user->update(['email_verified_at' => now()]);
-            }
-            if ($user->status !== 'active') {
-                $user->update(['status' => 'active', 'is_active' => true]);
+        if ($user->hasRole('FUNDI')) {
+            $technician = Technician::where('user_id', $user->id)->first();
+            if (!$technician || !$technician->verified || $technician->verification_status !== 'approved') {
+                return $this->forbidden('Your technician account is not verified. Please wait for admin approval.');
             }
         }
 
-        // Generate Sanctum access token
         $token = $user->createToken('auth_token')->plainTextToken;
         $this->createSession($user, $request, $token);
 
-        // Store FCM device token if passed
+        $user->update([
+            'last_login_at' => now(),
+            'last_login_ip' => $request->ip(),
+        ]);
+
         if ($request->filled('fcm_token')) {
             $this->storeFcmToken($user, $request->fcm_token);
         }
 
-        $this->logAudit('login_google', 'auth', 'user', "User logged in via Google ID Token: {$user->email}");
+        $this->logAudit('login', 'auth', 'user', "User logged in: {$user->email}");
 
         return $this->successResponse([
             'user'  => $user->only(['id', 'name', 'email', 'phone', 'locale', 'fcm_device_token']),
             'roles' => $user->getRoleNames(),
             'token' => $token,
-        ], 'Google login successful.');
-
-    } catch (\Exception $e) {
-        Log::error('Google ID token authentication failed: ' . $e->getMessage());
-        return $this->serverError('Google authentication failed: ' . $e->getMessage());
+        ], 'Login successful.');
     }
-}
 
-/**
- * Redirect to Google OAuth (for web frontend)
- */
-public function redirectToGoogle()
-{
-    return response()->json([
-        'url' => Socialite::driver('google')
-            ->stateless()
-            ->redirect()
-            ->getTargetUrl(),
-    ]);
-}
+    // ------------------ GOOGLE LOGIN (ID Token) ------------------
+    public function googleLogin(Request $request)
+    {
+        $request->validate([
+            'id_token'  => 'required|string',
+            'fcm_token' => 'nullable|string|min:10',
+        ]);
 
-/**
- * Handle Google callback (for both web & mobile)
- */
-public function handleGoogleCallback(Request $request)
-{
-    try {
-        $code = $request->input('code');
-        if (!$code) {
-            return $this->errorResponse('No authorization code provided.', 422);
-        }
+        try {
+            $client = new Google_Client(['client_id' => config('services.google.client_id')]);
+            $payload = $client->verifyIdToken($request->id_token);
 
-        // 1. Exchange the authorization code for an access token response array
-        $response = Socialite::driver('google')->getAccessTokenResponse($code);
-        $token = $response['access_token'] ?? null;
-
-        if (!$token) {
-            return $this->errorResponse('Failed to retrieve access token from Google.', 401);
-        }
-
-        // 2. Retrieve user profile using the access token
-        $googleUser = Socialite::driver('google')->userFromToken($token);
-
-        // Find or create user
-        $user = User::where('email', $googleUser->getEmail())->first();
-
-        if (!$user) {
-            // Create new customer account
-            $user = User::create([
-                'name'              => $googleUser->getName(),
-                'email'             => $googleUser->getEmail(),
-                'password'          => bcrypt(\Str::random(16)),
-                'email_verified_at' => now(),
-                'status'            => 'active',
-                'is_active'         => true,
-            ]);
-            $user->assignRole('CUSTOMER');
-            $this->logAudit('register_google', 'auth', 'user', "Customer registered via Google: {$user->email}");
-        } else {
-            // Ensure the account is active and verified
-            if (!$user->email_verified_at) {
-                $user->update(['email_verified_at' => now()]);
+            if (!$payload) {
+                return $this->unauthorized('Invalid Google token.');
             }
-            if ($user->status !== 'active') {
-                $user->update(['status' => 'active', 'is_active' => true]);
+
+            $email    = $payload['email'];
+            $name     = $payload['name'] ?? 'Google User';
+            $googleId = $payload['sub'];
+
+            $user = User::where('email', $email)->first();
+
+            if (!$user) {
+                $user = User::create([
+                    'name'              => $name,
+                    'email'             => $email,
+                    'google_id'         => $googleId,
+                    'password'          => bcrypt(Str::random(24)),
+                    'email_verified_at' => now(),
+                    'status'            => 'active',
+                    'is_active'         => true,
+                ]);
+
+                $user->assignRole('CUSTOMER');
+                $this->logAudit('register_google', 'auth', 'user', "Customer registered via Google ID Token: {$user->email}");
+            } else {
+                if (!$user->email_verified_at) {
+                    $user->update(['email_verified_at' => now()]);
+                }
+                if ($user->status !== 'active') {
+                    $user->update(['status' => 'active', 'is_active' => true]);
+                }
             }
+
+            $token = $user->createToken('auth_token')->plainTextToken;
+            $this->createSession($user, $request, $token);
+
+            if ($request->filled('fcm_token')) {
+                $this->storeFcmToken($user, $request->fcm_token);
+            }
+
+            $this->logAudit('login_google', 'auth', 'user', "User logged in via Google ID Token: {$user->email}");
+
+            return $this->successResponse([
+                'user'  => $user->only(['id', 'name', 'email', 'phone', 'locale', 'fcm_device_token']),
+                'roles' => $user->getRoleNames(),
+                'token' => $token,
+            ], 'Google login successful.');
+
+        } catch (\Exception $e) {
+            Log::error('Google ID token authentication failed: ' . $e->getMessage());
+            return $this->serverError('Google authentication failed: ' . $e->getMessage());
         }
-
-        // Generate Sanctum token
-        $sanctumToken = $user->createToken('auth_token')->plainTextToken;
-        $this->createSession($user, $request, $sanctumToken);
-
-        // Store FCM token if provided
-        if ($request->filled('fcm_token')) {
-            $this->storeFcmToken($user, $request->fcm_token);
-        }
-
-        $this->logAudit('login_google', 'auth', 'user', "User logged in via Google: {$user->email}");
-
-        return $this->successResponse([
-            'user'  => $user->only(['id', 'name', 'email', 'phone', 'locale', 'fcm_device_token']),
-            'roles' => $user->getRoleNames(),
-            'token' => $sanctumToken,
-        ], 'Google login successful.');
-
-    } catch (\Exception $e) {
-        Log::error('Google callback failed: ' . $e->getMessage());
-        return $this->errorResponse('Google authentication failed: ' . $e->getMessage(), 500);
     }
-}
+
+    // ------------------ REDIRECT TO GOOGLE OAuth ------------------
+    public function redirectToGoogle()
+    {
+        return response()->json([
+            'url' => Socialite::driver('google')
+                ->stateless()
+                ->redirect()
+                ->getTargetUrl(),
+        ]);
+    }
+
+    // ------------------ HANDLE GOOGLE CALLBACK ------------------
+    public function handleGoogleCallback(Request $request)
+    {
+        try {
+            $code = $request->input('code');
+            if (!$code) {
+                return $this->errorResponse('No authorization code provided.', 422);
+            }
+
+            $response = Socialite::driver('google')->getAccessTokenResponse($code);
+            $token = $response['access_token'] ?? null;
+
+            if (!$token) {
+                return $this->errorResponse('Failed to retrieve access token from Google.', 401);
+            }
+
+            $googleUser = Socialite::driver('google')->userFromToken($token);
+
+            $user = User::where('email', $googleUser->getEmail())->first();
+
+            if (!$user) {
+                $user = User::create([
+                    'name'              => $googleUser->getName(),
+                    'email'             => $googleUser->getEmail(),
+                    'password'          => bcrypt(Str::random(16)),
+                    'email_verified_at' => now(),
+                    'status'            => 'active',
+                    'is_active'         => true,
+                ]);
+                $user->assignRole('CUSTOMER');
+                $this->logAudit('register_google', 'auth', 'user', "Customer registered via Google: {$user->email}");
+            } else {
+                if (!$user->email_verified_at) {
+                    $user->update(['email_verified_at' => now()]);
+                }
+                if ($user->status !== 'active') {
+                    $user->update(['status' => 'active', 'is_active' => true]);
+                }
+            }
+
+            $sanctumToken = $user->createToken('auth_token')->plainTextToken;
+            $this->createSession($user, $request, $sanctumToken);
+
+            if ($request->filled('fcm_token')) {
+                $this->storeFcmToken($user, $request->fcm_token);
+            }
+
+            $this->logAudit('login_google', 'auth', 'user', "User logged in via Google: {$user->email}");
+
+            return $this->successResponse([
+                'user'  => $user->only(['id', 'name', 'email', 'phone', 'locale', 'fcm_device_token']),
+                'roles' => $user->getRoleNames(),
+                'token' => $sanctumToken,
+            ], 'Google login successful.');
+
+        } catch (\Exception $e) {
+            Log::error('Google callback failed: ' . $e->getMessage());
+            return $this->errorResponse('Google authentication failed: ' . $e->getMessage(), 500);
+        }
+    }
 
     // ------------------ LOGOUT ------------------
     public function logout(Request $request)
@@ -564,8 +538,8 @@ public function handleGoogleCallback(Request $request)
         return $this->successResponse($user->only(['id', 'name', 'email', 'phone', 'locale', 'fcm_device_token']), 'Profile updated.');
     }
 
-    // ------------------ FORGOT PASSWORD (OPTIMIZED) ------------------
-    public function forgotPassword(Request $request)
+    // ------------------ FORGOT PASSWORD ------------------
+    public function forgotPassword(Request $request, OtpDeliveryService $otpDelivery)
     {
         $request->validate(['email' => 'required|email|exists:users,email']);
 
@@ -584,19 +558,18 @@ public function handleGoogleCallback(Request $request)
             'is_used'    => false,
         ]);
 
-        // Queue email for faster response
-        Mail::to($user->email)->queue(
-            new OtpMail(
-                $otp->otp,
-                $user->email,
-                $user->name,
-                Otp::TYPE_PASSWORD_RESET
-            )
+        $delivery = $otpDelivery->deliver($user, $otp);
+
+        $this->logAudit(
+            'forgot_password',
+            'auth',
+            'user',
+            "Password reset OTP sent to {$user->email} (via {$delivery['channel']})"
         );
 
-        $this->logAudit('forgot_password', 'auth', 'user', "Password reset OTP queued for {$user->email}");
-
-        return $this->successResponse(null, 'OTP sent successfully.');
+        return $this->successResponse([
+            'otp_channel' => $delivery['channel'],
+        ], 'OTP sent successfully.');
     }
 
     // ------------------ RESET PASSWORD ------------------
@@ -674,17 +647,16 @@ public function handleGoogleCallback(Request $request)
     }
 
     // ============================================================
-    //  ⭐⭐⭐ FCM TOKEN MANAGEMENT (IMPROVED) ⭐⭐⭐
+    //  FCM TOKEN MANAGEMENT
     // ============================================================
 
     /**
      * Store or update FCM device token for the authenticated user
-     * This is called from the mobile app after login
      */
     public function updateDeviceToken(Request $request)
     {
         $request->validate([
-            'token' => 'required|string|min:10', // FCM tokens are long strings
+            'token' => 'required|string|min:10',
         ]);
 
         $user = $request->user();
@@ -696,7 +668,6 @@ public function handleGoogleCallback(Request $request)
         $oldToken = $user->fcm_device_token;
         $newToken = $request->token;
 
-        // Store the token
         $user->fcm_device_token = $newToken;
         $user->save();
 
@@ -744,7 +715,7 @@ public function handleGoogleCallback(Request $request)
     }
 
     /**
-     * Get the current user's FCM token (for debugging)
+     * Get the current user's FCM token
      */
     public function getDeviceToken(Request $request)
     {
@@ -757,7 +728,7 @@ public function handleGoogleCallback(Request $request)
     }
 
     /**
-     * Delete the user's FCM token (logout or remove device)
+     * Delete the user's FCM token
      */
     public function deleteDeviceToken(Request $request)
     {
@@ -783,7 +754,6 @@ public function handleGoogleCallback(Request $request)
 
     /**
      * Update multiple device tokens (for multi-device support)
-     * Optional: Store tokens in a separate table for multiple devices
      */
     public function updateDeviceTokens(Request $request)
     {
@@ -794,17 +764,10 @@ public function handleGoogleCallback(Request $request)
 
         $user = $request->user();
         
-        // Store primary token in user table
         if (!empty($request->tokens)) {
             $primaryToken = $request->tokens[0];
             $user->fcm_device_token = $primaryToken;
             $user->save();
-
-            // TODO: Store additional tokens in a separate device_tokens table
-            // DeviceToken::where('user_id', $user->id)->delete();
-            // foreach ($request->tokens as $token) {
-            //     DeviceToken::create(['user_id' => $user->id, 'token' => $token]);
-            // }
         }
 
         Log::info('Multiple FCM tokens updated', [
@@ -844,7 +807,9 @@ public function handleGoogleCallback(Request $request)
                 }
                 $technician->delete();
             }
+            
             ServiceRequest::where('customer_id', $user->id)->update(['customer_id' => null]);
+            
             $user->delete();
             DB::commit();
             $this->logAudit('delete_account', 'auth', $user->id, "User deleted own account");
@@ -856,11 +821,22 @@ public function handleGoogleCallback(Request $request)
         }
     }
 
+    // ------------------ MY PERMISSIONS ------------------
+    public function myPermissions(Request $request)
+    {
+        $user = $request->user();
+
+        return $this->successResponse([
+            'permissions' => $user->getAllPermissions()->pluck('name'),
+        ], 'Permissions retrieved.');
+    }
+
     // ------------------ PRIVATE HELPERS ------------------
     private function createSession(User $user, Request $request, string $token): void
     {
         $tokenId = explode('|', $token)[0] ?? null;
         if (!$tokenId) return;
+
         UserSession::create([
             'user_id'       => $user->id,
             'token'         => $tokenId,
@@ -896,13 +872,5 @@ public function handleGoogleCallback(Request $request)
         return $coords;
     }
 
-    // ------------------ MY PERMISSIONS (for sidebar/UI gating) ------------------
-    public function myPermissions(Request $request)
-    {
-        $user = $request->user();
-
-        return $this->successResponse([
-            'permissions' => $user->getAllPermissions()->pluck('name'),
-        ], 'Permissions retrieved.');
-    }
+    
 }
