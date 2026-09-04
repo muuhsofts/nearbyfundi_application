@@ -13,6 +13,7 @@ use App\Mail\RequestAcceptedMail;
 use App\Mail\RequestCreatedMail;
 use App\Mail\RequestCompletedMail;
 use App\Services\FcmService;
+use App\Services\SmsNotificationService;
 use App\Traits\Auditable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
@@ -24,10 +25,12 @@ class RequestController extends BaseApiController
     use Auditable;
 
     protected FcmService $fcm;
+    protected SmsNotificationService $smsService;
 
-    public function __construct(FcmService $fcm)
+    public function __construct(FcmService $fcm, SmsNotificationService $smsService)
     {
         $this->fcm = $fcm;
+        $this->smsService = $smsService;
     }
 
     // ============================================================
@@ -336,6 +339,34 @@ class RequestController extends BaseApiController
 
             DB::commit();
 
+            // ============================================================
+            // 🔥 SEND SMS TO TECHNICIAN - NEW REQUEST NOTIFICATION
+            // ============================================================
+            try {
+                $technician = $serviceRequest->technician;
+                if ($technician && $technician->user && !empty($technician->user->phone)) {
+                    $smsResult = $this->smsService->notifyTechnicianNewRequest($serviceRequest, $technician);
+                    
+                    Log::info('SMS notification sent to technician', [
+                        'request_id' => $serviceRequest->id,
+                        'technician_id' => $technician->id,
+                        'phone' => $technician->user->phone,
+                        'sms_success' => $smsResult['success'] ?? false,
+                    ]);
+                } else {
+                    Log::warning('Technician has no phone number, SMS not sent', [
+                        'request_id' => $serviceRequest->id,
+                        'technician_id' => $data['technician_id'],
+                    ]);
+                }
+            } catch (\Exception $e) {
+                Log::error('Failed to send SMS to technician: ' . $e->getMessage(), [
+                    'request_id' => $serviceRequest->id,
+                    'technician_id' => $data['technician_id'],
+                ]);
+                // Don't fail the request if SMS fails - just log it
+            }
+
             try {
                 event(new RequestCreated($serviceRequest));
             } catch (\Exception $e) {
@@ -556,6 +587,36 @@ class RequestController extends BaseApiController
             Log::error('Failed to send accepted email: ' . $e->getMessage());
         }
 
+        // ============================================================
+        // 🔥 SEND SMS TO CUSTOMER - REQUEST ACCEPTED
+        // ============================================================
+        try {
+            $technician = $serviceRequest->technician;
+            $customer = $serviceRequest->customer;
+            
+            if ($technician && $customer && !empty($customer->phone)) {
+                $smsResult = $this->smsService->notifyCustomerRequestAccepted($serviceRequest, $technician);
+                
+                Log::info('SMS notification sent to customer about acceptance', [
+                    'request_id' => $serviceRequest->id,
+                    'customer_id' => $customer->id,
+                    'phone' => $customer->phone,
+                    'sms_success' => $smsResult['success'] ?? false,
+                ]);
+            } else {
+                Log::warning('Customer has no phone number, SMS not sent', [
+                    'request_id' => $serviceRequest->id,
+                    'customer_id' => $serviceRequest->customer_id,
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('Failed to send SMS to customer about acceptance: ' . $e->getMessage(), [
+                'request_id' => $serviceRequest->id,
+                'customer_id' => $serviceRequest->customer_id,
+            ]);
+            // Don't fail the request if SMS fails - just log it
+        }
+
         try {
             $techName = $serviceRequest->technician->user->name ?? 'the fundi';
             if ($serviceRequest->customer) {
@@ -744,6 +805,7 @@ class RequestController extends BaseApiController
 
     /**
      * Cancel a request (customer only, pending only)
+     * DELETE /v4/requests/{id}/cancel
      */
     public function cancel($id, Request $request)
     {
@@ -800,6 +862,7 @@ class RequestController extends BaseApiController
 
     /**
      * Get authenticated user's requests (customer or technician)
+     * GET /v4/requests/my
      */
     public function myRequests(Request $request)
     {
@@ -862,6 +925,7 @@ class RequestController extends BaseApiController
 
     /**
      * Admin: list all requests with filters
+     * GET /v4/requests
      */
     public function index(Request $request)
     {
@@ -939,6 +1003,7 @@ class RequestController extends BaseApiController
 
     /**
      * Admin: show single request details
+     * GET /v4/requests/{id}
      */
     public function show($id, Request $request)
     {
@@ -968,6 +1033,7 @@ class RequestController extends BaseApiController
 
     /**
      * Admin: delete a request
+     * DELETE /v4/requests/{id}
      */
     public function destroy($id, Request $request)
     {
@@ -996,6 +1062,7 @@ class RequestController extends BaseApiController
 
     /**
      * Get logs for a specific request (admin)
+     * GET /v4/requests/{requestId}/logs
      */
     public function logs($requestId, Request $request)
     {
@@ -1018,6 +1085,7 @@ class RequestController extends BaseApiController
 
     /**
      * Get request statistics (admin)
+     * GET /v4/requests/stats
      */
     public function stats(Request $request)
     {
@@ -1050,6 +1118,7 @@ class RequestController extends BaseApiController
 
     /**
      * Get requests for the authenticated customer
+     * GET /v4/requests/customer
      */
     public function customerRequests(Request $request)
     {
@@ -1082,6 +1151,7 @@ class RequestController extends BaseApiController
 
     /**
      * Get requests for the authenticated technician
+     * GET /v4/requests/technician
      */
     public function technicianRequests(Request $request)
     {
@@ -1288,6 +1358,51 @@ class RequestController extends BaseApiController
         }
     }
 
+    /**
+     * Update customer location for a request
+     * POST /v4/requests/{id}/location
+     */
+    public function updateLocation(Request $request, $id)
+    {
+        try {
+            $serviceRequest = ServiceRequest::findOrFail($id);
+            $user = $request->user();
+
+            if (!$user || $user->id !== $serviceRequest->customer_id) {
+                return $this->forbidden('You can only update location for your own requests.');
+            }
+
+            $data = $request->validate([
+                'latitude'  => 'required|numeric|between:-90,90',
+                'longitude' => 'required|numeric|between:-180,180',
+            ]);
+
+            $serviceRequest->latitude = $data['latitude'];
+            $serviceRequest->longitude = $data['longitude'];
+            $serviceRequest->save();
+
+            Log::info('Customer location updated for request', [
+                'request_id' => $id,
+                'customer_id' => $user->id,
+                'latitude' => $data['latitude'],
+                'longitude' => $data['longitude'],
+            ]);
+
+            return $this->successResponse([
+                'request_id' => $id,
+                'latitude' => (float) $serviceRequest->latitude,
+                'longitude' => (float) $serviceRequest->longitude,
+            ], 'Location updated successfully.');
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return $this->notFound('Request not found.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return $this->validationError($e->errors());
+        } catch (\Exception $e) {
+            Log::error('Error updating location: ' . $e->getMessage());
+            return $this->errorResponse('Failed to update location. Please try again.', 500);
+        }
+    }
+
     // ============================================================
     // PRIVATE FORMATTING HELPERS
     // ============================================================
@@ -1344,6 +1459,8 @@ class RequestController extends BaseApiController
                 'name' => $request->category->category_name,
                 'slug' => $request->category->slug,
             ] : null,
+            'latitude'    => $request->latitude ? (float) $request->latitude : null,
+            'longitude'   => $request->longitude ? (float) $request->longitude : null,
             'logs'        => $request->logs ? $request->logs->map(function ($log) {
                 return [
                     'id'         => $log->id,

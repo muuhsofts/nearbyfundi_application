@@ -21,7 +21,7 @@ class RafikiSmsService
             '/'
         );
         $this->apiKey   = config('services.rafikisms.api_key') ?? config('rafikisms.api_key', '');
-        $this->senderId = config('services.rafikisms.sender_id') ?? config('rafikisms.sender_id', 'OG ONEGROUP');
+        $this->senderId = config('services.rafikisms.sender_id') ?? config('rafikisms.sender_id', 'NearbyFundi');
         $this->timeout  = (int) (config('services.rafikisms.timeout') ?? config('rafikisms.timeout', 15));
     }
 
@@ -112,10 +112,22 @@ class RafikiSmsService
     {
         $cleaned = preg_replace('/[^0-9]/', '', $phone);
 
+        // If starts with 0, replace with 255 (Tanzania country code)
         if (str_starts_with($cleaned, '0')) {
             return '255' . substr($cleaned, 1);
         }
 
+        // If starts with 255, keep as is
+        if (str_starts_with($cleaned, '255')) {
+            return $cleaned;
+        }
+
+        // If starts with +255, remove the +
+        if (str_starts_with($phone, '+255')) {
+            return substr($cleaned, 1);
+        }
+
+        // Default: assume it's already in correct format
         return $cleaned;
     }
 
