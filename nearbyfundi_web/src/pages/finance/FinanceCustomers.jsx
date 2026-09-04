@@ -35,6 +35,8 @@ const FinanceCustomers = () => {
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
     const [exportFmt, setExportFmt] = useState(null);
+    const [dailyHistogramData, setDailyHistogramData] = useState([]);
+    const [loadingDailyHistogram, setLoadingDailyHistogram] = useState(false);
 
     const baseParams = useCallback(() => {
         const p = { range, status };
@@ -43,16 +45,153 @@ const FinanceCustomers = () => {
         return p;
     }, [range, granularity, status, dateFrom, dateTo]);
 
+    // Helper function to get current week/month dates in Africa/East timezone
+    const getDateRangeForHistogram = useCallback(() => {
+        const now = new Date();
+        // Convert to Africa/East timezone (UTC+3)
+        const eastAfricaTime = new Date(now.toLocaleString('en-US', { timeZone: 'Africa/Nairobi' }));
+
+        let startDate, endDate;
+
+        if (range === 'week' || range === 'this_week') {
+            // Get current week (Monday to Sunday)
+            const day = eastAfricaTime.getDay();
+            const diff = eastAfricaTime.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
+            startDate = new Date(eastAfricaTime);
+            startDate.setDate(diff);
+            startDate.setHours(0, 0, 0, 0);
+
+            endDate = new Date(startDate);
+            endDate.setDate(startDate.getDate() + 6);
+            endDate.setHours(23, 59, 59, 999);
+        } else if (range === 'month' || range === 'this_month') {
+            // Get current month
+            startDate = new Date(eastAfricaTime.getFullYear(), eastAfricaTime.getMonth(), 1);
+            startDate.setHours(0, 0, 0, 0);
+
+            endDate = new Date(eastAfricaTime.getFullYear(), eastAfricaTime.getMonth() + 1, 0);
+            endDate.setHours(23, 59, 59, 999);
+        } else if (range === 'custom') {
+            // Use custom dates if provided
+            if (dateFrom && dateTo) {
+                startDate = new Date(dateFrom);
+                startDate.setHours(0, 0, 0, 0);
+                endDate = new Date(dateTo);
+                endDate.setHours(23, 59, 59, 999);
+            } else {
+                // Fallback to current week if custom dates not set
+                const day = eastAfricaTime.getDay();
+                const diff = eastAfricaTime.getDate() - day + (day === 0 ? -6 : 1);
+                startDate = new Date(eastAfricaTime);
+                startDate.setDate(diff);
+                startDate.setHours(0, 0, 0, 0);
+                endDate = new Date(startDate);
+                endDate.setDate(startDate.getDate() + 6);
+                endDate.setHours(23, 59, 59, 999);
+            }
+        } else {
+            // Default to current week
+            const day = eastAfricaTime.getDay();
+            const diff = eastAfricaTime.getDate() - day + (day === 0 ? -6 : 1);
+            startDate = new Date(eastAfricaTime);
+            startDate.setDate(diff);
+            startDate.setHours(0, 0, 0, 0);
+            endDate = new Date(startDate);
+            endDate.setDate(startDate.getDate() + 6);
+            endDate.setHours(23, 59, 59, 999);
+        }
+
+        return { startDate, endDate };
+    }, [range, dateFrom, dateTo]);
+
+    // Fetch daily histogram data
+    const fetchDailyHistogram = useCallback(async () => {
+        setLoadingDailyHistogram(true);
+        try {
+            const { startDate, endDate } = getDateRangeForHistogram();
+
+            // Get current date in Africa/East timezone
+            const now = new Date();
+            const eastAfricaNow = new Date(now.toLocaleString('en-US', { timeZone: 'Africa/Nairobi' }));
+
+            // Generate date range
+            const dates = [];
+            let currentDate = new Date(startDate);
+
+            while (currentDate <= endDate) {
+                const dateStr = currentDate.toISOString().split('T')[0];
+                dates.push({
+                    date: dateStr,
+                    displayDate: currentDate.toLocaleDateString('en-US', {
+                        weekday: 'short',
+                        month: 'short',
+                        day: 'numeric',
+                        timeZone: 'Africa/Nairobi'
+                    }),
+                    count: 0,
+                    // For week view, include day name
+                    dayName: currentDate.toLocaleDateString('en-US', {
+                        weekday: 'short',
+                        timeZone: 'Africa/Nairobi'
+                    }),
+                    isToday: currentDate.toDateString() === eastAfricaNow.toDateString(),
+                });
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+
+            // If we have table data, aggregate by date
+            if (table.data && table.data.length > 0) {
+                const dateMap = {};
+                table.data.forEach(item => {
+                    if (item.created_at) {
+                        const itemDate = new Date(item.created_at);
+                        // Convert to Africa/East timezone for comparison
+                        const eastAfricaItemDate = new Date(itemDate.toLocaleString('en-US', { timeZone: 'Africa/Nairobi' }));
+                        const dateKey = eastAfricaItemDate.toISOString().split('T')[0];
+
+                        if (dateMap[dateKey]) {
+                            dateMap[dateKey].count += 1;
+                        } else {
+                            dateMap[dateKey] = {
+                                count: 1
+                            };
+                        }
+                    }
+                });
+
+                // Update dates with actual data
+                dates.forEach(d => {
+                    if (dateMap[d.date]) {
+                        d.count = dateMap[d.date].count;
+                    }
+                });
+            }
+
+            setDailyHistogramData(dates);
+        } catch (error) {
+            console.error('Error fetching daily histogram:', error);
+            showSnackbar({ type: 'error', message: 'Failed to load daily histogram data' });
+        } finally {
+            setLoadingDailyHistogram(false);
+        }
+    }, [getDateRangeForHistogram, table.data]);
+
     useEffect(() => { getSummary(baseParams()); }, [baseParams, getSummary]);
     useEffect(() => { getTrends(baseParams()); }, [baseParams, getTrends]);
     useEffect(() => {
         getTable({ ...baseParams(), search: search || undefined, page: page + 1, per_page: rowsPerPage });
     }, [baseParams, search, page, rowsPerPage, getTable]);
 
+    // Fetch daily histogram when table data or range changes
+    useEffect(() => {
+        fetchDailyHistogram();
+    }, [fetchDailyHistogram, range, dateFrom, dateTo]);
+
     const refreshAll = () => {
         getSummary(baseParams());
         getTrends(baseParams());
         getTable({ ...baseParams(), search: search || undefined, page: page + 1, per_page: rowsPerPage });
+        fetchDailyHistogram();
     };
 
     const handleExport = async (format) => {
@@ -137,6 +276,72 @@ const FinanceCustomers = () => {
                     </Grid>
                 ))}
             </Grid>
+
+            {/* ========== DAILY HISTOGRAM CHART ========== */}
+            <Paper
+                elevation={0}
+                sx={{
+                    p: 3,
+                    mb: 3,
+                    borderRadius: 3,
+                    border: `1px solid ${colors.middle}`,
+                    height: 420,
+                }}
+            >
+                <Typography variant="h6" fontWeight={600} mb={2}>
+                    {range === 'week' || range === 'this_week' ? 'Daily Customer Signups (This Week)' :
+                        range === 'month' || range === 'this_month' ? 'Daily Customer Signups (This Month)' :
+                            'Daily Customer Signups (Selected Range)'}
+                </Typography>
+                {loadingDailyHistogram ? (
+                    <Box sx={{ height: '85%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <CircularProgress />
+                    </Box>
+                ) : dailyHistogramData.length === 0 ? (
+                    <Box sx={{ height: '85%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Typography color="text.secondary">No data available for the selected period</Typography>
+                    </Box>
+                ) : (
+                    <ResponsiveContainer width="100%" height="90%">
+                        <BarChart data={dailyHistogramData} margin={{ top: 10, right: 30, left: 0, bottom: 20 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                            <XAxis
+                                dataKey={range === 'week' || range === 'this_week' ? 'dayName' : 'displayDate'}
+                                tick={{ fontSize: 12 }}
+                                interval={0}
+                                angle={range === 'month' || range === 'this_month' ? -45 : 0}
+                                textAnchor={range === 'month' || range === 'this_month' ? 'end' : 'middle'}
+                                height={range === 'month' || range === 'this_month' ? 60 : 30}
+                            />
+                            <YAxis tick={{ fontSize: 12 }} />
+                            <ChartTooltip
+                                formatter={(value) => value}
+                                labelFormatter={(label) => {
+                                    const item = dailyHistogramData.find(d =>
+                                        (range === 'week' || range === 'this_week' ? d.dayName : d.displayDate) === label
+                                    );
+                                    return item ? `${item.dayName || ''} ${item.displayDate || ''}` : label;
+                                }}
+                            />
+                            <Legend />
+                            <Bar
+                                dataKey="count"
+                                name="Signups"
+                                fill="#3b82f6"
+                                radius={[6, 6, 0, 0]}
+                            >
+                                {dailyHistogramData.map((entry, index) => (
+                                    <Cell
+                                        key={`cell-${index}`}
+                                        fill={entry.isToday ? '#10b981' : '#3b82f6'}
+                                        fillOpacity={entry.isToday ? 1 : 0.7}
+                                    />
+                                ))}
+                            </Bar>
+                        </BarChart>
+                    </ResponsiveContainer>
+                )}
+            </Paper>
 
             {/* Pie Chart */}
             <Paper elevation={0} sx={{ p: 3, mb: 3, borderRadius: 3, border: `1px solid ${colors.middle}`, height: 420 }}>
