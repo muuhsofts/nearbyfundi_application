@@ -2,872 +2,637 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Models\User;
-use App\Models\Technician;
+use App\Http\Controllers\Api\BaseApiController;
 use App\Models\ServiceRequest;
-use App\Models\Post;
-use App\Models\Review;
-use App\Models\Comment;
-use App\Models\Portfolio;
-use App\Models\Service;
-use App\Models\Like;
 use App\Models\Subscription;
+use App\Models\Technician;
+use App\Models\User;
+use App\Traits\FinanceRangeTrait;
 use Carbon\Carbon;
+use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
+/**
+ * Consolidates FinanceCustomerController, FinanceRequestController,
+ * FinanceSubscriptionController and FinanceTechnicianController behind a
+ * single set of endpoints:
+ *
+ *   GET /v12/reports/summary    ?type=&status=&(range params)
+ *   GET /v12/reports/trends     ?type=&status=&granularity=&(range params)
+ *   GET /v12/reports/detailed   ?type=(required)&status=&search=&per_page=&(range params)
+ *   GET /v12/reports/overview   ?(range params)
+ *   GET /v12/reports/export     ?type=&format=csv|xlsx&status=&(range params)
+ *
+ * `type` is one of: customers | requests | subscriptions | technicians | all
+ * (all is the default for summary/trends, and means "every domain combined";
+ * detailed always needs one specific type since the tables don't share columns).
+ */
 class ReportController extends BaseApiController
 {
-    /**
-     * Users report – paginated with stats and trend.
-     */
-    public function usersReport(Request $request)
+    use FinanceRangeTrait;
+
+    private const DOMAINS = ['customers', 'requests', 'subscriptions', 'technicians'];
+
+    // =====================================================================
+    //  GET /v12/reports/summary
+    // =====================================================================
+    public function summary(Request $request)
     {
-        $this->checkPermission('reports.view');
+        [$start, $end, $range] = $this->resolveRange($request);
+        $type = $request->input('type', 'all');
 
-        $query = User::with('roles');
+        if ($type !== 'all') {
+            if (!$this->isValidType($type)) {
+                return $this->invalidTypeResponse($type);
+            }
 
-        // Filters
-        if ($request->filled('role')) {
-            $query->role($request->role);
-        }
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
-        }
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%")
-                    ->orWhere('phone', 'like', "%{$search}%");
-            });
+            return $this->successResponse(array_merge(
+                ['range' => $this->rangePayload($start, $end, $range), 'type' => $type],
+                $this->buildSummary($type, $request, $start, $end)
+            ));
         }
 
-        // Date range from period filters
-        list($start, $end) = $this->parseDateRange($request);
-        if ($start) {
-            $query->whereDate('created_at', '>=', $start);
-        }
-        if ($end) {
-            $query->whereDate('created_at', '<=', $end);
-        }
-
-        $users = $query->paginate($request->input('per_page', 20));
-
-        $stats = $this->getUserStats($start, $end);
-        $trend = $this->getUserTrend($start, $end);
+        $customers     = $this->buildSummary('customers', $request, $start, $end);
+        $requests      = $this->buildSummary('requests', $request, $start, $end);
+        $subscriptions = $this->buildSummary('subscriptions', $request, $start, $end);
+        $technicians   = $this->buildSummary('technicians', $request, $start, $end);
 
         return $this->successResponse([
-            'data'   => $users,
-            'stats'  => $stats,
-            'trend'  => $trend,
-        ]);
-    }
-
-    /**
-     * Technicians report – includes area filter, no online/offline.
-     */
-    public function techniciansReport(Request $request)
-    {
-        $this->checkPermission('reports.view');
-
-        $query = Technician::with('user');
-
-        // Filters
-        if ($request->filled('verified')) {
-            $query->where('verified', $request->verified === 'true');
-        }
-        if ($request->filled('area')) {
-            $query->where('area', 'like', "%{$request->area}%");
-        }
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->whereHas('user', function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%")
-                    ->orWhere('phone', 'like', "%{$search}%");
-            });
-        }
-
-        list($start, $end) = $this->parseDateRange($request);
-        if ($start) {
-            $query->whereDate('created_at', '>=', $start);
-        }
-        if ($end) {
-            $query->whereDate('created_at', '<=', $end);
-        }
-
-        $technicians = $query->paginate($request->input('per_page', 20));
-
-        $stats = $this->getTechnicianStats($start, $end);
-        $trend = $this->getTechnicianTrend($start, $end);
-
-        return $this->successResponse([
-            'data'   => $technicians,
-            'stats'  => $stats,
-            'trend'  => $trend,
-        ]);
-    }
-
-    /**
-     * Service requests report – with status filter.
-     */
-    public function requestsReport(Request $request)
-    {
-        $this->checkPermission('reports.view');
-
-        $query = ServiceRequest::with('customer', 'technician.user', 'service');
-
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
-        }
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q->where('description', 'like', "%{$search}%")
-                    ->orWhereHas('customer', fn($cq) => $cq->where('name', 'like', "%{$search}%"))
-                    ->orWhereHas('technician.user', fn($tq) => $tq->where('name', 'like', "%{$search}%"));
-            });
-        }
-
-        list($start, $end) = $this->parseDateRange($request);
-        if ($start) {
-            $query->whereDate('created_at', '>=', $start);
-        }
-        if ($end) {
-            $query->whereDate('created_at', '<=', $end);
-        }
-
-        $requests = $query->orderBy('created_at', 'desc')
-            ->paginate($request->input('per_page', 20));
-
-        $stats = $this->getRequestStats($start, $end);
-        $trend = $this->getRequestTrend($start, $end);
-
-        return $this->successResponse([
-            'data'   => $requests,
-            'stats'  => $stats,
-            'trend'  => $trend,
-        ]);
-    }
-
-    /**
-     * Services report – top services by request count.
-     */
-    public function servicesReport(Request $request)
-    {
-        $this->checkPermission('reports.view');
-
-        list($start, $end) = $this->parseDateRange($request);
-
-        $query = Service::withCount(['requests' => function ($q) use ($start, $end) {
-            if ($start) $q->whereDate('created_at', '>=', $start);
-            if ($end)   $q->whereDate('created_at', '<=', $end);
-        }]);
-
-        $services = $query->orderBy('requests_count', 'desc')->get();
-
-        return $this->successResponse([
-            'data'  => $services,
-            'stats' => [
-                'total'            => $services->count(),
-                'total_requests'   => $services->sum('requests_count'),
-                'avg_per_service'  => $services->avg('requests_count'),
+            'range' => $this->rangePayload($start, $end, $range),
+            'combined_totals' => [
+                'customers'          => $customers['totals']['count'],
+                'requests'           => $requests['totals']['count'],
+                'subscriptions'      => $subscriptions['totals']['count'],
+                'subscriptions_revenue' => $subscriptions['totals']['revenue'],
+                'technicians'        => $technicians['totals']['count'],
             ],
+            'customers'     => $customers,
+            'requests'      => $requests,
+            'subscriptions' => $subscriptions,
+            'technicians'   => $technicians,
         ]);
     }
 
-    /**
-     * Blog report – posts, comments, likes, and trends.
-     */
-    public function blogReport(Request $request)
+    // =====================================================================
+    //  GET /v12/reports/trends
+    // =====================================================================
+    public function trends(Request $request)
     {
-        $this->checkPermission('reports.view');
+        [$start, $end, $range] = $this->resolveRange($request);
+        $granularity = $this->resolveGranularity($request, $range);
+        $unit = $this->bucketUnit($granularity);
+        $type = $request->input('type', 'all');
+        $status = $request->input('status');
 
-        list($start, $end) = $this->parseDateRange($request);
+        if ($type !== 'all') {
+            if (!$this->isValidType($type)) {
+                return $this->invalidTypeResponse($type);
+            }
 
-        // Base queries with date filters
-        $postsQuery    = Post::query();
-        $commentsQuery = Comment::query();
-        $likesQuery    = Like::query();
+            $buckets = [];
+            foreach (CarbonPeriod::create($start, "1 {$unit}", $end) as $date) {
+                $bStart = $date->copy()->startOf($unit);
+                $bEnd   = $date->copy()->endOf($unit);
+                $point  = $this->bucketPoint($type, $bStart, $bEnd, $status);
 
-        if ($start) {
-            $postsQuery->whereDate('created_at', '>=', $start);
-            $commentsQuery->whereDate('created_at', '>=', $start);
-            $likesQuery->whereDate('created_at', '>=', $start);
+                $buckets[] = array_merge([
+                    'label' => $this->bucketLabel($bStart, $unit),
+                    'date'  => $bStart->toDateString(),
+                ], $point);
+            }
+
+            return $this->successResponse([
+                'type'        => $type,
+                'granularity' => $granularity,
+                'buckets'     => $buckets,
+            ]);
         }
-        if ($end) {
-            $postsQuery->whereDate('created_at', '<=', $end);
-            $commentsQuery->whereDate('created_at', '<=', $end);
-            $likesQuery->whereDate('created_at', '<=', $end);
+
+        // Combined: one bucket loop, one series per domain (status filter is
+        // ignored here since it means something different per domain).
+        $buckets = [];
+        foreach (CarbonPeriod::create($start, "1 {$unit}", $end) as $date) {
+            $bStart = $date->copy()->startOf($unit);
+            $bEnd   = $date->copy()->endOf($unit);
+
+            $buckets[] = [
+                'label' => $this->bucketLabel($bStart, $unit),
+                'date'  => $bStart->toDateString(),
+                'customers'             => $this->bucketPoint('customers', $bStart, $bEnd, null)['count'],
+                'requests'              => $this->bucketPoint('requests', $bStart, $bEnd, null)['count'],
+                'subscriptions'         => $this->bucketPoint('subscriptions', $bStart, $bEnd, null)['count'],
+                'subscriptions_revenue' => $this->bucketPoint('subscriptions', $bStart, $bEnd, null)['revenue'],
+                'technicians'           => $this->bucketPoint('technicians', $bStart, $bEnd, null)['count'],
+            ];
         }
 
-        $totalPosts = $postsQuery->count();
+        return $this->successResponse([
+            'granularity' => $granularity,
+            'buckets'     => $buckets,
+        ]);
+    }
 
-        $stats = [
-            'total_posts'             => $totalPosts,
-            'total_comments'          => $commentsQuery->count(),
-            'total_likes'             => $likesQuery->count(),
-            'avg_comments_per_post'   => $totalPosts > 0 ? $commentsQuery->count() / $totalPosts : 0,
+    // =====================================================================
+    //  GET /v12/reports/detailed
+    //  A single-domain paginated table (equivalent to the old `table()`
+    //  endpoints). `type` is required since schemas differ per domain.
+    // =====================================================================
+    public function detailed(Request $request)
+    {
+        $type = $request->input('type');
 
-            'posts_with_most_comments' => Post::withCount(['comments' => function ($q) use ($start, $end) {
-                if ($start) $q->whereDate('created_at', '>=', $start);
-                if ($end)   $q->whereDate('created_at', '<=', $end);
-            }])->orderBy('comments_count', 'desc')->limit(5)->get(['id', 'title', 'comments_count']),
+        if (!$type || !$this->isValidType($type)) {
+            return $this->invalidTypeResponse($type, true);
+        }
 
-            'posts_with_most_likes' => Post::withCount(['likes' => function ($q) use ($start, $end) {
-                if ($start) $q->whereDate('created_at', '>=', $start);
-                if ($end)   $q->whereDate('created_at', '<=', $end);
-            }])->orderBy('likes_count', 'desc')->limit(5)->get(['id', 'title', 'likes_count']),
+        [$start, $end] = $this->resolveRange($request);
+        $status = $request->input('status');
+        $search = $request->input('search');
+        $perPage = $request->input('per_page', 10);
 
-            'comments_by_user' => Comment::selectRaw('user_id, count(*) as count')
-                ->when($start, fn($q) => $q->whereDate('created_at', '>=', $start))
-                ->when($end,   fn($q) => $q->whereDate('created_at', '<=', $end))
-                ->groupBy('user_id')
-                ->orderBy('count', 'desc')
-                ->limit(5)
-                ->with('user:id,name')
-                ->get(),
+        $query = match ($type) {
+            'customers' => User::role('CUSTOMER')->whereBetween('created_at', [$start, $end]),
+            'requests'  => ServiceRequest::with(['customer', 'technician.user', 'service'])
+                ->whereBetween('created_at', [$start, $end]),
+            'subscriptions' => Subscription::with(['user', 'rateCard'])
+                ->whereBetween('created_at', [$start, $end]),
+            'technicians' => Technician::with('user')->whereBetween('created_at', [$start, $end]),
+        };
+
+        if ($status && $status !== 'all') {
+            $statusColumn = $type === 'technicians' ? 'verification_status' : 'status';
+            $query->where($statusColumn, $status);
+        }
+
+        if ($search) {
+            $this->applySearch($query, $type, $search);
+        }
+
+        return $this->successResponse(
+            $query->orderBy('created_at', 'desc')->paginate($perPage)
+        );
+    }
+
+    // =====================================================================
+    //  GET /v12/reports/overview
+    //  Dashboard snapshot: headline totals + growth vs. the previous period
+    //  of equal length, plus a compact combined trend.
+    // =====================================================================
+    public function overview(Request $request)
+    {
+        [$start, $end, $range] = $this->resolveRange($request);
+        [$prevStart, $prevEnd] = $this->previousPeriod($start, $end);
+
+        $current = [
+            'customers'     => $this->buildSummary('customers', $request, $start, $end),
+            'requests'      => $this->buildSummary('requests', $request, $start, $end),
+            'subscriptions' => $this->buildSummary('subscriptions', $request, $start, $end),
+            'technicians'   => $this->buildSummary('technicians', $request, $start, $end),
         ];
 
-        // Blog post trend (daily)
-        $trend = Post::select(
-                DB::raw('DATE(created_at) as date'),
-                DB::raw('COUNT(*) as posts')
-            )
-            ->when($start, fn($q) => $q->whereDate('created_at', '>=', $start))
-            ->when($end,   fn($q) => $q->whereDate('created_at', '<=', $end))
-            ->groupBy('date')
-            ->orderBy('date', 'asc')
-            ->get();
+        $previous = [
+            'customers'     => $this->buildSummary('customers', $request, $prevStart, $prevEnd),
+            'requests'      => $this->buildSummary('requests', $request, $prevStart, $prevEnd),
+            'subscriptions' => $this->buildSummary('subscriptions', $request, $prevStart, $prevEnd),
+            'technicians'   => $this->buildSummary('technicians', $request, $prevStart, $prevEnd),
+        ];
 
-        return $this->successResponse([
-            'stats' => $stats,
-            'trend' => $trend,
-        ]);
-    }
-
-    /**
-     * Portfolio report – total items and technicians with most items.
-     */
-    public function portfolioReport(Request $request)
-    {
-        $this->checkPermission('reports.view');
-
-        list($start, $end) = $this->parseDateRange($request);
-
-        $query = Portfolio::query();
-        if ($start) $query->whereDate('created_at', '>=', $start);
-        if ($end)   $query->whereDate('created_at', '<=', $end);
-
-        $total = $query->count();
-
-        $techPortfolios = Portfolio::selectRaw('technician_id, count(*) as count')
-            ->when($start, fn($q) => $q->whereDate('created_at', '>=', $start))
-            ->when($end,   fn($q) => $q->whereDate('created_at', '<=', $end))
-            ->groupBy('technician_id')
-            ->orderBy('count', 'desc')
-            ->limit(10)
-            ->with('technician.user:id,name')
-            ->get();
-
-        return $this->successResponse([
-            'total_portfolio_items'           => $total,
-            'technicians_with_most_portfolios' => $techPortfolios,
-        ]);
-    }
-
-    /**
- * Reviews report – paginated list with filters.
- */
-public function reviewsReport(Request $request)
-{
-    $this->checkPermission('reports.view');
-
-    $query = Review::with(['customer', 'technician.user']);
-
-    // Filters
-    if ($request->filled('rating')) {
-        $query->where('rating', $request->rating);
-    }
-    if ($request->filled('search')) {
-        $search = $request->search;
-        $query->where(function ($q) use ($search) {
-            $q->where('comment', 'like', "%{$search}%")
-                ->orWhereHas('customer', fn($cq) => $cq->where('name', 'like', "%{$search}%"))
-                ->orWhereHas('technician.user', fn($tq) => $tq->where('name', 'like', "%{$search}%"));
-        });
-    }
-
-    list($start, $end) = $this->parseDateRange($request);
-    if ($start) {
-        $query->whereDate('created_at', '>=', $start);
-    }
-    if ($end) {
-        $query->whereDate('created_at', '<=', $end);
-    }
-
-    $reviews = $query->orderBy('created_at', 'desc')
-        ->paginate($request->input('per_page', 20));
-
-    return $this->successResponse($reviews);
-}
-
-    /**
- * Get all dashboard stats and trends in one request.
- */
-public function allStats(Request $request)
-{
-    $this->checkPermission('reports.view');
-
-    $tz = 'Africa/Dar_es_Salaam';
-    $now = Carbon::now($tz);
-    list($start, $end) = $this->parseDateRange($request);
-
-    // Default to last 30 days if no period given
-    if (!$start) {
-        $start = $now->copy()->subDays(30)->startOfDay();
-    }
-    if (!$end) {
-        $end = $now->copy()->endOfDay();
-    }
-
-    // ─── Users ──────────────────────────────────────────────
-    $usersQuery = User::query();
-    if ($start) $usersQuery->whereDate('created_at', '>=', $start);
-    if ($end)   $usersQuery->whereDate('created_at', '<=', $end);
-    $usersTotal   = $usersQuery->count();
-    $usersActive  = (clone $usersQuery)->where('is_active', true)->count();
-    $usersInactive = (clone $usersQuery)->where('is_active', false)->count();
-    $usersTrend = User::select(DB::raw('DATE(created_at) as date'), DB::raw('COUNT(*) as total'))
-        ->when($start, fn($q) => $q->whereDate('created_at', '>=', $start))
-        ->when($end,   fn($q) => $q->whereDate('created_at', '<=', $end))
-        ->groupBy('date')->orderBy('date')->get();
-
-    // ─── Technicians ────────────────────────────────────────
-    $techQuery = Technician::query();
-    if ($start) $techQuery->whereDate('created_at', '>=', $start);
-    if ($end)   $techQuery->whereDate('created_at', '<=', $end);
-    $techTotal   = $techQuery->count();
-    $techVerified = (clone $techQuery)->where('verified', true)->count();
-    $techTrend = Technician::select(DB::raw('DATE(created_at) as date'), DB::raw('COUNT(*) as total'))
-        ->when($start, fn($q) => $q->whereDate('created_at', '>=', $start))
-        ->when($end,   fn($q) => $q->whereDate('created_at', '<=', $end))
-        ->groupBy('date')->orderBy('date')->get();
-
-    // ─── Service Requests ──────────────────────────────────
-    $reqQuery = ServiceRequest::query();
-    if ($start) $reqQuery->whereDate('created_at', '>=', $start);
-    if ($end)   $reqQuery->whereDate('created_at', '<=', $end);
-    $reqTotal    = $reqQuery->count();
-    $reqByStatus = (clone $reqQuery)->select('status', DB::raw('count(*) as count'))
-        ->groupBy('status')->get();
-    $reqTrend = ServiceRequest::select(DB::raw('DATE(created_at) as date'), DB::raw('COUNT(*) as total'))
-        ->when($start, fn($q) => $q->whereDate('created_at', '>=', $start))
-        ->when($end,   fn($q) => $q->whereDate('created_at', '<=', $end))
-        ->groupBy('date')->orderBy('date')->get();
-
-    // ─── Services ───────────────────────────────────────────
-    $serviceQuery = Service::withCount(['requests' => function($q) use ($start, $end) {
-        if ($start) $q->whereDate('created_at', '>=', $start);
-        if ($end)   $q->whereDate('created_at', '<=', $end);
-    }]);
-    $topServices = $serviceQuery->orderBy('requests_count', 'desc')->limit(10)->get();
-    $totalServices = Service::count();
-    $totalRequestsAll = ServiceRequest::whereBetween('created_at', [$start, $end])->count();
-
-    // ─── Blog ────────────────────────────────────────────────
-    $blogPostsQuery = Post::query();
-    if ($start) $blogPostsQuery->whereDate('created_at', '>=', $start);
-    if ($end)   $blogPostsQuery->whereDate('created_at', '<=', $end);
-    $totalPosts = $blogPostsQuery->count();
-
-    $blogCommentsQuery = Comment::query();
-    if ($start) $blogCommentsQuery->whereDate('created_at', '>=', $start);
-    if ($end)   $blogCommentsQuery->whereDate('created_at', '<=', $end);
-    $totalComments = $blogCommentsQuery->count();
-
-    $blogLikesQuery = Like::query();
-    if ($start) $blogLikesQuery->whereDate('created_at', '>=', $start);
-    if ($end)   $blogLikesQuery->whereDate('created_at', '<=', $end);
-    $totalLikes = $blogLikesQuery->count();
-
-    $avgComments = $totalPosts > 0 ? $totalComments / $totalPosts : 0;
-
-    $postsWithMostComments = Post::withCount(['comments' => function($q) use ($start, $end) {
-        if ($start) $q->whereDate('created_at', '>=', $start);
-        if ($end)   $q->whereDate('created_at', '<=', $end);
-    }])->orderBy('comments_count', 'desc')->limit(5)->get(['id', 'title', 'comments_count']);
-
-    $postsWithMostLikes = Post::withCount(['likes' => function($q) use ($start, $end) {
-        if ($start) $q->whereDate('created_at', '>=', $start);
-        if ($end)   $q->whereDate('created_at', '<=', $end);
-    }])->orderBy('likes_count', 'desc')->limit(5)->get(['id', 'title', 'likes_count']);
-
-    $commentsByUser = Comment::select('user_id', DB::raw('count(*) as count'))
-        ->when($start, fn($q) => $q->whereDate('created_at', '>=', $start))
-        ->when($end,   fn($q) => $q->whereDate('created_at', '<=', $end))
-        ->groupBy('user_id')->orderBy('count', 'desc')->limit(5)
-        ->with('user:id,name')->get();
-
-    $blogTrend = Post::select(DB::raw('DATE(created_at) as date'), DB::raw('COUNT(*) as posts'))
-        ->when($start, fn($q) => $q->whereDate('created_at', '>=', $start))
-        ->when($end,   fn($q) => $q->whereDate('created_at', '<=', $end))
-        ->groupBy('date')->orderBy('date')->get();
-
-    // ─── Portfolio ───────────────────────────────────────────
-    $portfolioQuery = Portfolio::query();
-    if ($start) $portfolioQuery->whereDate('created_at', '>=', $start);
-    if ($end)   $portfolioQuery->whereDate('created_at', '<=', $end);
-    $totalPortfolioItems = $portfolioQuery->count();
-    $techWithMostPortfolio = Portfolio::select('technician_id', DB::raw('count(*) as count'))
-        ->when($start, fn($q) => $q->whereDate('created_at', '>=', $start))
-        ->when($end,   fn($q) => $q->whereDate('created_at', '<=', $end))
-        ->groupBy('technician_id')->orderBy('count', 'desc')->limit(10)
-        ->with('technician.user:id,name')->get();
-
-    // ─── Subscriptions ───────────────────────────────────────
-    $subQuery = Subscription::query();
-    if ($start) $subQuery->whereDate('created_at', '>=', $start);
-    if ($end)   $subQuery->whereDate('created_at', '<=', $end);
-    $subTotal    = $subQuery->count();
-    $subActive   = (clone $subQuery)->where('status', 'active')
-        ->where(function($q) { $q->whereNull('expiry_date')->orWhere('expiry_date', '>', now()); })->count();
-    $subPending  = (clone $subQuery)->where('status', 'pending')->count();
-    $subExpired  = (clone $subQuery)->where(function($q) {
-        $q->where('status', 'expired')->orWhere(function($sq) {
-            $sq->where('status', 'active')->where('expiry_date', '<', now());
-        });
-    })->count();
-    $subCancelled = (clone $subQuery)->where('status', 'cancelled')->count();
-    $subRevenue  = (clone $subQuery)->sum('amount_paid');
-    $revenueByMethod = (clone $subQuery)->select('payment_method', DB::raw('sum(amount_paid) as total'))
-        ->groupBy('payment_method')->get();
-    $subTrend = Subscription::select(DB::raw('DATE(created_at) as date'), DB::raw('COUNT(*) as total'))
-        ->when($start, fn($q) => $q->whereDate('created_at', '>=', $start))
-        ->when($end,   fn($q) => $q->whereDate('created_at', '<=', $end))
-        ->groupBy('date')->orderBy('date')->get();
-
-    // ─── Reviews ─────────────────────────────────────────────
-    $reviewQuery = Review::query();
-    if ($start) $reviewQuery->whereDate('created_at', '>=', $start);
-    if ($end)   $reviewQuery->whereDate('created_at', '<=', $end);
-    $totalReviews = $reviewQuery->count();
-    $avgRating    = (clone $reviewQuery)->avg('rating') ?? 0;
-    $ratingsDistribution = (clone $reviewQuery)->select('rating', DB::raw('count(*) as count'))
-        ->groupBy('rating')->orderBy('rating')->get();
-    $recentReviews = (clone $reviewQuery)->orderBy('created_at', 'desc')->limit(5)
-        ->with(['customer:id,name', 'technician.user:id,name'])->get();
-
-    // ─── Response ────────────────────────────────────────────
-    return $this->successResponse([
-        'users' => [
-            'total'    => $usersTotal,
-            'active'   => $usersActive,
-            'inactive' => $usersInactive,
-            'trend'    => $usersTrend,
-        ],
-        'technicians' => [
-            'total'    => $techTotal,
-            'verified' => $techVerified,
-            'trend'    => $techTrend,
-        ],
-        'requests' => [
-            'total'     => $reqTotal,
-            'by_status' => $reqByStatus,
-            'trend'     => $reqTrend,
-        ],
-        'services' => [
-            'total'          => $totalServices,
-            'total_requests' => $reqTotal,
-            'avg_per_service'=> $totalServices > 0 ? $reqTotal / $totalServices : 0,
-            'top_services'   => $topServices,
-        ],
-        'blog' => [
-            'total_posts'   => $totalPosts,
-            'total_comments'=> $totalComments,
-            'total_likes'   => $totalLikes,
-            'avg_comments_per_post' => $avgComments,
-            'posts_with_most_comments' => $postsWithMostComments,
-            'posts_with_most_likes'    => $postsWithMostLikes,
-            'comments_by_user' => $commentsByUser,
-            'trend' => $blogTrend,
-        ],
-        'portfolio' => [
-            'total_portfolio_items' => $totalPortfolioItems,
-            'technicians_with_most_portfolios' => $techWithMostPortfolio,
-        ],
-        'subscriptions' => [
-            'total'       => $subTotal,
-            'active'      => $subActive,
-            'pending'     => $subPending,
-            'expired'     => $subExpired,
-            'cancelled'   => $subCancelled,
-            'total_revenue' => $subRevenue,
-            'revenue_by_method' => $revenueByMethod,
-            'trend'       => $subTrend,
-        ],
-        'reviews' => [
-            'total' => $totalReviews,
-            'average_rating' => round($avgRating, 1),
-            'ratings_distribution' => $ratingsDistribution,
-            'recent_reviews' => $recentReviews,
-        ],
-    ]);
-}
-
-    /**
-     * Subscriptions report – with stats, trends, and filters.
-     */
-    public function subscriptionsReport(Request $request)
-    {
-        $this->checkPermission('reports.view');
-
-        $query = Subscription::with(['user', 'rateCard', 'invoice']);
-
-        // Filters
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
-        }
-        if ($request->filled('payment_method')) {
-            $query->where('payment_method', 'like', "%{$request->payment_method}%");
-        }
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q->where('payment_reference', 'like', "%{$search}%")
-                    ->orWhereHas('user', function ($uq) use ($search) {
-                        $uq->where('name', 'like', "%{$search}%")
-                            ->orWhere('email', 'like', "%{$search}%")
-                            ->orWhere('phone', 'like', "%{$search}%");
-                    });
-            });
-        }
-
-        // Date range from period filters
-        list($start, $end) = $this->parseDateRange($request);
-        if ($start) {
-            $query->whereDate('created_at', '>=', $start);
-        }
-        if ($end) {
-            $query->whereDate('created_at', '<=', $end);
-        }
-
-        $subscriptions = $query->orderBy('created_at', 'desc')
-            ->paginate($request->input('per_page', 20));
-
-        // ✅ Auto-mark expired subscriptions
-        $expiredSubscriptions = Subscription::where('status', 'active')
-            ->where('expiry_date', '<', now())
-            ->get();
-
-        foreach ($expiredSubscriptions as $expiredSub) {
-            $expiredSub->update(['status' => 'expired']);
-            if ($expiredSub->user) {
-                $expiredSub->user->update([
-                    'subscription_status' => 'expired',
-                ]);
-            }
-        }
-
-        // Stats
-        $stats = $this->getSubscriptionStats($start, $end);
-        $trend = $this->getSubscriptionTrend($start, $end);
-
-        // Format subscription data for frontend
-        $formattedData = $subscriptions->map(function ($sub) {
-            // Check if expired based on expiry date
-            $isExpired = $sub->expiry_date && Carbon::parse($sub->expiry_date)->isPast();
-            $status = $isExpired && $sub->status === 'active' ? 'expired' : $sub->status;
-
-            return [
-                'id' => $sub->id,
-                'user' => $sub->user ? [
-                    'id' => $sub->user->id,
-                    'name' => $sub->user->name,
-                    'email' => $sub->user->email,
-                ] : null,
-                'rate_card' => $sub->rateCard ? [
-                    'id' => $sub->rateCard->id,
-                    'name' => $sub->rateCard->name,
-                    'duration' => $sub->rateCard->duration_days . ' days',
-                ] : null,
-                'status' => $status,
-                'status_label' => $this->getStatusLabel($status),
-                'amount' => number_format($sub->amount_paid, 0) . ' ' . ($sub->currency ?? 'TZS'),
-                'payment_method' => $sub->payment_method,
-                'payment_reference' => $sub->payment_reference,
-                'payment_proof' => $sub->payment_proof ? url('storage/' . $sub->payment_proof) : null,
-                'start_date' => $sub->start_date,
-                'expiry_date' => $sub->expiry_date,
-                'days_remaining' => $sub->expiry_date ? now()->diffInDays($sub->expiry_date, false) : null,
-                'approved_at' => $sub->approved_at,
-                'created_at' => $sub->created_at,
-                'invoice' => $sub->invoice ? [
-                    'id' => $sub->invoice->id,
-                    'number' => $sub->invoice->invoice_number,
-                    'amount' => $sub->invoice->formatted_amount,
-                    'status' => $sub->invoice->status,
-                    'status_label' => $sub->invoice->status_label,
-                    'pdf_url' => $sub->invoice->pdf_path ? url('storage/' . $sub->invoice->pdf_path) : null,
-                ] : null,
+        $headline = [];
+        foreach (self::DOMAINS as $domain) {
+            $headline[$domain] = [
+                'count'  => $current[$domain]['totals']['count'],
+                'growth' => $this->growth(
+                    $current[$domain]['totals']['count'],
+                    $previous[$domain]['totals']['count']
+                ),
             ];
-        });
+        }
+        $headline['subscriptions']['revenue'] = $current['subscriptions']['totals']['revenue'];
+        $headline['subscriptions']['revenue_growth'] = $this->growth(
+            $current['subscriptions']['totals']['revenue'],
+            $previous['subscriptions']['totals']['revenue']
+        );
+
+        // Compact combined trend for a quick chart on the same screen.
+        $granularity = $this->resolveGranularity($request, $range);
+        $unit = $this->bucketUnit($granularity);
+        $buckets = [];
+        foreach (CarbonPeriod::create($start, "1 {$unit}", $end) as $date) {
+            $bStart = $date->copy()->startOf($unit);
+            $bEnd   = $date->copy()->endOf($unit);
+
+            $buckets[] = [
+                'label'         => $this->bucketLabel($bStart, $unit),
+                'date'          => $bStart->toDateString(),
+                'customers'     => $this->bucketPoint('customers', $bStart, $bEnd, null)['count'],
+                'requests'      => $this->bucketPoint('requests', $bStart, $bEnd, null)['count'],
+                'subscriptions' => $this->bucketPoint('subscriptions', $bStart, $bEnd, null)['count'],
+                'technicians'   => $this->bucketPoint('technicians', $bStart, $bEnd, null)['count'],
+            ];
+        }
 
         return $this->successResponse([
-            'data' => [
-                'data' => $formattedData,
-                'total' => $subscriptions->total(),
-                'per_page' => $subscriptions->perPage(),
-                'current_page' => $subscriptions->currentPage(),
-                'last_page' => $subscriptions->lastPage(),
+            'range' => $this->rangePayload($start, $end, $range),
+            'previous_range' => $this->rangePayload($prevStart, $prevEnd, null),
+            'headline' => $headline,
+            'trend' => [
+                'granularity' => $granularity,
+                'buckets'     => $buckets,
             ],
-            'stats' => $stats,
-            'trend' => $trend,
         ]);
+    }
+
+    // =====================================================================
+    //  GET /v12/reports/export
+    //  Single domain -> csv/xlsx (same output as the old export() methods).
+    //  type=all -> combined multi-sheet xlsx only.
+    // =====================================================================
+    public function export(Request $request)
+    {
+        [$start, $end] = $this->resolveRange($request);
+        $status = $request->input('status');
+        $format = $request->input('format', 'csv');
+        $type = $request->input('type', 'all');
+
+        if ($type === 'all') {
+            if ($format !== 'xlsx') {
+                return $this->errorResponse(
+                    "Combined export only supports format=xlsx (each domain has different columns). Pass a specific ?type= for csv.",
+                    422
+                );
+            }
+
+            return $this->exportCombined($start, $end, $status);
+        }
+
+        if (!$this->isValidType($type)) {
+            return $this->invalidTypeResponse($type);
+        }
+
+        [$headers, $rows, $mapRow, $filename] = $this->exportDataFor($type, $start, $end, $status);
+
+        return $format === 'xlsx'
+            ? $this->exportExcel($rows, $headers, $filename, $mapRow)
+            : $this->exportCsv($rows, $headers, $filename, $mapRow);
+    }
+
+    // =====================================================================
+    //  Internal helpers
+    // =====================================================================
+
+    private function isValidType(?string $type): bool
+    {
+        return in_array($type, self::DOMAINS, true);
+    }
+
+    private function invalidTypeResponse(?string $type, bool $required = false)
+    {
+        $message = $required
+            ? "A ?type= is required. Expected one of: " . implode(', ', self::DOMAINS)
+            : "Invalid type '{$type}'. Expected one of: " . implode(', ', self::DOMAINS) . ', or all';
+
+        return $this->errorResponse($message, 422);
+    }
+
+    private function rangePayload(Carbon $start, Carbon $end, ?string $range): array
+    {
+        return array_filter([
+            'start' => $start->toDateString(),
+            'end'   => $end->toDateString(),
+            'label' => $range,
+        ], fn ($v) => $v !== null);
+    }
+
+    private function previousPeriod(Carbon $start, Carbon $end): array
+    {
+        $seconds = max($start->diffInSeconds($end), 1);
+        $prevEnd = $start->copy()->subSecond();
+        $prevStart = $prevEnd->copy()->subSeconds($seconds);
+
+        return [$prevStart, $prevEnd];
+    }
+
+    private function growth($current, $previous): float
+    {
+        if ((float) $previous == 0.0) {
+            return $current > 0 ? 100.0 : 0.0;
+        }
+
+        return round((($current - $previous) / $previous) * 100, 2);
     }
 
     /**
-     * Revenue report – combined with subscription data.
+     * Builds the same {totals, status_breakdown} shape the original
+     * Finance*Controllers::summary() returned, for one domain.
      */
-    public function revenueReport(Request $request)
+    private function buildSummary(string $type, Request $request, Carbon $start, Carbon $end): array
     {
-        $this->checkPermission('reports.view');
+        $status = $request->input('status');
 
-        list($start, $end) = $this->parseDateRange($request);
-
-        $query = Subscription::query();
-        if ($start) $query->whereDate('created_at', '>=', $start);
-        if ($end)   $query->whereDate('created_at', '<=', $end);
-
-        // ✅ FIX: Sum ALL subscriptions amount_paid for total revenue
-        $totalRevenue = $query->sum('amount_paid');
-
-        // Revenue by payment method - all subscriptions
-        $revenueByMethod = (clone $query)->select('payment_method', DB::raw('sum(amount_paid) as total'))
-            ->groupBy('payment_method')
-            ->get();
-
-        // Revenue by plan - all subscriptions
-        $revenueByPlan = (clone $query)->select('rate_card_id', DB::raw('sum(amount_paid) as total'))
-            ->groupBy('rate_card_id')
-            ->with('rateCard:id,name')
-            ->get();
-
-        // Monthly revenue trend - all subscriptions
-        $monthlyTrend = Subscription::select(
-                DB::raw('DATE_FORMAT(created_at, "%Y-%m") as month'),
-                DB::raw('SUM(amount_paid) as total')
-            )
-            ->when($start, fn($q) => $q->whereDate('created_at', '>=', $start))
-            ->when($end,   fn($q) => $q->whereDate('created_at', '<=', $end))
-            ->groupBy('month')
-            ->orderBy('month', 'asc')
-            ->get();
-
-        return $this->successResponse([
-            'total_revenue' => number_format($totalRevenue, 0) . ' TZS',
-            'by_payment_method' => $revenueByMethod,
-            'by_plan' => $revenueByPlan,
-            'monthly_trend' => $monthlyTrend,
-        ]);
+        return match ($type) {
+            'customers' => $this->summaryCustomers($start, $end, $status),
+            'requests' => $this->summaryRequests($start, $end, $status),
+            'subscriptions' => $this->summarySubscriptions($start, $end, $status),
+            'technicians' => $this->summaryTechnicians($start, $end, $status),
+        };
     }
 
-    // ---------- Aggregation Helpers ----------
-
-    private function getUserStats($start, $end)
+    private function summaryCustomers(Carbon $start, Carbon $end, ?string $status): array
     {
-        $query = User::query();
-        if ($start) $query->whereDate('created_at', '>=', $start);
-        if ($end)   $query->whereDate('created_at', '<=', $end);
+        $query = User::role('CUSTOMER')->whereBetween('created_at', [$start, $end]);
+        if ($status && $status !== 'all') {
+            $query->where('status', $status);
+        }
 
-        $total    = $query->count();
-        $active   = (clone $query)->where('is_active', true)->count();
-        $inactive = (clone $query)->where('is_active', false)->count();
-
-        return ['total' => $total, 'active' => $active, 'inactive' => $inactive];
-    }
-
-    private function getTechnicianStats($start, $end)
-    {
-        $query = Technician::query();
-        if ($start) $query->whereDate('created_at', '>=', $start);
-        if ($end)   $query->whereDate('created_at', '<=', $end);
-
-        $total    = $query->count();
-        $verified = (clone $query)->where('verified', true)->count();
-
-        return ['total' => $total, 'verified' => $verified];
-    }
-
-    private function getRequestStats($start, $end)
-    {
-        $query = ServiceRequest::query();
-        if ($start) $query->whereDate('created_at', '>=', $start);
-        if ($end)   $query->whereDate('created_at', '<=', $end);
-
-        $total    = $query->count();
-        $statuses = (clone $query)->select('status', DB::raw('count(*) as count'))
+        $breakdown = (clone $query)
+            ->selectRaw('status, count(*) as total')
             ->groupBy('status')
-            ->get();
+            ->get()
+            ->map(fn ($r) => ['status' => $r->status, 'total' => (int) $r->total]);
 
-        return ['total' => $total, 'by_status' => $statuses];
+        return [
+            'totals' => [
+                'count'     => (clone $query)->count(),
+                'active'    => (clone $query)->where('status', 'active')->count(),
+                'pending'   => (clone $query)->where('status', 'pending')->count(),
+                'suspended' => (clone $query)->where('status', 'suspended')->count(),
+            ],
+            'status_breakdown' => $breakdown,
+        ];
     }
 
-    /**
-     * Get subscription statistics.
-     * ✅ FIX: total_revenue sums ALL subscriptions amount_paid
-     */
-    private function getSubscriptionStats($start, $end)
+    private function summaryRequests(Carbon $start, Carbon $end, ?string $status): array
     {
-        $query = Subscription::query();
-        if ($start) $query->whereDate('created_at', '>=', $start);
-        if ($end)   $query->whereDate('created_at', '<=', $end);
+        $query = ServiceRequest::whereBetween('created_at', [$start, $end]);
+        if ($status && $status !== 'all') {
+            $query->where('status', $status);
+        }
 
-        $total = $query->count();
-        
-        // Active subscriptions (not expired)
-        $active = (clone $query)->where('status', 'active')
-            ->where(function($q) {
-                $q->whereNull('expiry_date')
-                    ->orWhere('expiry_date', '>', now());
+        $breakdown = (clone $query)
+            ->selectRaw('status, count(*) as total')
+            ->groupBy('status')
+            ->get()
+            ->map(fn ($r) => ['status' => $r->status, 'total' => (int) $r->total]);
+
+        return [
+            'totals' => [
+                'count'      => (clone $query)->count(),
+                'pending'    => (clone $query)->where('status', 'pending')->count(),
+                'accepted'   => (clone $query)->where('status', 'accepted')->count(),
+                'completed'  => (clone $query)->where('status', 'completed')->count(),
+                'on_the_way' => (clone $query)->where('status', 'on_the_way')->count(),
+                'rejected'   => (clone $query)->where('status', 'rejected')->count(),
+                'cancelled'  => (clone $query)->where('status', 'cancelled')->count(),
+            ],
+            'status_breakdown' => $breakdown,
+        ];
+    }
+
+    private function summarySubscriptions(Carbon $start, Carbon $end, ?string $status): array
+    {
+        $query = Subscription::whereBetween('created_at', [$start, $end]);
+        if ($status && $status !== 'all') {
+            $query->where('status', $status);
+        }
+
+        $activeCount = (clone $query)
+            ->where('status', 'active')
+            ->where(fn ($q) => $q->whereNull('expiry_date')->orWhere('expiry_date', '>', now()))
+            ->count();
+
+        $expiredCount = (clone $query)
+            ->where(function ($q) {
+                $q->where('status', 'expired')
+                  ->orWhere(function ($sub) {
+                      $sub->where('status', 'active')
+                          ->whereNotNull('expiry_date')
+                          ->where('expiry_date', '<=', now());
+                  });
             })
             ->count();
 
-        // Pending
-        $pending = (clone $query)->where('status', 'pending')->count();
-
-        // Expired (by status OR expiry date)
-        $expired = (clone $query)->where(function($q) {
-            $q->where('status', 'expired')
-                ->orWhere(function($sq) {
-                    $sq->where('status', 'active')
-                        ->where('expiry_date', '<', now());
-                });
-        })->count();
-
-        // Cancelled
-        $cancelled = (clone $query)->where('status', 'cancelled')->count();
-
-        // ✅ FIX: Total Revenue - sum ALL subscriptions amount_paid
-        // This includes all statuses since all have been paid
-        $totalRevenue = (clone $query)->sum('amount_paid');
-
-        // Revenue by payment method - all subscriptions
-        $revenueByMethod = (clone $query)->select('payment_method', DB::raw('sum(amount_paid) as total'))
-            ->groupBy('payment_method')
-            ->get();
+        $breakdown = (clone $query)
+            ->selectRaw('status, count(*) as total, sum(amount_paid) as revenue')
+            ->groupBy('status')
+            ->get()
+            ->map(fn ($r) => [
+                'status'  => $r->status,
+                'total'   => (int) $r->total,
+                'revenue' => (float) $r->revenue,
+            ]);
 
         return [
-            'total' => $total,
-            'active' => $active,
-            'pending' => $pending,
-            'expired' => $expired,
-            'cancelled' => $cancelled,
-            'total_revenue' => $totalRevenue,
-            'revenue_by_method' => $revenueByMethod,
+            'totals' => [
+                'count'   => (clone $query)->count(),
+                'revenue' => (float) (clone $query)->sum('amount_paid'),
+                'active'  => $activeCount,
+                'expired' => $expiredCount,
+            ],
+            'status_breakdown' => $breakdown,
         ];
     }
 
-    private function getUserTrend($start, $end)
+    private function summaryTechnicians(Carbon $start, Carbon $end, ?string $status): array
     {
-        return User::select(
-                DB::raw('DATE(created_at) as date'),
-                DB::raw('COUNT(*) as total')
-            )
-            ->when($start, fn($q) => $q->whereDate('created_at', '>=', $start))
-            ->when($end,   fn($q) => $q->whereDate('created_at', '<=', $end))
-            ->groupBy('date')
-            ->orderBy('date', 'asc')
-            ->get();
-    }
+        $query = Technician::whereBetween('created_at', [$start, $end]);
+        if ($status && $status !== 'all') {
+            $query->where('verification_status', $status);
+        }
 
-    private function getTechnicianTrend($start, $end)
-    {
-        return Technician::select(
-                DB::raw('DATE(created_at) as date'),
-                DB::raw('COUNT(*) as total')
-            )
-            ->when($start, fn($q) => $q->whereDate('created_at', '>=', $start))
-            ->when($end,   fn($q) => $q->whereDate('created_at', '<=', $end))
-            ->groupBy('date')
-            ->orderBy('date', 'asc')
-            ->get();
-    }
+        $breakdown = (clone $query)
+            ->selectRaw('verification_status as status, count(*) as total')
+            ->groupBy('verification_status')
+            ->get()
+            ->map(fn ($r) => ['status' => $r->status, 'total' => (int) $r->total]);
 
-    private function getRequestTrend($start, $end)
-    {
-        return ServiceRequest::select(
-                DB::raw('DATE(created_at) as date'),
-                DB::raw('COUNT(*) as total')
-            )
-            ->when($start, fn($q) => $q->whereDate('created_at', '>=', $start))
-            ->when($end,   fn($q) => $q->whereDate('created_at', '<=', $end))
-            ->groupBy('date')
-            ->orderBy('date', 'asc')
-            ->get();
-    }
-
-    /**
-     * Get subscription trend (daily new subscriptions).
-     */
-    private function getSubscriptionTrend($start, $end)
-    {
-        return Subscription::select(
-                DB::raw('DATE(created_at) as date'),
-                DB::raw('COUNT(*) as total')
-            )
-            ->when($start, fn($q) => $q->whereDate('created_at', '>=', $start))
-            ->when($end,   fn($q) => $q->whereDate('created_at', '<=', $end))
-            ->groupBy('date')
-            ->orderBy('date', 'asc')
-            ->get();
-    }
-
-    /**
-     * Get status label.
-     */
-    private function getStatusLabel($status)
-    {
-        $map = [
-            'pending' => 'Pending',
-            'active' => 'Active',
-            'expired' => 'Expired',
-            'cancelled' => 'Cancelled',
+        return [
+            'totals' => [
+                'count'    => (clone $query)->count(),
+                'approved' => (clone $query)->where('verification_status', 'approved')->count(),
+                'pending'  => (clone $query)->where('verification_status', 'pending')->count(),
+                'online'   => (clone $query)->where('is_online', true)->count(),
+            ],
+            'status_breakdown' => $breakdown,
         ];
-        return $map[$status] ?? $status;
     }
 
     /**
-     * Parse period and date from request, return Carbon instances in EAT.
-     *
-     * @param Request $request
-     * @return array [start, end] (Carbon|null)
+     * Count (+ revenue, for subscriptions) for one domain within one bucket window.
      */
-    private function parseDateRange(Request $request)
+    private function bucketPoint(string $type, Carbon $bStart, Carbon $bEnd, ?string $status): array
     {
-        $period = $request->get('period');
-        $date   = $request->get('date');
+        return match ($type) {
+            'customers' => (function () use ($bStart, $bEnd, $status) {
+                $q = User::role('CUSTOMER')->whereBetween('created_at', [$bStart, $bEnd]);
+                if ($status && $status !== 'all') $q->where('status', $status);
+                return ['count' => $q->count()];
+            })(),
+            'requests' => (function () use ($bStart, $bEnd, $status) {
+                $q = ServiceRequest::whereBetween('created_at', [$bStart, $bEnd]);
+                if ($status && $status !== 'all') $q->where('status', $status);
+                return ['count' => $q->count()];
+            })(),
+            'subscriptions' => (function () use ($bStart, $bEnd, $status) {
+                $q = Subscription::whereBetween('created_at', [$bStart, $bEnd]);
+                if ($status && $status !== 'all') $q->where('status', $status);
+                return [
+                    'count'   => (clone $q)->count(),
+                    'revenue' => (float) (clone $q)->sum('amount_paid'),
+                ];
+            })(),
+            'technicians' => (function () use ($bStart, $bEnd, $status) {
+                $q = Technician::whereBetween('created_at', [$bStart, $bEnd]);
+                if ($status && $status !== 'all') $q->where('verification_status', $status);
+                return ['count' => $q->count()];
+            })(),
+        };
+    }
 
-        if (!$period || !$date) {
-            return [null, null];
+    private function applySearch($query, string $type, string $search): void
+    {
+        match ($type) {
+            'customers' => $query->where(function ($q) use ($search) {
+                $q->where('name', 'LIKE', "%{$search}%")
+                  ->orWhere('email', 'LIKE', "%{$search}%")
+                  ->orWhere('phone', 'LIKE', "%{$search}%");
+            }),
+            'requests' => $query->where(function ($q) use ($search) {
+                $q->where('description', 'LIKE', "%{$search}%")
+                  ->orWhereHas('customer', fn ($u) => $u->where('name', 'LIKE', "%{$search}%")
+                      ->orWhere('email', 'LIKE', "%{$search}%")
+                      ->orWhere('phone', 'LIKE', "%{$search}%"))
+                  ->orWhereHas('technician.user', fn ($u) => $u->where('name', 'LIKE', "%{$search}%"))
+                  ->orWhereHas('service', fn ($s) => $s->where('name', 'LIKE', "%{$search}%"));
+            }),
+            'subscriptions' => $query->whereHas('user', fn ($q) => $q->where('name', 'LIKE', "%{$search}%")
+                ->orWhere('email', 'LIKE', "%{$search}%")),
+            'technicians' => $query->where(function ($q) use ($search) {
+                $q->where('area', 'LIKE', "%{$search}%")
+                  ->orWhereHas('user', fn ($u) => $u->where('name', 'LIKE', "%{$search}%")
+                      ->orWhere('email', 'LIKE', "%{$search}%"));
+            }),
+            default => null,
+        };
+    }
+
+    /**
+     * Returns [headers, rows, mapRow, filename] for a single-domain export,
+     * matching the original Finance*Controllers::export() column sets.
+     */
+    private function exportDataFor(string $type, Carbon $start, Carbon $end, ?string $status): array
+    {
+        $timestamp = now()->format('Y-m-d_His');
+
+        return match ($type) {
+            'customers' => (function () use ($start, $end, $status, $timestamp) {
+                $query = User::role('CUSTOMER')->whereBetween('created_at', [$start, $end]);
+                if ($status && $status !== 'all') $query->where('status', $status);
+
+                return [
+                    ['ID', 'Name', 'Email', 'Phone', 'Status', 'Active', 'Created At'],
+                    $query->orderBy('created_at', 'desc')->get(),
+                    fn ($row) => [
+                        $row->id, $row->name, $row->email, $row->phone ?? '-',
+                        $row->status, $row->is_active ? 'Yes' : 'No',
+                        optional($row->created_at)->format('Y-m-d H:i'),
+                    ],
+                    "finance_customers_{$timestamp}",
+                ];
+            })(),
+            'requests' => (function () use ($start, $end, $status, $timestamp) {
+                $query = ServiceRequest::with(['customer', 'technician.user', 'service'])
+                    ->whereBetween('created_at', [$start, $end]);
+                if ($status && $status !== 'all') $query->where('status', $status);
+
+                return [
+                    ['ID', 'Customer', 'Technician', 'Service', 'Status', 'Description', 'Created At'],
+                    $query->orderBy('created_at', 'desc')->get(),
+                    fn ($row) => [
+                        $row->id, $row->customer->name ?? '-', $row->technician->user->name ?? '-',
+                        $row->service->name ?? '-', $row->status, $row->description,
+                        optional($row->created_at)->format('Y-m-d H:i'),
+                    ],
+                    "finance_requests_{$timestamp}",
+                ];
+            })(),
+            'subscriptions' => (function () use ($start, $end, $status, $timestamp) {
+                $query = Subscription::with(['user', 'rateCard'])->whereBetween('created_at', [$start, $end]);
+                if ($status && $status !== 'all') $query->where('status', $status);
+
+                return [
+                    ['ID', 'User', 'Email', 'Plan', 'Amount', 'Currency', 'Status', 'Payment Method', 'Created At', 'Expiry'],
+                    $query->orderBy('created_at', 'desc')->get(),
+                    fn ($row) => [
+                        $row->id, $row->user->name ?? '-', $row->user->email ?? '-', $row->rateCard->name ?? '-',
+                        $row->amount_paid, $row->currency, $row->status, $row->payment_method,
+                        optional($row->created_at)->format('Y-m-d H:i'), optional($row->expiry_date)->format('Y-m-d H:i'),
+                    ],
+                    "finance_subscriptions_{$timestamp}",
+                ];
+            })(),
+            'technicians' => (function () use ($start, $end, $status, $timestamp) {
+                $query = Technician::with('user')->whereBetween('created_at', [$start, $end]);
+                if ($status && $status !== 'all') $query->where('verification_status', $status);
+
+                return [
+                    ['ID', 'Name', 'Email', 'Area', 'Rating', 'Verification Status', 'Online', 'Created At'],
+                    $query->orderBy('created_at', 'desc')->get(),
+                    fn ($row) => [
+                        $row->id, $row->user->name ?? '-', $row->user->email ?? '-', $row->area,
+                        $row->rating, $row->verification_status, $row->is_online ? 'Yes' : 'No',
+                        optional($row->created_at)->format('Y-m-d H:i'),
+                    ],
+                    "finance_technicians_{$timestamp}",
+                ];
+            })(),
+        };
+    }
+
+    /**
+     * Combined multi-sheet xlsx export (one sheet per domain), built directly
+     * with PhpSpreadsheet so it doesn't depend on BaseApiController::exportExcel()
+     * being single-sheet only. Adjust namespace/imports above if your project
+     * uses a different Excel package.
+     */
+    private function exportCombined(Carbon $start, Carbon $end, ?string $status)
+    {
+        $spreadsheet = new Spreadsheet();
+        $spreadsheet->removeSheetByIndex(0);
+
+        $sheetTitles = [
+            'customers'     => 'Customers',
+            'requests'      => 'Requests',
+            'subscriptions' => 'Subscriptions',
+            'technicians'   => 'Technicians',
+        ];
+
+        foreach (self::DOMAINS as $type) {
+            [$headers, $rows, $mapRow] = $this->exportDataFor($type, $start, $end, $status);
+
+            $sheet = $spreadsheet->createSheet();
+            $sheet->setTitle($sheetTitles[$type]);
+            $sheet->fromArray($headers, null, 'A1');
+
+            $rowIndex = 2;
+            foreach ($rows as $row) {
+                $sheet->fromArray($mapRow($row), null, "A{$rowIndex}");
+                $rowIndex++;
+            }
+
+            foreach (range('A', $sheet->getHighestColumn()) as $col) {
+                $sheet->getColumnDimension($col)->setAutoSize(true);
+            }
         }
 
-        $tz = 'Africa/Dar_es_Salaam';
-        $start = null;
-        $end   = null;
+        $filename = 'finance_report_' . now()->format('Y-m-d_His') . '.xlsx';
+        $writer = new Xlsx($spreadsheet);
 
-        if ($period === 'daily') {
-            $start = Carbon::parse($date, $tz)->startOfDay();
-            $end   = Carbon::parse($date, $tz)->endOfDay();
-        } elseif ($period === 'monthly') {
-            $start = Carbon::parse($date . '-01', $tz)->startOfDay();
-            $end   = Carbon::parse($date . '-01', $tz)->endOfMonth()->endOfDay();
-        } elseif ($period === 'yearly') {
-            $start = Carbon::parse($date . '-01-01', $tz)->startOfDay();
-            $end   = Carbon::parse($date . '-12-31', $tz)->endOfDay();
-        }
-
-        return [$start, $end];
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
     }
 }

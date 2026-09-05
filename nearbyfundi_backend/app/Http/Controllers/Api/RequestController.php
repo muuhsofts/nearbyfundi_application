@@ -348,20 +348,20 @@ class RequestController extends BaseApiController
                     $smsResult = $this->smsService->notifyTechnicianNewRequest($serviceRequest, $technician);
                     
                     Log::info('SMS notification sent to technician', [
-                        'request_id' => $serviceRequest->id,
+                        'request_id'    => $serviceRequest->id,
                         'technician_id' => $technician->id,
-                        'phone' => $technician->user->phone,
-                        'sms_success' => $smsResult['success'] ?? false,
+                        'phone'         => $technician->user->phone,
+                        'sms_success'   => $smsResult['success'] ?? false,
                     ]);
                 } else {
                     Log::warning('Technician has no phone number, SMS not sent', [
-                        'request_id' => $serviceRequest->id,
+                        'request_id'    => $serviceRequest->id,
                         'technician_id' => $data['technician_id'],
                     ]);
                 }
             } catch (\Exception $e) {
                 Log::error('Failed to send SMS to technician: ' . $e->getMessage(), [
-                    'request_id' => $serviceRequest->id,
+                    'request_id'    => $serviceRequest->id,
                     'technician_id' => $data['technician_id'],
                 ]);
                 // Don't fail the request if SMS fails - just log it
@@ -451,93 +451,114 @@ class RequestController extends BaseApiController
      * Update request status
      * PATCH /v4/requests/{id}/status
      */
-    public function updateStatus(Request $request, $id)
-    {
-        try {
-            $serviceRequest = ServiceRequest::with(['technician.user', 'customer'])->findOrFail($id);
-            $user           = $request->user();
-            $newStatus      = $request->status;
-            $oldStatus      = $serviceRequest->status;
+     public function updateStatus(Request $request, $id)
+{
+    try {
+        $serviceRequest = ServiceRequest::with(['technician.user', 'customer', 'service'])->findOrFail($id);
+        $user           = $request->user();
+        $newStatus      = $request->input('status') ?? $request->status;
+        $oldStatus      = $serviceRequest->status;
 
-            if (!$user) {
-                return $this->forbidden('User not authenticated.');
-            }
-
-            $allowed = false;
-
-            if ($user->hasRole('FUNDI')) {
-                // Must be the assigned fundi
-                if (!$this->isAssignedFundi($user, $serviceRequest)) {
-                    return $this->forbidden('You are not assigned to this request.');
-                }
-
-                // Valid transitions for fundi
-                if (in_array($newStatus, ['accepted', 'rejected']) && $oldStatus === 'pending') {
-                    $allowed = true;
-                }
-                if ($newStatus === 'on_the_way' && $oldStatus === 'accepted') {
-                    $allowed = true;
-                }
-                if ($newStatus === 'arrived' && $oldStatus === 'on_the_way') {
-                    $allowed = true;
-                }
-                if ($newStatus === 'in_progress' && in_array($oldStatus, ['accepted', 'on_the_way', 'arrived'])) {
-                    $allowed = true;
-                }
-                if ($newStatus === 'completed' && in_array($oldStatus, ['accepted', 'on_the_way', 'arrived', 'in_progress'])) {
-                    $allowed = true;
-                }
-            } elseif ($user->hasRole('CUSTOMER') && $newStatus === 'cancelled' && $oldStatus === 'pending') {
-                if ((int) $user->id !== (int) $serviceRequest->customer_id) {
-                    return $this->forbidden('You can only cancel your own requests.');
-                }
-                $allowed = true;
-            } elseif ($user->can('requests.status.update')) {
-                $allowed = true; // Admin / staff
-            }
-
-            if (!$allowed) {
-                return $this->forbidden('Invalid status change.');
-            }
-
-            DB::beginTransaction();
-
-            $serviceRequest->status = $newStatus;
-            $serviceRequest->save();
-
-            DB::commit();
-
-            try {
-                event(new RequestStatusUpdated($serviceRequest));
-            } catch (\Exception $e) {
-                Log::error('Failed to dispatch RequestStatusUpdated event: ' . $e->getMessage());
-            }
-
-            $this->logRequestAction(
-                $serviceRequest->id,
-                $user->id,
-                $newStatus,
-                $oldStatus,
-                $newStatus,
-                "Status changed from {$oldStatus} to {$newStatus}",
-                $request->ip()
-            );
-
-            $this->handleStatusChange($serviceRequest, $newStatus);
-            $this->logAudit('update_request_status', 'request', $id, "Status changed to {$newStatus}");
-
-            return $this->successResponse(
-                $this->formatSingleRequest($serviceRequest->fresh(['customer', 'technician.user', 'service', 'category'])),
-                'Status updated successfully.'
-            );
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return $this->notFound('Request not found.');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Error updating request status: ' . $e->getMessage());
-            return $this->errorResponse('Failed to update status. Please try again.', 500);
+        if (!$user) {
+            return $this->forbidden('User not authenticated.');
         }
+
+        if (empty($newStatus)) {
+            return $this->errorResponse('Status is required.', 422);
+        }
+
+        $allowed = false;
+
+        // ─── FUNDI ───────────────────────────────────────────────
+        if ($user->hasRole('FUNDI')) {
+            if (!$this->isAssignedFundi($user, $serviceRequest)) {
+                return $this->forbidden(
+                    'You are not assigned to this request. This request belongs to another fundi.'
+                );
+            }
+
+            // Valid transitions
+            if (in_array($newStatus, ['accepted', 'rejected']) && $oldStatus === 'pending') {
+                $allowed = true;
+            }
+            if ($newStatus === 'on_the_way' && $oldStatus === 'accepted') {
+                $allowed = true;
+            }
+            if ($newStatus === 'arrived' && $oldStatus === 'on_the_way') {
+                $allowed = true;
+            }
+            if ($newStatus === 'in_progress' && in_array($oldStatus, ['accepted', 'on_the_way', 'arrived'])) {
+                $allowed = true;
+            }
+            if ($newStatus === 'completed' && in_array($oldStatus, ['accepted', 'on_the_way', 'arrived', 'in_progress'])) {
+                $allowed = true;
+            }
+        }
+        // ─── CUSTOMER ────────────────────────────────────────────
+        elseif ($user->hasRole('CUSTOMER') && $newStatus === 'cancelled' && $oldStatus === 'pending') {
+            if ((int) $user->id !== (int) $serviceRequest->customer_id) {
+                return $this->forbidden('You can only cancel your own requests.');
+            }
+            $allowed = true;
+        }
+        // ─── ADMIN / STAFF ───────────────────────────────────────
+        elseif ($user->can('requests.status.update')) {
+            $allowed = true;
+        }
+
+        if (!$allowed) {
+            Log::warning('Invalid status change attempt', [
+                'user_id'       => $user->id,
+                'roles'         => $user->getRoleNames()->toArray(),
+                'request_id'    => $id,
+                'old_status'    => $oldStatus,
+                'new_status'    => $newStatus,
+                'technician_id' => $serviceRequest->technician_id,
+            ]);
+
+            return $this->forbidden(
+                "Invalid status change. Current status is '{$oldStatus}'. You cannot change it to '{$newStatus}'."
+            );
+        }
+
+        DB::beginTransaction();
+
+        $serviceRequest->status = $newStatus;
+        $serviceRequest->save();
+
+        DB::commit();
+
+        try {
+            event(new RequestStatusUpdated($serviceRequest));
+        } catch (\Exception $e) {
+            Log::error('Failed to dispatch RequestStatusUpdated event: ' . $e->getMessage());
+        }
+
+        $this->logRequestAction(
+            $serviceRequest->id,
+            $user->id,
+            $newStatus,
+            $oldStatus,
+            $newStatus,
+            "Status changed from {$oldStatus} to {$newStatus}",
+            $request->ip()
+        );
+
+        $this->handleStatusChange($serviceRequest, $newStatus);
+        $this->logAudit('update_request_status', 'request', $id, "Status changed to {$newStatus}");
+
+        return $this->successResponse(
+            $this->formatSingleRequest($serviceRequest->fresh(['customer', 'technician.user', 'service', 'category'])),
+            'Status updated successfully.'
+        );
+    } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+        return $this->notFound('Request not found.');
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Error updating request status: ' . $e->getMessage());
+        return $this->errorResponse('Failed to update status. Please try again.', 500);
     }
+}
 
     /**
      * Handle status change side-effects
@@ -592,26 +613,31 @@ class RequestController extends BaseApiController
         // ============================================================
         try {
             $technician = $serviceRequest->technician;
-            $customer = $serviceRequest->customer;
+            $customer   = $serviceRequest->customer;
             
             if ($technician && $customer && !empty($customer->phone)) {
+                // Ensure service is loaded
+                if (!$serviceRequest->relationLoaded('service')) {
+                    $serviceRequest->load('service');
+                }
+
                 $smsResult = $this->smsService->notifyCustomerRequestAccepted($serviceRequest, $technician);
                 
                 Log::info('SMS notification sent to customer about acceptance', [
-                    'request_id' => $serviceRequest->id,
+                    'request_id'  => $serviceRequest->id,
                     'customer_id' => $customer->id,
-                    'phone' => $customer->phone,
+                    'phone'       => $customer->phone,
                     'sms_success' => $smsResult['success'] ?? false,
                 ]);
             } else {
                 Log::warning('Customer has no phone number, SMS not sent', [
-                    'request_id' => $serviceRequest->id,
+                    'request_id'  => $serviceRequest->id,
                     'customer_id' => $serviceRequest->customer_id,
                 ]);
             }
         } catch (\Exception $e) {
             Log::error('Failed to send SMS to customer about acceptance: ' . $e->getMessage(), [
-                'request_id' => $serviceRequest->id,
+                'request_id'  => $serviceRequest->id,
                 'customer_id' => $serviceRequest->customer_id,
             ]);
             // Don't fail the request if SMS fails - just log it
@@ -1382,16 +1408,16 @@ class RequestController extends BaseApiController
             $serviceRequest->save();
 
             Log::info('Customer location updated for request', [
-                'request_id' => $id,
+                'request_id'  => $id,
                 'customer_id' => $user->id,
-                'latitude' => $data['latitude'],
-                'longitude' => $data['longitude'],
+                'latitude'    => $data['latitude'],
+                'longitude'   => $data['longitude'],
             ]);
 
             return $this->successResponse([
                 'request_id' => $id,
-                'latitude' => (float) $serviceRequest->latitude,
-                'longitude' => (float) $serviceRequest->longitude,
+                'latitude'   => (float) $serviceRequest->latitude,
+                'longitude'  => (float) $serviceRequest->longitude,
             ], 'Location updated successfully.');
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->notFound('Request not found.');
@@ -1436,7 +1462,7 @@ class RequestController extends BaseApiController
                 'id'    => $request->customer->id,
                 'name'  => $request->customer->name,
                 'email' => $request->customer->email,
-                'phone' => $request->customer->phone, // ← phone included
+                'phone' => $request->customer->phone,
             ] : null,
             'technician'  => $request->technician ? [
                 'id'            => $request->technician->id,

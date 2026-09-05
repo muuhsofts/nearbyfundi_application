@@ -28,12 +28,12 @@ use App\Http\Controllers\Api\SubscriptionController;
 use App\Http\Controllers\Api\RateCardController;
 use App\Http\Controllers\Api\PaymentMethodController;
 use App\Http\Controllers\Api\ServiceCategoryController;
-// NEW controllers for Phase 2
 use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\PrivacyPolicyController;
 use App\Http\Controllers\Api\Finance\FinanceSubscriptionController;
 use App\Http\Controllers\Api\Finance\FinanceTechnicianController;
 use App\Http\Controllers\Api\Finance\FinanceCustomerController;
+use App\Http\Controllers\Api\Finance\FinanceRequestController;
 use App\Http\Controllers\Api\SmsLogController;
 
 
@@ -322,21 +322,25 @@ Route::prefix('v11')->group(function () {
     });
 });
 
+
 // =============================================
 // V12 – REPORTS
+// Consolidated finance reporting (customers, requests, subscriptions,
+// technicians). Most endpoints accept ?type=customers|requests|subscriptions|technicians
+// to scope to one domain; omit it to get all domains combined.
 // =============================================
-Route::prefix('v12')->middleware(['auth:sanctum', 'active.session'])->group(function () {
-    Route::get('reports/users', [ReportController::class, 'usersReport']);
-    Route::get('reports/technicians', [ReportController::class, 'techniciansReport']);
-    Route::get('reports/requests', [ReportController::class, 'requestsReport']);
-    Route::get('reports/services', [ReportController::class, 'servicesReport']);
-    Route::get('reports/blog', [ReportController::class, 'blogReport']);
-    Route::get('reports/portfolio', [ReportController::class, 'portfolioReport']);
-    Route::get('reports/revenue', [ReportController::class, 'revenueReport']);
-    Route::get('reports/subscriptions', [ReportController::class, 'subscriptionsReport']);
-    Route::get('reports/all-stats', [ReportController::class, 'allStats']);
-    Route::get('reports/reviews', [ReportController::class, 'reviewsReport']);
-});
+Route::prefix('v12')
+    ->middleware(['auth:sanctum', 'active.session', 'permission:finance.view'])
+    ->group(function () {
+        Route::prefix('reports')->group(function () {
+            Route::get('summary', [ReportController::class, 'summary']);
+            Route::get('trends', [ReportController::class, 'trends']);
+            Route::get('detailed', [ReportController::class, 'detailed']); // ?type= required
+            Route::get('overview', [ReportController::class, 'overview']);
+            Route::get('export', [ReportController::class, 'export']);
+        });
+    });
+    
 
 // =============================================
 // V13 – ANALYTICS
@@ -526,6 +530,13 @@ Route::prefix('v21')
             Route::get('table', [FinanceCustomerController::class, 'table']);
             Route::get('export', [FinanceCustomerController::class, 'export']);
         });
+
+            Route::prefix('finance/requests')->group(function () {
+           Route::get('summary', [FinanceRequestController::class, 'summary']);
+           Route::get('trends', [FinanceRequestController::class, 'trends']);
+           Route::get('table', [FinanceRequestController::class, 'table']);
+            Route::get('export', [FinanceRequestController::class, 'export']);
+       });
     });
 
 

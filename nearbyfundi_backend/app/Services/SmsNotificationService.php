@@ -20,37 +20,42 @@ class SmsNotificationService
 
     /**
      * Send notification to technician about new request
-     * Format: "Nearbyfundi: New request created by {customer_name}. Login into app for more detail."
+     * Format: "Nearbyfundi: New request for {service} created by {customer_name}. Login into app for more detail."
      */
     public function notifyTechnicianNewRequest(ServiceRequest $request, Technician $technician): array
     {
         $customer = $request->customer;
         $customerName = $customer->name ?? 'Customer';
+        $serviceName  = $request->service->name ?? 'a service';
 
-        $message = "Nearbyfundi: New request created by {$customerName}. Login into app for more detail.";
+        $message = "Nearbyfundi: New request for {$serviceName} created by {$customerName}. Login into app for more detail.";
 
         return $this->sendSms($technician->user, $message, 'technician_new_request', [
-            'request_id' => $request->id,
-            'customer_id' => $customer->id ?? null,
+            'request_id'    => $request->id,
+            'customer_id'   => $customer->id ?? null,
             'technician_id' => $technician->id,
+            'service_name'  => $serviceName,
         ]);
     }
 
     /**
      * Send notification to customer when technician accepts request
-     * Format: "Your request has been accepted. Wait, technician checks you in a few minutes."
+     * Format: "Your request for {service} has been accepted by {technician_name}. Wait, technician checks you in a few minutes."
      */
     public function notifyCustomerRequestAccepted(ServiceRequest $request, Technician $technician): array
     {
-        $customer = $request->customer;
-        $technicianName = $technician->user->name ?? 'Technician';
+        $customer        = $request->customer;
+        $technicianName  = $technician->user->name ?? 'Technician';
+        $serviceName     = $request->service->name ?? 'your service';
 
-        $message = "Your request has been accepted. Wait, technician checks you in a few minutes.";
+        $message = "Your request for {$serviceName} has been accepted by {$technicianName}. Wait, technician checks you in a few minutes.";
 
         return $this->sendSms($customer, $message, 'request_accepted', [
-            'request_id' => $request->id,
-            'technician_id' => $technician->id,
-            'customer_id' => $customer->id ?? null,
+            'request_id'      => $request->id,
+            'technician_id'   => $technician->id,
+            'customer_id'     => $customer->id ?? null,
+            'technician_name' => $technicianName,
+            'service_name'    => $serviceName,
         ]);
     }
 
@@ -62,13 +67,13 @@ class SmsNotificationService
         if (empty($user->phone)) {
             Log::warning("SMS not sent: User has no phone number", [
                 'user_id' => $user->id,
-                'type' => $type,
+                'type'    => $type,
             ]);
 
             return [
                 'success' => false,
-                'error' => 'User has no phone number',
-                'type' => $type,
+                'error'   => 'User has no phone number',
+                'type'    => $type,
             ];
         }
 
@@ -81,42 +86,42 @@ class SmsNotificationService
 
             // Log SMS
             SmsLog::create([
-                'user_id' => $user->id,
-                'recipient' => $user->phone,
-                'message' => $message,
-                'status' => $isSuccess ? 'sent' : 'failed',
-                'message_id' => $result['message_id'] ?? $result['id'] ?? null,
+                'user_id'       => $user->id,
+                'recipient'     => $user->phone,
+                'message'       => $message,
+                'status'        => $isSuccess ? 'sent' : 'failed',
+                'message_id'    => $result['message_id'] ?? $result['id'] ?? null,
                 'response_data' => array_merge($result, ['type' => $type, 'metadata' => $metadata]),
                 'error_message' => $isSuccess ? null : ($result['message'] ?? 'SMS dispatch failed'),
             ]);
 
             return [
-                'success' => $isSuccess,
-                'message_id' => $result['message_id'] ?? null,
-                'type' => $type,
+                'success'   => $isSuccess,
+                'message_id'=> $result['message_id'] ?? null,
+                'type'      => $type,
                 'recipient' => $user->phone,
             ];
 
         } catch (Throwable $e) {
             Log::error("SMS notification failed", [
                 'user_id' => $user->id,
-                'type' => $type,
-                'error' => $e->getMessage(),
+                'type'    => $type,
+                'error'   => $e->getMessage(),
             ]);
 
             SmsLog::create([
-                'user_id' => $user->id,
-                'recipient' => $user->phone,
-                'message' => $message,
-                'status' => 'failed',
+                'user_id'       => $user->id,
+                'recipient'     => $user->phone,
+                'message'       => $message,
+                'status'        => 'failed',
                 'error_message' => $e->getMessage(),
                 'response_data' => ['type' => $type, 'metadata' => $metadata],
             ]);
 
             return [
                 'success' => false,
-                'error' => $e->getMessage(),
-                'type' => $type,
+                'error'   => $e->getMessage(),
+                'type'    => $type,
             ];
         }
     }
