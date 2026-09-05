@@ -1,6 +1,7 @@
 // main.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:nearbyfundi/providers/settings_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/services.dart';
@@ -13,7 +14,6 @@ import 'providers/request_provider.dart';
 import 'providers/technician_provider.dart';
 import 'providers/service_provider.dart';
 import 'providers/notification_provider.dart';
-import 'providers/settings_provider.dart';
 import 'providers/location_provider.dart';
 import 'providers/static_page_provider.dart';
 import 'providers/theme_provider.dart';

@@ -22,6 +22,7 @@ class RequestDialog extends StatefulWidget {
 class _RequestDialogState extends State<RequestDialog> {
   final TextEditingController _descController = TextEditingController();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+
   int? _selectedServiceId;
   int? _selectedCategoryId;
   bool _isSubmitting = false;
@@ -30,6 +31,9 @@ class _RequestDialogState extends State<RequestDialog> {
   List<ServiceCategory> _availableCategories = [];
   String _locale = 'en';
   bool _isInitialized = false;
+
+  // ← NEW: controls whether category is read-only
+  bool _categoryReadOnly = false;
 
   @override
   void initState() {
@@ -62,22 +66,32 @@ class _RequestDialogState extends State<RequestDialog> {
     super.dispose();
   }
 
+  // ────────────────────────────────────────────────
+  // UPDATED: Auto-fill category + make it read-only
+  // ────────────────────────────────────────────────
   void _updateCategories(int? serviceId) {
     if (serviceId == null) {
       setState(() {
         _availableCategories = [];
         _selectedCategoryId = null;
+        _categoryReadOnly = false;
       });
       return;
     }
 
     final serviceProvider = context.read<ServiceProvider>();
     final categories = serviceProvider.getCategoriesForService(serviceId);
+
     setState(() {
       _availableCategories = categories;
-      if (_selectedCategoryId != null &&
-          !categories.any((c) => c.id == _selectedCategoryId)) {
+
+      if (categories.isNotEmpty) {
+        // Auto-select the first category
+        _selectedCategoryId = categories.first.id;
+        _categoryReadOnly = true; // ← make it read-only
+      } else {
         _selectedCategoryId = null;
+        _categoryReadOnly = false;
       }
     });
   }
@@ -151,6 +165,7 @@ class _RequestDialogState extends State<RequestDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // ─── Header ─────────────────────────────────────────────
               Row(
                 children: [
                   Container(
@@ -186,6 +201,7 @@ class _RequestDialogState extends State<RequestDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // ─── Service Dropdown ─────────────────────────────
                       Text(
                         l10n.selectService,
                         style: theme.textTheme.titleSmall?.copyWith(
@@ -253,7 +269,7 @@ class _RequestDialogState extends State<RequestDialog> {
                             setState(() {
                               _selectedServiceId = value;
                               _errorMessage = null;
-                              _updateCategories(value);
+                              _updateCategories(value); // ← auto-fills + locks category
                             });
                           },
                           validator: (value) => value == null ? l10n.pleaseSelectService : null,
@@ -269,6 +285,7 @@ class _RequestDialogState extends State<RequestDialog> {
                         ),
                       const SizedBox(height: 16),
 
+                      // ─── Category Dropdown (auto-filled + read-only) ──
                       if (_availableCategories.isNotEmpty) ...[
                         Text(
                           l10n.category,
@@ -278,44 +295,52 @@ class _RequestDialogState extends State<RequestDialog> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: theme.dividerColor),
-                          ),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton<int>(
-                              value: _selectedCategoryId,
-                              isExpanded: true,
-                              hint: Text(
-                                l10n.selectService,
-                                style: TextStyle(color: theme.hintColor, fontSize: 14),
-                              ),
-                              items: [
-                                DropdownMenuItem<int>(
-                                  value: null,
-                                  child: Text(l10n.all),
-                                ),
-                                ..._availableCategories.map((category) {
-                                  return DropdownMenuItem<int>(
-                                    value: category.id,
-                                    child: Text(category.getDisplayName(_locale)),
-                                  );
-                                }),
-                              ],
-                              onChanged: (value) {
-                                setState(() {
-                                  _selectedCategoryId = value;
-                                  _errorMessage = null;
-                                });
-                              },
+                        DropdownButtonFormField<int>(
+                          value: _selectedCategoryId,
+                          isExpanded: true,
+                          decoration: InputDecoration(
+                            hintText: l10n.selectService,
+                            hintStyle: TextStyle(color: theme.hintColor, fontSize: 14),
+                            prefixIcon: Icon(Icons.category_rounded, color: AppTheme.primary, size: 20),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
                             ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: theme.dividerColor),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: AppTheme.primary, width: 2),
+                            ),
+                            filled: true,
+                            // Slightly different background when locked
+                            fillColor: _categoryReadOnly
+                                ? theme.colorScheme.surfaceContainerHighest.withOpacity(0.7)
+                                : theme.colorScheme.surfaceContainerHighest,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                           ),
+                          items: _availableCategories.map((category) {
+                            return DropdownMenuItem<int>(
+                              value: category.id,
+                              child: Text(category.getDisplayName(_locale)),
+                            );
+                          }).toList(),
+                          // ← THIS makes it read-only
+                          onChanged: _categoryReadOnly
+                              ? null
+                              : (value) {
+                            setState(() {
+                              _selectedCategoryId = value;
+                              _errorMessage = null;
+                            });
+                          },
                         ),
                         const SizedBox(height: 16),
                       ],
 
+                      // ─── Description ──────────────────────────────────
                       TextFormField(
                         controller: _descController,
                         maxLines: 4,
@@ -351,6 +376,7 @@ class _RequestDialogState extends State<RequestDialog> {
                       ),
                       const SizedBox(height: 20),
 
+                      // ─── Submit Button ────────────────────────────────
                       SizedBox(
                         width: double.infinity,
                         height: 50,
@@ -373,6 +399,7 @@ class _RequestDialogState extends State<RequestDialog> {
                 ),
               ],
 
+              // ─── Loading State ──────────────────────────────────────
               if (_isSubmitting) ...[
                 const SizedBox(height: 24),
                 const Center(child: CircularProgressIndicator()),
@@ -385,6 +412,7 @@ class _RequestDialogState extends State<RequestDialog> {
                 ),
               ],
 
+              // ─── Success State ──────────────────────────────────────
               if (_isSuccess) ...[
                 const SizedBox(height: 8),
                 Container(
@@ -442,7 +470,9 @@ class _RequestDialogState extends State<RequestDialog> {
                 ),
               ],
 
-              if (!_isSubmitting && !_isSuccess &&
+              // ─── Error State ────────────────────────────────────────
+              if (!_isSubmitting &&
+                  !_isSuccess &&
                   _errorMessage != null &&
                   !_errorMessage!.contains('service')) ...[
                 const SizedBox(height: 16),
