@@ -1,5 +1,3 @@
-// src/components/Sidebar/SidebarStructure.js
-
 import {
   Dashboard as DashboardIcon,
   People as UsersIcon,
@@ -15,7 +13,6 @@ import {
   PhotoLibrary as PortfoliosIcon,
   Article as PostsIcon,
   RequestPage as RequestsIcon,
-  Assessment as ReportIcon,
   Settings as SettingsIcon,
   MonitorHeart as MonitoringIcon,
   AccountBalance as FundIcon,
@@ -23,7 +20,7 @@ import {
   PrivacyTip as PrivacyPolicyIcon,
   Category as CategoryIcon,
   AttachMoney as FinanceIcon,
-  Sms as SmsIcon, // NEW: SMS Icon
+  Sms as SmsIcon,
 } from '@mui/icons-material';
 
 const addIf = (condition, item) => (condition ? [item] : []);
@@ -41,7 +38,7 @@ export function getSidebarStructure(hasPermission) {
     });
   }
 
-  // ----- Static Pages (About, Terms, FAQs, Privacy Policy) -----
+  // ----- Static Pages -----
   const staticChildren = [
     ...addIf(hasPermission('about.view'), { label: 'About', link: '/app/about' }),
     ...addIf(hasPermission('terms.view'), { label: 'Terms', link: '/app/terms' }),
@@ -58,7 +55,7 @@ export function getSidebarStructure(hasPermission) {
     });
   }
 
-  // ----- Services (with Categories child) -----
+  // ----- Services -----
   if (hasPermission('services.view')) {
     const servicesChildren = [
       { label: 'All Services', link: '/app/services' },
@@ -122,29 +119,29 @@ export function getSidebarStructure(hasPermission) {
     });
   }
 
-  // ----- SMS Logs (NEW) -----
+  // ----- SMS Logs -----
   if (hasPermission('sms.view')) {
     structure.push({
       id: 14,
       label: 'SMS Logs',
       link: '/app/sms-logs',
       icon: <SmsIcon />,
-      children: [
-        { label: 'All SMS Logs', link: '/app/sms-logs' },]
+      children: [{ label: 'All SMS Logs', link: '/app/sms-logs' }],
     });
   }
 
-  // ----- Finance (dropdown) -----
+  // ----- Finance (Advanced Reports & Dashboards) -----
   if (hasPermission('finance.view')) {
     structure.push({
       id: 13,
       label: 'Finance',
-      link: '#',
+      link: '/app/finance',
       icon: <FinanceIcon />,
       children: [
         { label: 'Subscriptions', link: '/app/finance/subscriptions' },
         { label: 'Technicians', link: '/app/finance/technicians' },
         { label: 'Customers', link: '/app/finance/customers' },
+        { label: 'Requests', link: '/app/finance/requests' },
       ],
     });
   }
@@ -176,18 +173,7 @@ export function getSidebarStructure(hasPermission) {
     });
   }
 
-  // ----- Reports -----
-  if (hasPermission('reports.view')) {
-    structure.push({
-      id: 8,
-      label: 'Reports',
-      link: '#',
-      icon: <ReportIcon />,
-      children: [{ label: 'Reports Dashboard', link: '/app/reports' }],
-    });
-  }
-
-  // ----- Subscriptions -----
+  // ----- Subscriptions (Global) -----
   const subscriptionChildren = [
     ...addIf(hasPermission('subscriptions.view'), { label: 'All Subscriptions', link: '/app/subscriptions' }),
     ...addIf(hasPermission('subscriptions.manage'), { label: 'Rate Cards', link: '/app/rate-cards' }),
@@ -226,7 +212,7 @@ export function getSidebarStructure(hasPermission) {
 }
 
 // =============================================================
-// STATIC STRUCTURE (fallback – used for breadcrumbs / fallback)
+// STATIC STRUCTURE (fallback)
 // =============================================================
 const staticStructure = [
   { id: 1, label: 'Dashboard', link: '/app/dashboard', icon: <DashboardIcon /> },
@@ -279,20 +265,18 @@ const staticStructure = [
     label: 'SMS Logs',
     link: '/app/sms-logs',
     icon: <SmsIcon />,
-    children: [
-      { label: 'All SMS Logs', link: '/app/sms-logs' },
-      { label: 'Send SMS', link: '/app/sms-logs/send' },
-    ],
+    children: [{ label: 'All SMS Logs', link: '/app/sms-logs' }],
   },
   {
     id: 13,
     label: 'Finance',
-    link: '#',
+    link: '/app/finance',
     icon: <FinanceIcon />,
     children: [
       { label: 'Subscriptions', link: '/app/finance/subscriptions' },
       { label: 'Technicians', link: '/app/finance/technicians' },
       { label: 'Customers', link: '/app/finance/customers' },
+      { label: 'Requests', link: '/app/finance/requests' },
     ],
   },
   {
@@ -312,13 +296,6 @@ const staticStructure = [
     link: '/app/monitoring',
     icon: <MonitoringIcon />,
     children: [{ label: 'Monitoring Dashboard', link: '/app/monitoring' }],
-  },
-  {
-    id: 8,
-    label: 'Reports',
-    link: '#',
-    icon: <ReportIcon />,
-    children: [{ label: 'Reports Dashboard', link: '/app/reports' }],
   },
   {
     id: 12,

@@ -68,11 +68,11 @@ function Layout() {
             <div>
               <Link
                   color="primary"
-                  href="https://imaratech.co.tz/"
+                  href="https://ogonegroup.co.tz/"
                   target="_blank"
                   className={classes.link}
               >
-                hanai technologies
+                OG-ONE GROUP
               </Link>
             </div>
             <div>

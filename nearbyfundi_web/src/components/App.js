@@ -1,11 +1,12 @@
 // App.js
-
 import React from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { setNavigator } from "router/navigation";
 import { AuthProvider, useAuth } from "context/AuthContext";
+
+// System Components
 import Documentation from "components/Documentation";
 import Layout from "components/Layout";
 import Login from "pages/login/Login";
@@ -14,7 +15,7 @@ import ResetPassword from "pages/reset_password/ResetPassword";
 import ForgotPassword from "pages/forgot_password/ForgotPassword";
 import Error from "pages/error/Error";
 
-// All Pages
+// Primary Pages
 import Profile from "pages/profile";
 import Dashboard from "pages/dashboard/Dashboard";
 import UsersList from "pages/user";
@@ -30,28 +31,27 @@ import TechnicianDetails from "pages/technicians/TechnicianDetails";
 import PortfoliosList from "pages/portfolios/PortfoliosList";
 import PostsList from "pages/posts/PostsList";
 import RequestsList from "pages/requests/RequestsList";
-import ReportsDashboard from "pages/reports/ReportsDashboard";
 import ServicesList from "pages/services/ServicesList";
 import CategoriesList from "pages/categories/CategoriesList";
 import MonitoringMap from "pages/monitoring/MonitoringMap";
 import PrivacyPolicyPage from "pages/privacy-policy/PrivacyPolicyPage";
 
-// Subscription pages
+// Subscription Pages
 import SubscriptionList from "pages/subscriptions/SubscriptionList";
 import RateCardManagement from "pages/subscriptions/RateCardManagement";
 import PaymentMethodManagement from "pages/subscriptions/PaymentMethodManagement";
 
-// Finance pages
+// Finance Pages
 import FinanceLayout from "pages/finance/FinanceLayout";
 import FinanceSubscriptions from "pages/finance/FinanceSubscriptions";
 import FinanceTechnicians from "pages/finance/FinanceTechnicians";
 import FinanceCustomers from "pages/finance/FinanceCustomers";
+import FinanceRequests from "pages/finance/FinanceRequests";
 
-// SMS Logs pages (NEW)
+// SMS Logs Pages
 import SmsLogsList from "pages/sms/SmsLogsList";
-import SendSmsDialog from "pages/sms/SendSmsDialog";
 
-// Contexts
+// Context Providers
 import { UserProvider } from "context/UserContext";
 import { RoleProvider } from "context/RoleContext";
 import { PermissionProvider } from "context/PermissionContext";
@@ -76,14 +76,18 @@ import {
     SubscriptionProvider,
 } from "context/SubscriptionContext";
 import { PrivacyPolicyProvider } from "context/PrivacyPolicyContext";
-
-// Finance contexts
-import { FinanceSubscriptionProvider } from "context/FinanceSubscriptionContext";
-import { FinanceTechnicianProvider } from "context/FinanceTechnicianContext";
-import { FinanceCustomerProvider } from "context/FinanceCustomerContext";
-
-// SMS Context (NEW)
 import { SmsProvider } from "context/SmsContext";
+
+// Route Guards
+const PrivateRoute = ({ children, isAuthenticated }) => {
+    if (!isAuthenticated) return <Navigate to="/login" replace />;
+    return children;
+};
+
+const PublicRoute = ({ children, isAuthenticated }) => {
+    if (isAuthenticated) return <Navigate to="/app/dashboard" replace />;
+    return children;
+};
 
 function RouterNavigatorSync() {
     const navigate = useNavigate();
@@ -108,10 +112,10 @@ function AppContent() {
     return (
         <Routes>
             {/* Public Routes */}
-            <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-            <Route path="/verify-otp" element={<PublicRoute><VerifyOTP /></PublicRoute>} />
-            <Route path="/reset-password" element={<PublicRoute><ResetPassword /></PublicRoute>} />
-            <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
+            <Route path="/login" element={<PublicRoute isAuthenticated={isAuthenticated}><Login /></PublicRoute>} />
+            <Route path="/verify-otp" element={<PublicRoute isAuthenticated={isAuthenticated}><VerifyOTP /></PublicRoute>} />
+            <Route path="/reset-password" element={<PublicRoute isAuthenticated={isAuthenticated}><ResetPassword /></PublicRoute>} />
+            <Route path="/forgot-password" element={<PublicRoute isAuthenticated={isAuthenticated}><ForgotPassword /></PublicRoute>} />
 
             {/* Error Pages */}
             <Route path="/403" element={<Error code={403} />} />
@@ -120,8 +124,8 @@ function AppContent() {
             {/* Documentation */}
             <Route path="/documentation/*" element={<Documentation />} />
 
-            {/* Protected Routes – all /app/* handled by Layout */}
-            <Route path="/app/*" element={<PrivateRoute><Layout /></PrivateRoute>}>
+            {/* Protected Routes */}
+            <Route path="/app/*" element={<PrivateRoute isAuthenticated={isAuthenticated}><Layout /></PrivateRoute>}>
                 <Route path="profile" element={<Profile />} />
                 <Route path="dashboard" element={<Dashboard />} />
                 <Route path="users" element={<UsersList />} />
@@ -153,22 +157,21 @@ function AppContent() {
                 <Route path="posts" element={<PostsList />} />
                 <Route path="requests" element={<RequestsList />} />
                 <Route path="monitoring" element={<MonitoringMap />} />
-                <Route path="reports" element={<ReportsDashboard />} />
+                <Route path="reports" element={<Dashboard />} />
                 <Route path="subscriptions" element={<SubscriptionList />} />
                 <Route path="rate-cards" element={<RateCardManagement />} />
                 <Route path="payment-methods" element={<PaymentMethodManagement />} />
                 <Route path="privacy-policy" element={<PrivacyPolicyPage />} />
-
-                {/* SMS Logs routes (NEW) */}
                 <Route path="sms-logs" element={<SmsLogsList />} />
-                <Route path="sms-logs/send" element={<SmsLogsList />} />
 
-                {/* Finance nested routes */}
+                {/* Finance Module Routes */}
                 <Route path="finance" element={<FinanceLayout />}>
                     <Route index element={<Navigate to="/app/finance/subscriptions" replace />} />
                     <Route path="subscriptions" element={<FinanceSubscriptions />} />
                     <Route path="technicians" element={<FinanceTechnicians />} />
                     <Route path="customers" element={<FinanceCustomers />} />
+                    <Route path="requests" element={<FinanceRequests />} />
+                    <Route path="*" element={<Navigate to="/app/finance/subscriptions" replace />} />
                 </Route>
 
                 <Route index element={<Navigate to="/app/dashboard" replace />} />
@@ -180,83 +183,47 @@ function AppContent() {
             <Route path="*" element={<Error />} />
         </Routes>
     );
-
-    function PrivateRoute({ children }) {
-        if (!isAuthenticated) return <Navigate to="/login" replace />;
-        return children;
-    }
-
-    function PublicRoute({ children }) {
-        if (isAuthenticated) return <Navigate to="/app/dashboard" replace />;
-        return children;
-    }
 }
+
+// Context Provider Composer
+const PROVIDERS = [
+    AuthProvider,
+    DashboardProvider,
+    UserProvider,
+    RoleProvider,
+    PermissionProvider,
+    AuditProvider,
+    OtpProvider,
+    AboutProvider,
+    TermsProvider,
+    FaqProvider,
+    PrivacyPolicyProvider,
+    ServiceProvider,
+    TechnicianProvider,
+    AdminTechnicianProvider,
+    PortfolioProvider,
+    PostProvider,
+    CommentProvider,
+    LikeProvider,
+    RequestProvider,
+    ReportProvider,
+    RateCardProvider,
+    PaymentMethodProvider,
+    SubscriptionProvider,
+    SmsProvider,
+];
+
+const AppProviders = ({ children }) =>
+    PROVIDERS.reduceRight((acc, Provider) => <Provider>{acc}</Provider>, children);
 
 export default function App() {
     return (
         <BrowserRouter>
-            <AuthProvider>
-                <DashboardProvider>
-                    <UserProvider>
-                        <RoleProvider>
-                            <PermissionProvider>
-                                <AuditProvider>
-                                    <OtpProvider>
-                                        <AboutProvider>
-                                            <TermsProvider>
-                                                <FaqProvider>
-                                                    <PrivacyPolicyProvider>
-                                                        <ServiceProvider>
-                                                            <TechnicianProvider>
-                                                                <AdminTechnicianProvider>
-                                                                    <PortfolioProvider>
-                                                                        <PostProvider>
-                                                                            <CommentProvider>
-                                                                                <LikeProvider>
-                                                                                    <RequestProvider>
-                                                                                        <ReportProvider>
-                                                                                            <RateCardProvider>
-                                                                                                <PaymentMethodProvider>
-                                                                                                    <SubscriptionProvider>
-                                                                                                        {/* SMS Provider (NEW) */}
-                                                                                                        <SmsProvider>
-                                                                                                            <FinanceSubscriptionProvider>
-                                                                                                                <FinanceTechnicianProvider>
-                                                                                                                    <FinanceCustomerProvider>
-                                                                                                                        <ToastContainer
-                                                                                                                            position="top-right"
-                                                                                                                            autoClose={3000}
-                                                                                                                            hideProgressBar={false}
-                                                                                                                        />
-                                                                                                                        <RouterNavigatorSync />
-                                                                                                                        <AppContent />
-                                                                                                                    </FinanceCustomerProvider>
-                                                                                                                </FinanceTechnicianProvider>
-                                                                                                            </FinanceSubscriptionProvider>
-                                                                                                        </SmsProvider>
-                                                                                                    </SubscriptionProvider>
-                                                                                                </PaymentMethodProvider>
-                                                                                            </RateCardProvider>
-                                                                                        </ReportProvider>
-                                                                                    </RequestProvider>
-                                                                                </LikeProvider>
-                                                                            </CommentProvider>
-                                                                        </PostProvider>
-                                                                    </PortfolioProvider>
-                                                                </AdminTechnicianProvider>
-                                                            </TechnicianProvider>
-                                                        </ServiceProvider>
-                                                    </PrivacyPolicyProvider>
-                                                </FaqProvider>
-                                            </TermsProvider>
-                                        </AboutProvider>
-                                    </OtpProvider>
-                                </AuditProvider>
-                            </PermissionProvider>
-                        </RoleProvider>
-                    </UserProvider>
-                </DashboardProvider>
-            </AuthProvider>
+            <AppProviders>
+                <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} />
+                <RouterNavigatorSync />
+                <AppContent />
+            </AppProviders>
         </BrowserRouter>
     );
 }
