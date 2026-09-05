@@ -224,7 +224,7 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
       if (context.mounted) {
         _showSnack(
           context,
-          success ? l10n.completedSuccess : l10n.failedToComplete,
+          success ? l10n.completedSuccess : (provider.error ?? l10n.failedToComplete),
           isError: !success,
         );
       }
@@ -557,7 +557,7 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
     );
   }
 
-  // ─── REQUEST CARD (production) ─────────────────────────────────────────
+  // ─── REQUEST CARD ──────────────────────────────────────────────────────
   Widget _buildRequestCard(
       BuildContext context,
       ServiceRequest request,
@@ -597,7 +597,7 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header: service + status
+            // Header
             Row(
               children: [
                 Expanded(
@@ -666,7 +666,7 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
               ],
             ),
 
-            // Customer phone (NEW)
+            // Customer phone
             if (request.customerPhone != null &&
                 request.customerPhone!.trim().isNotEmpty) ...[
               const SizedBox(height: 6),
@@ -677,11 +677,7 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
                   padding: const EdgeInsets.symmetric(vertical: 2),
                   child: Row(
                     children: [
-                      Icon(
-                        Icons.phone_rounded,
-                        size: 15,
-                        color: AppTheme.primary,
-                      ),
+                      Icon(Icons.phone_rounded, size: 15, color: AppTheme.primary),
                       const SizedBox(width: 7),
                       Text(
                         request.customerPhone!,
@@ -720,11 +716,7 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
             // Date
             Row(
               children: [
-                Icon(
-                  Icons.access_time_rounded,
-                  size: 13,
-                  color: theme.hintColor,
-                ),
+                Icon(Icons.access_time_rounded, size: 13, color: theme.hintColor),
                 const SizedBox(width: 6),
                 Text(
                   createdDate,
@@ -739,8 +731,8 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
             const SizedBox(height: 16),
 
             // Actions
-            if (isPending) _buildPendingActions(context, request, l10n, theme),
-            if (isActioned) _buildActionedActions(context, request, l10n, theme),
+            if (isPending) _buildPendingActions(context, request, l10n),
+            if (isActioned) _buildActionedActions(context, request, l10n),
             if (isCompleted) _buildCompletedActions(request, l10n, theme),
             if (isRejectedOrCancelled) _buildRejectedActions(request, theme),
           ],
@@ -754,7 +746,6 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
       BuildContext context,
       ServiceRequest request,
       AppLocalizations l10n,
-      ThemeData theme,
       ) {
     return Row(
       children: [
@@ -765,10 +756,13 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
             onPressed: () async {
               final provider = context.read<RequestProvider>();
               final success = await provider.acceptRequest(request.id);
+
               if (context.mounted) {
                 _showSnack(
                   context,
-                  success ? l10n.requestAccepted : 'Failed to accept',
+                  success
+                      ? l10n.requestAccepted
+                      : (provider.error ?? 'Failed to accept'),
                   isError: !success,
                 );
               }
@@ -784,10 +778,13 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
             onPressed: () async {
               final provider = context.read<RequestProvider>();
               final success = await provider.rejectRequest(request.id);
+
               if (context.mounted) {
                 _showSnack(
                   context,
-                  success ? l10n.requestRejected : 'Failed to reject',
+                  success
+                      ? l10n.requestRejected
+                      : (provider.error ?? 'Failed to reject'),
                   isError: !success,
                 );
               }
@@ -802,11 +799,10 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
       BuildContext context,
       ServiceRequest request,
       AppLocalizations l10n,
-      ThemeData theme,
       ) {
     return Column(
       children: [
-        // Call + Chat row
+        // Call + Chat
         Row(
           children: [
             if (request.customerPhone != null &&
@@ -842,14 +838,15 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
               color: Colors.green,
               icon: Icons.directions_car_rounded,
               onPressed: () async {
-                final success =
-                await context.read<RequestProvider>().markOnTheWay(request.id);
+                final provider = context.read<RequestProvider>();
+                final success = await provider.markOnTheWay(request.id);
+
                 if (context.mounted) {
                   _showSnack(
                     context,
                     success
                         ? 'You are now sharing your live location with the customer'
-                        : 'Failed to update status',
+                        : (provider.error ?? 'Failed to update status'),
                     isError: !success,
                   );
                 }
@@ -865,12 +862,15 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
               color: Colors.teal,
               icon: Icons.location_on_rounded,
               onPressed: () async {
-                final success =
-                await context.read<RequestProvider>().markArrived(request.id);
+                final provider = context.read<RequestProvider>();
+                final success = await provider.markArrived(request.id);
+
                 if (context.mounted) {
                   _showSnack(
                     context,
-                    success ? 'Marked as arrived' : 'Failed to update status',
+                    success
+                        ? 'Marked as arrived'
+                        : (provider.error ?? 'Failed to update status'),
                     isError: !success,
                   );
                 }

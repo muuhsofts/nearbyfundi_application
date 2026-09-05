@@ -5,7 +5,6 @@ import '../models/request.dart';
 import '../services/api_service.dart';
 import '../services/location_sharing_service.dar.dart';
 
-
 class RequestProvider extends ChangeNotifier {
   final ApiService _api = ApiService();
 
@@ -15,7 +14,8 @@ class RequestProvider extends ChangeNotifier {
   String? _error;
   double _submissionProgress = 0.0;
 
-  List<ServiceRequest> get requests => _requests;
+  // ─── Getters ────────────────────────────────────────────────
+  List<ServiceRequest> get requests => List.unmodifiable(_requests);
   bool get isLoading => _isLoading;
   bool get isSubmitting => _isSubmitting;
   String? get error => _error;
@@ -40,6 +40,7 @@ class RequestProvider extends ChangeNotifier {
     return _requests.any((r) => r.technicianId == technicianId && r.isActive);
   }
 
+  // ─── Load My Requests ───────────────────────────────────────
   Future<void> loadMyRequests() async {
     _isLoading = true;
     _error = null;
@@ -47,9 +48,10 @@ class RequestProvider extends ChangeNotifier {
 
     try {
       final res = await _api.getMyRequests();
+
       if (res.success && res.data != null) {
         final data = res.data;
-        List<dynamic> requestsData;
+        List<dynamic> requestsData = [];
 
         if (data is List) {
           requestsData = data;
@@ -58,14 +60,13 @@ class RequestProvider extends ChangeNotifier {
             requestsData = data['data'];
           } else if (data['data'] is Map && data['data'].containsKey('data')) {
             requestsData = data['data']['data'] as List? ?? [];
-          } else {
-            requestsData = [];
           }
-        } else {
-          requestsData = [];
         }
 
-        _requests = requestsData.map((e) => ServiceRequest.fromJson(e)).toList();
+        _requests = requestsData
+            .whereType<Map>()
+            .map((e) => ServiceRequest.fromJson(Map<String, dynamic>.from(e)))
+            .toList();
       } else {
         _error = res.message ?? 'Failed to load requests';
         _requests = [];
@@ -73,16 +74,21 @@ class RequestProvider extends ChangeNotifier {
     } catch (e) {
       _error = 'Failed to load requests: $e';
       _requests = [];
+      debugPrint('❌ loadMyRequests error: $e');
     }
 
     _isLoading = false;
     notifyListeners();
   }
 
+  // ─── Create Request ─────────────────────────────────────────
   Future<bool> createRequest({
     required int technicianId,
     required int serviceId,
     required String description,
+    int? categoryId,
+    double? latitude,
+    double? longitude,
   }) async {
     if (_isSubmitting) return false;
 
@@ -93,18 +99,20 @@ class RequestProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _submissionProgress = 0.1;
+      _submissionProgress = 0.2;
       notifyListeners();
 
       final res = await _api.createRequest({
         'technician_id': technicianId,
         'service_id': serviceId,
         'description': description,
+        if (categoryId != null) 'category_id': categoryId,
+        if (latitude != null) 'latitude': latitude,
+        if (longitude != null) 'longitude': longitude,
       });
 
-      _submissionProgress = 0.6;
-      _isLoading = false;
-      _isSubmitting = false;
+      _submissionProgress = 0.7;
+      notifyListeners();
 
       if (res.success) {
         _submissionProgress = 1.0;
@@ -114,20 +122,21 @@ class RequestProvider extends ChangeNotifier {
         return true;
       } else {
         _error = res.message ?? 'Failed to create request';
-        _submissionProgress = 0.0;
-        notifyListeners();
         return false;
       }
     } catch (e) {
       _error = 'Failed to create request: $e';
-      _isLoading = false;
+      debugPrint('❌ createRequest error: $e');
+      return false;
+    } finally {
       _isSubmitting = false;
+      _isLoading = false;
       _submissionProgress = 0.0;
       notifyListeners();
-      return false;
     }
   }
 
+  // ─── Update Status ──────────────────────────────────────────
   Future<bool> updateStatus(int id, String status) async {
     _isLoading = true;
     _error = null;
@@ -135,8 +144,12 @@ class RequestProvider extends ChangeNotifier {
 
     try {
       final res = await _api.updateRequestStatus(id, status);
+
+      debugPrint('📡 updateStatus → id: $id | status: $status');
+      debugPrint('📡 success: ${res.success}');
+      debugPrint('📡 message: ${res.message}');
+
       if (res.success) {
-        // Auto manage location sharing
         if (status == 'on_the_way' || status == 'in_progress') {
           LocationSharingService.startSharing();
         } else if (status == 'completed' ||
@@ -149,18 +162,19 @@ class RequestProvider extends ChangeNotifier {
         return true;
       } else {
         _error = res.message ?? 'Failed to update status';
-        _isLoading = false;
-        notifyListeners();
         return false;
       }
     } catch (e) {
       _error = 'Failed to update status: $e';
+      debugPrint('❌ updateStatus exception: $e');
+      return false;
+    } finally {
       _isLoading = false;
       notifyListeners();
-      return false;
     }
   }
 
+  // ─── Cancel Request ─────────────────────────────────────────
   Future<bool> cancelRequest(int id) async {
     _isLoading = true;
     _error = null;
@@ -168,39 +182,39 @@ class RequestProvider extends ChangeNotifier {
 
     try {
       final res = await _api.cancelRequest(id);
+
       if (res.success) {
         LocationSharingService.stopSharing();
         await loadMyRequests();
         return true;
       } else {
         _error = res.message ?? 'Failed to cancel request';
-        _isLoading = false;
-        notifyListeners();
         return false;
       }
     } catch (e) {
       _error = 'Failed to cancel request: $e';
+      return false;
+    } finally {
       _isLoading = false;
       notifyListeners();
-      return false;
     }
   }
 
-  // ─── Convenience methods ──────────────────────────────────
-
-  Future<bool> acceptRequest(int id) => updateStatus(id, 'accepted');
-
-  Future<bool> rejectRequest(int id) => updateStatus(id, 'rejected');
-
-  Future<bool> completeRequest(int id) async {
-    final success = await updateStatus(id, 'completed');
-    if (success) LocationSharingService.stopSharing();
+  // ─── Convenience Methods ────────────────────────────────────
+  Future<bool> acceptRequest(int id) async {
+    final success = await updateStatus(id, 'accepted');
+    if (!success) {
+      debugPrint('🔴 ACCEPT FAILED → $_error');
+    }
     return success;
   }
 
+  Future<bool> rejectRequest(int id) => updateStatus(id, 'rejected');
+
+  Future<bool> completeRequest(int id) => updateStatus(id, 'completed');
+
   Future<bool> markInProgress(int id) => updateStatus(id, 'in_progress');
 
-  /// Mark as On The Way + start sharing location
   Future<bool> markOnTheWay(int id) async {
     _isLoading = true;
     _error = null;
@@ -208,25 +222,24 @@ class RequestProvider extends ChangeNotifier {
 
     try {
       final res = await _api.markOnTheWay(id);
+
       if (res.success) {
-        LocationSharingService.startSharing(); // start GPS
+        LocationSharingService.startSharing();
         await loadMyRequests();
         return true;
       } else {
         _error = res.message ?? 'Failed to mark on the way';
-        _isLoading = false;
-        notifyListeners();
         return false;
       }
     } catch (e) {
       _error = 'Failed to mark on the way: $e';
+      return false;
+    } finally {
       _isLoading = false;
       notifyListeners();
-      return false;
     }
   }
 
-  /// Mark Arrived
   Future<bool> markArrived(int id) async {
     _isLoading = true;
     _error = null;
@@ -234,23 +247,24 @@ class RequestProvider extends ChangeNotifier {
 
     try {
       final res = await _api.markArrived(id);
+
       if (res.success) {
         await loadMyRequests();
         return true;
       } else {
         _error = res.message ?? 'Failed to mark arrived';
-        _isLoading = false;
-        notifyListeners();
         return false;
       }
     } catch (e) {
       _error = 'Failed to mark arrived: $e';
+      return false;
+    } finally {
       _isLoading = false;
       notifyListeners();
-      return false;
     }
   }
 
+  // ─── Helpers ────────────────────────────────────────────────
   void clearError() {
     _error = null;
     notifyListeners();
