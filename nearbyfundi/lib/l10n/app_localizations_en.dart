@@ -205,6 +205,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get welcomeBack => 'Welcome Back';
 
   @override
+  String get signInToContinue => 'Sign in to continue';
+
+  @override
   String get signInManage => 'Sign in to manage your services';
 
   @override
@@ -313,6 +316,36 @@ class AppLocalizationsEn extends AppLocalizations {
   String get delete => 'Delete';
 
   @override
+  String get enterEmail => 'Enter your email address';
+
+  @override
+  String get enterValidEmail => 'Enter a valid email address';
+
+  @override
+  String get enterPassword => 'Enter your password';
+
+  @override
+  String get passwordMinLength => 'Password must be at least 6 characters';
+
+  @override
+  String get pleaseAcceptTerms => 'Please accept the Terms & Conditions';
+
+  @override
+  String get iAgreeToThe => 'I agree to the';
+
+  @override
+  String get termsAndConditions => 'Terms & Conditions';
+
+  @override
+  String get and => 'and';
+
+  @override
+  String get or => 'OR';
+
+  @override
+  String get continueWithGoogle => 'Continue with Google';
+
+  @override
   String get editProfile => 'Edit Profile';
 
   @override
@@ -395,6 +428,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get language => 'Language';
+
+  @override
+  String get theme => 'Theme';
 
   @override
   String get aboutUs => 'About Us';

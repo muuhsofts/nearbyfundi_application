@@ -1,10 +1,11 @@
 // main.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:nearbyfundi/providers/settings_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/services.dart';
+
+import 'package:nearbyfundi/providers/settings_provider.dart';
 import 'config/app_routes.dart';
 import 'config/app_theme.dart';
 import 'models/chat_conversation.dart';
@@ -48,9 +49,9 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await FcmService.init();
-
   await SecurityService.enableSecureScreen();
 
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
@@ -82,102 +83,128 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => ChatProvider()),
       ],
-      child: Consumer<ThemeProvider>(
-        builder: (context, themeProvider, _) {
-          return Consumer<SettingsProvider>(
-            builder: (context, settings, _) {
-              return MaterialApp(
-                title: 'NearbyFundi',
-                debugShowCheckedModeBanner: false,
-                theme: AppTheme.lightTheme,
-                darkTheme: AppTheme.darkTheme,
-                themeMode: themeProvider.themeMode,
-                locale: settings.currentLocale,
-                localizationsDelegates: const [
-                  AppLocalizations.delegate,
-                  GlobalMaterialLocalizations.delegate,
-                  GlobalCupertinoLocalizations.delegate,
-                  GlobalWidgetsLocalizations.delegate,
-                ],
-                supportedLocales: const [
-                  Locale('en', ''),
-                  Locale('sw', ''),
-                ],
-                navigatorKey: navigatorKey,
-                initialRoute: AppRoutes.splash,
-                onGenerateRoute: (settings) {
-                  switch (settings.name) {
-                    case AppRoutes.splash:
-                      return MaterialPageRoute(builder: (_) => const SplashScreen());
-                    case AppRoutes.onboarding:
-                      return MaterialPageRoute(builder: (_) => const OnboardingScreen());
-                    case AppRoutes.login:
-                      return MaterialPageRoute(builder: (_) => const LoginScreen());
-                    case AppRoutes.register:
-                      return MaterialPageRoute(builder: (_) => const RegisterScreen());
-                    case AppRoutes.otp:
-                      return MaterialPageRoute(
-                        builder: (_) => OtpVerificationScreen(
-                          email: settings.arguments as String,
-                        ),
-                      );
-                    case AppRoutes.forgot:
-                      return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());
-                    case AppRoutes.reset:
-                      return MaterialPageRoute(
-                        builder: (_) => ResetPasswordScreen(
-                          email: settings.arguments as String,
-                        ),
-                      );
-                    case AppRoutes.home:
-                      return MaterialPageRoute(builder: (_) => const HomeScreen());
-                    case AppRoutes.technicianDetail:
-                      return MaterialPageRoute(
-                        builder: (_) => TechnicianDetailScreen(
-                          technicianId: settings.arguments as int,
-                        ),
-                      );
-                    case AppRoutes.postDetail:
-                      return MaterialPageRoute(
-                        builder: (_) => PostDetailScreen(
-                          postId: settings.arguments as int,
-                        ),
-                      );
-                    case AppRoutes.editProfile:
-                      return MaterialPageRoute(builder: (_) => const EditProfileScreen());
-                    case AppRoutes.settings:
-                      return MaterialPageRoute(builder: (_) => const SettingsScreen());
-                    case AppRoutes.about:
-                      return MaterialPageRoute(builder: (_) => const AboutScreen());
-                    case AppRoutes.terms:
-                      return MaterialPageRoute(builder: (_) => const TermsScreen());
-                    case AppRoutes.faq:
-                      return MaterialPageRoute(builder: (_) => const FaqScreen());
-                    case AppRoutes.contactUs:
-                      return MaterialPageRoute(builder: (_) => const ContactUsScreen());
-                    case AppRoutes.chatList:
-                      return MaterialPageRoute(builder: (_) => const ChatListScreen());
-                    case AppRoutes.chatScreen:
-                      return MaterialPageRoute(
-                        builder: (_) => ChatScreen(
-                          conversation: settings.arguments as ChatConversation,
-                        ),
-                      );
-                    case AppRoutes.notifications:
-                      return MaterialPageRoute(builder: (_) => const NotificationsScreen());
-                    case AppRoutes.privacyPolicy:
-                      return MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen());
-                    case AppRoutes.tracking:
-                      return MaterialPageRoute(
-                        builder: (_) => TrackingScreen(
-                          requestId: settings.arguments as int,
-                        ),
-                      );
-                    default:
-                      return MaterialPageRoute(builder: (_) => const SplashScreen());
-                  }
-                },
-              );
+      child: Consumer2<ThemeProvider, SettingsProvider>(
+        builder: (context, themeProvider, settings, _) {
+          return MaterialApp(
+            title: 'NearbyFundi',
+            debugShowCheckedModeBanner: false,
+
+            // Theme
+            theme: AppTheme.lightTheme,
+            darkTheme: AppTheme.darkTheme,
+            themeMode: themeProvider.themeMode,
+
+            // 🔥 Language – this is the critical fix
+            locale: Locale(settings.locale), // use settings.locale (String)
+            // If your provider really has currentLocale as Locale, use:
+            // locale: settings.currentLocale,
+
+            supportedLocales: const [
+              Locale('en'),
+              Locale('sw'),
+            ],
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+            ],
+
+            navigatorKey: navigatorKey,
+            initialRoute: AppRoutes.splash,
+
+            onGenerateRoute: (routeSettings) {
+              switch (routeSettings.name) {
+                case AppRoutes.splash:
+                  return MaterialPageRoute(builder: (_) => const SplashScreen());
+
+                case AppRoutes.onboarding:
+                  return MaterialPageRoute(builder: (_) => const OnboardingScreen());
+
+                case AppRoutes.login:
+                  return MaterialPageRoute(builder: (_) => const LoginScreen());
+
+                case AppRoutes.register:
+                  return MaterialPageRoute(builder: (_) => const RegisterScreen());
+
+                case AppRoutes.otp:
+                  return MaterialPageRoute(
+                    builder: (_) => OtpVerificationScreen(
+                      email: routeSettings.arguments as String,
+                    ),
+                  );
+
+                case AppRoutes.forgot:
+                  return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());
+
+                case AppRoutes.reset:
+                  return MaterialPageRoute(
+                    builder: (_) => ResetPasswordScreen(
+                      email: routeSettings.arguments as String,
+                    ),
+                  );
+
+                case AppRoutes.home:
+                  return MaterialPageRoute(builder: (_) => const HomeScreen());
+
+                case AppRoutes.technicianDetail:
+                  return MaterialPageRoute(
+                    builder: (_) => TechnicianDetailScreen(
+                      technicianId: routeSettings.arguments as int,
+                    ),
+                  );
+
+                case AppRoutes.postDetail:
+                  return MaterialPageRoute(
+                    builder: (_) => PostDetailScreen(
+                      postId: routeSettings.arguments as int,
+                    ),
+                  );
+
+                case AppRoutes.editProfile:
+                  return MaterialPageRoute(builder: (_) => const EditProfileScreen());
+
+                case AppRoutes.settings:
+                  return MaterialPageRoute(builder: (_) => const SettingsScreen());
+
+                case AppRoutes.about:
+                  return MaterialPageRoute(builder: (_) => const AboutScreen());
+
+                case AppRoutes.terms:
+                  return MaterialPageRoute(builder: (_) => const TermsScreen());
+
+                case AppRoutes.faq:
+                  return MaterialPageRoute(builder: (_) => const FaqScreen());
+
+                case AppRoutes.contactUs:
+                  return MaterialPageRoute(builder: (_) => const ContactUsScreen());
+
+                case AppRoutes.chatList:
+                  return MaterialPageRoute(builder: (_) => const ChatListScreen());
+
+                case AppRoutes.chatScreen:
+                  return MaterialPageRoute(
+                    builder: (_) => ChatScreen(
+                      conversation: routeSettings.arguments as ChatConversation,
+                    ),
+                  );
+
+                case AppRoutes.notifications:
+                  return MaterialPageRoute(builder: (_) => const NotificationsScreen());
+
+                case AppRoutes.privacyPolicy:
+                  return MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen());
+
+                case AppRoutes.tracking:
+                  return MaterialPageRoute(
+                    builder: (_) => TrackingScreen(
+                      requestId: routeSettings.arguments as int,
+                    ),
+                  );
+
+                default:
+                  return MaterialPageRoute(builder: (_) => const SplashScreen());
+              }
             },
           );
         },

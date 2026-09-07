@@ -205,6 +205,9 @@ class AppLocalizationsSw extends AppLocalizations {
   String get welcomeBack => 'Karibu Tena';
 
   @override
+  String get signInToContinue => 'Ingia ili kuendelea';
+
+  @override
   String get signInManage => 'Ingia ili kusimamia huduma zako';
 
   @override
@@ -313,6 +316,36 @@ class AppLocalizationsSw extends AppLocalizations {
   String get delete => 'Futa';
 
   @override
+  String get enterEmail => 'Ingiza anwani yako ya barua pepe';
+
+  @override
+  String get enterValidEmail => 'Ingiza anwani sahihi ya barua pepe';
+
+  @override
+  String get enterPassword => 'Ingiza nenosiri lako';
+
+  @override
+  String get passwordMinLength => 'Nenosiri lazima liwe na angalau herufi 6';
+
+  @override
+  String get pleaseAcceptTerms => 'Tafadhali kubali Masharti na Sheria';
+
+  @override
+  String get iAgreeToThe => 'Nakubali';
+
+  @override
+  String get termsAndConditions => 'Masharti na Sheria';
+
+  @override
+  String get and => 'na';
+
+  @override
+  String get or => 'AU';
+
+  @override
+  String get continueWithGoogle => 'Endelea na Google';
+
+  @override
   String get editProfile => 'Hariri Profaili';
 
   @override
@@ -395,6 +428,9 @@ class AppLocalizationsSw extends AppLocalizations {
 
   @override
   String get language => 'Lugha';
+
+  @override
+  String get theme => 'Mandhari';
 
   @override
   String get aboutUs => 'Kuhusu Sisi';

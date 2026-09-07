@@ -4,6 +4,7 @@ import '../services/storage_service.dart';
 
 class SettingsProvider extends ChangeNotifier {
   final ApiService _api = ApiService();
+
   bool _isLoading = false;
   String? _error;
   bool _notificationsEnabled = true;
@@ -13,33 +14,47 @@ class SettingsProvider extends ChangeNotifier {
   String? get error => _error;
   bool get notificationsEnabled => _notificationsEnabled;
   String get locale => _locale;
-
-  // ✅ Add this getter
   Locale get currentLocale => Locale(_locale);
 
   SettingsProvider() {
     _loadSettings();
   }
 
-  void _loadSettings() async {
+  Future<void> _loadSettings() async {
     _locale = (await StorageService.getLocale()) ?? 'en';
-    _notificationsEnabled = (await StorageService.getNotificationsEnabled()) ?? true;
+    _notificationsEnabled =
+        (await StorageService.getNotificationsEnabled()) ?? true;
     notifyListeners();
   }
 
+  /// Update language locally first, then try to sync with backend
   Future<bool> updateLocale(String newLocale) async {
+    if (_locale == newLocale) return true;
+
+    // 1. Update UI immediately (this is the key fix)
+    _locale = newLocale;
+    await StorageService.saveLocale(newLocale);
+    notifyListeners(); // ← UI changes right away
+
+    // 2. Try to sync with backend (non-blocking for the UI)
     _setLoading(true);
-    final res = await _api.updateLocale(newLocale);
-    if (res.success) {
-      _locale = newLocale;
-      await StorageService.saveLocale(newLocale);
+    try {
+      final res = await _api.updateLocale(newLocale);
+      if (!res.success) {
+        _error = res.message;
+        // Optional: you can revert here if you want strict sync
+        // _locale = previousLocale;
+        // await StorageService.saveLocale(previousLocale);
+        // notifyListeners();
+      }
+    } catch (e) {
+      _error = e.toString();
+      // Still keep the local change even if API fails
+    } finally {
       _setLoading(false);
-      notifyListeners(); // 👈 triggers rebuild
-      return true;
     }
-    _error = res.message;
-    _setLoading(false);
-    return false;
+
+    return true;
   }
 
   Future<bool> updateNotificationStatus(bool enabled) async {
