@@ -5,11 +5,11 @@ import '../../l10n/app_localizations.dart';
 class ContactUsScreen extends StatelessWidget {
   const ContactUsScreen({super.key});
 
-  static const String email = 'imaratech.co.tz@gmail.com';
-  static const String website = 'https://imaratech.co.tz';
+  static const String email = 'ogbestseller01@gmail.com';
+  static const String website = 'https://ogonegroup.co.tz';
   static const List<String> phones = ['0679117297', '0752456880', '0612118849'];
   // WhatsApp numbers – include the country code (e.g., 255 for Tanzania)
-  static const List<String> whatsappNumbers = ['255679117297', '255752456880'];
+  static const List<String> whatsappNumbers = ['0679117297', '0612118849', '0746382880'];
 
   Future<void> _launchEmail() async {
     final Uri uri = Uri(scheme: 'mailto', path: email);
