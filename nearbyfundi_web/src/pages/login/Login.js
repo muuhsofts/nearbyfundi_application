@@ -596,7 +596,7 @@ export default function Login() {
                             <Link
                                 component="button"
                                 underline="hover"
-                                onClick={() => navigate('/register')}
+                                onClick={() => navigate('')}
                                 sx={{
                                     color: '#0d7377',
                                     fontWeight: 700,
