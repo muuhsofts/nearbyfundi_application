@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\AdminDashboardController;
 use App\Http\Controllers\Api\UserManagementController;
 use App\Http\Controllers\Api\RolePermissionController;
 use App\Http\Controllers\Api\AuditTrailController;
+use App\Http\Controllers\Api\WebOtpLoginController;
 use App\Http\Controllers\Api\OtpController;
 use App\Http\Controllers\Api\UserSessionController;
 use App\Http\Controllers\Api\ReportController;
@@ -55,7 +56,14 @@ Route::prefix('v1')->group(function () {
         Route::post('resend-otp', [AuthController::class, 'resendOtp']);
         Route::post('forgot-password', [AuthController::class, 'forgotPassword']);
         Route::post('reset-password', [AuthController::class, 'resetPassword']);
+
+        //OTP LOGIN END POINTS
+        Route::post('web-otp/request', [WebOtpLoginController::class, 'requestOtp']);
+        Route::post('web-otp/verify',  [WebOtpLoginController::class, 'verifyOtp']);
+        Route::post('web-otp/resend',  [WebOtpLoginController::class, 'resendOtp']);  
+
         Route::post('logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
+        Route::post('logout-all', [AuthController::class, 'logoutAll'])->middleware('auth:sanctum');
         Route::get('me', [AuthController::class, 'me'])->middleware('auth:sanctum');
         Route::get('permissions', [AuthController::class, 'myPermissions'])->middleware('auth:sanctum');
         Route::put('profile', [AuthController::class, 'updateProfile'])->middleware('auth:sanctum');
