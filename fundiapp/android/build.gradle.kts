@@ -2,9 +2,9 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        maven { url = uri("https://jitpack.io") }
     }
 
-    // Intercept project evaluation before plugins load their build.gradle files
     subprojects {
         project.beforeEvaluate {
             if (project.name == "flutter_inappwebview_android") {

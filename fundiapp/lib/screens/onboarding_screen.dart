@@ -1,655 +1,778 @@
-// lib/screens/onboarding_screen.dart
+
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+
 import '../config/app_theme.dart';
 import 'auth/login_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({super.key});
+const OnboardingScreen({super.key});
 
-  @override
-  State<OnboardingScreen> createState() => _OnboardingScreenState();
+@override
+State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen>
-    with TickerProviderStateMixin {
-  final PageController _pageController = PageController();
-  int _currentPage = 0;
-  late final AnimationController _cardController;
+with SingleTickerProviderStateMixin {
+final PageController _pageController = PageController();
 
-  final List<OnboardingItem> _items = [
-    const OnboardingItem(
-      title: 'Expert Technicians',
-      subtitle: 'At Your Fingertips',
-      description:
-      'Discover verified professionals in your area. From AC repair to plumbing, find the right expert for every job.',
-      icon: Icons.engineering_rounded,
-      color: AppTheme.primary,
-      gradientColors: [Color(0xFF075E54), Color(0xFF0A8A6D)],
-    ),
-    OnboardingItem(
-      title: 'Instant Connection',
-      subtitle: 'No More Waiting',
-      description:
-      'Connect with available fundis in seconds. Share details, get quotes, and start your service immediately.',
-      icon: Icons.flash_on_rounded,
-      color: AppTheme.success,
-      gradientColors: [const Color(0xFF00A896), const Color(0xFF21AE8C)],
-    ),
-    OnboardingItem(
-      title: 'Track & Trust',
-      subtitle: 'Complete Transparency',
-      description:
-      'Monitor progress in real-time. Secure payments, quality assurance, and verified reviews build trust.',
-      icon: Icons.shield_rounded,
-      color: AppTheme.secondary,
-      gradientColors: [const Color(0xFFF5A623), const Color(0xFFF7B731)],
-    ),
-  ];
+late AnimationController _animationController;
+late Animation<double> _fadeAnimation;
+late Animation<Offset> _slideAnimation;
 
-  @override
-  void initState() {
-    super.initState();
-    _cardController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    )..forward();
-  }
+int _currentPage = 0;
 
-  @override
-  void dispose() {
-    _pageController.dispose();
-    _cardController.dispose();
-    super.dispose();
-  }
+final List<OnboardingItem> _items = const [
+OnboardingItem(
+title: 'Find a Trusted Fundi',
+description:
+'Find verified technicians near you and get the help you need, whenever you need it.',
+icon: Icons.handyman_rounded,
+accentColor: AppTheme.primary,
+number: '01',
+),
+OnboardingItem(
+title: 'Connect in Minutes',
+description:
+'Send your request and connect directly with an available technician around you.',
+icon: Icons.bolt_rounded,
+accentColor: AppTheme.accent,
+number: '02',
+),
+OnboardingItem(
+title: 'Track With Confidence',
+description:
+'Follow your technician in real-time and enjoy a simple, reliable and trusted service.',
+icon: Icons.location_on_rounded,
+accentColor: AppTheme.success,
+number: '03',
+),
+];
 
-  void _onNext() {
-    if (_currentPage == _items.length - 1) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
-      );
-    } else {
-      _pageController.nextPage(
-        duration: const Duration(milliseconds: 500),
-        curve: Curves.easeInOutCubic,
-      );
-      _cardController.reset();
-      _cardController.forward();
-    }
-  }
+@override
+void initState() {
+super.initState();
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final primaryColor = AppTheme.primaryColor; // Using static getter
+_animationController = AnimationController(
+vsync: this,
+duration: const Duration(milliseconds: 600),
+);
 
-    return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: isDark
-                ? [
-              const Color(0xFF0A0E1A),
-              const Color(0xFF151B2E),
-              const Color(0xFF0D1520),
-            ]
-                : [
-              const Color(0xFFE8EDF9),
-              const Color(0xFFD5DEEF),
-              const Color(0xFFF0F4FF),
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Header
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            primaryColor.withOpacity(0.15),
-                            AppTheme.success.withOpacity(0.1),
-                          ],
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: primaryColor.withOpacity(0.15),
-                        ),
-                      ),
-                      child: Image.asset(
-                        'assets/images/nearbyfundi-logo.png',
-                        width: 28,
-                        height: 28,
-                        errorBuilder: (context, error, stackTrace) =>
-                            Icon(Icons.build, size: 28, color: primaryColor),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Nearby Fundi',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: isDark ? Colors.white : const Color(0xFF1A1F35),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: primaryColor.withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            'TECHNICIAN NETWORK',
-                            style: TextStyle(
-                              fontSize: 8,
-                              fontWeight: FontWeight.w700,
-                              color: primaryColor,
-                              letterSpacing: 1.5,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const Spacer(),
-                    if (_currentPage < 2)
-                      TextButton(
-                        onPressed: () => _pageController.jumpToPage(2),
-                        style: TextButton.styleFrom(
-                          foregroundColor: isDark
-                              ? Colors.white.withOpacity(0.6)
-                              : Colors.black.withOpacity(0.4),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Text(
-                          'Skip',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
+_fadeAnimation = CurvedAnimation(
+parent: _animationController,
+curve: Curves.easeOut,
+);
 
-              const SizedBox(height: 8),
+_slideAnimation = Tween<Offset>(
+begin: const Offset(0, 0.08),
+end: Offset.zero,
+).animate(
+CurvedAnimation(
+parent: _animationController,
+curve: Curves.easeOutCubic,
+),
+);
 
-              // Page content
-              Expanded(
-                child: PageView.builder(
-                  controller: _pageController,
-                  onPageChanged: (index) {
-                    setState(() => _currentPage = index);
-                    _cardController.reset();
-                    _cardController.forward();
-                  },
-                  itemCount: _items.length,
-                  itemBuilder: (context, index) {
-                    return _OnboardingCard(
-                      item: _items[index],
-                      isActive: index == _currentPage,
-                      animation: _cardController,
-                      isDark: isDark,
-                    );
-                  },
-                ),
-              ),
-
-              // Bottom controls
-              Container(
-                padding: const EdgeInsets.fromLTRB(28, 16, 28, 28),
-                child: Column(
-                  children: [
-                    // Indicators
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(
-                        _items.length,
-                            (index) {
-                          final isActive = _currentPage == index;
-                          return AnimatedContainer(
-                            duration: const Duration(milliseconds: 400),
-                            margin: const EdgeInsets.symmetric(horizontal: 4),
-                            width: isActive ? 40 : 8,
-                            height: 4,
-                            decoration: BoxDecoration(
-                              gradient: isActive
-                                  ? LinearGradient(
-                                colors: [
-                                  _items[index].gradientColors[0],
-                                  _items[index].gradientColors[1],
-                                ],
-                              )
-                                  : null,
-                              color: isActive
-                                  ? null
-                                  : (isDark
-                                  ? Colors.white.withOpacity(0.15)
-                                  : Colors.black.withOpacity(0.1)),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // Buttons
-                    Row(
-                      children: [
-                        Expanded(
-                          child: SizedBox(
-                            height: 52,
-                            child: OutlinedButton(
-                              onPressed: _currentPage > 0
-                                  ? () {
-                                _pageController.previousPage(
-                                  duration: const Duration(milliseconds: 500),
-                                  curve: Curves.easeInOutCubic,
-                                );
-                              }
-                                  : null,
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: isDark
-                                    ? Colors.white.withOpacity(0.6)
-                                    : Colors.black.withOpacity(0.4),
-                                side: BorderSide(
-                                  color: (isDark
-                                      ? Colors.white
-                                      : Colors.black).withOpacity(0.15),
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                              ),
-                              child: Icon(
-                                Icons.arrow_back_rounded,
-                                color: isDark
-                                    ? Colors.white.withOpacity(0.6)
-                                    : Colors.black.withOpacity(0.4),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          flex: 3,
-                          child: SizedBox(
-                            height: 52,
-                            child: ElevatedButton(
-                              onPressed: _onNext,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: primaryColor, // Using primaryColor
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    _currentPage == _items.length - 1
-                                        ? 'Get Started'
-                                        : 'Continue',
-                                    style: const TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  if (_currentPage != _items.length - 1) ...[
-                                    const SizedBox(width: 6),
-                                    const Icon(
-                                      Icons.arrow_forward_rounded,
-                                      size: 18,
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+_animationController.forward();
 }
 
-class _OnboardingCard extends StatelessWidget {
-  final OnboardingItem item;
-  final bool isActive;
-  final AnimationController animation;
-  final bool isDark;
+@override
+void dispose() {
+_pageController.dispose();
+_animationController.dispose();
+super.dispose();
+}
 
-  const _OnboardingCard({
-    required this.item,
-    required this.isActive,
-    required this.animation,
-    required this.isDark,
-  });
+void _animateContent() {
+_animationController
+..reset()
+..forward();
+}
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final primaryColor = AppTheme.primaryColor;
+void _nextPage() {
+if (_currentPage == _items.length - 1) {
+Navigator.pushReplacement(
+context,
+MaterialPageRoute(
+builder: (_) => const LoginScreen(),
+),
+);
+return;
+}
 
-    return FadeTransition(
-      opacity: CurvedAnimation(
-        parent: animation,
-        curve: const Interval(0.0, 0.5, curve: Curves.easeOut),
-      ),
-      child: SlideTransition(
-        position: Tween<Offset>(
-          begin: const Offset(0, 0.1),
-          end: Offset.zero,
-        ).animate(
-          CurvedAnimation(
-            parent: animation,
-            curve: const Interval(0.0, 0.6, curve: Curves.easeOutCubic),
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Container(
-            width: double.infinity,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: isDark
-                    ? [
-                  Colors.white.withOpacity(0.08),
-                  Colors.white.withOpacity(0.03),
-                ]
-                    : [
-                  Colors.white.withOpacity(0.9),
-                  Colors.white.withOpacity(0.7),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(32),
-              border: Border.all(
-                color: isDark
-                    ? Colors.white.withOpacity(0.08)
-                    : Colors.white.withOpacity(0.5),
-                width: 1.5,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: isDark
-                      ? Colors.black.withOpacity(0.4)
-                      : primaryColor.withOpacity(0.08), // Using primaryColor
-                  blurRadius: 30,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Icon
-                Container(
-                  height: 180,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Container(
-                        width: 200,
-                        height: 200,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(
-                            colors: [
-                              item.color.withOpacity(isDark ? 0.2 : 0.15),
-                              item.color.withOpacity(isDark ? 0.05 : 0.03),
-                              Colors.transparent,
-                            ],
-                            stops: const [0, 0.5, 1],
-                          ),
-                        ),
-                      ),
-                      Container(
-                        width: 160,
-                        height: 160,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: item.color.withOpacity(0.15),
-                            width: 1.5,
-                          ),
-                        ),
-                      ),
-                      _buildRotatingRing(item.color),
-                      Container(
-                        width: 110,
-                        height: 110,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              item.gradientColors[0]
-                                  .withOpacity(isDark ? 0.3 : 0.2),
-                              item.gradientColors[1]
-                                  .withOpacity(isDark ? 0.15 : 0.08),
-                            ],
-                          ),
-                          border: Border.all(
-                            color: item.color.withOpacity(0.2),
-                            width: 2,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: item.color.withOpacity(0.2),
-                              blurRadius: 20,
-                              spreadRadius: 5,
-                            ),
-                          ],
-                        ),
-                        child: Icon(
-                          item.icon,
-                          size: 50,
-                          color: item.color,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+_pageController.nextPage(
+duration: const Duration(milliseconds: 450),
+curve: Curves.easeInOutCubic,
+);
+}
 
-                const SizedBox(height: 16),
+void _previousPage() {
+if (_currentPage == 0) return;
 
-                // Text content
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 32),
-                  child: Column(
-                    children: [
-                      Text(
-                        item.title,
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.5,
-                          fontSize: 26,
-                          color: isDark ? Colors.white : const Color(0xFF1A1F35),
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              item.gradientColors[0].withOpacity(0.15),
-                              item.gradientColors[1].withOpacity(0.08),
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          item.subtitle,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: item.color,
-                            letterSpacing: 1.5,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        item.description,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: isDark
-                              ? Colors.white.withOpacity(0.7)
-                              : Colors.black.withOpacity(0.6),
-                          height: 1.6,
-                          letterSpacing: 0.2,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                ),
+_pageController.previousPage(
+duration: const Duration(milliseconds: 450),
+curve: Curves.easeInOutCubic,
+);
+}
 
-                const SizedBox(height: 24),
+void _skip() {
+_pageController.animateToPage(
+_items.length - 1,
+duration: const Duration(milliseconds: 450),
+curve: Curves.easeInOutCubic,
+);
+}
 
-                // Feature chips
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  alignment: WrapAlignment.center,
-                  children: [
-                    _buildFeatureChip('✓ Verified', item.gradientColors[0]),
-                    _buildFeatureChip('★ Rated', item.gradientColors[1]),
-                    _buildFeatureChip('⚡ Fast', item.gradientColors[0]),
-                    _buildFeatureChip('🔒 Secure', item.gradientColors[1]),
-                  ],
-                ),
+@override
+Widget build(BuildContext context) {
+final theme = Theme.of(context);
+final isDark = theme.brightness == Brightness.dark;
 
-                const SizedBox(height: 32),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+final backgroundColor = isDark
+? AppTheme.darkBackground
+    : AppTheme.scaffoldLight;
 
-  Widget _buildRotatingRing(Color color) {
-    return TweenAnimationBuilder(
-      tween: Tween<double>(begin: 0, end: 1),
-      duration: const Duration(seconds: 20),
-      builder: (context, value, _) {
-        return Transform.rotate(
-          angle: value * 2 * 3.14159,
-          child: Container(
-            width: 140,
-            height: 140,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: color.withOpacity(0.12),
-                width: 1,
-              ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: color.withOpacity(0.08),
-                    width: 0.5,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
+final textColor = isDark
+? AppTheme.darkTextPrimary
+    : Colors.black87;
 
-  Widget _buildFeatureChip(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            color.withOpacity(isDark ? 0.15 : 0.1),
-            color.withOpacity(isDark ? 0.08 : 0.05),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: color.withOpacity(0.15),
-          width: 0.5,
-        ),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: color,
-          letterSpacing: 0.3,
-        ),
-      ),
-    );
-  }
+final secondaryTextColor = isDark
+? AppTheme.darkTextSecondary
+    : AppTheme.greyText;
+
+return Scaffold(
+backgroundColor: backgroundColor,
+body: SafeArea(
+child: LayoutBuilder(
+builder: (context, constraints) {
+final isSmallHeight = constraints.maxHeight < 700;
+final horizontalPadding =
+constraints.maxWidth < 380 ? 20.0 : 26.0;
+
+return Column(
+children: [
+_buildHeader(
+isDark: isDark,
+textColor: textColor,
+horizontalPadding: horizontalPadding,
+),
+
+Expanded(
+child: PageView.builder(
+controller: _pageController,
+physics: const BouncingScrollPhysics(),
+itemCount: _items.length,
+onPageChanged: (index) {
+setState(() {
+_currentPage = index;
+});
+
+_animateContent();
+},
+itemBuilder: (context, index) {
+return FadeTransition(
+opacity: _fadeAnimation,
+child: SlideTransition(
+position: _slideAnimation,
+child: _OnboardingContent(
+item: _items[index],
+isDark: isDark,
+textColor: textColor,
+secondaryTextColor: secondaryTextColor,
+compact: isSmallHeight,
+),
+),
+);
+},
+),
+),
+
+_buildBottomSection(
+isDark: isDark,
+horizontalPadding: horizontalPadding,
+),
+],
+);
+},
+),
+),
+);
+}
+
+Widget _buildHeader({
+required bool isDark,
+required Color textColor,
+required double horizontalPadding,
+}) {
+return Padding(
+padding: EdgeInsets.fromLTRB(
+horizontalPadding,
+18,
+horizontalPadding,
+8,
+),
+child: Row(
+children: [
+// Logo
+Container(
+width: 46,
+height: 46,
+padding: const EdgeInsets.all(9),
+decoration: BoxDecoration(
+color: isDark
+? AppTheme.darkSurface
+    : AppTheme.light,
+borderRadius: BorderRadius.circular(14),
+border: Border.all(
+color: isDark
+? AppTheme.darkBorder
+    : AppTheme.borderLight,
+),
+),
+child: Image.asset(
+'assets/images/nearbyfundi-logo.png',
+fit: BoxFit.contain,
+errorBuilder: (_, __, ___) {
+return const Icon(
+Icons.handyman_rounded,
+color: AppTheme.primary,
+size: 25,
+);
+},
+),
+),
+
+const SizedBox(width: 12),
+
+// Brand
+Expanded(
+child: Column(
+crossAxisAlignment: CrossAxisAlignment.start,
+children: [
+Text(
+'Nearby Fundi',
+style: TextStyle(
+color: textColor,
+fontSize: 17,
+fontWeight: FontWeight.w800,
+letterSpacing: -0.3,
+),
+),
+const SizedBox(height: 2),
+Text(
+'Trusted technicians near you',
+style: TextStyle(
+color: isDark
+? AppTheme.darkTextSecondary
+    : AppTheme.greyText,
+fontSize: 11.5,
+fontWeight: FontWeight.w500,
+),
+),
+],
+),
+),
+
+if (_currentPage < _items.length - 1)
+TextButton(
+onPressed: _skip,
+style: TextButton.styleFrom(
+foregroundColor: isDark
+? AppTheme.darkTextSecondary
+    : AppTheme.greyText,
+padding: const EdgeInsets.symmetric(
+horizontal: 10,
+vertical: 8,
+),
+minimumSize: Size.zero,
+tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+),
+child: const Text(
+'Skip',
+style: TextStyle(
+fontSize: 13,
+fontWeight: FontWeight.w700,
+),
+),
+),
+],
+),
+);
+}
+
+Widget _buildBottomSection({
+required bool isDark,
+required double horizontalPadding,
+}) {
+final currentItem = _items[_currentPage];
+
+return Padding(
+padding: EdgeInsets.fromLTRB(
+horizontalPadding,
+8,
+horizontalPadding,
+22,
+),
+child: Column(
+children: [
+// Progress indicators
+Row(
+children: List.generate(
+_items.length,
+(index) {
+final isActive = index == _currentPage;
+
+return Expanded(
+child: AnimatedContainer(
+duration: const Duration(milliseconds: 300),
+height: 4,
+margin: EdgeInsets.only(
+right: index == _items.length - 1 ? 0 : 6,
+),
+decoration: BoxDecoration(
+color: isActive
+? currentItem.accentColor
+    : isDark
+? AppTheme.darkBorder
+    : AppTheme.borderLight,
+borderRadius: BorderRadius.circular(10),
+),
+),
+);
+},
+),
+),
+
+const SizedBox(height: 18),
+
+// Page count
+Row(
+children: [
+Text(
+'${_currentPage + 1}',
+style: TextStyle(
+color: currentItem.accentColor,
+fontSize: 13,
+fontWeight: FontWeight.w800,
+),
+),
+Text(
+' / ${_items.length}',
+style: TextStyle(
+color: isDark
+? AppTheme.darkTextSecondary
+    : AppTheme.greyText,
+fontSize: 13,
+fontWeight: FontWeight.w600,
+),
+),
+],
+),
+
+const SizedBox(height: 12),
+
+// Navigation
+Row(
+children: [
+if (_currentPage > 0) ...[
+SizedBox(
+width: 54,
+height: 52,
+child: OutlinedButton(
+onPressed: _previousPage,
+style: OutlinedButton.styleFrom(
+padding: EdgeInsets.zero,
+foregroundColor: AppTheme.primary,
+side: BorderSide(
+color: isDark
+? AppTheme.darkBorder
+    : AppTheme.borderLight,
+),
+shape: RoundedRectangleBorder(
+borderRadius: BorderRadius.circular(12),
+),
+),
+child: const Icon(
+Icons.arrow_back_rounded,
+size: 20,
+),
+),
+),
+const SizedBox(width: 10),
+],
+
+Expanded(
+child: SizedBox(
+height: 52,
+child: ElevatedButton(
+onPressed: _nextPage,
+style: ElevatedButton.styleFrom(
+backgroundColor: AppTheme.primary,
+foregroundColor: AppTheme.light,
+elevation: 0,
+shape: RoundedRectangleBorder(
+borderRadius: BorderRadius.circular(12),
+),
+),
+child: Row(
+mainAxisAlignment: MainAxisAlignment.center,
+children: [
+Text(
+_currentPage == _items.length - 1
+? 'Get Started'
+    : 'Continue',
+style: const TextStyle(
+fontSize: 15,
+fontWeight: FontWeight.w700,
+),
+),
+const SizedBox(width: 8),
+const Icon(
+Icons.arrow_forward_rounded,
+size: 18,
+),
+],
+),
+),
+),
+),
+],
+),
+],
+),
+);
+}
+}
+
+class _OnboardingContent extends StatelessWidget {
+final OnboardingItem item;
+final bool isDark;
+final Color textColor;
+final Color secondaryTextColor;
+final bool compact;
+
+const _OnboardingContent({
+required this.item,
+required this.isDark,
+required this.textColor,
+required this.secondaryTextColor,
+required this.compact,
+});
+
+@override
+Widget build(BuildContext context) {
+return SingleChildScrollView(
+physics: const BouncingScrollPhysics(),
+padding: EdgeInsets.symmetric(
+horizontal: 24,
+vertical: compact ? 10 : 18,
+),
+child: Column(
+children: [
+SizedBox(
+height: compact ? 225 : 285,
+child: _buildIllustration(),
+),
+
+SizedBox(height: compact ? 18 : 24),
+
+// Small accent label
+Text(
+'NEARBY FUNDI',
+style: TextStyle(
+color: item.accentColor,
+fontSize: 10,
+fontWeight: FontWeight.w800,
+letterSpacing: 1.8,
+),
+),
+
+const SizedBox(height: 12),
+
+// Heading
+ConstrainedBox(
+constraints: const BoxConstraints(
+maxWidth: 430,
+),
+child: Text(
+item.title,
+textAlign: TextAlign.center,
+style: TextStyle(
+color: textColor,
+fontSize: compact ? 28 : 32,
+height: 1.12,
+fontWeight: FontWeight.w800,
+letterSpacing: -0.8,
+),
+),
+),
+
+const SizedBox(height: 14),
+
+// Description
+ConstrainedBox(
+constraints: const BoxConstraints(
+maxWidth: 440,
+),
+child: Text(
+item.description,
+textAlign: TextAlign.center,
+style: TextStyle(
+color: secondaryTextColor,
+fontSize: 14,
+height: 1.65,
+fontWeight: FontWeight.w500,
+),
+),
+),
+
+SizedBox(height: compact ? 20 : 28),
+
+// Simple feature row
+Row(
+mainAxisAlignment: MainAxisAlignment.center,
+children: [
+_Feature(
+icon: Icons.verified_rounded,
+label: 'Verified',
+color: item.accentColor,
+isDark: isDark,
+),
+const SizedBox(width: 8),
+_Feature(
+icon: Icons.location_on_rounded,
+label: 'Nearby',
+color: item.accentColor,
+isDark: isDark,
+),
+const SizedBox(width: 8),
+_Feature(
+icon: Icons.star_rounded,
+label: 'Trusted',
+color: item.accentColor,
+isDark: isDark,
+),
+],
+),
+],
+),
+);
+}
+
+Widget _buildIllustration() {
+return Stack(
+alignment: Alignment.center,
+children: [
+// Outer circle
+Container(
+width: 245,
+height: 245,
+decoration: BoxDecoration(
+shape: BoxShape.circle,
+color: item.accentColor.withOpacity(
+isDark ? 0.06 : 0.045,
+),
+),
+),
+
+// Middle circle
+Container(
+width: 190,
+height: 190,
+decoration: BoxDecoration(
+shape: BoxShape.circle,
+border: Border.all(
+color: item.accentColor.withOpacity(
+isDark ? 0.18 : 0.13,
+),
+width: 1,
+),
+),
+),
+
+// Inner circle
+Container(
+width: 145,
+height: 145,
+decoration: BoxDecoration(
+shape: BoxShape.circle,
+color: isDark
+? AppTheme.darkSurface
+    : AppTheme.light,
+border: Border.all(
+color: item.accentColor.withOpacity(0.20),
+width: 1.5,
+),
+boxShadow: [
+BoxShadow(
+color: item.accentColor.withOpacity(
+isDark ? 0.16 : 0.10,
+),
+blurRadius: 28,
+spreadRadius: 2,
+),
+],
+),
+child: Icon(
+item.icon,
+size: 58,
+color: item.accentColor,
+),
+),
+
+// Top decoration
+Positioned(
+top: 26,
+right: 54,
+child: _SmallDot(
+color: item.accentColor,
+size: 9,
+),
+),
+
+// Left decoration
+Positioned(
+left: 38,
+top: 94,
+child: _SmallDot(
+color: item.accentColor,
+size: 6,
+),
+),
+
+// Bottom decoration
+Positioned(
+bottom: 26,
+left: 58,
+child: _SmallDot(
+color: item.accentColor,
+size: 8,
+),
+),
+
+// Number
+Positioned(
+right: 34,
+bottom: 25,
+child: Container(
+width: 44,
+height: 44,
+decoration: BoxDecoration(
+color: item.accentColor,
+shape: BoxShape.circle,
+border: Border.all(
+color: isDark
+? AppTheme.darkBackground
+    : AppTheme.scaffoldLight,
+width: 5,
+),
+),
+alignment: Alignment.center,
+child: Text(
+item.number,
+style: const TextStyle(
+color: AppTheme.light,
+fontSize: 11,
+fontWeight: FontWeight.w800,
+),
+),
+),
+),
+],
+);
+}
+}
+
+class _Feature extends StatelessWidget {
+final IconData icon;
+final String label;
+final Color color;
+final bool isDark;
+
+const _Feature({
+required this.icon,
+required this.label,
+required this.color,
+required this.isDark,
+});
+
+@override
+Widget build(BuildContext context) {
+return Container(
+padding: const EdgeInsets.symmetric(
+horizontal: 10,
+vertical: 7,
+),
+decoration: BoxDecoration(
+color: isDark
+? AppTheme.darkSurface
+    : AppTheme.light,
+borderRadius: BorderRadius.circular(20),
+border: Border.all(
+color: isDark
+? AppTheme.darkBorder
+    : AppTheme.borderLight,
+),
+),
+child: Row(
+mainAxisSize: MainAxisSize.min,
+children: [
+Icon(
+icon,
+size: 13,
+color: color,
+),
+const SizedBox(width: 5),
+Text(
+label,
+style: TextStyle(
+color: isDark
+? AppTheme.darkTextSecondary
+    : AppTheme.greyText,
+fontSize: 10.5,
+fontWeight: FontWeight.w600,
+),
+),
+],
+),
+);
+}
+}
+
+class _SmallDot extends StatelessWidget {
+final Color color;
+final double size;
+
+const _SmallDot({
+required this.color,
+required this.size,
+});
+
+@override
+Widget build(BuildContext context) {
+return Container(
+width: size,
+height: size,
+decoration: BoxDecoration(
+color: color,
+shape: BoxShape.circle,
+),
+);
+}
 }
 
 class OnboardingItem {
-  final String title;
-  final String subtitle;
-  final String description;
-  final IconData icon;
-  final Color color;
-  final List<Color> gradientColors;
+final String title;
+final String description;
+final IconData icon;
+final Color accentColor;
+final String number;
 
-  const OnboardingItem({
-    required this.title,
-    required this.subtitle,
-    required this.description,
-    required this.icon,
-    required this.color,
-    required this.gradientColors,
-  });
+const OnboardingItem({
+required this.title,
+required this.description,
+required this.icon,
+required this.accentColor,
+required this.number,
+});
 }
+

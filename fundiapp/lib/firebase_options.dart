@@ -51,7 +51,7 @@ class DefaultFirebaseOptions {
     projectId: 'nearbyfundi-8032f',
     storageBucket: 'nearbyfundi-8032f.firebasestorage.app',
     iosClientId: '217153819583-7jv5l9jai0vu02euuldqkdodssqkqfrl.apps.googleusercontent.com',
-    iosBundleId: 'com.fundiapp',
+    iosBundleId: 'com.fundapp',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
@@ -61,6 +61,6 @@ class DefaultFirebaseOptions {
     projectId: 'nearbyfundi-8032f',
     storageBucket: 'nearbyfundi-8032f.firebasestorage.app',
     iosClientId: '217153819583-7jv5l9jai0vu02euuldqkdodssqkqfrl.apps.googleusercontent.com',
-    iosBundleId: 'com.fundiapp',
+    iosBundleId: 'com.fundapp',
   );
 }

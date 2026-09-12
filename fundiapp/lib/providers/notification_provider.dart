@@ -8,6 +8,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../services/fcm_service.dart';
 import '../services/fcm_event_bus.dart';
 import '../services/api_service.dart';
+import '../utils/badge_helper.dart';
 import '../config/app_routes.dart';
 
 class NotificationProvider extends ChangeNotifier {
@@ -27,9 +28,6 @@ class NotificationProvider extends ChangeNotifier {
   String? _error;
   StreamSubscription? _fcmSub;
 
-  /// True for one frame after a live FCM push bumps the unread count.
-  /// UI (NotificationBellIcon) reads this to trigger a "pop" animation,
-  /// then calls [consumePulse] to reset it.
   bool _pulseBadge = false;
 
   // ============================================
@@ -71,9 +69,6 @@ class NotificationProvider extends ChangeNotifier {
       _isInitialized = true;
       await loadNotifications();
 
-      // Live updates: whenever FcmService receives a foreground push,
-      // it emits onto this bus. We react instantly instead of waiting
-      // for the next manual loadNotifications() call.
       _fcmSub = FcmEventBus.instance.stream.listen(_onFcmEvent);
     } catch (e) {
       debugPrint('❌ Notification init error: $e');
@@ -81,7 +76,6 @@ class NotificationProvider extends ChangeNotifier {
     }
   }
 
-  /// Handles a live push event forwarded from FcmService in real time.
   void _onFcmEvent(Map<String, dynamic> event) {
     addLocalNotification({
       'id': 'local_${DateTime.now().millisecondsSinceEpoch}',
@@ -94,15 +88,20 @@ class NotificationProvider extends ChangeNotifier {
 
     _pulseBadge = true;
     notifyListeners();
+    _syncAppBadge();
 
-    // Reconcile with the server shortly after
     Future.delayed(const Duration(seconds: 2), loadNotifications);
   }
 
-  /// Called by the UI right after it consumes the pulse, so it only
-  /// animates once per event instead of on every rebuild.
   void consumePulse() {
     _pulseBadge = false;
+  }
+
+  // ============================================
+  // APP ICON BADGE SYNC
+  // ============================================
+  void _syncAppBadge() {
+    BadgeHelper.updateBadge(unreadCount);
   }
 
   // ============================================
@@ -262,6 +261,12 @@ class NotificationProvider extends ChangeNotifier {
 
       if (response.success && response.data != null) {
         _notifications = List<Map<String, dynamic>>.from(response.data);
+
+        // TEMP DEBUG — remove after confirming is_read's real type
+        if (_notifications.isNotEmpty) {
+          debugPrint('🔍 is_read raw value: ${_notifications.first['is_read']} '
+              '(type: ${_notifications.first['is_read'].runtimeType})');
+        }
       } else {
         _error = response.message ?? 'Failed to load notifications';
         _notifications = [];
@@ -273,6 +278,7 @@ class NotificationProvider extends ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
+      _syncAppBadge();
     }
   }
 
@@ -290,6 +296,7 @@ class NotificationProvider extends ChangeNotifier {
         if (index != -1) {
           _notifications[index]['is_read'] = true;
           notifyListeners();
+          _syncAppBadge();
           return true;
         }
       }
@@ -309,6 +316,7 @@ class NotificationProvider extends ChangeNotifier {
           notification['is_read'] = true;
         }
         notifyListeners();
+        _syncAppBadge();
         return true;
       }
       return false;
@@ -325,6 +333,7 @@ class NotificationProvider extends ChangeNotifier {
       if (response.success) {
         _notifications.clear();
         notifyListeners();
+        _syncAppBadge();
         return true;
       }
       return false;
@@ -341,6 +350,7 @@ class NotificationProvider extends ChangeNotifier {
       if (response.success) {
         _notifications.removeWhere((n) => n['id'] == notificationId);
         notifyListeners();
+        _syncAppBadge();
         return true;
       }
       return false;
@@ -358,6 +368,7 @@ class NotificationProvider extends ChangeNotifier {
     if (!exists) {
       _notifications.insert(0, notification);
       notifyListeners();
+      _syncAppBadge();
       debugPrint('✅ Local notification added');
     }
   }

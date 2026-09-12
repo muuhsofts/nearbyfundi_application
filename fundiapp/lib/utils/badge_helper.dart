@@ -4,9 +4,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 
 class BadgeHelper {
-  // ✅ Fixed: custom channel matching MainActivity.java, no longer clashing
+  // ✅ Fixed: custom channel matching MainActivity.kt, no longer clashing
   // with the flutter_local_notifications plugin's own internal channel.
-  static const MethodChannel _channel = MethodChannel('com.fundiapp/badge');
+  static const MethodChannel _channel = MethodChannel('com.fundapp/badge');
 
   /// Updates the app icon badge count (Android via ShortcutBadger, iOS via native handler).
   static Future<void> updateBadge(int count) async {

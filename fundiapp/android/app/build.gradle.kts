@@ -62,8 +62,6 @@ android {
             )
         }
     }
-
-    // REMOVE the bundle block - it's not needed
 }
 
 kotlin {
@@ -79,4 +77,5 @@ flutter {
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     implementation("androidx.multidex:multidex:2.0.1")
+    implementation("me.leolin:ShortcutBadger:1.1.22")
 }

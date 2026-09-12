@@ -48,7 +48,7 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen> {
       );
 
       final response = await http
-          .get(url, headers: {'User-Agent': 'netsaf-fundi-app/1.0'})
+          .get(url, headers: {'User-Agent': 'ogonegroup-fundi-app/1.0'})
           .timeout(const Duration(seconds: 7));
 
       if (response.statusCode == 200) {
@@ -153,7 +153,7 @@ class _MapLocationPickerScreenState extends State<MapLocationPickerScreen> {
             children: [
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.netsaf.fundapp', // ✅ Updated to match your app ID
+                userAgentPackageName: 'com.ogonegroup.fundapp', // ✅ Updated to match your app ID
               ),
               if (_selectedPoint != null)
                 MarkerLayer(

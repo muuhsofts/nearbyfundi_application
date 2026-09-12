@@ -54,7 +54,7 @@ class _PickMapLocationScreenState extends State<PickMapLocationScreen> {
       );
 
       final response = await http
-          .get(url, headers: {'User-Agent': 'netsaf-fundi-app/1.0'})
+          .get(url, headers: {'User-Agent': 'ogonegroup-fundi-app/1.0'})
           .timeout(const Duration(seconds: 8));
 
       if (response.statusCode == 200) {
@@ -159,7 +159,7 @@ class _PickMapLocationScreenState extends State<PickMapLocationScreen> {
             children: [
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.netsaf.fundapp',
+                userAgentPackageName: 'com.ogonegroup.fundapp',
               ),
               if (_selectedPoint != null)
                 MarkerLayer(
