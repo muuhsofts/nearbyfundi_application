@@ -1,4 +1,3 @@
-// lib/providers/notification_provider.dart
 import 'dart:async';
 import 'dart:convert';
 
@@ -27,7 +26,6 @@ class NotificationProvider extends ChangeNotifier {
   bool _isInitialized = false;
   String? _error;
   StreamSubscription? _fcmSub;
-
   bool _pulseBadge = false;
 
   // ============================================
@@ -39,12 +37,26 @@ class NotificationProvider extends ChangeNotifier {
   String? get error => _error;
   bool get pulseBadge => _pulseBadge;
 
-  int get unreadCount {
-    return _notifications.where((n) => n['is_read'] == false).length;
-  }
+  int get unreadCount =>
+      _notifications.where((n) => !_isRead(n)).length;
 
   bool get hasUnread => unreadCount > 0;
   bool get hasNotifications => _notifications.isNotEmpty;
+
+  // ============================================
+  // HELPERS (type-safe)
+  // ============================================
+  String _idToString(dynamic id) => id?.toString() ?? '';
+
+  bool _isRead(Map<String, dynamic> n) {
+    final value = n['is_read'];
+    if (value is bool) return value;
+    if (value is int) return value == 1;
+    if (value is String) {
+      return value == '1' || value.toLowerCase() == 'true';
+    }
+    return false;
+  }
 
   // ============================================
   // INITIALIZATION
@@ -55,11 +67,9 @@ class NotificationProvider extends ChangeNotifier {
 
   Future<void> _init() async {
     try {
-      const AndroidInitializationSettings android =
-      AndroidInitializationSettings('@mipmap/ic_launcher');
-      const DarwinInitializationSettings ios = DarwinInitializationSettings();
-      const InitializationSettings settings =
-      InitializationSettings(android: android, iOS: ios);
+      const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const ios = DarwinInitializationSettings();
+      const settings = InitializationSettings(android: android, iOS: ios);
 
       await _localNotifications.initialize(
         settings,
@@ -98,14 +108,14 @@ class NotificationProvider extends ChangeNotifier {
   }
 
   // ============================================
-  // APP ICON BADGE SYNC
+  // APP ICON BADGE
   // ============================================
   void _syncAppBadge() {
     BadgeHelper.updateBadge(unreadCount);
   }
 
   // ============================================
-  // NOTIFICATION TAP HANDLER
+  // LOCAL NOTIFICATION TAP
   // ============================================
   void _onNotificationTap(NotificationResponse response) {
     final payload = response.payload;
@@ -116,7 +126,7 @@ class NotificationProvider extends ChangeNotifier {
 
     try {
       final data = Map<String, dynamic>.from(
-        json.decode(payload) as Map<String, dynamic>,
+        json.decode(payload) as Map,
       );
       _handleNavigation(context, data);
     } catch (e) {
@@ -126,7 +136,7 @@ class NotificationProvider extends ChangeNotifier {
   }
 
   void _handleNavigation(BuildContext context, Map<String, dynamic> data) {
-    final type = data['type'] ?? '';
+    final type = data['type']?.toString() ?? '';
     final conversationId = data['conversation_id'];
 
     switch (type) {
@@ -134,7 +144,9 @@ class NotificationProvider extends ChangeNotifier {
         if (conversationId != null) {
           FcmService.navigatorKey.currentState?.pushNamed(
             AppRoutes.chat,
-            arguments: {'conversationId': int.parse(conversationId)},
+            arguments: {
+              'conversationId': int.tryParse(conversationId.toString()) ?? 0,
+            },
           );
         }
         break;
@@ -156,7 +168,7 @@ class NotificationProvider extends ChangeNotifier {
   }
 
   // ============================================
-  // LOCAL NOTIFICATIONS
+  // SHOW LOCAL NOTIFICATION
   // ============================================
   Future<void> showLocalNotification({
     required String title,
@@ -165,10 +177,7 @@ class NotificationProvider extends ChangeNotifier {
     String? channelId,
     String? channelName,
   }) async {
-    if (!_isInitialized) {
-      debugPrint('⚠️ Notifications not initialized');
-      return;
-    }
+    if (!_isInitialized) return;
 
     try {
       final androidDetails = AndroidNotificationDetails(
@@ -185,7 +194,7 @@ class NotificationProvider extends ChangeNotifier {
         autoCancel: true,
       );
 
-      final iosDetails = DarwinNotificationDetails(
+      const iosDetails = DarwinNotificationDetails(
         presentAlert: true,
         presentBadge: true,
         presentSound: true,
@@ -205,8 +214,6 @@ class NotificationProvider extends ChangeNotifier {
         platformDetails,
         payload: payload,
       );
-
-      debugPrint('✅ Local notification shown: $title');
     } catch (e) {
       debugPrint('❌ Failed to show notification: $e');
     }
@@ -217,11 +224,7 @@ class NotificationProvider extends ChangeNotifier {
     required String body,
     String? payload,
   }) async {
-    await showLocalNotification(
-      title: title,
-      body: body,
-      payload: payload,
-    );
+    await showLocalNotification(title: title, body: body, payload: payload);
   }
 
   // ============================================
@@ -230,7 +233,6 @@ class NotificationProvider extends ChangeNotifier {
   Future<void> initFcm() async {
     try {
       await FcmService.init();
-      debugPrint('✅ FCM initialized');
     } catch (e) {
       debugPrint('❌ FCM init error: $e');
       _error = 'Failed to initialize FCM';
@@ -247,7 +249,7 @@ class NotificationProvider extends ChangeNotifier {
   }
 
   // ============================================
-  // API OPERATIONS
+  // API
   // ============================================
   Future<void> loadNotifications() async {
     if (_isLoading) return;
@@ -261,12 +263,6 @@ class NotificationProvider extends ChangeNotifier {
 
       if (response.success && response.data != null) {
         _notifications = List<Map<String, dynamic>>.from(response.data);
-
-        // TEMP DEBUG — remove after confirming is_read's real type
-        if (_notifications.isNotEmpty) {
-          debugPrint('🔍 is_read raw value: ${_notifications.first['is_read']} '
-              '(type: ${_notifications.first['is_read'].runtimeType})');
-        }
       } else {
         _error = response.message ?? 'Failed to load notifications';
         _notifications = [];
@@ -282,17 +278,19 @@ class NotificationProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> refresh() async {
-    await loadNotifications();
-  }
+  Future<void> refresh() async => loadNotifications();
 
-  Future<bool> markAsRead(String notificationId) async {
+  Future<bool> markAsRead(dynamic notificationId) async {
+    final id = _idToString(notificationId);
+    if (id.isEmpty) return false;
+
     try {
-      final response = await _apiService.markNotificationAsRead(notificationId);
+      final response = await _apiService.markNotificationAsRead(id);
 
       if (response.success) {
-        final index =
-        _notifications.indexWhere((n) => n['id'] == notificationId);
+        final index = _notifications.indexWhere(
+              (n) => _idToString(n['id']) == id,
+        );
         if (index != -1) {
           _notifications[index]['is_read'] = true;
           notifyListeners();
@@ -312,8 +310,8 @@ class NotificationProvider extends ChangeNotifier {
       final response = await _apiService.markAllNotificationsAsRead();
 
       if (response.success) {
-        for (var notification in _notifications) {
-          notification['is_read'] = true;
+        for (final n in _notifications) {
+          n['is_read'] = true;
         }
         notifyListeners();
         _syncAppBadge();
@@ -343,12 +341,15 @@ class NotificationProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> deleteNotification(String notificationId) async {
+  Future<bool> deleteNotification(dynamic notificationId) async {
+    final id = _idToString(notificationId);
+    if (id.isEmpty) return false;
+
     try {
-      final response = await _apiService.deleteNotification(notificationId);
+      final response = await _apiService.deleteNotification(id);
 
       if (response.success) {
-        _notifications.removeWhere((n) => n['id'] == notificationId);
+        _notifications.removeWhere((n) => _idToString(n['id']) == id);
         notifyListeners();
         _syncAppBadge();
         return true;
@@ -364,25 +365,27 @@ class NotificationProvider extends ChangeNotifier {
   // LOCAL OPERATIONS
   // ============================================
   void addLocalNotification(Map<String, dynamic> notification) {
-    final exists = _notifications.any((n) => n['id'] == notification['id']);
+    final id = _idToString(notification['id']);
+    final exists = _notifications.any((n) => _idToString(n['id']) == id);
+
     if (!exists) {
       _notifications.insert(0, notification);
       notifyListeners();
       _syncAppBadge();
-      debugPrint('✅ Local notification added');
     }
   }
 
-  void addLocalNotifications(List<Map<String, dynamic>> notifications) {
-    for (var notification in notifications) {
-      addLocalNotification(notification);
+  void addLocalNotifications(List<Map<String, dynamic>> list) {
+    for (final n in list) {
+      addLocalNotification(n);
     }
   }
 
-  Map<String, dynamic>? getNotification(String notificationId) {
+  Map<String, dynamic>? getNotification(dynamic notificationId) {
+    final id = _idToString(notificationId);
     try {
-      return _notifications.firstWhere((n) => n['id'] == notificationId);
-    } catch (e) {
+      return _notifications.firstWhere((n) => _idToString(n['id']) == id);
+    } catch (_) {
       return null;
     }
   }
@@ -392,7 +395,7 @@ class NotificationProvider extends ChangeNotifier {
   }
 
   // ============================================
-  // UTILITY
+  // UTILS
   // ============================================
   void clearError() {
     _error = null;
@@ -403,20 +406,13 @@ class NotificationProvider extends ChangeNotifier {
     if (timestamp == null) return '';
     try {
       final parsed = DateTime.parse(timestamp);
-      final now = DateTime.now();
-      final diff = now.difference(parsed);
+      final diff = DateTime.now().difference(parsed);
 
-      if (diff.inDays > 7) {
-        return '${diff.inDays}d ago';
-      } else if (diff.inDays > 0) {
-        return '${diff.inDays}d ago';
-      } else if (diff.inHours > 0) {
-        return '${diff.inHours}h ago';
-      } else if (diff.inMinutes > 0) {
-        return '${diff.inMinutes}m ago';
-      } else {
-        return 'Just now';
-      }
+      if (diff.inDays > 7) return '${diff.inDays}d ago';
+      if (diff.inDays > 0) return '${diff.inDays}d ago';
+      if (diff.inHours > 0) return '${diff.inHours}h ago';
+      if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
+      return 'Just now';
     } catch (_) {
       return '';
     }
@@ -425,19 +421,19 @@ class NotificationProvider extends ChangeNotifier {
   IconData getNotificationIcon(String type) {
     switch (type) {
       case 'chat_message':
-        return Icons.chat_bubble_outline;
+        return Icons.chat_bubble_outline_rounded;
       case 'new_request':
-        return Icons.request_page;
+        return Icons.request_page_outlined;
       case 'request_accepted':
-        return Icons.check_circle_outline;
+        return Icons.check_circle_outline_rounded;
       case 'request_rejected':
         return Icons.cancel_outlined;
       case 'post_comment':
         return Icons.comment_outlined;
       case 'post_like':
-        return Icons.favorite_border;
+        return Icons.favorite_border_rounded;
       case 'profile_update':
-        return Icons.person_outline;
+        return Icons.person_outline_rounded;
       default:
         return Icons.notifications_outlined;
     }
@@ -464,9 +460,6 @@ class NotificationProvider extends ChangeNotifier {
     }
   }
 
-  // ============================================
-  // CLEANUP
-  // ============================================
   @override
   void dispose() {
     _fcmSub?.cancel();

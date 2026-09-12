@@ -1,6 +1,5 @@
-// lib/screens/fundi/fundi_home_screen.dart
-
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -17,7 +16,6 @@ import '../../widgets/confirmation_dialog.dart';
 import '../../widgets/notification_bell_icon.dart';
 import '../../l10n/app_localizations.dart';
 
-// Screens
 import 'fundi_posts_screen.dart';
 import 'fundi_requests_screen.dart';
 import '../chat/chat_list_screen.dart';
@@ -70,9 +68,8 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
   }
 
   // ============================================================
-  // INITIALIZE DATA
+  // DATA
   // ============================================================
-
   void _initializeData() {
     context.read<TechnicianProvider>().fetchMyProfile();
     context.read<RequestProvider>().loadMyRequests();
@@ -91,24 +88,18 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
       context.read<NotificationProvider>().loadNotifications(),
     ]);
 
-    if (mounted) {
-      setState(() => _isRefreshing = false);
-    }
+    if (mounted) setState(() => _isRefreshing = false);
   }
 
-  // ============================================================
-  // CHAT INITIALIZATION
-  // ============================================================
-
   void _initializeChat() {
-    final authProvider = context.read<AuthProvider>();
-    final chatProvider = context.read<ChatProvider>();
+    final auth = context.read<AuthProvider>();
+    final chat = context.read<ChatProvider>();
 
-    final user = authProvider.user;
-    final token = authProvider.token;
+    final user = auth.user;
+    final token = auth.token;
 
     if (user != null && token != null) {
-      chatProvider.initialize(
+      chat.initialize(
         token: token,
         currentUser: ChatUser(
           id: user.id,
@@ -132,7 +123,6 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
   // ============================================================
   // DRAWER
   // ============================================================
-
   Drawer _buildDrawer(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
@@ -149,15 +139,13 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
                 color: theme.cardColor,
                 border: Border(
                   bottom: BorderSide(
-                    color: theme.dividerColor.withOpacity(0.6),
-                    width: 1,
+                    color: theme.dividerColor.withOpacity(0.5),
                   ),
                 ),
               ),
               child: Text(
                 'Menu',
                 style: theme.textTheme.titleLarge?.copyWith(
-                  color: colorScheme.onSurface,
                   fontWeight: FontWeight.w700,
                   letterSpacing: -0.3,
                 ),
@@ -165,14 +153,10 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
             ),
             const SizedBox(height: 8),
             ListTile(
-              leading: Icon(
-                Icons.handshake_outlined,
-                color: colorScheme.primary,
-              ),
+              leading: Icon(Icons.handshake_outlined, color: colorScheme.primary),
               title: Text(
                 'Partnerships',
                 style: theme.textTheme.titleMedium?.copyWith(
-                  color: colorScheme.onSurface,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -188,9 +172,8 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
   }
 
   // ============================================================
-  // NOTIFICATIONS BOTTOM SHEET
+  // NOTIFICATIONS BOTTOM SHEET (Modern UI)
   // ============================================================
-
   void _showNotifications(BuildContext context) {
     final provider = context.read<NotificationProvider>();
     final theme = Theme.of(context);
@@ -199,56 +182,78 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: theme.cardColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (ctx) {
         return DraggableScrollableSheet(
-          initialChildSize: 0.8,
+          initialChildSize: 0.82,
           minChildSize: 0.5,
           maxChildSize: 0.95,
           expand: false,
           builder: (context, scrollController) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            return Container(
+              decoration: BoxDecoration(
+                color: theme.cardColor,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.12),
+                    blurRadius: 24,
+                    offset: const Offset(0, -8),
+                  ),
+                ],
+              ),
               child: Column(
                 children: [
+                  // Handle
+                  const SizedBox(height: 12),
                   Container(
-                    width: 40,
+                    width: 42,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: theme.dividerColor,
+                      color: theme.dividerColor.withOpacity(0.6),
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        l10n.notifications,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
+                  const SizedBox(height: 18),
+
+                  // Header
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Row(
+                      children: [
+                        Text(
+                          l10n.notifications,
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.4,
+                          ),
                         ),
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          provider.markAllAsRead();
-                          Navigator.pop(ctx);
-                        },
-                        child: Text(l10n.markAllAsRead),
-                      ),
-                    ],
+                        const Spacer(),
+                        TextButton(
+                          onPressed: () {
+                            provider.markAllAsRead();
+                            Navigator.pop(ctx);
+                          },
+                          style: TextButton.styleFrom(
+                            foregroundColor: theme.primaryColor,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                          ),
+                          child: Text(
+                            l10n.markAllAsRead,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 8),
+
+                  // List
                   Expanded(
                     child: Consumer<NotificationProvider>(
-                      builder: (context, notificationProvider, child) {
+                      builder: (context, notificationProvider, _) {
                         if (notificationProvider.isLoading) {
-                          return const Center(
-                            child: CircularProgressIndicator(),
-                          );
+                          return const Center(child: CircularProgressIndicator());
                         }
 
                         if (notificationProvider.notifications.isEmpty) {
@@ -258,14 +263,15 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
                               children: [
                                 Icon(
                                   Icons.notifications_off_outlined,
-                                  size: 64,
-                                  color: theme.hintColor,
+                                  size: 68,
+                                  color: theme.hintColor.withOpacity(0.6),
                                 ),
                                 const SizedBox(height: 16),
                                 Text(
                                   l10n.noNotificationsYet,
                                   style: theme.textTheme.bodyLarge?.copyWith(
                                     color: theme.hintColor,
+                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
                               ],
@@ -273,9 +279,11 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
                           );
                         }
 
-                        return ListView.builder(
+                        return ListView.separated(
                           controller: scrollController,
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                           itemCount: notificationProvider.notifications.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 8),
                           itemBuilder: (context, index) {
                             final notification =
                             notificationProvider.notifications[index];
@@ -283,12 +291,10 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
                             return _NotificationTile(
                               notification: notification,
                               onTap: () {
-                                notificationProvider.markAsRead(
-                                  notification['id'],
-                                );
+                                notificationProvider.markAsRead(notification['id']);
                                 Navigator.pop(ctx);
 
-                                final type = notification['type'] ?? '';
+                                final type = notification['type']?.toString() ?? '';
 
                                 if (type == 'chat_message') {
                                   _navigateToTab(3);
@@ -318,7 +324,6 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
   // ============================================================
   // COMING SOON
   // ============================================================
-
   void _showComingSoon(BuildContext context, String feature) {
     final theme = Theme.of(context);
 
@@ -326,7 +331,7 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
       SnackBar(
         content: Row(
           children: [
-            const Icon(Icons.construction_rounded, color: Colors.white),
+            const Icon(Icons.construction_rounded, color: Colors.white, size: 20),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
@@ -338,9 +343,7 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
         ),
         backgroundColor: theme.primaryColor,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         duration: const Duration(seconds: 2),
       ),
     );
@@ -349,7 +352,6 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
   // ============================================================
   // LOGOUT
   // ============================================================
-
   Future<void> _logoutWithConfirmation(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
 
@@ -361,7 +363,6 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
 
     if (confirm == true) {
       await context.read<AuthProvider>().logout();
-
       if (context.mounted) {
         Navigator.pushReplacementNamed(context, AppRoutes.login);
       }
@@ -371,7 +372,6 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
   // ============================================================
   // BUILD
   // ============================================================
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -387,19 +387,17 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
           style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
-            letterSpacing: -0.2,
+            letterSpacing: -0.3,
           ),
         ),
         elevation: 0,
         backgroundColor: theme.primaryColor,
         foregroundColor: Colors.white,
         leading: Builder(
-          builder: (context) {
-            return IconButton(
-              icon: const Icon(Icons.menu_rounded, color: Colors.white),
-              onPressed: () => Scaffold.of(context).openDrawer(),
-            );
-          },
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu_rounded, color: Colors.white),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
         ),
         actions: [
           IconButton(
@@ -408,7 +406,7 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
               width: 20,
               height: 20,
               child: CircularProgressIndicator(
-                strokeWidth: 2,
+                strokeWidth: 2.2,
                 color: Colors.white,
               ),
             )
@@ -420,21 +418,15 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
             onTap: () => _showNotifications(context),
           ),
           IconButton(
-            icon: const Icon(
-              Icons.smart_toy_rounded,
-              color: Colors.white,
-              size: 26,
-            ),
+            icon: const Icon(Icons.smart_toy_rounded, color: Colors.white, size: 26),
             onPressed: () => _showComingSoon(context, l10n.aiAssistant),
             tooltip: '${l10n.aiAssistant} (${l10n.comingSoon})',
           ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
             offset: const Offset(0, 50),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            elevation: 8,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            elevation: 10,
             itemBuilder: (context) => _buildMenuItems(context),
           ),
         ],
@@ -444,20 +436,20 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
         decoration: BoxDecoration(
           boxShadow: [
             BoxShadow(
-              color: theme.shadowColor.withOpacity(0.06),
-              blurRadius: 10,
-              offset: const Offset(0, -2),
+              color: theme.shadowColor.withOpacity(0.07),
+              blurRadius: 12,
+              offset: const Offset(0, -3),
             ),
           ],
           border: Border(
             top: BorderSide(
-              color: theme.dividerColor.withOpacity(0.5),
+              color: theme.dividerColor.withOpacity(0.45),
               width: 0.5,
             ),
           ),
         ),
         child: Consumer<ChatProvider>(
-          builder: (context, chatProvider, child) {
+          builder: (context, chatProvider, _) {
             return BottomNavigationBar(
               currentIndex: _currentIndex,
               selectedItemColor: theme.primaryColor,
@@ -533,17 +525,17 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
 
   Widget _buildBadge(int count) {
     return Container(
-      padding: const EdgeInsets.all(3),
+      padding: const EdgeInsets.all(3.5),
       decoration: const BoxDecoration(
         color: Colors.red,
         shape: BoxShape.circle,
       ),
-      constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+      constraints: const BoxConstraints(minWidth: 15, minHeight: 15),
       child: Text(
         count > 9 ? '9+' : '$count',
         style: const TextStyle(
           color: Colors.white,
-          fontSize: 8,
+          fontSize: 8.5,
           fontWeight: FontWeight.bold,
         ),
         textAlign: TextAlign.center,
@@ -552,9 +544,8 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
   }
 
   // ============================================================
-  // MENU ITEMS
+  // MENU
   // ============================================================
-
   List<PopupMenuEntry<String>> _buildMenuItems(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
@@ -615,8 +606,7 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
               title,
               style: theme.textTheme.titleMedium?.copyWith(
                 color: isDestructive ? Colors.red : null,
-                fontWeight:
-                isDestructive ? FontWeight.w600 : FontWeight.normal,
+                fontWeight: isDestructive ? FontWeight.w600 : FontWeight.normal,
               ),
             ),
           ),
@@ -627,9 +617,8 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
 }
 
 // ================================================================
-// NOTIFICATION TILE
+// NOTIFICATION TILE – Modern Card Style
 // ================================================================
-
 class _NotificationTile extends StatelessWidget {
   final Map<String, dynamic> notification;
   final VoidCallback onTap;
@@ -639,72 +628,130 @@ class _NotificationTile extends StatelessWidget {
     required this.onTap,
   });
 
+  bool get _isRead {
+    final v = notification['is_read'];
+    if (v is bool) return v;
+    if (v is int) return v == 1;
+    if (v is String) return v == '1' || v.toLowerCase() == 'true';
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isRead = notification['is_read'] ?? false;
+    final isRead = _isRead;
+    final type = notification['type']?.toString();
 
-    return ListTile(
-      onTap: onTap,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      leading: CircleAvatar(
-        backgroundColor: isRead
-            ? theme.dividerColor.withOpacity(0.4)
-            : theme.primaryColor.withOpacity(0.12),
-        child: Icon(
-          _getIcon(notification['type']),
-          color: isRead ? theme.hintColor : theme.primaryColor,
-          size: 20,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            color: isRead
+                ? theme.cardColor
+                : theme.primaryColor.withOpacity(0.06),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isRead
+                  ? theme.dividerColor.withOpacity(0.45)
+                  : theme.primaryColor.withOpacity(0.18),
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Icon circle
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: isRead
+                      ? theme.dividerColor.withOpacity(0.25)
+                      : theme.primaryColor.withOpacity(0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  _getIcon(type),
+                  color: isRead ? theme.hintColor : theme.primaryColor,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 14),
+
+              // Content
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      notification['title']?.toString() ?? '',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: isRead ? FontWeight.w500 : FontWeight.w700,
+                        height: 1.25,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      notification['body']?.toString() ?? '',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.hintColor,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Unread dot
+              if (!isRead) ...[
+                const SizedBox(width: 10),
+                Container(
+                  width: 9,
+                  height: 9,
+                  margin: const EdgeInsets.only(top: 6),
+                  decoration: BoxDecoration(
+                    color: theme.primaryColor,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
-      title: Text(
-        notification['title'] ?? '',
-        style: theme.textTheme.bodyMedium?.copyWith(
-          fontWeight: isRead ? FontWeight.normal : FontWeight.w600,
-        ),
-      ),
-      subtitle: Text(
-        notification['body'] ?? '',
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: theme.textTheme.bodySmall,
-      ),
-      trailing: isRead
-          ? null
-          : Container(
-        width: 8,
-        height: 8,
-        decoration: const BoxDecoration(
-          color: Colors.blue,
-          shape: BoxShape.circle,
-        ),
-      ),
-      dense: true,
     );
   }
 
   IconData _getIcon(String? type) {
     switch (type) {
       case 'chat_message':
-        return Icons.chat_bubble_outline;
+        return Icons.chat_bubble_outline_rounded;
       case 'new_request':
         return Icons.request_page_outlined;
       case 'request_accepted':
-        return Icons.check_circle_outline;
+        return Icons.check_circle_outline_rounded;
       case 'request_rejected':
         return Icons.cancel_outlined;
       case 'request_in_progress':
-        return Icons.hourglass_top_outlined;
+        return Icons.hourglass_top_rounded;
       case 'request_completed':
-        return Icons.check_circle_outline;
+        return Icons.verified_rounded;
       case 'subscription_approved':
         return Icons.verified_rounded;
       case 'subscription_rejected':
         return Icons.cancel_rounded;
       case 'subscription_expired':
-        return Icons.warning_rounded;
+        return Icons.warning_amber_rounded;
       case 'subscription_expiring_soon':
-        return Icons.timer_rounded;
+        return Icons.timer_outlined;
       default:
         return Icons.notifications_outlined;
     }
@@ -712,9 +759,8 @@ class _NotificationTile extends StatelessWidget {
 }
 
 // ================================================================
-// HOME DASHBOARD CONTENT
+// HOME DASHBOARD CONTENT – Modern UI
 // ================================================================
-
 class _HomeDashboardContent extends StatelessWidget {
   const _HomeDashboardContent();
 
@@ -760,8 +806,7 @@ class _HomeDashboardContent extends StatelessWidget {
     final requestProvider = context.watch<RequestProvider>();
     final requests = requestProvider.requests;
 
-    final pendingRequests =
-        requests.where((r) => r.status == 'pending').length;
+    final pendingRequests = requests.where((r) => r.status == 'pending').length;
     final completedRequests =
         requests.where((r) => r.status == 'completed').length;
 
@@ -776,15 +821,14 @@ class _HomeDashboardContent extends StatelessWidget {
     final screenWidth = MediaQuery.of(context).size.width;
     final isTablet = screenWidth >= 600;
     final padding = isTablet ? 24.0 : 16.0;
-    final cardPadding = isTablet ? 24.0 : 18.0;
+    final cardPadding = isTablet ? 22.0 : 18.0;
     final gap = isTablet ? 16.0 : 12.0;
 
     return SafeArea(
       bottom: true,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final bottomPadding =
-              MediaQuery.of(context).padding.bottom + 80.0;
+          final bottomPadding = MediaQuery.of(context).padding.bottom + 80.0;
 
           return RefreshIndicator(
             onRefresh: () async {
@@ -802,7 +846,7 @@ class _HomeDashboardContent extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── Profile / Greeting Card ─────────────────────────
+                  // ── Greeting Card ─────────────────────────────
                   Container(
                     padding: EdgeInsets.all(cardPadding),
                     decoration: BoxDecoration(
@@ -814,12 +858,12 @@ class _HomeDashboardContent extends StatelessWidget {
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(22),
                       boxShadow: [
                         BoxShadow(
-                          color: theme.primaryColor.withOpacity(0.28),
-                          blurRadius: 18,
-                          offset: const Offset(0, 8),
+                          color: theme.primaryColor.withOpacity(0.32),
+                          blurRadius: 20,
+                          offset: const Offset(0, 10),
                         ),
                       ],
                     ),
@@ -850,19 +894,19 @@ class _HomeDashboardContent extends StatelessWidget {
                                   color: Colors.white,
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
-                                  letterSpacing: -0.2,
+                                  letterSpacing: -0.3,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              const SizedBox(height: 6),
+                              const SizedBox(height: 8),
                               Row(
                                 children: [
                                   if (online) ...[
                                     Container(
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 10,
-                                        vertical: 3,
+                                        vertical: 4,
                                       ),
                                       decoration: BoxDecoration(
                                         color: Colors.green.shade600,
@@ -874,7 +918,7 @@ class _HomeDashboardContent extends StatelessWidget {
                                           const Icon(
                                             Icons.wifi_rounded,
                                             color: Colors.white,
-                                            size: 14,
+                                            size: 13,
                                           ),
                                           const SizedBox(width: 4),
                                           Text(
@@ -882,7 +926,7 @@ class _HomeDashboardContent extends StatelessWidget {
                                             style: const TextStyle(
                                               color: Colors.white,
                                               fontSize: 12,
-                                              fontWeight: FontWeight.w500,
+                                              fontWeight: FontWeight.w600,
                                             ),
                                           ),
                                         ],
@@ -894,7 +938,7 @@ class _HomeDashboardContent extends StatelessWidget {
                                     Container(
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 10,
-                                        vertical: 3,
+                                        vertical: 4,
                                       ),
                                       decoration: BoxDecoration(
                                         color: Colors.orange.shade700,
@@ -905,7 +949,7 @@ class _HomeDashboardContent extends StatelessWidget {
                                         style: const TextStyle(
                                           color: Colors.white,
                                           fontSize: 12,
-                                          fontWeight: FontWeight.w500,
+                                          fontWeight: FontWeight.w600,
                                         ),
                                       ),
                                     ),
@@ -915,7 +959,7 @@ class _HomeDashboardContent extends StatelessWidget {
                           ),
                         ),
                         const Icon(
-                          Icons.check_circle,
+                          Icons.check_circle_rounded,
                           color: Colors.white,
                           size: 28,
                         ),
@@ -923,9 +967,9 @@ class _HomeDashboardContent extends StatelessWidget {
                     ),
                   ),
 
-                  SizedBox(height: gap + 6),
+                  SizedBox(height: gap + 8),
 
-                  // ── Stats Row ───────────────────────────────────────
+                  // ── Stats ─────────────────────────────────────
                   Row(
                     children: [
                       Flexible(
@@ -966,56 +1010,60 @@ class _HomeDashboardContent extends StatelessWidget {
                     ],
                   ),
 
-                  SizedBox(height: gap + 10),
+                  SizedBox(height: gap + 12),
 
-                  // ── Latest Requests Header ──────────────────────────
+                  // ── Latest Requests Header ────────────────────
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
                         'Latest Requests',
                         style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.3,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.4,
                         ),
                       ),
                       if (requests.isNotEmpty)
                         TextButton(
                           onPressed: () => _navigateToTab(context, 2),
-                          child: const Text('View All'),
+                          child: const Text(
+                            'View All',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
                         ),
                     ],
                   ),
 
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
 
-                  // ── Latest Requests List ────────────────────────────
+                  // ── Latest Requests List ──────────────────────
                   if (topFiveRequests.isEmpty)
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(
-                        vertical: 32,
+                        vertical: 36,
                         horizontal: 20,
                       ),
                       decoration: BoxDecoration(
                         color: theme.cardColor,
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(18),
                         border: Border.all(
-                          color: theme.dividerColor.withOpacity(0.6),
+                          color: theme.dividerColor.withOpacity(0.5),
                         ),
                       ),
                       child: Column(
                         children: [
                           Icon(
                             Icons.inbox_outlined,
-                            size: 44,
-                            color: theme.hintColor,
+                            size: 48,
+                            color: theme.hintColor.withOpacity(0.7),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 14),
                           Text(
                             l10n.noRequests,
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: theme.hintColor,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ],
@@ -1038,131 +1086,137 @@ class _HomeDashboardContent extends StatelessWidget {
     );
   }
 
-  // ─── Latest Request Item ─────────────────────────────────────────────
+  // ─── Latest Request Card ─────────────────────────────────────
   Widget _buildLatestRequest(BuildContext context, dynamic request) {
     final theme = Theme.of(context);
     final status = request.status?.toString() ?? 'pending';
     final statusColor = _requestStatusColor(status);
     final created = _formatRequestDate(request);
 
-    return InkWell(
-      onTap: () => _navigateToTab(context, 2),
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        width: double.infinity,
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: theme.cardColor,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: theme.dividerColor.withOpacity(0.55),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: theme.shadowColor.withOpacity(0.04),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: statusColor.withOpacity(0.12),
-                shape: BoxShape.circle,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _navigateToTab(context, 2),
+          borderRadius: BorderRadius.circular(18),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(15),
+            decoration: BoxDecoration(
+              color: theme.cardColor,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: theme.dividerColor.withOpacity(0.5),
               ),
-              child: Icon(
-                _requestStatusIcon(status),
-                color: statusColor,
-                size: 21,
-              ),
+              boxShadow: [
+                BoxShadow(
+                  color: theme.shadowColor.withOpacity(0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          request.serviceName.toString(),
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: statusColor.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          _requestStatusLabel(status),
-                          style: TextStyle(
-                            color: statusColor,
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ],
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.13),
+                    shape: BoxShape.circle,
                   ),
-                  const SizedBox(height: 5),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.person_outline,
-                        size: 14,
-                        color: theme.hintColor,
-                      ),
-                      const SizedBox(width: 5),
-                      Expanded(
-                        child: Text(
-                          request.customerName.toString(),
-                          style: theme.textTheme.bodySmall,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
+                  child: Icon(
+                    _requestStatusIcon(status),
+                    color: statusColor,
+                    size: 22,
                   ),
-                  if (created.isNotEmpty) ...[
-                    const SizedBox(height: 5),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.access_time_rounded,
-                          size: 13,
-                          color: theme.hintColor,
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          created,
-                          style: theme.textTheme.bodySmall?.copyWith(
+                ),
+                const SizedBox(width: 13),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              request.serviceName.toString(),
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 9,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: statusColor.withOpacity(0.13),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              _requestStatusLabel(status),
+                              style: TextStyle(
+                                color: statusColor,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.person_outline_rounded,
+                            size: 14,
                             color: theme.hintColor,
-                            fontSize: 11,
                           ),
+                          const SizedBox(width: 5),
+                          Expanded(
+                            child: Text(
+                              request.customerName.toString(),
+                              style: theme.textTheme.bodySmall,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (created.isNotEmpty) ...[
+                        const SizedBox(height: 5),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.access_time_rounded,
+                              size: 13,
+                              color: theme.hintColor,
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              created,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.hintColor,
+                                fontSize: 11.5,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
-                    ),
-                  ],
-                ],
-              ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -1231,12 +1285,11 @@ class _HomeDashboardContent extends StatelessWidget {
   }
 
   void _navigateToTab(BuildContext context, int index) {
-    final homeState =
-    context.findAncestorStateOfType<_FundiHomeScreenState>();
+    final homeState = context.findAncestorStateOfType<_FundiHomeScreenState>();
     homeState?._navigateToTab(index);
   }
 
-  // ─── Stat Card ───────────────────────────────────────────────────────
+  // ─── Stat Card ───────────────────────────────────────────────
   Widget _buildStatCard(
       BuildContext context, {
         required IconData icon,
@@ -1248,54 +1301,59 @@ class _HomeDashboardContent extends StatelessWidget {
       }) {
     final theme = Theme.of(context);
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(
-          vertical: isTablet ? 16.0 : 14.0,
-          horizontal: isTablet ? 12.0 : 8.0,
-        ),
-        decoration: BoxDecoration(
-          color: theme.cardColor,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: theme.shadowColor.withOpacity(0.07),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, size: isTablet ? 20 : 16, color: color),
-                const SizedBox(width: 5),
-                Text(
-                  value,
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontSize: isTablet ? 20 : 16,
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: theme.textTheme.bodySmall?.copyWith(
-                fontSize: isTablet ? 11 : 10,
-                color: theme.hintColor,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: EdgeInsets.symmetric(
+            vertical: isTablet ? 16.0 : 14.0,
+            horizontal: isTablet ? 12.0 : 8.0,
+          ),
+          decoration: BoxDecoration(
+            color: theme.cardColor,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: theme.shadowColor.withOpacity(0.07),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
               ),
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
+            ],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, size: isTablet ? 20 : 16, color: color),
+                  const SizedBox(width: 5),
+                  Text(
+                    value,
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontSize: isTablet ? 20 : 16,
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 5),
+              Text(
+                label,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontSize: isTablet ? 11 : 10,
+                  color: theme.hintColor,
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
         ),
       ),
     );
