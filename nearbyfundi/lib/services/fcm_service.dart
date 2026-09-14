@@ -1,24 +1,21 @@
 // lib/services/fcm_service.dart
 
+import 'dart:io';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_app_badge_control/flutter_app_badge_control.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../firebase_options.dart';
 
 class FcmService {
   // ============================================================
-  // FIREBASE
+  // FIREBASE & NOTIFICATIONS
   // ============================================================
 
   static final FirebaseMessaging _fcm = FirebaseMessaging.instance;
-
-  // ============================================================
-  // LOCAL NOTIFICATIONS
-  // ============================================================
-
   static final FlutterLocalNotificationsPlugin _notifications =
   FlutterLocalNotificationsPlugin();
 
@@ -44,14 +41,13 @@ class FcmService {
     }
 
     try {
-      // Firebase
       if (Firebase.apps.isEmpty) {
         await Firebase.initializeApp(
           options: DefaultFirebaseOptions.currentPlatform,
         );
       }
 
-      // Notification permission
+      // Request notification permissions
       await _fcm.requestPermission(
         alert: true,
         badge: true,
@@ -59,11 +55,10 @@ class FcmService {
         provisional: false,
       );
 
-      // Android initialization
+      // Platform Settings
       const AndroidInitializationSettings androidSettings =
       AndroidInitializationSettings('@mipmap/ic_launcher');
 
-      // iOS initialization
       const DarwinInitializationSettings iosSettings =
       DarwinInitializationSettings(
         requestAlertPermission: true,
@@ -71,7 +66,6 @@ class FcmService {
         requestSoundPermission: true,
       );
 
-      // General initialization
       const InitializationSettings settings = InitializationSettings(
         android: androidSettings,
         iOS: iosSettings,
@@ -82,29 +76,20 @@ class FcmService {
         onDidReceiveNotificationResponse: _onNotificationTap,
       );
 
-      // Android channel
       await _createNotificationChannel();
 
-      // Firebase listeners
+      // Listeners
       FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
       FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpened);
+      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-      // Background messages
-      FirebaseMessaging.onBackgroundMessage(
-        _firebaseMessagingBackgroundHandler,
-      );
-
-      // Save token
+      // Save FCM Token cleanly with APNS safety
       await _saveToken();
 
-      // Token refresh
       _fcm.onTokenRefresh.listen(_handleTokenRefresh);
-
-      // Restore badge
       await _loadSavedBadge();
 
       _initialized = true;
-
       debugPrint('✅ FCM Service initialized successfully');
     } catch (e, stackTrace) {
       debugPrint('❌ FCM Service initialization failed: $e');
@@ -119,10 +104,8 @@ class FcmService {
   static Future<void> _handleTokenRefresh(String token) async {
     try {
       if (token.isEmpty) return;
-
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_tokenKey, token);
-
       debugPrint('✅ FCM token refreshed and saved');
     } catch (e) {
       debugPrint('❌ Failed to save refreshed FCM token: $e');
@@ -138,9 +121,10 @@ class FcmService {
       _channelId,
       _channelName,
       description: 'Notifications from NearbyFundi',
-      importance: Importance.high,
+      importance: Importance.max,
       enableVibration: true,
       playSound: true,
+      showBadge: true,
     );
 
     final androidPlugin = _notifications
@@ -148,38 +132,26 @@ class FcmService {
         AndroidFlutterLocalNotificationsPlugin>();
 
     await androidPlugin?.createNotificationChannel(channel);
-
     debugPrint('✅ Notification channel created');
   }
 
   // ============================================================
-  // NOTIFICATION TAP
+  // NOTIFICATION TAP & FOREGROUND
   // ============================================================
 
   static void _onNotificationTap(NotificationResponse response) {
     debugPrint('👆 Notification tapped');
     debugPrint('Payload: ${response.payload}');
-    // Navigation can be connected here later.
   }
-
-  // ============================================================
-  // FOREGROUND MESSAGE
-  // ============================================================
 
   static Future<void> _handleForegroundMessage(RemoteMessage message) async {
     debugPrint('📱 Foreground notification: ${message.notification?.title}');
-
     await _showNotification(message);
     await _incrementBadge();
   }
 
-  // ============================================================
-  // MESSAGE OPENED
-  // ============================================================
-
   static Future<void> _handleMessageOpened(RemoteMessage message) async {
     debugPrint('📱 Notification opened: ${message.notification?.title}');
-    debugPrint('Notification data: ${message.data}');
   }
 
   // ============================================================
@@ -192,11 +164,12 @@ class FcmService {
       _channelId,
       _channelName,
       channelDescription: 'Notifications from NearbyFundi',
-      importance: Importance.high,
+      importance: Importance.max,
       priority: Priority.high,
       icon: '@mipmap/ic_launcher',
       playSound: true,
       enableVibration: true,
+      channelShowBadge: true,
     );
 
     const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
@@ -229,7 +202,7 @@ class FcmService {
   }
 
   // ============================================================
-  // BADGE METHODS (Using SharedPreferences only)
+  // HARDWARE APP BADGE LOGIC
   // ============================================================
 
   static Future<void> _incrementBadge() async {
@@ -239,7 +212,7 @@ class FcmService {
       final newCount = currentCount + 1;
 
       await prefs.setInt(_badgeKey, newCount);
-      debugPrint('✅ Badge count updated: $newCount (in memory)');
+      await _updateNativeBadge(newCount);
     } catch (e) {
       debugPrint('❌ Failed to increment badge: $e');
     }
@@ -249,9 +222,20 @@ class FcmService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final count = prefs.getInt(_badgeKey) ?? 0;
+      await _updateNativeBadge(count);
       debugPrint('✅ Restored badge count: $count');
     } catch (e) {
       debugPrint('❌ Failed to restore badge: $e');
+    }
+  }
+
+  static Future<void> _updateNativeBadge(int count) async {
+    if (await FlutterAppBadgeControl.isAppBadgeSupported()) {
+      if (count > 0) {
+        FlutterAppBadgeControl.updateBadgeCount(count);
+      } else {
+        FlutterAppBadgeControl.removeBadge();
+      }
     }
   }
 
@@ -259,6 +243,9 @@ class FcmService {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt(_badgeKey, 0);
+      if (await FlutterAppBadgeControl.isAppBadgeSupported()) {
+        FlutterAppBadgeControl.removeBadge();
+      }
       debugPrint('✅ Notification badge cleared');
     } catch (e) {
       debugPrint('❌ Failed to clear badge: $e');
@@ -270,19 +257,17 @@ class FcmService {
       final prefs = await SharedPreferences.getInstance();
       return prefs.getInt(_badgeKey) ?? 0;
     } catch (e) {
-      debugPrint('❌ Failed to get badge count: $e');
       return 0;
     }
   }
 
   // ============================================================
-  // FCM TOKEN METHODS
+  // APNS-SAFE FCM TOKEN RETRIEVAL
   // ============================================================
 
   static Future<void> _saveToken() async {
     try {
-      final token = await _fcm.getToken();
-
+      final token = await getToken();
       if (token == null || token.isEmpty) {
         debugPrint('⚠️ FCM token is null or empty');
         return;
@@ -290,7 +275,6 @@ class FcmService {
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_tokenKey, token);
-
       debugPrint('✅ FCM token saved');
     } catch (e) {
       debugPrint('❌ Failed to save FCM token: $e');
@@ -299,6 +283,18 @@ class FcmService {
 
   static Future<String?> getToken() async {
     try {
+      // Safe APNS Check on iOS to prevent apns-token-not-set exception
+      if (Platform.isIOS) {
+        String? apnsToken = await _fcm.getAPNSToken();
+        if (apnsToken == null) {
+          await Future.delayed(const Duration(seconds: 2));
+          apnsToken = await _fcm.getAPNSToken();
+        }
+        if (apnsToken == null) {
+          debugPrint('⚠️ APNS Token is still null. Cannot get FCM Token yet.');
+          return null;
+        }
+      }
       return await _fcm.getToken();
     } catch (e) {
       debugPrint('❌ Failed to get FCM token: $e');
@@ -314,27 +310,24 @@ class FcmService {
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   try {
-    // Firebase
     if (Firebase.apps.isEmpty) {
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       );
     }
 
-    debugPrint('📱 Background notification: ${message.notification?.title}');
-
-    // Badge count (using SharedPreferences only)
     final prefs = await SharedPreferences.getInstance();
     final currentCount = prefs.getInt('badge_count') ?? 0;
     final newCount = currentCount + 1;
     await prefs.setInt('badge_count', newCount);
 
-    // Local notification plugin
-    final notifications = FlutterLocalNotificationsPlugin();
+    if (await FlutterAppBadgeControl.isAppBadgeSupported()) {
+      FlutterAppBadgeControl.updateBadgeCount(newCount);
+    }
 
+    final notifications = FlutterLocalNotificationsPlugin();
     const AndroidInitializationSettings androidSettings =
     AndroidInitializationSettings('@mipmap/ic_launcher');
-
     const DarwinInitializationSettings iosSettings =
     DarwinInitializationSettings(
       requestAlertPermission: false,
@@ -349,17 +342,17 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
     await notifications.initialize(settings);
 
-    // Notification details
     const AndroidNotificationDetails androidDetails =
     AndroidNotificationDetails(
       'fundi_channel',
       'NearbyFundi Notifications',
       channelDescription: 'Notifications from NearbyFundi',
-      importance: Importance.high,
+      importance: Importance.max,
       priority: Priority.high,
       icon: '@mipmap/ic_launcher',
       playSound: true,
       enableVibration: true,
+      channelShowBadge: true,
     );
 
     const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
@@ -373,11 +366,9 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       iOS: iosDetails,
     );
 
-    // Notification ID
     final notificationId =
     DateTime.now().millisecondsSinceEpoch.remainder(2147483647);
 
-    // Show notification
     await notifications.show(
       notificationId,
       message.notification?.title ?? 'NearbyFundi',
@@ -385,8 +376,6 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       notificationDetails,
       payload: message.data['type']?.toString() ?? 'notification',
     );
-
-    debugPrint('✅ Background notification handled. Badge: $newCount');
   } catch (e, stackTrace) {
     debugPrint('❌ Background notification failed: $e');
     debugPrint('$stackTrace');

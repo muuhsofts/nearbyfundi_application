@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../config/app_theme.dart';
 import '../../providers/auth_provider.dart';
@@ -54,16 +53,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _handleRegister() async {
-    // ... (unchanged)
+    // Keep your existing implementation here
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA), // Soft modern grey background
+      backgroundColor: isDark ? const Color(0xFF0F1C1A) : const Color(0xFFF5F7FA),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -76,11 +76,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   constraints: const BoxConstraints(maxWidth: 480),
                   padding: const EdgeInsets.all(32),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: isDark ? const Color(0xFF1A2A27) : Colors.white,
                     borderRadius: BorderRadius.circular(28),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
+                        color: Colors.black.withOpacity(isDark ? 0.35 : 0.04),
                         blurRadius: 40,
                         offset: const Offset(0, 12),
                       ),
@@ -92,7 +92,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // --- Modern Brand Icon ---
+                        // Brand Icon
                         Center(
                           child: Container(
                             width: 72,
@@ -109,7 +109,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        // --- Headings ---
+
+                        // Headings
                         Center(
                           child: Text(
                             'NearbyFundi',
@@ -132,7 +133,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                         const SizedBox(height: 36),
 
-                        // --- Full Name ---
+                        // Full Name
                         _buildFieldLabel(l10n.fullName),
                         const SizedBox(height: 6),
                         TextFormField(
@@ -142,13 +143,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             hintText: 'Enter your full name',
                             prefixIcon: Icons.person_outline_rounded,
                           ),
-                          validator: (v) => v != null && v.trim().isNotEmpty
+                          validator: (v) =>
+                          v != null && v.trim().isNotEmpty
                               ? null
                               : 'Full name is required',
                         ),
                         const SizedBox(height: 24),
 
-                        // --- Email ---
+                        // Email
                         _buildFieldLabel(l10n.emailAddress),
                         const SizedBox(height: 6),
                         TextFormField(
@@ -159,13 +161,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             hintText: 'you@example.com',
                             prefixIcon: Icons.email_outlined,
                           ),
-                          validator: (v) => v != null && v.contains('@')
+                          validator: (v) =>
+                          v != null && v.contains('@')
                               ? null
                               : 'Enter a valid email address',
                         ),
                         const SizedBox(height: 24),
 
-                        // --- Phone Number ---
+                        // Phone
                         _buildFieldLabel(l10n.phoneNumber),
                         const SizedBox(height: 6),
                         Row(
@@ -191,7 +194,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                   if (v == null || v.trim().isEmpty) {
                                     return 'Phone number is required';
                                   }
-                                  final digits = v.trim().replaceAll(RegExp(r'[^0-9]'), '');
+                                  final digits =
+                                  v.trim().replaceAll(RegExp(r'[^0-9]'), '');
                                   if (digits.length < 7 || digits.length > 15) {
                                     return 'Phone must be 7–15 digits';
                                   }
@@ -203,7 +207,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                         const SizedBox(height: 24),
 
-                        // --- Password ---
+                        // Password
                         _buildFieldLabel(l10n.password),
                         const SizedBox(height: 6),
                         TextFormField(
@@ -221,16 +225,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 color: theme.hintColor,
                                 size: 20,
                               ),
-                              onPressed: () => setState(() => _obscurePass = !_obscurePass),
+                              onPressed: () =>
+                                  setState(() => _obscurePass = !_obscurePass),
                             ),
                           ),
-                          validator: (v) => v != null && v.length >= 8
+                          validator: (v) =>
+                          v != null && v.length >= 8
                               ? null
                               : 'Password must be at least 8 characters',
                         ),
                         const SizedBox(height: 24),
 
-                        // --- Confirm Password ---
+                        // Confirm Password
                         _buildFieldLabel(l10n.confirmPassword),
                         const SizedBox(height: 6),
                         TextFormField(
@@ -248,16 +254,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 color: theme.hintColor,
                                 size: 20,
                               ),
-                              onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                              onPressed: () => setState(
+                                      () => _obscureConfirm = !_obscureConfirm),
                             ),
                           ),
-                          validator: (v) => v == _passwordController.text
+                          validator: (v) =>
+                          v == _passwordController.text
                               ? null
                               : 'Passwords do not match',
                         ),
                         const SizedBox(height: 24),
 
-                        // --- Terms & Conditions ---
+                        // Terms
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -273,7 +281,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(4),
                                 ),
-                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
                               ),
                             ),
                             const SizedBox(width: 10),
@@ -281,44 +290,41 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               child: RichText(
                                 text: TextSpan(
                                   style: theme.textTheme.bodySmall?.copyWith(
-                                    color: theme.colorScheme.onSurface.withOpacity(0.8),
+                                    color: theme.colorScheme.onSurface
+                                        .withOpacity(0.8),
                                     height: 1.4,
                                   ),
                                   children: [
-                                    const TextSpan(text: 'I agree to the '),
+                                    TextSpan(text: '${l10n.iAgreeToThe} '),
                                     TextSpan(
-                                      text: 'Terms & Conditions',
+                                      text: l10n.termsAndConditions,
                                       style: TextStyle(
                                         color: theme.primaryColor,
                                         fontWeight: FontWeight.w700,
                                         decoration: TextDecoration.underline,
-                                        decorationColor: theme.primaryColor.withOpacity(0.4),
+                                        decorationColor:
+                                        theme.primaryColor.withOpacity(0.4),
                                       ),
                                       recognizer: TapGestureRecognizer()
                                         ..onTap = () {
-                                          Navigator.pushNamed(context, AppRoutes.terms);
+                                          Navigator.pushNamed(
+                                              context, AppRoutes.terms);
                                         },
                                     ),
-                                    const TextSpan(text: ' and '),
+                                    TextSpan(text: ' ${l10n.and} '),
                                     TextSpan(
-                                      text: 'Privacy Policy',
+                                      text: l10n.privacyPolicy,
                                       style: TextStyle(
                                         color: theme.primaryColor,
                                         fontWeight: FontWeight.w700,
                                         decoration: TextDecoration.underline,
-                                        decorationColor: theme.primaryColor.withOpacity(0.4),
+                                        decorationColor:
+                                        theme.primaryColor.withOpacity(0.4),
                                       ),
                                       recognizer: TapGestureRecognizer()
                                         ..onTap = () {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(
-                                              content: Text('Privacy Policy page coming soon'),
-                                              behavior: SnackBarBehavior.floating,
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius: BorderRadius.all(Radius.circular(12)),
-                                              ),
-                                            ),
-                                          );
+                                          Navigator.pushNamed(
+                                              context, AppRoutes.privacyPolicy);
                                         },
                                     ),
                                   ],
@@ -329,7 +335,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                         const SizedBox(height: 32),
 
-                        // --- Sign Up Button ---
+                        // Sign Up Button
                         SizedBox(
                           width: double.infinity,
                           height: 56,
@@ -340,7 +346,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                         const SizedBox(height: 20),
 
-                        // --- Sign In Link ---
+                        // Sign In Link
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -351,9 +357,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               ),
                             ),
                             TextButton(
-                              onPressed: () => Navigator.pushNamed(context, AppRoutes.login),
+                              onPressed: () =>
+                                  Navigator.pushNamed(context, AppRoutes.login),
                               style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: 4),
+                                padding:
+                                const EdgeInsets.symmetric(horizontal: 4),
                                 minimumSize: const Size(0, 30),
                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               ),
@@ -381,7 +389,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  // ─── Helpers ─────────────────────────────────────────────────────────
   Widget _buildFieldLabel(String label) {
     return Text(
       label.toUpperCase(),
@@ -395,7 +402,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 }
 
-// ─── Redesigned Input Decoration ──────────────────────────────────────
 InputDecoration _inputDecoration(
     BuildContext context, {
       required String hintText,
@@ -403,6 +409,8 @@ InputDecoration _inputDecoration(
       Widget? suffixIcon,
     }) {
   final theme = Theme.of(context);
+  final isDark = theme.brightness == Brightness.dark;
+
   return InputDecoration(
     hintText: hintText,
     hintStyle: theme.textTheme.bodyMedium?.copyWith(
@@ -412,7 +420,7 @@ InputDecoration _inputDecoration(
     prefixIcon: Icon(prefixIcon, color: theme.hintColor, size: 20),
     suffixIcon: suffixIcon,
     filled: true,
-    fillColor: const Color(0xFFF2F4F8), // Premium soft grey fill
+    fillColor: isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFF2F4F8),
     contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(16),

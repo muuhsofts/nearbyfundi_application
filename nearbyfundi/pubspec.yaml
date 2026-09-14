@@ -80,6 +80,7 @@ dependencies:
   firebase_core: ^4.10.0
   firebase_messaging: ^16.3.0
   flutter_local_notifications: ^19.4.1
+  flutter_app_badge_control: ^0.0.2
   google_sign_in: ^6.1.5
 
   # ============================================================

@@ -35,8 +35,8 @@ class $AssetsImagesGen {
   final AssetGenImage home = const AssetGenImage('assets/images/home.jpg');
   final AssetGenImage nearbyfundiLogo =
       const AssetGenImage('assets/images/nearbyfundi-logo.png');
-  final AssetGenImage nearbyfundiImageRemovebgPreview = const AssetGenImage(
-      'assets/images/nearbyfundi_image.jpg');
+  final AssetGenImage nearbyfundiImage =
+      const AssetGenImage('assets/images/nearbyfundi_image.jpg');
 }
 
 class AssetGenImage {
