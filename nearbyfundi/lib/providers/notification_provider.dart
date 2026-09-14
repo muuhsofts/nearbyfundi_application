@@ -1,8 +1,7 @@
-// lib/providers/notification_provider.dart
-
 import 'dart:convert';
+import 'dart:io';
+import 'package:app_badge_control_flutter/app_badge_control_flutter.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_app_badge_control/flutter_app_badge_control.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../main.dart';
@@ -17,11 +16,11 @@ class NotificationProvider extends ChangeNotifier {
   static const String _channelName = 'NearbyFundi Notifications';
 
   List<Map<String, dynamic>> _notifications = [];
-
   bool _isLoading = false;
   String? _error;
   int _serverUnreadCount = 0;
 
+  // ==================== GETTERS ====================
   List<Map<String, dynamic>> get notifications => _notifications;
   bool get isLoading => _isLoading;
   String? get error => _error;
@@ -33,10 +32,12 @@ class NotificationProvider extends ChangeNotifier {
     }).length;
   }
 
+  // ==================== CONSTRUCTOR ====================
   NotificationProvider() {
     _init();
   }
 
+  // ==================== INITIALIZATION ====================
   Future<void> _init() async {
     try {
       const AndroidInitializationSettings androidSettings =
@@ -57,7 +58,8 @@ class NotificationProvider extends ChangeNotifier {
       await _localNotifications.initialize(
         settings,
         onDidReceiveNotificationResponse: _onNotificationTap,
-        onDidReceiveBackgroundNotificationResponse: _onBackgroundNotificationTap,
+        onDidReceiveBackgroundNotificationResponse:
+        _onBackgroundNotificationTap,
       );
 
       await _createNotificationChannel();
@@ -95,6 +97,7 @@ class NotificationProvider extends ChangeNotifier {
     debugPrint('✅ Notification channel created');
   }
 
+  // ==================== NOTIFICATION TAP ====================
   void _onNotificationTap(NotificationResponse response) {
     try {
       final String? payload = response.payload;
@@ -112,13 +115,14 @@ class NotificationProvider extends ChangeNotifier {
     }
   }
 
+  // ==================== SHOW LOCAL NOTIFICATION ====================
   Future<void> showLocalNotification({
     required String title,
     required String body,
     String? payload,
   }) async {
     try {
-      const AndroidNotificationDetails androidDetails =
+      final AndroidNotificationDetails androidDetails =
       AndroidNotificationDetails(
         _channelId,
         _channelName,
@@ -130,17 +134,16 @@ class NotificationProvider extends ChangeNotifier {
         enableVibration: true,
         icon: '@mipmap/ic_launcher',
         channelShowBadge: true,
+        number: _serverUnreadCount > 0 ? _serverUnreadCount : null,
       );
 
-      const DarwinNotificationDetails iosDetails =
-      DarwinNotificationDetails(
+      const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
         presentAlert: true,
         presentBadge: true,
         presentSound: true,
       );
 
-      const NotificationDetails notificationDetails =
-      NotificationDetails(
+      final NotificationDetails notificationDetails = NotificationDetails(
         android: androidDetails,
         iOS: iosDetails,
       );
@@ -171,6 +174,7 @@ class NotificationProvider extends ChangeNotifier {
     }
   }
 
+  // ==================== HELPERS ====================
   bool _isUnread(dynamic value) {
     if (value == null) return true;
     if (value is bool) return value == false;
@@ -186,21 +190,29 @@ class NotificationProvider extends ChangeNotifier {
     return !_isUnread(notification['is_read']);
   }
 
+  // ==================== BADGE UPDATE ====================
   Future<void> _updateAppBadge() async {
     try {
       debugPrint('ℹ️ Updating notification badge count: $_serverUnreadCount');
-      if (await FlutterAppBadgeControl.isAppBadgeSupported()) {
+
+      final bool isSupported =
+      await AppBadgeControlFlutter.isAppBadgeSupported();
+
+      if (isSupported || Platform.isAndroid) {
         if (_serverUnreadCount > 0) {
-          FlutterAppBadgeControl.updateBadgeCount(_serverUnreadCount);
+          await AppBadgeControlFlutter.updateBadgeCount(_serverUnreadCount);
         } else {
-          FlutterAppBadgeControl.removeBadge();
+          await AppBadgeControlFlutter.removeBadge();
         }
+      } else {
+        debugPrint('ℹ️ App badge not supported on this launcher');
       }
     } catch (e) {
       debugPrint('❌ Failed to update notification badge: $e');
     }
   }
 
+  // ==================== LOAD NOTIFICATIONS ====================
   Future<void> loadNotifications() async {
     if (_isLoading) return;
 
@@ -266,6 +278,7 @@ class NotificationProvider extends ChangeNotifier {
     }
   }
 
+  // ==================== UNREAD COUNT ====================
   Future<void> refreshUnreadCount() async {
     try {
       final ApiService api = ApiService();
@@ -292,6 +305,7 @@ class NotificationProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ==================== MARK AS READ ====================
   Future<void> markAsRead(String notificationId) async {
     try {
       final ApiService api = ApiService();
@@ -337,6 +351,7 @@ class NotificationProvider extends ChangeNotifier {
     }
   }
 
+  // ==================== ADD LOCAL NOTIFICATION ====================
   void addLocalNotification(Map<String, dynamic> notification) {
     notification['is_read'] ??= false;
     _notifications.insert(0, notification);
@@ -345,6 +360,7 @@ class NotificationProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ==================== CLEAR ====================
   Future<void> clearAll() async {
     try {
       final ApiService api = ApiService();
@@ -364,7 +380,10 @@ class NotificationProvider extends ChangeNotifier {
   Future<void> clearBadge() async {
     try {
       await _localNotifications.cancelAll();
-      FlutterAppBadgeControl.removeBadge();
+      await AppBadgeControlFlutter.removeBadge();
+
+      _serverUnreadCount = 0;
+      notifyListeners();
       debugPrint('✅ Notifications and badge cleared');
     } catch (e) {
       debugPrint('❌ Failed to clear notifications: $e');

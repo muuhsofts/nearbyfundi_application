@@ -5,6 +5,7 @@
 import FlutterMacOS
 import Foundation
 
+import app_badge_control_flutter
 import audioplayers_darwin
 import connectivity_plus
 import emoji_picker_flutter
@@ -15,7 +16,6 @@ import firebase_messaging
 import flutter_image_compress_macos
 import flutter_inappwebview_macos
 import flutter_local_notifications
-import flutter_sound
 import geolocator_apple
 import google_sign_in_ios
 import open_file_mac
@@ -27,6 +27,7 @@ import sqflite_darwin
 import url_launcher_macos
 
 func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
+  AppBadgeControlFlutterPlugin.register(with: registry.registrar(forPlugin: "AppBadgeControlFlutterPlugin"))
   AudioplayersDarwinPlugin.register(with: registry.registrar(forPlugin: "AudioplayersDarwinPlugin"))
   ConnectivityPlusPlugin.register(with: registry.registrar(forPlugin: "ConnectivityPlusPlugin"))
   EmojiPickerFlutterPlugin.register(with: registry.registrar(forPlugin: "EmojiPickerFlutterPlugin"))
@@ -37,7 +38,6 @@ func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
   FlutterImageCompressMacosPlugin.register(with: registry.registrar(forPlugin: "FlutterImageCompressMacosPlugin"))
   InAppWebViewFlutterPlugin.register(with: registry.registrar(forPlugin: "InAppWebViewFlutterPlugin"))
   FlutterLocalNotificationsPlugin.register(with: registry.registrar(forPlugin: "FlutterLocalNotificationsPlugin"))
-  FlutterSoundPlugin.register(with: registry.registrar(forPlugin: "FlutterSoundPlugin"))
   GeolocatorPlugin.register(with: registry.registrar(forPlugin: "GeolocatorPlugin"))
   FLTGoogleSignInPlugin.register(with: registry.registrar(forPlugin: "FLTGoogleSignInPlugin"))
   OpenFilePlugin.register(with: registry.registrar(forPlugin: "OpenFilePlugin"))

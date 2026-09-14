@@ -1,57 +1,66 @@
-// lib/services/voice_recorder_service.dart
-
-import 'package:flutter_sound/flutter_sound.dart';
-import 'package:path_provider/path_provider.dart';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 
 class VoiceRecorderService {
   static final VoiceRecorderService _instance = VoiceRecorderService._internal();
   factory VoiceRecorderService() => _instance;
   VoiceRecorderService._internal();
 
-  FlutterSoundRecorder? _recorder;
+  AudioRecorder? _audioRecorder;
   bool _isRecording = false;
   String? _recordingPath;
 
   Future<void> init() async {
-    _recorder = FlutterSoundRecorder();
-    await _recorder!.openRecorder();
+    _audioRecorder ??= AudioRecorder();
   }
 
   Future<bool> startRecording() async {
-    if (_recorder == null) await init();
-
-    if (_recorder!.isRecording) return false;
+    await init();
 
     try {
-      final tempDir = await getTemporaryDirectory();
-      final path = '${tempDir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.aac';
+      // Check and request microphone permission
+      final hasPermission = await _audioRecorder!.hasPermission();
+      if (!hasPermission) {
+        debugPrint('⚠️ Microphone permission not granted');
+        return false;
+      }
 
-      await _recorder!.startRecorder(
-        toFile: path,
-        codec: Codec.aacADTS,
-        bitRate: 128000,
-        sampleRate: 16000,
+      final tempDir = await getTemporaryDirectory();
+      final path =
+          '${tempDir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+
+      // Start recording with AAC LC codec
+      await _audioRecorder!.start(
+        const RecordConfig(
+          encoder: AudioEncoder.aacLc,
+          bitRate: 128000,
+          sampleRate: 16000,
+        ),
+        path: path,
       );
 
       _isRecording = true;
       _recordingPath = path;
+      debugPrint('🎙️ Recording started at: $path');
       return true;
     } catch (e) {
-      print('Failed to start recording: $e');
+      debugPrint('❌ Failed to start recording: $e');
       return false;
     }
   }
 
   Future<String?> stopRecording() async {
-    if (_recorder == null || !_recorder!.isRecording) return null;
+    if (_audioRecorder == null || !_isRecording) return null;
 
     try {
-      final path = await _recorder!.stopRecorder();
+      final path = await _audioRecorder!.stop();
       _isRecording = false;
-      return path;
+      debugPrint('⏹️ Recording stopped. File: $path');
+      return path ?? _recordingPath;
     } catch (e) {
-      print('Failed to stop recording: $e');
+      debugPrint('❌ Failed to stop recording: $e');
       return null;
     }
   }
@@ -60,6 +69,7 @@ class VoiceRecorderService {
   String? get recordingPath => _recordingPath;
 
   void dispose() {
-    _recorder?.closeRecorder();
+    _audioRecorder?.dispose();
+    _audioRecorder = null;
   }
 }

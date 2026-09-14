@@ -6,7 +6,6 @@ list(APPEND FLUTTER_PLUGIN_LIST
   audioplayers_linux
   emoji_picker_flutter
   file_selector_linux
-  flutter_sound
   open_file_linux
   printing
   record_linux

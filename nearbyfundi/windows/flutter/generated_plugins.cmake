@@ -3,13 +3,13 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  app_badge_control_flutter
   audioplayers_windows
   connectivity_plus
   emoji_picker_flutter
   file_selector_windows
   firebase_core
   flutter_inappwebview_windows
-  flutter_sound
   geolocator_windows
   permission_handler_windows
   printing
