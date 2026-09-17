@@ -1,56 +1,58 @@
-// lib/services/fcm_service.dart
 import 'dart:convert';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+import '../app_navigator.dart';
 import '../config/app_routes.dart';
+import '../main.dart';
 import 'fcm_event_bus.dart';
 
 class FcmService {
-  static final GlobalKey<NavigatorState> navigatorKey =
-  GlobalKey<NavigatorState>();
-
   static final FirebaseMessaging _fcm = FirebaseMessaging.instance;
   static final FlutterLocalNotificationsPlugin _notifications =
   FlutterLocalNotificationsPlugin();
 
+  /// Use the shared key from app_navigator.dart
+  static GlobalKey<NavigatorState> get navKey => navigatorKey;
+
   @pragma('vm:entry-point')
   static Future<void> onBackgroundMessage(RemoteMessage message) async {
-    print("📩 Background message: ${message.notification?.title}");
+    debugPrint('📩 Background message: ${message.notification?.title}');
   }
 
   static Future<void> init() async {
     try {
-      NotificationSettings settings = await _fcm.requestPermission(
+      final settings = await _fcm.requestPermission(
         alert: true,
         badge: true,
         sound: true,
       );
 
-      if (settings.authorizationStatus != AuthorizationStatus.authorized) {
-        print('❌ FCM permission denied');
+      if (settings.authorizationStatus != AuthorizationStatus.authorized &&
+          settings.authorizationStatus != AuthorizationStatus.provisional) {
+        debugPrint('❌ FCM permission denied');
         return;
       }
 
-      FirebaseMessaging.onBackgroundMessage(onBackgroundMessage);
-
-      const AndroidInitializationSettings android =
-      AndroidInitializationSettings('@mipmap/ic_launcher');
-      const DarwinInitializationSettings ios = DarwinInitializationSettings();
-      const InitializationSettings initSettings =
-      InitializationSettings(android: android, iOS: ios);
+      const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const ios = DarwinInitializationSettings(
+        requestAlertPermission: true,
+        requestBadgePermission: true,
+        requestSoundPermission: true,
+      );
+      const initSettings = InitializationSettings(android: android, iOS: ios);
 
       await _notifications.initialize(
         initSettings,
         onDidReceiveNotificationResponse: _handleNotificationTapFromLocal,
       );
 
-      const AndroidNotificationChannel channel = AndroidNotificationChannel(
+      const channel = AndroidNotificationChannel(
         'fundi_channel',
-        'FundiApp Notifications',
-        description: 'Notifications from FundiApp',
+        'NearbyFundi Notifications',
+        description: 'Notifications from NearbyFundi',
         importance: Importance.max,
         showBadge: true,
         enableVibration: true,
@@ -62,7 +64,6 @@ class FcmService {
           AndroidFlutterLocalNotificationsPlugin>()
           ?.createNotificationChannel(channel);
 
-      // Set foreground presentation options for iOS
       await _fcm.setForegroundNotificationPresentationOptions(
         alert: true,
         badge: true,
@@ -71,7 +72,7 @@ class FcmService {
 
       FirebaseMessaging.onMessage.listen(_showForegroundNotification);
 
-      RemoteMessage? initialMessage = await _fcm.getInitialMessage();
+      final initialMessage = await _fcm.getInitialMessage();
       if (initialMessage != null) {
         _handleNotificationTapFromRemote(initialMessage);
       }
@@ -79,39 +80,46 @@ class FcmService {
       FirebaseMessaging.onMessageOpenedApp
           .listen(_handleNotificationTapFromRemote);
 
-      print('✅ FCM initialized');
+      debugPrint('✅ FCM initialized');
     } catch (e) {
-      print('❌ FCM init error: $e');
+      debugPrint('❌ FCM init error: $e');
     }
+  }
+
+  static String _sanitize(String? value, String fallback) {
+    final text = (value ?? '').trim();
+    if (text.isEmpty || int.tryParse(text) != null) return fallback;
+    return text;
   }
 
   static void _showForegroundNotification(RemoteMessage message) {
     try {
-      final title = message.notification?.title ?? 'FundiApp';
-      final body =
-          message.notification?.body ?? 'You have a new notification';
+      final type = message.data['type']?.toString() ?? 'general';
 
-      final context = navigatorKey.currentContext;
-      if (context != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('$title: $body'),
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 4),
-            action: SnackBarAction(
-              label: 'View',
-              onPressed: () {
-                _handleNotificationTapFromRemote(message);
-              },
-            ),
-          ),
-        );
+      // Chat: silent – no system tray banner
+      if (type == 'chat_message') {
+        FcmEventBus.instance.emit({
+          'title': message.notification?.title ?? '',
+          'body': message.notification?.body ?? '',
+          'type': type,
+          'data': message.data,
+          'received_at': DateTime.now().toIso8601String(),
+        });
+        return;
       }
 
-      // System notification with badge support
-      const AndroidNotificationDetails android = AndroidNotificationDetails(
+      final title = _sanitize(
+        message.notification?.title ?? message.data['title']?.toString(),
+        'NearbyFundi',
+      );
+      final body = _sanitize(
+        message.notification?.body ?? message.data['body']?.toString(),
+        'You have a new update',
+      );
+
+      const android = AndroidNotificationDetails(
         'fundi_channel',
-        'FundiApp Notifications',
+        'NearbyFundi Notifications',
         importance: Importance.high,
         priority: Priority.high,
         icon: '@mipmap/ic_launcher',
@@ -121,40 +129,36 @@ class FcmService {
         enableVibration: true,
       );
 
-      const NotificationDetails platform =
-      NotificationDetails(android: android);
+      const platform = NotificationDetails(android: android);
 
       _notifications.show(
         DateTime.now().millisecondsSinceEpoch ~/ 1000,
         title,
         body,
         platform,
-        payload:
-        message.data.isNotEmpty ? json.encode(message.data) : null,
+        payload: message.data.isNotEmpty ? json.encode(message.data) : null,
       );
 
-      // Live event bus so NotificationProvider can update the bell instantly
       FcmEventBus.instance.emit({
         'title': title,
         'body': body,
-        'type': message.data['type'] ?? 'general',
+        'type': type,
         'data': message.data,
         'received_at': DateTime.now().toIso8601String(),
       });
     } catch (e) {
-      print('❌ Show foreground notification error: $e');
+      debugPrint('❌ Show foreground notification error: $e');
     }
   }
 
   static void _handleNotificationTapFromLocal(NotificationResponse response) {
     if (response.payload == null) return;
-
     try {
       final data = Map<String, dynamic>.from(
         json.decode(response.payload!) as Map<String, dynamic>,
       );
       _navigateBasedOnType(data);
-    } catch (e) {
+    } catch (_) {
       _navigateToHome();
     }
   }
@@ -162,19 +166,24 @@ class FcmService {
   static void _handleNotificationTapFromRemote(RemoteMessage message) {
     try {
       _navigateBasedOnType(message.data);
-    } catch (e) {
+    } catch (_) {
       _navigateToHome();
     }
   }
 
   static void _navigateBasedOnType(Map<String, dynamic> data) {
-    final type = data['type'] ?? '';
+    final type = data['type']?.toString() ?? '';
     final conversationId = data['conversation_id'];
 
     switch (type) {
       case 'chat_message':
         if (conversationId != null) {
-          _navigateToChat(conversationId);
+          navigatorKey.currentState?.pushNamed(
+            AppRoutes.chat,
+            arguments: {
+              'conversationId': int.tryParse(conversationId.toString()) ?? 0,
+            },
+          );
         } else {
           _navigateToHome();
         }
@@ -182,37 +191,24 @@ class FcmService {
       case 'new_request':
       case 'request_accepted':
       case 'request_rejected':
-        _navigateToRequests();
+      case 'request_in_progress':
+      case 'request_completed':
+      case 'request_on_the_way':
+      case 'request_arrived':
+      case 'request_cancelled':
+        navigatorKey.currentState?.pushNamed(AppRoutes.requests);
         break;
       case 'post_comment':
       case 'post_like':
-        _navigateToBlog();
+      case 'new_post':
+        navigatorKey.currentState?.pushNamed(AppRoutes.blog);
         break;
       case 'profile_update':
-        _navigateToProfile();
+        navigatorKey.currentState?.pushNamed(AppRoutes.profile);
         break;
       default:
-        _navigateToHome();
+        navigatorKey.currentState?.pushNamed(AppRoutes.notifications);
     }
-  }
-
-  static void _navigateToChat(String conversationId) {
-    navigatorKey.currentState?.pushNamed(
-      AppRoutes.chat,
-      arguments: {'conversationId': int.parse(conversationId)},
-    );
-  }
-
-  static void _navigateToRequests() {
-    navigatorKey.currentState?.pushNamed(AppRoutes.requests);
-  }
-
-  static void _navigateToBlog() {
-    navigatorKey.currentState?.pushNamed(AppRoutes.blog);
-  }
-
-  static void _navigateToProfile() {
-    navigatorKey.currentState?.pushNamed(AppRoutes.profile);
   }
 
   static void _navigateToHome() {
@@ -226,7 +222,7 @@ class FcmService {
     try {
       return await _fcm.getToken();
     } catch (e) {
-      print('❌ FCM getToken error: $e');
+      debugPrint('❌ FCM getToken error: $e');
       return null;
     }
   }

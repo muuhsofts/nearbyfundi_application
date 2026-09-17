@@ -95,7 +95,10 @@ class ApiService {
   }
 
   Future<ApiResponse> login(String identifier, String password) =>
-      _post('/v1/auth/login', data: {'email': identifier, 'password': password});
+      _post('/v1/auth/login', data: {
+        'email': identifier,
+        'password': password,
+      });
 
   Future<ApiResponse> verifyOtp(String email, String otp, {String? fcmToken}) =>
       _post('/v1/auth/verify-otp', data: {
@@ -154,7 +157,7 @@ class ApiService {
   Future<ApiResponse> getServices() => _get('/v1/services');
 
   // ============================================================
-  // FUNDI – PROFILE & SERVICES (V19 – no subscription required)
+  // FUNDI – PROFILE & SERVICES (V19)
   // ============================================================
 
   Future<ApiResponse> getMyTechnicianProfile() =>
@@ -273,8 +276,9 @@ class ApiService {
       _post('/v19/admin/technicians/$technicianId/approve');
 
   // ============================================================
-  // ✅ NEW: Registration Status (public, no auth)
+  // Registration Status (public, no auth)
   // ============================================================
+
   Future<ApiResponse> getRegistrationStatus(int technicianId) =>
       _get('/technicians/registration-status/$technicianId');
 
@@ -359,7 +363,9 @@ class ApiService {
 
     final Map<String, dynamic> jsonData = {};
     if (data.containsKey('title')) jsonData['title'] = data['title'] ?? '';
-    if (data.containsKey('content')) jsonData['content'] = data['content'] ?? '';
+    if (data.containsKey('content')) {
+      jsonData['content'] = data['content'] ?? '';
+    }
     if (data.containsKey('youtube_url')) {
       jsonData['youtube_url'] = data['youtube_url']?.toString() ?? '';
     }
@@ -418,10 +424,13 @@ class ApiService {
     return _put('/v3/portfolios/$id', data: data);
   }
 
-  Future<ApiResponse> deletePortfolio(int id) => _delete('/v3/portfolios/$id');
+  Future<ApiResponse> deletePortfolio(int id) =>
+      _delete('/v3/portfolios/$id');
 
   Future<ApiResponse> updatePortfolioSocialLinks(
-      int id, Map<String, dynamic> socialLinks) =>
+      int id,
+      Map<String, dynamic> socialLinks,
+      ) =>
       _put('/v3/portfolios/$id/social-links', data: socialLinks);
 
   Future<ApiResponse> getPortfolios({int? technicianId, int page = 1}) =>
@@ -486,7 +495,9 @@ class ApiService {
   // ============================================================
 
   Future<ApiResponse> getAbout() => _get('/v1/about');
+
   Future<ApiResponse> getFaqs() => _get('/v1/faqs');
+
   Future<ApiResponse> getTerms() => _get('/v1/terms');
 
   // ============================================================
@@ -618,25 +629,48 @@ class ApiService {
       _delete('/v14/chat/conversations/$conversationId');
 
   // ============================================================
-  // NOTIFICATION ENDPOINTS (V15)
+  // NOTIFICATION ENDPOINTS (V15) - FIXED QUERY PARAMS
   // ============================================================
 
-  Future<ApiResponse> getNotifications() => _get('/v15/notifications');
+  Future<ApiResponse> getNotifications({
+    String? excludeType,
+    String? type,
+  }) =>
+      _get('/v15/notifications', query: {
+        if (excludeType != null && excludeType.isNotEmpty)
+          'exclude_type': excludeType,
+        if (type != null && type.isNotEmpty) 'type': type,
+      });
 
-  Future<ApiResponse> getUnreadNotificationCount() =>
-      _get('/v15/notifications/unread-count');
+  Future<ApiResponse> getUnreadNotificationCount({String? excludeType}) =>
+      _get('/v15/notifications/unread-count', query: {
+        if (excludeType != null && excludeType.isNotEmpty)
+          'exclude_type': excludeType,
+      });
 
   Future<ApiResponse> markNotificationAsRead(String notificationId) =>
       _put('/v15/notifications/$notificationId/read');
 
-  Future<ApiResponse> markAllNotificationsAsRead() =>
-      _put('/v15/notifications/read-all');
+  Future<ApiResponse> markAllNotificationsAsRead({String? excludeType}) =>
+      _put(
+        '/v15/notifications/read-all',
+        query: {
+          if (excludeType != null && excludeType.isNotEmpty)
+            'exclude_type': excludeType,
+        },
+      );
 
   Future<ApiResponse> deleteNotification(String notificationId) =>
       _delete('/v15/notifications/$notificationId');
 
-  Future<ApiResponse> clearNotifications() =>
-      _delete('/v15/notifications/clear');
+  Future<ApiResponse> clearNotifications({String? excludeType}) =>
+      _delete(
+        '/v15/notifications/clear',
+        query: {
+          if (excludeType != null && excludeType.isNotEmpty)
+            'exclude_type': excludeType,
+        },
+      );
 
   // ============================================================
   // SUBSCRIPTION ENDPOINTS (V16)
@@ -663,7 +697,10 @@ class ApiService {
         if (notes != null) MapEntry('notes', notes),
       ]);
       formData.files.add(
-        MapEntry('payment_proof', await MultipartFile.fromFile(paymentProof.path)),
+        MapEntry(
+          'payment_proof',
+          await MultipartFile.fromFile(paymentProof.path),
+        ),
       );
       return _post('/v16/subscriptions', data: formData);
     }
@@ -732,9 +769,17 @@ class ApiService {
     }
   }
 
-  Future<ApiResponse> _put(String path, {dynamic data}) async {
+  Future<ApiResponse> _put(
+      String path, {
+        dynamic data,
+        Map<String, dynamic>? query,
+      }) async {
     try {
-      final res = await _dio.put(path, data: data);
+      final res = await _dio.put(
+        path,
+        data: data,
+        queryParameters: query,
+      );
       return ApiResponse.fromJson(res.data);
     } catch (e) {
       return _handleError(e);
@@ -750,9 +795,15 @@ class ApiService {
     }
   }
 
-  Future<ApiResponse> _delete(String path) async {
+  Future<ApiResponse> _delete(
+      String path, {
+        Map<String, dynamic>? query,
+      }) async {
     try {
-      final res = await _dio.delete(path);
+      final res = await _dio.delete(
+        path,
+        queryParameters: query,
+      );
       return ApiResponse.fromJson(res.data);
     } catch (e) {
       return _handleError(e);

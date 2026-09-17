@@ -1,51 +1,47 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:app_badge_control_flutter/app_badge_control_flutter.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-import '../services/fcm_service.dart';
-import '../services/fcm_event_bus.dart';
-import '../services/api_service.dart';
-import '../utils/badge_helper.dart';
+import '../app_navigator.dart';
 import '../config/app_routes.dart';
+import '../main.dart';
+import '../services/api_service.dart';
+import '../services/fcm_event_bus.dart';
+import '../services/fcm_service.dart';
 
 class NotificationProvider extends ChangeNotifier {
-  // ============================================
-  // DEPENDENCIES
-  // ============================================
   final FlutterLocalNotificationsPlugin _localNotifications =
   FlutterLocalNotificationsPlugin();
   final ApiService _apiService = ApiService();
 
-  // ============================================
-  // STATE
-  // ============================================
+  static const MethodChannel _badgeChannel =
+  MethodChannel('com.fundapp/badge');
+
   List<Map<String, dynamic>> _notifications = [];
   bool _isLoading = false;
   bool _isInitialized = false;
   String? _error;
   StreamSubscription? _fcmSub;
   bool _pulseBadge = false;
+  int _unreadCount = 0;
 
-  // ============================================
-  // GETTERS
-  // ============================================
   List<Map<String, dynamic>> get notifications => _notifications;
   bool get isLoading => _isLoading;
   bool get isInitialized => _isInitialized;
   String? get error => _error;
   bool get pulseBadge => _pulseBadge;
-
-  int get unreadCount =>
-      _notifications.where((n) => !_isRead(n)).length;
-
+  int get unreadCount => _unreadCount;
   bool get hasUnread => unreadCount > 0;
   bool get hasNotifications => _notifications.isNotEmpty;
 
-  // ============================================
-  // HELPERS (type-safe)
-  // ============================================
+  int get localUnreadCount =>
+      _notifications.where((n) => !_isRead(n)).length;
+
   String _idToString(dynamic id) => id?.toString() ?? '';
 
   bool _isRead(Map<String, dynamic> n) {
@@ -58,9 +54,37 @@ class NotificationProvider extends ChangeNotifier {
     return false;
   }
 
-  // ============================================
-  // INITIALIZATION
-  // ============================================
+  bool isRead(Map<String, dynamic> notification) => !_isRead(notification);
+
+  String _sanitizeText(dynamic value, String fallback) {
+    final text = (value?.toString() ?? '').trim();
+    if (text.isEmpty || int.tryParse(text) != null) return fallback;
+    return text;
+  }
+
+  List<Map<String, dynamic>> _extractList(dynamic raw) {
+    if (raw == null) return [];
+    if (raw is List) {
+      return raw
+          .map((item) => Map<String, dynamic>.from(item as Map))
+          .toList();
+    }
+    if (raw is Map) {
+      final inner = raw['data'];
+      if (inner is List) {
+        return inner
+            .map((item) => Map<String, dynamic>.from(item as Map))
+            .toList();
+      }
+      if (inner is Map && inner['data'] is List) {
+        return (inner['data'] as List)
+            .map((item) => Map<String, dynamic>.from(item as Map))
+            .toList();
+      }
+    }
+    return [];
+  }
+
   NotificationProvider() {
     _init();
   }
@@ -68,7 +92,11 @@ class NotificationProvider extends ChangeNotifier {
   Future<void> _init() async {
     try {
       const android = AndroidInitializationSettings('@mipmap/ic_launcher');
-      const ios = DarwinInitializationSettings();
+      const ios = DarwinInitializationSettings(
+        requestAlertPermission: true,
+        requestBadgePermission: true,
+        requestSoundPermission: true,
+      );
       const settings = InitializationSettings(android: android, iOS: ios);
 
       await _localNotifications.initialize(
@@ -76,30 +104,56 @@ class NotificationProvider extends ChangeNotifier {
         onDidReceiveNotificationResponse: _onNotificationTap,
       );
 
+      await _createNotificationChannel();
+
       _isInitialized = true;
       await loadNotifications();
+      await refreshUnreadCount();
 
       _fcmSub = FcmEventBus.instance.stream.listen(_onFcmEvent);
+      debugPrint('✅ NotificationProvider initialized');
     } catch (e) {
       debugPrint('❌ Notification init error: $e');
       _error = 'Failed to initialize notifications';
     }
   }
 
+  Future<void> _createNotificationChannel() async {
+    const channel = AndroidNotificationChannel(
+      'fundi_channel',
+      'NearbyFundi Notifications',
+      description: 'Notifications from NearbyFundi',
+      importance: Importance.max,
+      enableVibration: true,
+      playSound: true,
+      showBadge: true,
+    );
+
+    await _localNotifications
+        .resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(channel);
+  }
+
   void _onFcmEvent(Map<String, dynamic> event) {
+    final type = event['type']?.toString() ?? 'general';
+    if (type == 'chat_message') {
+      refreshUnreadCount();
+      return;
+    }
+
     addLocalNotification({
       'id': 'local_${DateTime.now().millisecondsSinceEpoch}',
-      'title': event['title'] ?? 'Notification',
-      'body': event['body'] ?? '',
-      'type': event['type'] ?? 'general',
+      'title': _sanitizeText(event['title'], 'NearbyFundi'),
+      'body': _sanitizeText(event['body'], 'You have a new update'),
+      'type': type,
       'is_read': false,
       'created_at': event['received_at'] ?? DateTime.now().toIso8601String(),
     });
 
     _pulseBadge = true;
     notifyListeners();
-    _syncAppBadge();
-
+    _updateAppBadge();
     Future.delayed(const Duration(seconds: 2), loadNotifications);
   }
 
@@ -107,42 +161,55 @@ class NotificationProvider extends ChangeNotifier {
     _pulseBadge = false;
   }
 
-  // ============================================
-  // APP ICON BADGE
-  // ============================================
-  void _syncAppBadge() {
-    BadgeHelper.updateBadge(unreadCount);
+  /// Native ShortcutBadger first, then app_badge_control_flutter
+  Future<void> _updateAppBadge() async {
+    try {
+      if (Platform.isAndroid) {
+        if (_unreadCount > 0) {
+          await _badgeChannel.invokeMethod(
+            'setBadgeCount',
+            {'count': _unreadCount},
+          );
+        } else {
+          await _badgeChannel.invokeMethod('removeBadge');
+        }
+        debugPrint('📱 Native badge set to $_unreadCount');
+      }
+
+      final supported = await AppBadgeControlFlutter.isAppBadgeSupported();
+      if (supported || Platform.isAndroid) {
+        if (_unreadCount > 0) {
+          await AppBadgeControlFlutter.updateBadgeCount(_unreadCount);
+        } else {
+          await AppBadgeControlFlutter.removeBadge();
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ Failed to update app badge: $e');
+    }
   }
 
-  // ============================================
-  // LOCAL NOTIFICATION TAP
-  // ============================================
   void _onNotificationTap(NotificationResponse response) {
     final payload = response.payload;
     if (payload == null) return;
 
-    final context = FcmService.navigatorKey.currentContext;
-    if (context == null) return;
-
     try {
-      final data = Map<String, dynamic>.from(
-        json.decode(payload) as Map,
-      );
-      _handleNavigation(context, data);
+      final data = Map<String, dynamic>.from(json.decode(payload) as Map);
+      _handleNavigation(data);
     } catch (e) {
       debugPrint('⚠️ Invalid notification payload: $e');
-      FcmService.navigatorKey.currentState?.pushNamed(AppRoutes.home);
+      navigatorKey.currentState?.pushNamed(AppRoutes.home);
     }
   }
 
-  void _handleNavigation(BuildContext context, Map<String, dynamic> data) {
+  void _handleNavigation(Map<String, dynamic> data) {
     final type = data['type']?.toString() ?? '';
     final conversationId = data['conversation_id'];
 
     switch (type) {
       case 'chat_message':
         if (conversationId != null) {
-          FcmService.navigatorKey.currentState?.pushNamed(
+          navigatorKey.currentState?.pushNamed(
             AppRoutes.chat,
             arguments: {
               'conversationId': int.tryParse(conversationId.toString()) ?? 0,
@@ -153,38 +220,43 @@ class NotificationProvider extends ChangeNotifier {
       case 'new_request':
       case 'request_accepted':
       case 'request_rejected':
-        FcmService.navigatorKey.currentState?.pushNamed(AppRoutes.requests);
+      case 'request_in_progress':
+      case 'request_completed':
+      case 'request_on_the_way':
+      case 'request_arrived':
+      case 'request_cancelled':
+        navigatorKey.currentState?.pushNamed(AppRoutes.requests);
         break;
       case 'post_comment':
       case 'post_like':
-        FcmService.navigatorKey.currentState?.pushNamed(AppRoutes.blog);
+      case 'new_post':
+        navigatorKey.currentState?.pushNamed(AppRoutes.blog);
         break;
       case 'profile_update':
-        FcmService.navigatorKey.currentState?.pushNamed(AppRoutes.profile);
+        navigatorKey.currentState?.pushNamed(AppRoutes.profile);
         break;
       default:
-        FcmService.navigatorKey.currentState?.pushNamed(AppRoutes.home);
+        navigatorKey.currentState?.pushNamed(AppRoutes.notifications);
     }
   }
 
-  // ============================================
-  // SHOW LOCAL NOTIFICATION
-  // ============================================
   Future<void> showLocalNotification({
     required String title,
     required String body,
     String? payload,
-    String? channelId,
-    String? channelName,
   }) async {
     if (!_isInitialized) return;
+    if (payload == 'chat_message') return;
 
     try {
-      final androidDetails = AndroidNotificationDetails(
-        channelId ?? 'fundi_channel',
-        channelName ?? 'FundiApp Notifications',
-        channelDescription: 'Notifications from FundiApp',
-        importance: Importance.high,
+      final safeTitle = _sanitizeText(title, 'NearbyFundi');
+      final safeBody = _sanitizeText(body, 'You have a new update');
+
+      const androidDetails = AndroidNotificationDetails(
+        'fundi_channel',
+        'NearbyFundi Notifications',
+        channelDescription: 'Notifications from NearbyFundi',
+        importance: Importance.max,
         priority: Priority.high,
         channelShowBadge: true,
         showWhen: true,
@@ -200,18 +272,11 @@ class NotificationProvider extends ChangeNotifier {
         presentSound: true,
       );
 
-      final platformDetails = NotificationDetails(
-        android: androidDetails,
-        iOS: iosDetails,
-      );
-
-      final id = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-
       await _localNotifications.show(
-        id,
-        title,
-        body,
-        platformDetails,
+        DateTime.now().millisecondsSinceEpoch.remainder(2147483647),
+        safeTitle,
+        safeBody,
+        const NotificationDetails(android: androidDetails, iOS: iosDetails),
         payload: payload,
       );
     } catch (e) {
@@ -219,54 +284,35 @@ class NotificationProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> showSimpleNotification({
-    required String title,
-    required String body,
-    String? payload,
-  }) async {
-    await showLocalNotification(title: title, body: body, payload: payload);
-  }
-
-  // ============================================
-  // FCM
-  // ============================================
-  Future<void> initFcm() async {
-    try {
-      await FcmService.init();
-    } catch (e) {
-      debugPrint('❌ FCM init error: $e');
-      _error = 'Failed to initialize FCM';
-    }
-  }
-
-  Future<String?> getFcmToken() async {
-    try {
-      return await FcmService.getToken();
-    } catch (e) {
-      debugPrint('❌ FCM token error: $e');
-      return null;
-    }
-  }
-
-  // ============================================
-  // API
-  // ============================================
   Future<void> loadNotifications() async {
     if (_isLoading) return;
-
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final response = await _apiService.getNotifications();
+      final response = await _apiService.getNotifications(
+        excludeType: 'chat_message',
+      );
 
       if (response.success && response.data != null) {
-        _notifications = List<Map<String, dynamic>>.from(response.data);
+        final items = _extractList(response.data);
+        _notifications = items.map((item) {
+          final n = Map<String, dynamic>.from(item);
+          n['title'] = _sanitizeText(n['title'], 'NearbyFundi');
+          n['body'] = _sanitizeText(n['body'], 'You have a new update');
+          if (n['data'] is String) {
+            try {
+              n['data'] = jsonDecode(n['data']);
+            } catch (_) {}
+          }
+          return n;
+        }).toList();
       } else {
         _error = response.message ?? 'Failed to load notifications';
         _notifications = [];
       }
+      await refreshUnreadCount();
     } catch (e) {
       _error = 'Error loading notifications: $e';
       _notifications = [];
@@ -274,29 +320,52 @@ class NotificationProvider extends ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
-      _syncAppBadge();
     }
   }
 
   Future<void> refresh() async => loadNotifications();
 
+  Future<void> refreshUnreadCount() async {
+    try {
+      final response = await _apiService.getUnreadNotificationCount(
+        excludeType: 'chat_message',
+      );
+
+      if (response.success && response.data != null) {
+        final dynamic count =
+        response.data is Map ? response.data['count'] : response.data;
+        if (count is int) {
+          _unreadCount = count;
+        } else {
+          _unreadCount = int.tryParse(count.toString()) ?? localUnreadCount;
+        }
+      } else {
+        _unreadCount = localUnreadCount;
+      }
+    } catch (e) {
+      debugPrint('❌ Error refreshing unread count: $e');
+      _unreadCount = localUnreadCount;
+    }
+
+    await _updateAppBadge();
+    notifyListeners();
+  }
+
   Future<bool> markAsRead(dynamic notificationId) async {
     final id = _idToString(notificationId);
     if (id.isEmpty) return false;
-
     try {
       final response = await _apiService.markNotificationAsRead(id);
-
       if (response.success) {
-        final index = _notifications.indexWhere(
-              (n) => _idToString(n['id']) == id,
-        );
+        final index =
+        _notifications.indexWhere((n) => _idToString(n['id']) == id);
         if (index != -1) {
           _notifications[index]['is_read'] = true;
-          notifyListeners();
-          _syncAppBadge();
-          return true;
+          _notifications[index]['read_at'] =
+              DateTime.now().toIso8601String();
         }
+        await refreshUnreadCount();
+        return true;
       }
       return false;
     } catch (e) {
@@ -307,14 +376,18 @@ class NotificationProvider extends ChangeNotifier {
 
   Future<bool> markAllAsRead() async {
     try {
-      final response = await _apiService.markAllNotificationsAsRead();
-
+      final response = await _apiService.markAllNotificationsAsRead(
+        excludeType: 'chat_message',
+      );
       if (response.success) {
+        final readAt = DateTime.now().toIso8601String();
         for (final n in _notifications) {
           n['is_read'] = true;
+          n['read_at'] = readAt;
         }
+        _unreadCount = 0;
+        await _updateAppBadge();
         notifyListeners();
-        _syncAppBadge();
         return true;
       }
       return false;
@@ -326,12 +399,14 @@ class NotificationProvider extends ChangeNotifier {
 
   Future<bool> clearAll() async {
     try {
-      final response = await _apiService.clearNotifications();
-
+      final response = await _apiService.clearNotifications(
+        excludeType: 'chat_message',
+      );
       if (response.success) {
         _notifications.clear();
+        _unreadCount = 0;
+        await _updateAppBadge();
         notifyListeners();
-        _syncAppBadge();
         return true;
       }
       return false;
@@ -344,14 +419,11 @@ class NotificationProvider extends ChangeNotifier {
   Future<bool> deleteNotification(dynamic notificationId) async {
     final id = _idToString(notificationId);
     if (id.isEmpty) return false;
-
     try {
       final response = await _apiService.deleteNotification(id);
-
       if (response.success) {
         _notifications.removeWhere((n) => _idToString(n['id']) == id);
-        notifyListeners();
-        _syncAppBadge();
+        await refreshUnreadCount();
         return true;
       }
       return false;
@@ -361,42 +433,24 @@ class NotificationProvider extends ChangeNotifier {
     }
   }
 
-  // ============================================
-  // LOCAL OPERATIONS
-  // ============================================
   void addLocalNotification(Map<String, dynamic> notification) {
+    if (notification['type']?.toString() == 'chat_message') return;
+
+    notification['title'] =
+        _sanitizeText(notification['title'], 'NearbyFundi');
+    notification['body'] =
+        _sanitizeText(notification['body'], 'You have a new update');
+    notification['is_read'] ??= false;
+
     final id = _idToString(notification['id']);
-    final exists = _notifications.any((n) => _idToString(n['id']) == id);
+    if (_notifications.any((n) => _idToString(n['id']) == id)) return;
 
-    if (!exists) {
-      _notifications.insert(0, notification);
-      notifyListeners();
-      _syncAppBadge();
-    }
+    _notifications.insert(0, notification);
+    _unreadCount++;
+    _updateAppBadge();
+    notifyListeners();
   }
 
-  void addLocalNotifications(List<Map<String, dynamic>> list) {
-    for (final n in list) {
-      addLocalNotification(n);
-    }
-  }
-
-  Map<String, dynamic>? getNotification(dynamic notificationId) {
-    final id = _idToString(notificationId);
-    try {
-      return _notifications.firstWhere((n) => _idToString(n['id']) == id);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  List<Map<String, dynamic>> getNotificationsByType(String type) {
-    return _notifications.where((n) => n['type'] == type).toList();
-  }
-
-  // ============================================
-  // UTILS
-  // ============================================
   void clearError() {
     _error = null;
     notifyListeners();
@@ -407,8 +461,6 @@ class NotificationProvider extends ChangeNotifier {
     try {
       final parsed = DateTime.parse(timestamp);
       final diff = DateTime.now().difference(parsed);
-
-      if (diff.inDays > 7) return '${diff.inDays}d ago';
       if (diff.inDays > 0) return '${diff.inDays}d ago';
       if (diff.inHours > 0) return '${diff.inHours}h ago';
       if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
@@ -427,13 +479,16 @@ class NotificationProvider extends ChangeNotifier {
       case 'request_accepted':
         return Icons.check_circle_outline_rounded;
       case 'request_rejected':
+      case 'request_cancelled':
         return Icons.cancel_outlined;
-      case 'post_comment':
-        return Icons.comment_outlined;
-      case 'post_like':
-        return Icons.favorite_border_rounded;
-      case 'profile_update':
-        return Icons.person_outline_rounded;
+      case 'request_in_progress':
+        return Icons.hourglass_top_rounded;
+      case 'request_on_the_way':
+        return Icons.local_shipping_outlined;
+      case 'request_arrived':
+        return Icons.pin_drop_outlined;
+      case 'request_completed':
+        return Icons.task_alt_rounded;
       default:
         return Icons.notifications_outlined;
     }
@@ -441,20 +496,14 @@ class NotificationProvider extends ChangeNotifier {
 
   Color getNotificationColor(String type) {
     switch (type) {
-      case 'chat_message':
-        return Colors.blue;
       case 'new_request':
         return Colors.orange;
       case 'request_accepted':
+      case 'request_completed':
         return Colors.green;
       case 'request_rejected':
+      case 'request_cancelled':
         return Colors.red;
-      case 'post_comment':
-        return Colors.purple;
-      case 'post_like':
-        return Colors.pink;
-      case 'profile_update':
-        return Colors.teal;
       default:
         return Colors.grey;
     }

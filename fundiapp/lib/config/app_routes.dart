@@ -21,6 +21,9 @@ class AppRoutes {
   static const String editProfile = '/edit-profile';
   static const String settings = '/settings';
 
+  // ✅ NOTIFICATIONS
+  static const String notifications = '/notifications';
+
   // ===== CHAT ROUTES =====
   static const String chatList = '/chat-list';
   static const String chat = '/chat';
@@ -37,9 +40,7 @@ class AppRoutes {
   static const String contactUs = '/contact-us';
   static const String privacy = '/privacy';
 
-  // =============================================
-  // 🆕 SUBSCRIPTION ROUTES
-  // =============================================
+  // ===== SUBSCRIPTION ROUTES =====
   static const String subscriptions = '/subscriptions';
   static const String rateCards = '/rate-cards';
   static const String createSubscription = '/create-subscription';
@@ -47,14 +48,10 @@ class AppRoutes {
   static const String invoiceDetails = '/invoice-details';
   static const String paymentMethods = '/payment-methods';
 
-  // =============================================
-  // 🆕 DOWNLOADS ROUTE
-  // =============================================
+  // ===== DOWNLOADS =====
   static const String downloads = '/downloads';
 
-  // =============================================
-  // 🆕 REGISTRATION STEPS ROUTE
-  // =============================================
+  // ===== REGISTRATION STEPS =====
   static const String registerStep1 = '/register-step1';
   static const String registerStep2 = '/register-step2';
   static const String registerStep3 = '/register-step3';
@@ -88,6 +85,7 @@ class AppRoutes {
     profile: 'Profile',
     editProfile: 'Edit Profile',
     settings: 'Settings',
+    notifications: 'Notifications', // ✅ added
     chatList: 'Chat List',
     chat: 'Chat',
     voiceCall: 'Voice Call',

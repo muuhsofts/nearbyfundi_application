@@ -5,6 +5,7 @@
 import FlutterMacOS
 import Foundation
 
+import app_badge_control_flutter
 import audioplayers_darwin
 import connectivity_plus
 import emoji_picker_flutter
@@ -24,6 +25,7 @@ import sqflite_darwin
 import url_launcher_macos
 
 func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
+  AppBadgeControlFlutterPlugin.register(with: registry.registrar(forPlugin: "AppBadgeControlFlutterPlugin"))
   AudioplayersDarwinPlugin.register(with: registry.registrar(forPlugin: "AudioplayersDarwinPlugin"))
   ConnectivityPlusPlugin.register(with: registry.registrar(forPlugin: "ConnectivityPlusPlugin"))
   EmojiPickerFlutterPlugin.register(with: registry.registrar(forPlugin: "EmojiPickerFlutterPlugin"))
