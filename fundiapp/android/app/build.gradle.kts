@@ -77,5 +77,17 @@ flutter {
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     implementation("androidx.multidex:multidex:2.0.1")
-    implementation("me.leolin:ShortcutBadger:1.1.22")
+
+    // ════════════════════════════════════════════════════════════
+    // NOTE: ShortcutBadger dependency removed.
+    //
+    // Reason: ShortcutBadger creates a persistent tray notification
+    // (e.g., "Fundi App / 12") on Samsung and some other OEM
+    // launchers when applyCount() is called. Modern Android (8+)
+    // handles launcher badges automatically via NotificationManager
+    // when flutter_local_notifications posts a notification.
+    //
+    // Removed line:
+    //   implementation("me.leolin:ShortcutBadger:1.1.22")
+    // ════════════════════════════════════════════════════════════
 }

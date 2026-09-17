@@ -6,7 +6,6 @@ import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
-import me.leolin.shortcutbadger.ShortcutBadger
 
 class MainActivity : FlutterActivity() {
 
@@ -25,6 +24,9 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
+        // ─────────────────────────────────────────────
+        // SECURITY CHANNEL (FLAG_SECURE)
+        // ─────────────────────────────────────────────
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             SECURITY_CHANNEL
@@ -45,6 +47,20 @@ class MainActivity : FlutterActivity() {
             }
         }
 
+        // ─────────────────────────────────────────────
+        // BADGE CHANNEL
+        //
+        // Android 8+ shows launcher badges automatically when a
+        // notification is posted through flutter_local_notifications.
+        // We no longer use ShortcutBadger — it was creating a
+        // persistent "Fundi App / N" tray notification on Samsung
+        // and other OEM launchers.
+        //
+        // These handlers keep the Dart-side API contract intact and
+        // persist the count locally (so getBadgeCount() still returns
+        // a meaningful value if anything reads it). They do NOT
+        // create or remove tray notifications.
+        // ─────────────────────────────────────────────
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             BADGE_CHANNEL
@@ -52,23 +68,10 @@ class MainActivity : FlutterActivity() {
             when (call.method) {
                 "setBadgeCount" -> {
                     val count = (call.argument<Int>("count")) ?: 0
-                    try {
-                        if (count <= 0) {
-                            ShortcutBadger.removeCount(applicationContext)
-                        } else {
-                            ShortcutBadger.applyCount(applicationContext, count)
-                        }
-                        saveBadgeCount(count)
-                        result.success(true)
-                    } catch (e: Exception) {
-                        result.success(false)
-                    }
+                    saveBadgeCount(count)
+                    result.success(true)
                 }
                 "removeBadge", "clearBadge" -> {
-                    try {
-                        ShortcutBadger.removeCount(applicationContext)
-                    } catch (_: Exception) {
-                    }
                     saveBadgeCount(0)
                     result.success(true)
                 }

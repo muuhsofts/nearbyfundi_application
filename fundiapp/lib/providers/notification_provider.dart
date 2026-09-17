@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:app_badge_control_flutter/app_badge_control_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_app_badger_plus/flutter_app_badger.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../app_navigator.dart';
@@ -30,6 +30,9 @@ class NotificationProvider extends ChangeNotifier {
   bool _pulseBadge = false;
   int _unreadCount = 0;
 
+  // ============================================================
+  // GETTERS
+  // ============================================================
   List<Map<String, dynamic>> get notifications => _notifications;
   bool get isLoading => _isLoading;
   bool get isInitialized => _isInitialized;
@@ -41,6 +44,10 @@ class NotificationProvider extends ChangeNotifier {
 
   int get localUnreadCount =>
       _notifications.where((n) => !_isRead(n)).length;
+
+  // ============================================================
+  // HELPERS
+  // ============================================================
 
   String _idToString(dynamic id) => id?.toString() ?? '';
 
@@ -56,9 +63,23 @@ class NotificationProvider extends ChangeNotifier {
 
   bool isRead(Map<String, dynamic> notification) => !_isRead(notification);
 
+  /// Returns trimmed text if it's non-empty and not a bare number.
+  /// Returns the fallback ONLY when a genuine fallback is acceptable
+  /// (e.g. loading stale DB rows). For incoming FCM/chat pushes,
+  /// callers should use `_validText` and skip when null.
   String _sanitizeText(dynamic value, String fallback) {
     final text = (value?.toString() ?? '').trim();
-    if (text.isEmpty || int.tryParse(text) != null) return fallback;
+    if (text.isEmpty) return fallback;
+    if (double.tryParse(text) != null) return fallback;
+    return text;
+  }
+
+  /// Same rule as `_sanitizeText` but returns null instead of a fallback
+  /// so callers can decide to skip the notification entirely.
+  String? _validText(dynamic value) {
+    final text = (value?.toString() ?? '').trim();
+    if (text.isEmpty) return null;
+    if (double.tryParse(text) != null) return null;
     return text;
   }
 
@@ -84,6 +105,10 @@ class NotificationProvider extends ChangeNotifier {
     }
     return [];
   }
+
+  // ============================================================
+  // CONSTRUCTOR + INIT
+  // ============================================================
 
   NotificationProvider() {
     _init();
@@ -135,17 +160,35 @@ class NotificationProvider extends ChangeNotifier {
         ?.createNotificationChannel(channel);
   }
 
+  // ============================================================
+  // FCM EVENT HANDLER
+  // ============================================================
+
   void _onFcmEvent(Map<String, dynamic> event) {
     final type = event['type']?.toString() ?? 'general';
+
+    // Chat: never touch the tray. Only refresh the badge count.
     if (type == 'chat_message') {
       refreshUnreadCount();
       return;
     }
 
+    // Validate title/body — skip entirely if invalid.
+    final title = _validText(event['title']);
+    final body  = _validText(event['body']);
+
+    if (title == null || body == null) {
+      debugPrint(
+        '⚠️ FCM event skipped — invalid title/body '
+            '(title: "${event['title']}", body: "${event['body']}", type: $type)',
+      );
+      return;
+    }
+
     addLocalNotification({
       'id': 'local_${DateTime.now().millisecondsSinceEpoch}',
-      'title': _sanitizeText(event['title'], 'NearbyFundi'),
-      'body': _sanitizeText(event['body'], 'You have a new update'),
+      'title': title,
+      'body': body,
       'type': type,
       'is_read': false,
       'created_at': event['received_at'] ?? DateTime.now().toIso8601String(),
@@ -161,10 +204,31 @@ class NotificationProvider extends ChangeNotifier {
     _pulseBadge = false;
   }
 
-  /// Native ShortcutBadger first, then app_badge_control_flutter
+  // ============================================================
+  // APP BADGE
+  // ============================================================
+
   Future<void> _updateAppBadge() async {
     try {
-      if (Platform.isAndroid) {
+      if (Platform.isIOS) {
+        // iOS: use the native badge API.
+        final supported = await FlutterAppBadger.isAppBadgeSupported();
+        if (!supported) {
+          debugPrint('ℹ️ iOS badge not supported on this device');
+          return;
+        }
+
+        if (_unreadCount > 0) {
+          await FlutterAppBadger.updateBadgeCount(_unreadCount);
+        } else {
+          await FlutterAppBadger.removeBadge();
+        }
+        debugPrint('🔴 iOS badge set to $_unreadCount');
+      } else if (Platform.isAndroid) {
+        // Android 8+ shows launcher badges automatically when
+        // flutter_local_notifications posts a notification.
+        // We still persist the count locally via the native channel,
+        // but it no longer creates or removes a tray notification.
         if (_unreadCount > 0) {
           await _badgeChannel.invokeMethod(
             'setBadgeCount',
@@ -173,21 +237,16 @@ class NotificationProvider extends ChangeNotifier {
         } else {
           await _badgeChannel.invokeMethod('removeBadge');
         }
-        debugPrint('📱 Native badge set to $_unreadCount');
-      }
-
-      final supported = await AppBadgeControlFlutter.isAppBadgeSupported();
-      if (supported || Platform.isAndroid) {
-        if (_unreadCount > 0) {
-          await AppBadgeControlFlutter.updateBadgeCount(_unreadCount);
-        } else {
-          await AppBadgeControlFlutter.removeBadge();
-        }
+        debugPrint('🤖 Android badge count persisted: $_unreadCount');
       }
     } catch (e) {
       debugPrint('❌ Failed to update app badge: $e');
     }
   }
+
+  // ============================================================
+  // NOTIFICATION TAP
+  // ============================================================
 
   void _onNotificationTap(NotificationResponse response) {
     final payload = response.payload;
@@ -240,18 +299,33 @@ class NotificationProvider extends ChangeNotifier {
     }
   }
 
+  // ============================================================
+  // LOCAL NOTIFICATIONS
+  // ============================================================
+
   Future<void> showLocalNotification({
     required String title,
     required String body,
     String? payload,
   }) async {
     if (!_isInitialized) return;
+
+    // Chat: never touch the tray.
     if (payload == 'chat_message') return;
 
-    try {
-      final safeTitle = _sanitizeText(title, 'NearbyFundi');
-      final safeBody = _sanitizeText(body, 'You have a new update');
+    // Validate — skip if title/body invalid. No placeholder fallback.
+    final safeTitle = _validText(title);
+    final safeBody  = _validText(body);
 
+    if (safeTitle == null || safeBody == null) {
+      debugPrint(
+        '⚠️ Local notification skipped — invalid title/body '
+            '(title: "$title", body: "$body", payload: $payload)',
+      );
+      return;
+    }
+
+    try {
       const androidDetails = AndroidNotificationDetails(
         'fundi_channel',
         'NearbyFundi Notifications',
@@ -284,6 +358,10 @@ class NotificationProvider extends ChangeNotifier {
     }
   }
 
+  // ============================================================
+  // LOAD / REFRESH
+  // ============================================================
+
   Future<void> loadNotifications() async {
     if (_isLoading) return;
     _isLoading = true;
@@ -299,8 +377,23 @@ class NotificationProvider extends ChangeNotifier {
         final items = _extractList(response.data);
         _notifications = items.map((item) {
           final n = Map<String, dynamic>.from(item);
-          n['title'] = _sanitizeText(n['title'], 'NearbyFundi');
-          n['body'] = _sanitizeText(n['body'], 'You have a new update');
+
+          final rawTitle = (n['title']?.toString() ?? '').trim();
+          final rawBody  = (n['body']?.toString() ?? '').trim();
+
+          if (rawTitle.isEmpty ||
+              rawBody.isEmpty ||
+              double.tryParse(rawTitle) != null ||
+              double.tryParse(rawBody) != null) {
+            debugPrint(
+              '⚠️ Notification #${n['id']} has invalid title/body '
+                  '(title: "$rawTitle", body: "$rawBody")',
+            );
+          }
+
+          n['title'] = rawTitle;
+          n['body']  = rawBody;
+
           if (n['data'] is String) {
             try {
               n['data'] = jsonDecode(n['data']);
@@ -312,6 +405,7 @@ class NotificationProvider extends ChangeNotifier {
         _error = response.message ?? 'Failed to load notifications';
         _notifications = [];
       }
+
       await refreshUnreadCount();
     } catch (e) {
       _error = 'Error loading notifications: $e';
@@ -350,6 +444,10 @@ class NotificationProvider extends ChangeNotifier {
     await _updateAppBadge();
     notifyListeners();
   }
+
+  // ============================================================
+  // MARK AS READ / DELETE / CLEAR
+  // ============================================================
 
   Future<bool> markAsRead(dynamic notificationId) async {
     final id = _idToString(notificationId);
@@ -433,13 +531,27 @@ class NotificationProvider extends ChangeNotifier {
     }
   }
 
+  // ============================================================
+  // ADD LOCAL NOTIFICATION (used by FCM listener)
+  // ============================================================
+
   void addLocalNotification(Map<String, dynamic> notification) {
     if (notification['type']?.toString() == 'chat_message') return;
 
-    notification['title'] =
-        _sanitizeText(notification['title'], 'NearbyFundi');
-    notification['body'] =
-        _sanitizeText(notification['body'], 'You have a new update');
+    // Skip entirely if title/body invalid.
+    final title = _validText(notification['title']);
+    final body  = _validText(notification['body']);
+
+    if (title == null || body == null) {
+      debugPrint(
+        '⚠️ addLocalNotification skipped — invalid title/body '
+            '(title: "${notification['title']}", body: "${notification['body']}")',
+      );
+      return;
+    }
+
+    notification['title'] = title;
+    notification['body']  = body;
     notification['is_read'] ??= false;
 
     final id = _idToString(notification['id']);
@@ -450,6 +562,10 @@ class NotificationProvider extends ChangeNotifier {
     _updateAppBadge();
     notifyListeners();
   }
+
+  // ============================================================
+  // UTILITIES
+  // ============================================================
 
   void clearError() {
     _error = null;

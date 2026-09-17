@@ -14,12 +14,14 @@ class FcmService {
   static final FlutterLocalNotificationsPlugin _notifications =
   FlutterLocalNotificationsPlugin();
 
-  /// Use the shared key from app_navigator.dart
+  static const String _channelId = 'fundi_channel';
+  static const String _channelName = 'NearbyFundi Notifications';
+
   static GlobalKey<NavigatorState> get navKey => navigatorKey;
 
   @pragma('vm:entry-point')
   static Future<void> onBackgroundMessage(RemoteMessage message) async {
-    debugPrint('📩 Background message: ${message.notification?.title}');
+    debugPrint('📩 Background message: ${message.messageId}');
   }
 
   static Future<void> init() async {
@@ -50,8 +52,8 @@ class FcmService {
       );
 
       const channel = AndroidNotificationChannel(
-        'fundi_channel',
-        'NearbyFundi Notifications',
+        _channelId,
+        _channelName,
         description: 'Notifications from NearbyFundi',
         importance: Importance.max,
         showBadge: true,
@@ -86,21 +88,35 @@ class FcmService {
     }
   }
 
-  static String _sanitize(String? value, String fallback) {
+  // ============================================================
+  // SANITIZATION
+  // ============================================================
+
+  /// Returns the trimmed text if it's non-empty and not a bare number.
+  /// Returns null otherwise — no placeholder fallback.
+  static String? _sanitize(String? value) {
     final text = (value ?? '').trim();
-    if (text.isEmpty || int.tryParse(text) != null) return fallback;
+    if (text.isEmpty) return null;
+    if (double.tryParse(text) != null) return null;
     return text;
   }
+
+  // ============================================================
+  // FOREGROUND HANDLER
+  // ============================================================
 
   static void _showForegroundNotification(RemoteMessage message) {
     try {
       final type = message.data['type']?.toString() ?? 'general';
 
-      // Chat: silent – no system tray banner
+      // ─────────────────────────────────────────────
+      // Chat: completely silent, no tray banner
+      // ─────────────────────────────────────────────
       if (type == 'chat_message') {
+        debugPrint('💬 Chat push received in foreground — silent');
         FcmEventBus.instance.emit({
-          'title': message.notification?.title ?? '',
-          'body': message.notification?.body ?? '',
+          'title': message.notification?.title ?? message.data['title'] ?? '',
+          'body': message.notification?.body ?? message.data['body'] ?? '',
           'type': type,
           'data': message.data,
           'received_at': DateTime.now().toIso8601String(),
@@ -108,18 +124,33 @@ class FcmService {
         return;
       }
 
+      // ─────────────────────────────────────────────
+      // Non-chat: sanitize title/body, skip if invalid
+      // ─────────────────────────────────────────────
       final title = _sanitize(
         message.notification?.title ?? message.data['title']?.toString(),
-        'NearbyFundi',
       );
       final body = _sanitize(
         message.notification?.body ?? message.data['body']?.toString(),
-        'You have a new update',
       );
 
+      if (title == null || body == null) {
+        debugPrint(
+          '⚠️ Foreground push skipped — invalid title/body '
+              '(title: "${message.notification?.title}", '
+              'body: "${message.notification?.body}", '
+              'data.title: "${message.data['title']}", '
+              'data.body: "${message.data['body']}")',
+        );
+        return;
+      }
+
+      debugPrint('🔔 Foreground push — title: "$title", body: "$body"');
+
       const android = AndroidNotificationDetails(
-        'fundi_channel',
-        'NearbyFundi Notifications',
+        _channelId,
+        _channelName,
+        channelDescription: 'Notifications from NearbyFundi',
         importance: Importance.high,
         priority: Priority.high,
         icon: '@mipmap/ic_launcher',
@@ -150,6 +181,10 @@ class FcmService {
       debugPrint('❌ Show foreground notification error: $e');
     }
   }
+
+  // ============================================================
+  // TAP HANDLERS
+  // ============================================================
 
   static void _handleNotificationTapFromLocal(NotificationResponse response) {
     if (response.payload == null) return;
