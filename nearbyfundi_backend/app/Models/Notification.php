@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 
 class Notification extends Model
 {
@@ -59,5 +59,10 @@ class Notification extends Model
     public function scopeType($query, $type)
     {
         return $query->where('type', $type);
+    }
+
+    public function scopeExcludeType($query, $type)
+    {
+        return $query->where('type', '!=', $type);
     }
 }

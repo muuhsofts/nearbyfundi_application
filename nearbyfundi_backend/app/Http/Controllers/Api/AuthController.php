@@ -53,12 +53,12 @@ class AuthController extends BaseApiController
         $role = $data['role'] ?? 'CUSTOMER';
         $user->assignRole($role);
 
-        $this->issueVerificationOtp($user, $request, $otpDelivery);
+        $delivery = $this->issueVerificationOtp($user, $request, $otpDelivery);
 
         return $this->created([
             'user'        => $user->only(['id', 'name', 'email', 'phone']),
-            'otp_channel' => $otpDelivery->lastChannel ?? 'email',
-            'sent_to'     => ($otpDelivery->lastChannel ?? 'email') === 'sms' ? $user->phone : $user->email,
+            'otp_channel' => $delivery['channel'] ?? 'email',
+            'sent_to'     => ($delivery['channel'] ?? 'email') === 'sms' ? $user->phone : $user->email,
         ], 'Registration successful. Please enter the OTP sent to verify your account.');
     }
 
@@ -93,13 +93,13 @@ class AuthController extends BaseApiController
             $role = Role::where('name', 'FUNDI')->firstOrFail();
 
             $user = User::create([
-                'name'       => $data['name'],
-                'email'      => $data['email'],
-                'password'   => Hash::make($data['password']),
-                'phone'      => $data['phone'] ?? null,
-                'status'     => 'pending',
-                'is_active'  => false,
-                'locale'     => 'en',
+                'name'      => $data['name'],
+                'email'     => $data['email'],
+                'password'  => Hash::make($data['password']),
+                'phone'     => $data['phone'] ?? null,
+                'status'    => 'pending',
+                'is_active' => false,
+                'locale'    => 'en',
             ]);
 
             $user->assignRole($role);
@@ -129,7 +129,7 @@ class AuthController extends BaseApiController
 
             DB::commit();
 
-            $this->logAudit('register_fundi', 'auth', 'user', "Fundi registered: {$user->email}");
+            $this->logAudit('register_fundi', 'auth', $user->id, "Fundi registered: {$user->email}");
 
             return $this->created([
                 'email'       => $user->email,
@@ -169,7 +169,7 @@ class AuthController extends BaseApiController
 
         $delivery = $this->issueVerificationOtp($user, $request, $otpDelivery);
 
-        $this->logAudit('resend_otp', 'auth', 'user', "OTP resent to {$user->email}");
+        $this->logAudit('resend_otp', 'auth', $user->id, "OTP resent to {$user->email}");
 
         return $this->successResponse([
             'email'       => $user->email,
@@ -274,7 +274,7 @@ class AuthController extends BaseApiController
 
         $otp->update(['is_used' => true]);
 
-        $this->logAudit('verify_email_token', 'auth', 'user', "Email verified via token: {$user->email}");
+        $this->logAudit('verify_email_token', 'auth', $user->id, "Email verified via token: {$user->email}");
 
         return view('emails.verify-result', [
             'success' => true,
@@ -320,7 +320,7 @@ class AuthController extends BaseApiController
                 }
             }
 
-            $this->logAudit('login_failed', 'auth', 'user', "Failed login for: {$login}");
+            $this->logAudit('login_failed', 'auth', null, "Failed login for: {$login}");
             return $this->unauthorized('Invalid credentials.');
         }
 
@@ -355,7 +355,7 @@ class AuthController extends BaseApiController
             $this->storeFcmToken($user, $request->fcm_token);
         }
 
-        $this->logAudit('login', 'auth', 'user', "User logged in: {$user->email}");
+        $this->logAudit('login', 'auth', $user->id, "User logged in: {$user->email}");
 
         return $this->successResponse([
             'user'  => $user->only(['id', 'name', 'email', 'phone', 'locale', 'fcm_device_token']),
@@ -402,7 +402,7 @@ class AuthController extends BaseApiController
                     'is_active'         => true,
                 ]);
                 $user->assignRole('CUSTOMER');
-                $this->logAudit('register_google', 'auth', 'user', "Customer registered via Google: {$email}");
+                $this->logAudit('register_google', 'auth', $user->id, "Customer registered via Google: {$email}");
             } else {
                 if (empty($user->google_id)) {
                     $user->update(['google_id' => $googleId]);
@@ -427,7 +427,7 @@ class AuthController extends BaseApiController
                 $this->storeFcmToken($user, $request->fcm_token);
             }
 
-            $this->logAudit('login_google', 'auth', 'user', "User logged in via Google: {$email}");
+            $this->logAudit('login_google', 'auth', $user->id, "User logged in via Google: {$email}");
 
             return $this->successResponse([
                 'user'  => $user->only(['id', 'name', 'email', 'phone', 'locale', 'fcm_device_token']),
@@ -477,7 +477,7 @@ class AuthController extends BaseApiController
                     'is_active'         => true,
                 ]);
                 $user->assignRole('CUSTOMER');
-                $this->logAudit('register_google', 'auth', 'user', "Customer registered via Google callback");
+                $this->logAudit('register_google', 'auth', $user->id, 'Customer registered via Google callback');
             } else {
                 if (empty($user->google_id)) {
                     $user->update(['google_id' => $googleUser->getId()]);
@@ -500,7 +500,7 @@ class AuthController extends BaseApiController
                 $this->storeFcmToken($user, $request->fcm_token);
             }
 
-            $this->logAudit('login_google', 'auth', 'user', "User logged in via Google callback");
+            $this->logAudit('login_google', 'auth', $user->id, 'User logged in via Google callback');
 
             return $this->successResponse([
                 'user'  => $user->only(['id', 'name', 'email', 'phone', 'locale', 'fcm_device_token']),
@@ -528,7 +528,7 @@ class AuthController extends BaseApiController
             ->where('token', $tokenId)
             ->update(['is_active' => false]);
 
-        $this->logAudit('logout', 'auth', 'user', "User logged out: {$user->email}");
+        $this->logAudit('logout', 'auth', $user->id, "User logged out: {$user->email}");
 
         return $this->successResponse(null, 'Logged out.');
     }
@@ -540,7 +540,7 @@ class AuthController extends BaseApiController
         $user->tokens()->delete();
         UserSession::where('user_id', $user->id)->update(['is_active' => false]);
 
-        $this->logAudit('logout_all', 'auth', 'user', "User logged out from all devices: {$user->email}");
+        $this->logAudit('logout_all', 'auth', $user->id, "User logged out from all devices: {$user->email}");
 
         return $this->successResponse(null, 'Logged out from all devices.');
     }
@@ -577,7 +577,7 @@ class AuthController extends BaseApiController
 
         $user->update($request->only(['name', 'phone', 'locale']));
 
-        $this->logAudit('update_profile', 'user', 'profile', 'Profile updated', $old, $user->only(['name', 'phone', 'locale']));
+        $this->logAudit('update_profile', 'user', $user->id, 'Profile updated', $old, $user->only(['name', 'phone', 'locale']));
 
         return $this->successResponse(
             $user->only(['id', 'name', 'email', 'phone', 'locale', 'fcm_device_token']),
@@ -616,7 +616,7 @@ class AuthController extends BaseApiController
         $otp->plain_otp = $plainOtp;
         $delivery = $otpDelivery->deliver($user, $otp);
 
-        $this->logAudit('forgot_password', 'auth', 'user', "Password reset OTP sent to {$user->email}");
+        $this->logAudit('forgot_password', 'auth', $user->id, "Password reset OTP sent to {$user->email}");
 
         return $this->successResponse([
             'otp_channel' => $delivery['channel'] ?? 'email',
@@ -662,7 +662,7 @@ class AuthController extends BaseApiController
         $user->tokens()->delete();
         UserSession::where('user_id', $user->id)->update(['is_active' => false]);
 
-        $this->logAudit('reset_password', 'auth', 'user', "Password reset for {$user->email}");
+        $this->logAudit('reset_password', 'auth', $user->id, "Password reset for {$user->email}");
 
         return $this->successResponse(null, 'Password reset successfully. Please log in again.');
     }
@@ -689,7 +689,7 @@ class AuthController extends BaseApiController
             ->where('token', '!=', $currentTokenId)
             ->update(['is_active' => false]);
 
-        $this->logAudit('change_password', 'auth', 'user', "Password changed for {$user->email}");
+        $this->logAudit('change_password', 'auth', $user->id, "Password changed for {$user->email}");
 
         return $this->successResponse(null, 'Password changed successfully.');
     }
@@ -708,7 +708,7 @@ class AuthController extends BaseApiController
         $user->locale = $request->locale;
         $user->save();
 
-        $this->logAudit('update_locale', 'user', 'profile', "Locale changed from {$old} to {$request->locale}");
+        $this->logAudit('update_locale', 'user', $user->id, "Locale changed from {$old} to {$request->locale}");
 
         return $this->successResponse(null, 'Locale updated.');
     }
@@ -725,7 +725,7 @@ class AuthController extends BaseApiController
         $user->fcm_device_token = $request->token;
         $user->save();
 
-        $this->logAudit('update_device_token', 'user', 'device', "FCM token updated for {$user->email}");
+        $this->logAudit('update_device_token', 'user', $user->id, "FCM token updated for {$user->email}");
 
         return $this->successResponse([
             'message' => 'Device token updated successfully.',
@@ -748,7 +748,7 @@ class AuthController extends BaseApiController
         $user->fcm_device_token = null;
         $user->save();
 
-        $this->logAudit('delete_device_token', 'user', 'device', "FCM token deleted for {$user->email}");
+        $this->logAudit('delete_device_token', 'user', $user->id, "FCM token deleted for {$user->email}");
 
         return $this->successResponse(null, 'Device token deleted.');
     }
@@ -842,7 +842,11 @@ class AuthController extends BaseApiController
 
         $otp->plain_otp = $plainOtp;
 
-        return $otpDelivery->deliver($user, $otp, method_exists($otp, 'getVerificationUrl') ? $otp->getVerificationUrl() : null);
+        return $otpDelivery->deliver(
+            $user,
+            $otp,
+            method_exists($otp, 'getVerificationUrl') ? $otp->getVerificationUrl() : null
+        );
     }
 
     private function createSession(User $user, Request $request, string $token): void
@@ -868,9 +872,9 @@ class AuthController extends BaseApiController
     {
         $ua = $request->userAgent() ?? '';
 
-        if (str_contains($ua, 'Postman'))  return 'Postman';
-        if (str_contains($ua, 'Flutter'))  return 'Mobile App';
-        if (str_contains($ua, 'Mozilla'))  return 'Web Browser';
+        if (str_contains($ua, 'Postman')) return 'Postman';
+        if (str_contains($ua, 'Flutter')) return 'Mobile App';
+        if (str_contains($ua, 'Mozilla')) return 'Web Browser';
 
         return 'Unknown';
     }
@@ -885,7 +889,10 @@ class AuthController extends BaseApiController
             $user->fcm_device_token = $token;
             $user->save();
         } catch (\Throwable $e) {
-            Log::error('Failed to store FCM token', ['user_id' => $user->id, 'error' => $e->getMessage()]);
+            Log::error('Failed to store FCM token', [
+                'user_id' => $user->id,
+                'error'   => $e->getMessage(),
+            ]);
         }
     }
 
