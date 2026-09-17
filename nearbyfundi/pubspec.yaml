@@ -79,8 +79,21 @@ dependencies:
   firebase_core: ^4.10.0
   firebase_messaging: ^16.3.0
   flutter_local_notifications: ^19.4.1
-  app_badge_control_flutter: ^0.2.0
   google_sign_in: ^6.1.5
+
+  # ============================================================
+  # Badge
+  # iOS: uses the native UIApplication badge API via
+  #      flutter_app_badger_plus.
+  # Android: badges are handled automatically by
+  #          flutter_local_notifications — no ShortcutBadger,
+  #          no persistent tray notification.
+  #
+  # NOTE: The original `flutter_app_badger` package still references
+  # `me.leolin.shortcutbadger.ShortcutBadger` internally, which is why
+  # we use the `_plus` fork instead.
+  # ============================================================
+  flutter_app_badger_plus: ^1.0.0
 
   # ============================================================
   # Chat

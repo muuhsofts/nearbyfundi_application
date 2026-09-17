@@ -1,4 +1,4 @@
-// android/app/src/main/java/com/nearbyfundi/MainActivity.java
+// android/app/src/main/java/com/example/nearbyfundi/MainActivity.java
 package com.example.nearbyfundi;
 
 import android.content.Intent;
@@ -16,12 +16,15 @@ public class MainActivity extends FlutterActivity {
     private static final String CHANNEL = "com.nearbyfundi/fcm";
     private static final String SECURITY_CHANNEL = "com.nearbyfundi/security";
     private static final String DEEP_LINK_CHANNEL = "com.nearbyfundi/deep_link";
+    private static final String BADGE_CHANNEL = "com.nearbyfundi/badge";
+    private static final String BADGE_PREFS = "badge_prefs";
+    private static final String BADGE_KEY = "badge_count";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // ✅ Enable secure flag to prevent screenshots
+        // Enable secure flag to prevent screenshots
         getWindow().setFlags(
                 WindowManager.LayoutParams.FLAG_SECURE,
                 WindowManager.LayoutParams.FLAG_SECURE
@@ -34,7 +37,9 @@ public class MainActivity extends FlutterActivity {
     public void configureFlutterEngine(@NonNull FlutterEngine flutterEngine) {
         super.configureFlutterEngine(flutterEngine);
 
-        // FCM Token Channel
+        // ─────────────────────────────────────────────
+        // FCM TOKEN CHANNEL
+        // ─────────────────────────────────────────────
         new MethodChannel(flutterEngine.getDartExecutor().getBinaryMessenger(), CHANNEL)
                 .setMethodCallHandler((call, result) -> {
                     if (call.method.equals("getFCMToken")) {
@@ -55,7 +60,9 @@ public class MainActivity extends FlutterActivity {
                     }
                 });
 
-        // Security Channel
+        // ─────────────────────────────────────────────
+        // SECURITY CHANNEL (FLAG_SECURE)
+        // ─────────────────────────────────────────────
         new MethodChannel(flutterEngine.getDartExecutor().getBinaryMessenger(), SECURITY_CHANNEL)
                 .setMethodCallHandler((call, result) -> {
                     if (call.method.equals("enableSecureScreen")) {
@@ -69,7 +76,9 @@ public class MainActivity extends FlutterActivity {
                     }
                 });
 
-        // Deep Link Channel
+        // ─────────────────────────────────────────────
+        // DEEP LINK CHANNEL
+        // ─────────────────────────────────────────────
         new MethodChannel(flutterEngine.getDartExecutor().getBinaryMessenger(), DEEP_LINK_CHANNEL)
                 .setMethodCallHandler((call, result) -> {
                     if (call.method.equals("handleDeepLink")) {
@@ -80,6 +89,35 @@ public class MainActivity extends FlutterActivity {
 
                         android.util.Log.d("DeepLink", "Request ID: " + requestId + ", Type: " + type);
                         result.success(true);
+                    } else {
+                        result.notImplemented();
+                    }
+                });
+
+        // ─────────────────────────────────────────────
+        // BADGE CHANNEL
+        //
+        // Android 8+ shows launcher badges automatically when a
+        // notification is posted through flutter_local_notifications.
+        // No ShortcutBadger — it created a persistent
+        // "NearbyFundi / N" tray notification on Samsung and other
+        // OEM launchers.
+        //
+        // This handler persists the count locally so getBadgeCount()
+        // still returns a meaningful value. It does NOT create or
+        // remove tray notifications.
+        // ─────────────────────────────────────────────
+        new MethodChannel(flutterEngine.getDartExecutor().getBinaryMessenger(), BADGE_CHANNEL)
+                .setMethodCallHandler((call, result) -> {
+                    if (call.method.equals("setBadgeCount")) {
+                        Integer count = call.argument("count");
+                        saveBadgeCount(count != null ? count : 0);
+                        result.success(true);
+                    } else if (call.method.equals("removeBadge") || call.method.equals("clearBadge")) {
+                        saveBadgeCount(0);
+                        result.success(true);
+                    } else if (call.method.equals("getBadgeCount")) {
+                        result.success(getBadgeCount());
                     } else {
                         result.notImplemented();
                     }
@@ -131,6 +169,16 @@ public class MainActivity extends FlutterActivity {
         runOnUiThread(() -> {
             getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
         });
+    }
+
+    private void saveBadgeCount(int count) {
+        SharedPreferences prefs = getSharedPreferences(BADGE_PREFS, MODE_PRIVATE);
+        prefs.edit().putInt(BADGE_KEY, count).apply();
+    }
+
+    private int getBadgeCount() {
+        SharedPreferences prefs = getSharedPreferences(BADGE_PREFS, MODE_PRIVATE);
+        return prefs.getInt(BADGE_KEY, 0);
     }
 
     @Override

@@ -1,5 +1,5 @@
-// main.dart
-
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -49,11 +49,22 @@ import 'services/security_service.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
+// Top-level entry point required by Firebase for background messages
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+  debugPrint('📩 Background message received: ${message.messageId}');
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // FcmService.init() handles Firebase.initializeApp internally
-  await FcmService.init();
+  // Initialize Firebase and set background handler
+  await Firebase.initializeApp();
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  // Initialize FCM configuration
+  await FcmService.initialize();
   await SecurityService.enableSecureScreen();
 
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(

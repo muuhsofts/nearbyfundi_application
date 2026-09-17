@@ -1,29 +1,29 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- ============================================================
+    <!-- ═══════════════════════════════════════════════════════
          HARDWARE FEATURES
-         ============================================================ -->
+         ═══════════════════════════════════════════════════════ -->
     <uses-feature
         android:name="android.hardware.camera"
         android:required="false" />
 
-    <!-- ============================================================
+    <!-- ═══════════════════════════════════════════════════════
          INTERNET & NETWORK PERMISSIONS
-         ============================================================ -->
+         ═══════════════════════════════════════════════════════ -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 
-    <!-- ============================================================
+    <!-- ═══════════════════════════════════════════════════════
          LOCATION PERMISSIONS
-         ============================================================ -->
+         ═══════════════════════════════════════════════════════ -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
-    <!-- ============================================================
+    <!-- ═══════════════════════════════════════════════════════
          CAMERA & MEDIA PERMISSIONS
-         ============================================================ -->
+         ═══════════════════════════════════════════════════════ -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
@@ -34,38 +34,29 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
 
-    <!-- ============================================================
-         NOTIFICATIONS & VENDOR BADGES
-         ============================================================ -->
+    <!-- ═══════════════════════════════════════════════════════
+         NOTIFICATIONS
+         ═══════════════════════════════════════════════════════ -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
-    <uses-permission android:name="com.sec.android.provider.badge.permission.READ" />
-    <uses-permission android:name="com.sec.android.provider.badge.permission.WRITE" />
-    <uses-permission android:name="com.htc.launcher.permission.READ_SETTINGS" />
-    <uses-permission android:name="com.htc.launcher.permission.UPDATE_SHORTCUT" />
-    <uses-permission android:name="com.sonyericsson.home.permission.BROADCAST_BADGE" />
-    <uses-permission android:name="com.sonymobile.home.permission.PROVIDER_INSERT_BADGE" />
-    <uses-permission android:name="com.huawei.android.launcher.permission.CHANGE_BADGE" />
-    <uses-permission android:name="com.huawei.android.launcher.permission.READ_SETTINGS" />
-    <uses-permission android:name="com.huawei.android.launcher.permission.WRITE_SETTINGS" />
 
-    <!-- ============================================================
+    <!-- ═══════════════════════════════════════════════════════
          AUDIO & FOREGROUND SERVICES
-         ============================================================ -->
+         ═══════════════════════════════════════════════════════ -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
-    <!-- ============================================================
-         ALARMS (Safe for Google Play)
-         ============================================================ -->
+    <!-- ═══════════════════════════════════════════════════════
+         ALARMS
+         ═══════════════════════════════════════════════════════ -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
-    <!-- ============================================================
+    <!-- ═══════════════════════════════════════════════════════
          APPLICATION CONFIGURATION
-         ============================================================ -->
+         ═══════════════════════════════════════════════════════ -->
     <application
         android:label="NearbyFundi"
         android:name="${applicationName}"
@@ -97,21 +88,25 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-
         </activity>
 
-        <!-- FIREBASE CLOUD MESSAGING METADATA -->
-        <meta-data
-            android:name="com.google.firebase.messaging.default_notification_icon"
-            android:resource="@mipmap/ic_launcher" />
+        <!-- ═══════════════════════════════════════════════════
+             FIREBASE CLOUD MESSAGING METADATA
+             ═══════════════════════════════════════════════════
 
-        <meta-data
-            android:name="com.google.firebase.messaging.default_notification_color"
-            android:resource="@color/notification_color" />
+             ⚠️ IMPORTANT: Do NOT declare `default_notification_icon`
+             or `default_notification_channel_id` as meta-data here.
 
-        <meta-data
-            android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="fundi_channel" />
+             Those meta-data tags tell Android's FCM SDK to auto-render
+             ANY incoming push as a notification — even data-only pushes
+             with no title/body. When that happens, Android falls back
+             to using the app label as the title and the badge count as
+             the body, producing the "NearbyFundi / N" banner.
+
+             Let Flutter's FcmService handle ALL notification rendering
+             explicitly so it can validate title/body and skip bad
+             payloads. Flutter already sets channel_id per-message.
+             ═══════════════════════════════════════════════════ -->
 
         <!-- FILE PROVIDER -->
         <provider
@@ -128,7 +123,6 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-
     </application>
 
     <!-- INTENT QUERIES -->
@@ -165,5 +159,4 @@
             <data android:scheme="whatsapp" />
         </intent>
     </queries>
-
 </manifest>

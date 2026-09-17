@@ -605,28 +605,36 @@ class ApiService {
   Future<ApiResponse> deleteConversation(int conversationId) =>
       _delete('/v14/chat/conversations/$conversationId');
 
-  // ═══════════════════════════════════════════════════════════════════════
-  //  NOTIFICATION ENDPOINTS (V15) - FIXED
-  // ═══════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════
+//  NOTIFICATION ENDPOINTS (V15) - FIXED QUERY PARAMS
+// ═══════════════════════════════════════════════════════════════════════
 
-  Future<ApiResponse> getNotifications() =>
-      _get('/v15/notifications');
+  Future<ApiResponse> getNotifications({String? excludeType, String? type}) =>
+      _get('/v15/notifications', query: {
+        if (excludeType != null && excludeType.isNotEmpty) 'exclude_type': excludeType,
+        if (type != null && type.isNotEmpty) 'type': type,
+      });
 
-  Future<ApiResponse> getUnreadNotificationCount() =>
-      _get('/v15/notifications/unread-count');
+  Future<ApiResponse> getUnreadNotificationCount({String? excludeType}) =>
+      _get('/v15/notifications/unread-count', query: {
+        if (excludeType != null && excludeType.isNotEmpty) 'exclude_type': excludeType,
+      });
 
-  // ✅ FIXED: Positional parameter
   Future<ApiResponse> markNotificationAsRead(String notificationId) =>
       _put('/v15/notifications/$notificationId/read');
 
-  Future<ApiResponse> markAllNotificationsAsRead() =>
-      _put('/v15/notifications/read-all');
+  Future<ApiResponse> markAllNotificationsAsRead({String? excludeType}) =>
+      _put('/v15/notifications/read-all', query: {
+        if (excludeType != null && excludeType.isNotEmpty) 'exclude_type': excludeType,
+      });
 
   Future<ApiResponse> deleteNotification(String notificationId) =>
       _delete('/v15/notifications/$notificationId');
 
-  Future<ApiResponse> clearNotifications() =>
-      _delete('/v15/notifications/clear');
+  Future<ApiResponse> clearNotifications({String? excludeType}) =>
+      _delete('/v15/notifications/clear', query: {
+        if (excludeType != null && excludeType.isNotEmpty) 'exclude_type': excludeType,
+      });
 
   // ═══════════════════════════════════════════════════════════════════════
   //  SUBSCRIPTION ENDPOINTS (V16)
@@ -728,6 +736,7 @@ class ApiService {
   Future<ApiResponse> getPrivacyPolicy() =>
       _get('/v18/privacy-policy');
 
+
   // ═══════════════════════════════════════════════════════════════════════
   //  PRIVATE HELPERS
   // ═══════════════════════════════════════════════════════════════════════
@@ -806,10 +815,10 @@ class ApiService {
     }
   }
 
-  Future<ApiResponse> _post(String path, {dynamic data}) async {
-    _logRequest('POST', path);
+  Future<ApiResponse> _post(String path, {dynamic data, Map<String, dynamic>? query}) async {
+    _logRequest('POST', path, query: query);
     try {
-      final res = await _dio.post(path, data: data);
+      final res = await _dio.post(path, data: data, queryParameters: query);
       _logSuccess('POST', path, res);
       return _parseResponse('POST', path, res);
     } catch (e) {
@@ -818,10 +827,10 @@ class ApiService {
     }
   }
 
-  Future<ApiResponse> _put(String path, {dynamic data}) async {
-    _logRequest('PUT', path);
+  Future<ApiResponse> _put(String path, {dynamic data, Map<String, dynamic>? query}) async {
+    _logRequest('PUT', path, query: query);
     try {
-      final res = await _dio.put(path, data: data);
+      final res = await _dio.put(path, data: data, queryParameters: query);
       _logSuccess('PUT', path, res);
       return _parseResponse('PUT', path, res);
     } catch (e) {
@@ -830,10 +839,10 @@ class ApiService {
     }
   }
 
-  Future<ApiResponse> _patch(String path, {dynamic data}) async {
-    _logRequest('PATCH', path);
+  Future<ApiResponse> _patch(String path, {dynamic data, Map<String, dynamic>? query}) async {
+    _logRequest('PATCH', path, query: query);
     try {
-      final res = await _dio.patch(path, data: data);
+      final res = await _dio.patch(path, data: data, queryParameters: query);
       _logSuccess('PATCH', path, res);
       return _parseResponse('PATCH', path, res);
     } catch (e) {
@@ -842,10 +851,10 @@ class ApiService {
     }
   }
 
-  Future<ApiResponse> _delete(String path) async {
-    _logRequest('DELETE', path);
+  Future<ApiResponse> _delete(String path, {Map<String, dynamic>? query}) async {
+    _logRequest('DELETE', path, query: query);
     try {
-      final res = await _dio.delete(path);
+      final res = await _dio.delete(path, queryParameters: query);
       _logSuccess('DELETE', path, res);
       return _parseResponse('DELETE', path, res);
     } catch (e) {

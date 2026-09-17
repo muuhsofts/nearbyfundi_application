@@ -5,7 +5,6 @@
 import FlutterMacOS
 import Foundation
 
-import app_badge_control_flutter
 import audioplayers_darwin
 import connectivity_plus
 import emoji_picker_flutter
@@ -13,6 +12,7 @@ import file_picker
 import file_selector_macos
 import firebase_core
 import firebase_messaging
+import flutter_app_badger_plus
 import flutter_image_compress_macos
 import flutter_inappwebview_macos
 import flutter_local_notifications
@@ -27,7 +27,6 @@ import sqflite_darwin
 import url_launcher_macos
 
 func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
-  AppBadgeControlFlutterPlugin.register(with: registry.registrar(forPlugin: "AppBadgeControlFlutterPlugin"))
   AudioplayersDarwinPlugin.register(with: registry.registrar(forPlugin: "AudioplayersDarwinPlugin"))
   ConnectivityPlusPlugin.register(with: registry.registrar(forPlugin: "ConnectivityPlusPlugin"))
   EmojiPickerFlutterPlugin.register(with: registry.registrar(forPlugin: "EmojiPickerFlutterPlugin"))
@@ -35,6 +34,7 @@ func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
   FileSelectorPlugin.register(with: registry.registrar(forPlugin: "FileSelectorPlugin"))
   FLTFirebaseCorePlugin.register(with: registry.registrar(forPlugin: "FLTFirebaseCorePlugin"))
   FLTFirebaseMessagingPlugin.register(with: registry.registrar(forPlugin: "FLTFirebaseMessagingPlugin"))
+  FlutterAppBadgerPlusPlugin.register(with: registry.registrar(forPlugin: "FlutterAppBadgerPlusPlugin"))
   FlutterImageCompressMacosPlugin.register(with: registry.registrar(forPlugin: "FlutterImageCompressMacosPlugin"))
   InAppWebViewFlutterPlugin.register(with: registry.registrar(forPlugin: "InAppWebViewFlutterPlugin"))
   FlutterLocalNotificationsPlugin.register(with: registry.registrar(forPlugin: "FlutterLocalNotificationsPlugin"))

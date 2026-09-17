@@ -1,190 +1,179 @@
+import 'dart:convert';
 import 'dart:io';
-import 'package:app_badge_control_flutter/app_badge_control_flutter.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../firebase_options.dart';
+import '../main.dart';
+import '../providers/notification_provider.dart';
+
+/// Top-level entry point handler for background messages on Android/iOS
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  debugPrint('📩 FCM Background message received: ${message.messageId}');
+}
 
 class FcmService {
-  static final FirebaseMessaging _fcm = FirebaseMessaging.instance;
-  static const String _tokenKey = 'fcm_token';
-  static bool _initialized = false;
+  static final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
 
-  static Future<void> init() async {
-    if (_initialized) {
-      debugPrint('ℹ️ FCM Service already initialized');
-      return;
-    }
-
+  // ==================== INITIALIZE FCM ====================
+  static Future<void> initialize() async {
     try {
-      if (Firebase.apps.isEmpty) {
-        await Firebase.initializeApp(
-          options: DefaultFirebaseOptions.currentPlatform,
-        );
-      }
+      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-      await _fcm.requestPermission(
+      NotificationSettings settings = await _firebaseMessaging.requestPermission(
         alert: true,
         badge: true,
         sound: true,
         provisional: false,
       );
 
-      FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
-      FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpened);
-      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+      if (settings.authorizationStatus == AuthorizationStatus.denied) {
+        debugPrint('⚠️ User declined FCM notification permissions');
+        return;
+      }
 
-      await _saveToken();
-      _fcm.onTokenRefresh.listen(_handleTokenRefresh);
+      debugPrint('✅ FCM Permission Granted: ${settings.authorizationStatus}');
 
-      _initialized = true;
-      debugPrint('✅ FCM Service initialized successfully');
+      await _firebaseMessaging.setForegroundNotificationPresentationOptions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+
+      _configureMessageHandlers();
+
+      RemoteMessage? initialMessage = await _firebaseMessaging.getInitialMessage();
+      if (initialMessage != null) {
+        _handleNotificationTap(initialMessage);
+      }
+
+      debugPrint('✅ FCM Service Initialized Successfully');
     } catch (e, stackTrace) {
-      debugPrint('❌ FCM Service initialization failed: $e');
+      debugPrint('❌ Failed to initialize FCM Service: $e');
       debugPrint('$stackTrace');
     }
   }
 
-  static Future<void> _handleTokenRefresh(String token) async {
-    try {
-      if (token.isEmpty) return;
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_tokenKey, token);
-      debugPrint('✅ FCM token refreshed and saved');
-    } catch (e) {
-      debugPrint('❌ Failed to save refreshed FCM token: $e');
-    }
-  }
-
-  static void _handleForegroundMessage(RemoteMessage message) {
-    debugPrint('📱 Foreground FCM received: ${message.notification?.title}');
-    // Delegate handling to NotificationProvider via main listener
-  }
-
-  static void _handleMessageOpened(RemoteMessage message) {
-    debugPrint('📱 FCM Notification opened: ${message.notification?.title}');
-  }
-
-  static Future<void> _saveToken() async {
-    try {
-      final token = await getToken();
-      if (token == null || token.isEmpty) return;
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_tokenKey, token);
-      debugPrint('✅ FCM token saved');
-    } catch (e) {
-      debugPrint('❌ Failed to save FCM token: $e');
-    }
-  }
-
+  // ==================== GET TOKEN ====================
   static Future<String?> getToken() async {
     try {
       if (Platform.isIOS) {
-        String? apnsToken = await _fcm.getAPNSToken();
+        String? apnsToken = await _firebaseMessaging.getAPNSToken();
         if (apnsToken == null) {
           await Future.delayed(const Duration(seconds: 2));
-          apnsToken = await _fcm.getAPNSToken();
-        }
-        if (apnsToken == null) {
-          debugPrint('⚠️ APNS Token is null. Cannot retrieve FCM Token yet.');
-          return null;
+          apnsToken = await _firebaseMessaging.getAPNSToken();
         }
       }
-      return await _fcm.getToken();
+
+      String? token = await _firebaseMessaging.getToken();
+      debugPrint('🔑 FCM Device Token: $token');
+      return token;
     } catch (e) {
-      debugPrint('❌ Failed to get FCM token: $e');
+      debugPrint('❌ Failed to retrieve FCM Token: $e');
       return null;
     }
   }
-}
 
-// ============================================================
-// BACKGROUND FIREBASE MESSAGE HANDLER
-// ============================================================
+  // ==================== MESSAGE HANDLERS ====================
+  static void _configureMessageHandlers() {
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      debugPrint('📩 Foreground FCM Message Received: ${message.messageId}');
+      _processIncomingMessage(message, isForeground: true);
+    });
 
-@pragma('vm:entry-point')
-Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  try {
-    if (Firebase.apps.isEmpty) {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      debugPrint('👆 App opened via FCM notification tap');
+      _handleNotificationTap(message);
+    });
+
+    _firebaseMessaging.onTokenRefresh.listen((String newToken) {
+      debugPrint('🔄 FCM Token Refreshed: $newToken');
+    });
+  }
+
+  /// Returns trimmed text if non-empty and not a bare number, else null.
+  static String? _validText(String? value) {
+    final text = (value ?? '').trim();
+    if (text.isEmpty) return null;
+    if (double.tryParse(text) != null) return null;
+    return text;
+  }
+
+  // ==================== PROCESS MESSAGE ====================
+  static void _processIncomingMessage(
+      RemoteMessage message, {
+        required bool isForeground,
+      }) {
+    final BuildContext? context = navigatorKey.currentContext;
+    if (context == null) return;
+
+    final Map<String, dynamic> data = message.data;
+    final String type = data['type']?.toString() ?? 'general';
+
+    final notificationProvider =
+    Provider.of<NotificationProvider>(context, listen: false);
+
+    // Silent chat: update unread state, no tray banner.
+    if (type == 'chat_message') {
+      debugPrint('💬 Chat notification received. Suppressing local banner.');
+      notificationProvider.refreshUnreadCount();
+      return;
     }
 
-    final prefs = await SharedPreferences.getInstance();
-    final currentCount = (prefs.getInt('badge_count') ?? 0) + 1;
-    await prefs.setInt('badge_count', currentCount);
+    final String? title = _validText(
+      message.notification?.title ?? data['title']?.toString(),
+    );
+    final String? body = _validText(
+      message.notification?.body ?? data['body']?.toString(),
+    );
 
-    await AppBadgeControlFlutter.updateBadgeCount(currentCount);
-
-    if (message.notification == null) {
-      final notifications = FlutterLocalNotificationsPlugin();
-      const AndroidInitializationSettings androidSettings =
-      AndroidInitializationSettings('@mipmap/ic_launcher');
-      const DarwinInitializationSettings iosSettings =
-      DarwinInitializationSettings(
-        requestAlertPermission: false,
-        requestBadgePermission: false,
-        requestSoundPermission: false,
+    if (title == null || body == null) {
+      debugPrint(
+        '⚠️ FCM message dropped — invalid title/body '
+            '(id: ${message.messageId}, type: $type, '
+            'title: "${data['title']}", body: "${data['body']}")',
       );
-
-      await notifications.initialize(
-        const InitializationSettings(android: androidSettings, iOS: iosSettings),
-      );
-
-      const AndroidNotificationChannel channel = AndroidNotificationChannel(
-        'fundi_channel',
-        'NearbyFundi Notifications',
-        description: 'Notifications from NearbyFundi',
-        importance: Importance.max,
-        enableVibration: true,
-        playSound: true,
-        showBadge: true,
-      );
-
-      final androidPlugin = notifications
-          .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
-
-      await androidPlugin?.createNotificationChannel(channel);
-
-      final AndroidNotificationDetails androidDetails =
-      AndroidNotificationDetails(
-        'fundi_channel',
-        'NearbyFundi Notifications',
-        channelDescription: 'Notifications from NearbyFundi',
-        importance: Importance.max,
-        priority: Priority.high,
-        icon: '@mipmap/ic_launcher',
-        playSound: true,
-        enableVibration: true,
-        channelShowBadge: true,
-        number: currentCount,
-      );
-
-      final notificationDetails = NotificationDetails(
-        android: androidDetails,
-        iOS: const DarwinNotificationDetails(
-          presentAlert: true,
-          presentBadge: true,
-          presentSound: true,
-        ),
-      );
-
-      await notifications.show(
-        DateTime.now().millisecondsSinceEpoch.remainder(2147483647),
-        message.data['title']?.toString() ?? 'NearbyFundi',
-        message.data['body']?.toString() ?? 'You have a new notification',
-        notificationDetails,
-        payload: message.data['type']?.toString() ?? 'notification',
-      );
+      return;
     }
-  } catch (e, stackTrace) {
-    debugPrint('❌ Background notification failed: $e');
-    debugPrint('$stackTrace');
+
+    if (isForeground) {
+      if (message.notification == null) {
+        notificationProvider.showLocalNotification(
+          title: title,
+          body: body,
+          payload: type,
+        );
+      }
+
+      notificationProvider.addLocalNotification({
+        'id': data['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+        'title': title,
+        'body': body,
+        'type': type,
+        'data': data,
+        'is_read': false,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+    }
+  }
+
+  // ==================== TAP HANDLER ====================
+  static void _handleNotificationTap(RemoteMessage message) {
+    try {
+      final Map<String, dynamic> data = message.data;
+      final String type = data['type']?.toString() ?? '';
+
+      final context = navigatorKey.currentContext;
+      if (context == null) return;
+
+      if (type == 'chat_message') {
+        navigatorKey.currentState?.pushNamed('/chat', arguments: data);
+      } else {
+        navigatorKey.currentState?.pushNamed('/notifications');
+      }
+    } catch (e) {
+      debugPrint('❌ FCM Navigation Error: $e');
+    }
   }
 }

@@ -54,4 +54,17 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     implementation("com.google.firebase:firebase-messaging")
     implementation("com.google.firebase:firebase-analytics")
+
+    // ════════════════════════════════════════════════════════════
+    // NOTE: ShortcutBadger is intentionally NOT included.
+    //
+    // Reason: ShortcutBadger creates a persistent "NearbyFundi / N"
+    // tray notification on Samsung and other OEM launchers when
+    // applyCount() is called. Modern Android (8+) handles launcher
+    // badges automatically via NotificationManager when
+    // flutter_local_notifications posts a notification.
+    //
+    // Do NOT add:
+    //   implementation("me.leolin:ShortcutBadger:1.1.22")
+    // ════════════════════════════════════════════════════════════
 }

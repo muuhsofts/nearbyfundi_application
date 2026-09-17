@@ -3,7 +3,6 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
-  app_badge_control_flutter
   audioplayers_windows
   connectivity_plus
   emoji_picker_flutter
