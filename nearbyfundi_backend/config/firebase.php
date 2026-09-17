@@ -1,5 +1,4 @@
 <?php
-// config/firebase.php
 
 return [
     /*
@@ -13,8 +12,18 @@ return [
     |--------------------------------------------------------------------------
     | Send Notifications
     |--------------------------------------------------------------------------
+    | Set to true in production. When false, no FCM pushes are sent at all.
     */
-    'send_notifications' => env('FCM_SEND_NOTIFICATIONS', false),
+    'send_notifications' => env('FCM_SEND_NOTIFICATIONS', true),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Default Android Channel
+    |--------------------------------------------------------------------------
+    | Must match the channel ID declared in the Flutter app's
+    | NotificationProvider (_channelId = 'fundi_channel').
+    */
+    'android_channel_id' => 'fundi_channel',
 
     /*
     |--------------------------------------------------------------------------
@@ -22,8 +31,8 @@ return [
     |--------------------------------------------------------------------------
     */
     'fcm' => [
-        'timeout' => 30,
-        'retry' => 3,
+        'timeout'     => 30,
+        'retry'       => 3,
         'retry_delay' => 1000,
     ],
 ];

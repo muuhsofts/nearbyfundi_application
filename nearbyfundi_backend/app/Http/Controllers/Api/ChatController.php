@@ -23,7 +23,6 @@ class ChatController extends BaseApiController
 {
     use Auditable;
 
-    // Allowed file types (SVG removed – XSS risk)
     const ALLOWED_IMAGE_TYPES = [
         'image/jpeg',
         'image/png',
@@ -62,16 +61,20 @@ class ChatController extends BaseApiController
         'application/x-rar-compressed',
     ];
 
-    // Aligned with typical mobile + nginx/php limits (15MB)
     const MAX_FILE_SIZE = 15 * 1024 * 1024;
 
-    protected $fcmService;
+    protected FcmService $fcmService;
 
     public function __construct(FcmService $fcmService)
     {
         $this->fcmService = $fcmService;
     }
 
+    /**
+     * Create a chat notification row (DB only — no FCM push here).
+     * Chat pushes are handled separately by sendPushNotification() as
+     * silent data-only messages so they don't spam the system tray.
+     */
     private function createNotification(int $userId, string $title, string $body, string $type, array $data = []): void
     {
         $sanitized = [];
@@ -97,9 +100,10 @@ class ChatController extends BaseApiController
         ]);
     }
 
-    /**
-     * Get or create conversation – role-bound
-     */
+    // ============================================================
+    // CONVERSATIONS
+    // ============================================================
+
     public function getOrCreateConversation(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -113,12 +117,10 @@ class ChatController extends BaseApiController
 
         $user = $request->user();
 
-        // Must be a participant
         if ($user->id != $request->customer_id && $user->id != $request->fundi_id) {
             return $this->forbidden('Unauthorized to access this conversation.');
         }
 
-        // Role binding
         if ($user->hasRole('CUSTOMER') && (int) $user->id !== (int) $request->customer_id) {
             return $this->forbidden('Customers can only open chats as the customer.');
         }
@@ -150,9 +152,6 @@ class ChatController extends BaseApiController
         return $this->successResponse($conversation, 'Conversation retrieved.');
     }
 
-    /**
-     * Get user conversations – grouped where clause
-     */
     public function getConversations(Request $request)
     {
         $user = $request->user();
@@ -183,6 +182,10 @@ class ChatController extends BaseApiController
 
         return $this->successResponse($conversations, 'Conversations retrieved.');
     }
+
+    // ============================================================
+    // MESSAGES
+    // ============================================================
 
     public function getMessages(Request $request, $conversationId)
     {
@@ -310,8 +313,11 @@ class ChatController extends BaseApiController
             }]);
 
             broadcast(new NewMessage($message, $conversation->id));
+
+            // Silent FCM data push to receiver
             $this->sendPushNotification($message, $conversation);
 
+            // DB notification row for the in-app notification list
             $receiver = User::find($receiverId);
             if ($receiver) {
                 $sender = $user;
@@ -362,37 +368,32 @@ class ChatController extends BaseApiController
         }
     }
 
+    /**
+     * Send silent data-only FCM push to the receiver.
+     * Chat pushes must NEVER appear in the system tray.
+     */
     protected function sendPushNotification($message, $conversation)
     {
         try {
             $receiver = User::find($message->receiver_id);
 
-            if (!$receiver || empty($receiver->fcm_device_token)) {
+            if (!$receiver) {
                 return;
             }
 
             $sender = $message->sender;
-            $title  = $sender->name ?? 'New Message';
-            $body   = $this->getNotificationBody($message);
-
-            $data = [
-                'type'            => 'chat_message',
-                'conversation_id' => (string) $conversation->id,
-                'message_id'      => (string) $message->id,
-                'sender_id'       => (string) $sender->id,
-                'sender_name'     => $sender->name ?? 'Unknown',
-                'message_type'    => $message->message_type,
-                'has_attachment'  => !empty($message->file_path) ? 'true' : 'false',
-                'timestamp'       => now()->toIso8601String(),
-            ];
-
-            if ($message->file_path) {
-                $data['file_url']  = asset('storage/' . $message->file_path);
-                $data['file_name'] = $message->file_name ?? 'attachment';
-                $data['file_type'] = $message->file_mime_type ?? 'unknown';
+            if (!$sender) {
+                return;
             }
 
-            $this->fcmService->sendToUser($receiver, $title, $body, $data);
+            // Delegate to FcmService::sendChatNotification — handles token lookup,
+            // silent data-only payload, and all validation.
+            $this->fcmService->sendChatNotification(
+                $receiver,
+                $sender,
+                $message,
+                $conversation->id
+            );
         } catch (\Exception $e) {
             \Log::error('FCM notification error: ' . $e->getMessage());
         }
@@ -424,6 +425,10 @@ class ChatController extends BaseApiController
         return $type;
     }
 
+    // ============================================================
+    // FILE HANDLING
+    // ============================================================
+
     private function processFileUpload($file)
     {
         $mimeType     = $file->getMimeType();
@@ -443,7 +448,6 @@ class ChatController extends BaseApiController
             throw new \Exception('File type not allowed.');
         }
 
-        // Block SVG by extension as well
         if (in_array($extension, ['svg', 'svgz'], true)) {
             throw new \Exception('SVG files are not allowed.');
         }
@@ -549,6 +553,10 @@ class ChatController extends BaseApiController
         return 'file';
     }
 
+    // ============================================================
+    // READ STATUS
+    // ============================================================
+
     public function markMessageAsRead(Request $request, $messageId)
     {
         $user    = $request->user();
@@ -646,6 +654,10 @@ class ChatController extends BaseApiController
             'per_conversation' => $perConversation,
         ], 'Unread count retrieved.');
     }
+
+    // ============================================================
+    // MESSAGE MANAGEMENT
+    // ============================================================
 
     public function deleteMessage(Request $request, $messageId)
     {
@@ -762,6 +774,10 @@ class ChatController extends BaseApiController
 
         return $this->successResponse(null, 'Reaction removed.');
     }
+
+    // ============================================================
+    // FILE DOWNLOAD & INFO
+    // ============================================================
 
     public function downloadFile(Request $request, $messageId)
     {
@@ -902,6 +918,10 @@ class ChatController extends BaseApiController
             return $this->serverError('Upload failed: ' . $e->getMessage());
         }
     }
+
+    // ============================================================
+    // TYPING & CONVERSATION MANAGEMENT
+    // ============================================================
 
     public function setTypingStatus(Request $request)
     {

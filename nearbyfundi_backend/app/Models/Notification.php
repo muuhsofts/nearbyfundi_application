@@ -65,4 +65,16 @@ class Notification extends Model
     {
         return $query->where('type', '!=', $type);
     }
+
+    /**
+     * True title/body present — not empty, not a bare number.
+     * Use to spot rows a bad caller wrote incorrectly.
+     */
+    public function hasValidContent(): bool
+    {
+        $title = trim((string) $this->title);
+        $body  = trim((string) $this->body);
+
+        return $title !== '' && $body !== '' && !is_numeric($title) && !is_numeric($body);
+    }
 }

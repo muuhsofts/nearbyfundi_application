@@ -4,60 +4,64 @@ namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
-use NotificationChannels\Fcm\FcmChannel;
-use NotificationChannels\Fcm\FcmMessage;
-use NotificationChannels\Fcm\Resources\Notification as FcmNotification;
 
 class NewActivityNotification extends Notification
 {
     use Queueable;
 
+    /** Types that must never trigger a system tray banner. */
+    public const SILENT_TYPES = ['chat_message'];
+
     protected string $title;
     protected string $body;
     protected string $type;
     protected int $unreadCount;
+    protected array $extraData;
+    protected bool $isSilent;
 
-    public function __construct(string $title, string $body, string $type = 'general', int $unreadCount = 0)
-    {
-        // Safety: never allow empty or pure numbers as title/body
-        $this->title = (trim($title) !== '' && !is_numeric($title))
-            ? trim($title)
-            : 'NearbyFundi';
+    public function __construct(
+        string $title,
+        string $body,
+        string $type = 'general',
+        int $unreadCount = 0,
+        array $extraData = []
+    ) {
+        $this->type     = $type !== '' ? $type : 'general';
+        $this->isSilent = in_array($this->type, self::SILENT_TYPES, true);
 
-        $this->body = (trim($body) !== '' && !is_numeric($body))
-            ? trim($body)
+        $safeTitle = trim($title);
+        $safeBody  = trim($body);
+
+        $this->title = ($safeTitle !== '' && !is_numeric($safeTitle))
+            ? $safeTitle
+            : config('app.name', 'NearbyFundi');
+
+        $this->body = ($safeBody !== '' && !is_numeric($safeBody))
+            ? $safeBody
             : 'You have a new update';
 
-        $this->type = $type ?: 'general';
         $this->unreadCount = max(0, $unreadCount);
+
+        unset($extraData['unread_count']);
+        $this->extraData = $extraData;
     }
 
-    public function via($notifiable)
+    /**
+     * Only the database channel — FCM is handled separately by FcmService,
+     * which uses the already-installed `kreait/firebase-php` package.
+     */
+    public function via($notifiable): array
     {
-        return [FcmChannel::class, 'database'];
+        return ['database'];
     }
 
-    public function toFcm($notifiable)
-    {
-        return (new FcmMessage())
-            ->setNotification(
-                FcmNotification::create()
-                    ->setTitle($this->title)
-                    ->setBody($this->body)
-            )
-            ->setData([
-                'type'         => $this->type,
-                'unread_count' => (string) $this->unreadCount,
-                'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
-            ]);
-    }
-
-    public function toArray($notifiable)
+    public function toArray($notifiable): array
     {
         return [
             'title' => $this->title,
             'body'  => $this->body,
             'type'  => $this->type,
+            'data'  => $this->extraData,
         ];
     }
 }

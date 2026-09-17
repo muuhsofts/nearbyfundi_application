@@ -1024,44 +1024,31 @@ class TechnicianController extends BaseApiController
      * Title & body are always sanitized – never empty or numeric.
      */
     private function createNotification(User $user, string $title, string $body, string $type, array $data = []): void
-    {
-        try {
-            // Sanitize – never allow empty or pure numbers
-            $cleanTitle = (trim($title) !== '' && !is_numeric($title))
-                ? trim($title)
-                : 'NearbyFundi';
+{
+    try {
+        $cleanTitle = (trim($title) !== '' && !is_numeric($title))
+            ? trim($title) : config('app.name', 'NearbyFundi');
 
-            $cleanBody = (trim($body) !== '' && !is_numeric($body))
-                ? trim($body)
-                : 'You have a new update';
+        $cleanBody = (trim($body) !== '' && !is_numeric($body))
+            ? trim($body) : 'You have a new update';
 
-            // Count current unread (excluding chat) so the badge is accurate
-            $unreadCount = $user->notifications()
-                ->where('is_read', false)
-                ->where('type', '!=', 'chat_message')
-                ->count() + 1; // +1 for the one we are about to create
+        $notification = Notification::create([
+            'user_id' => $user->id,
+            'title'   => $cleanTitle,
+            'body'    => $cleanBody,
+            'type'    => $type,
+            'data'    => json_encode($data),
+            'is_read' => false,
+        ]);
 
-            // 1. Database record
-            Notification::create([
-                'user_id' => $user->id,
-                'title'   => $cleanTitle,
-                'body'    => $cleanBody,
-                'type'    => $type,
-                'data'    => json_encode($data),
-                'is_read' => false,
-            ]);
+        app(\App\Services\FcmService::class)
+            ->sendFromNotification($notification->fresh('user'));
 
-            // 2. Push notification (FCM)
-            $user->notify(new NewActivityNotification(
-                $cleanTitle,
-                $cleanBody,
-                $type,
-                $unreadCount
-            ));
-        } catch (\Exception $e) {
-            \Log::error('Failed to create notification: ' . $e->getMessage());
-        }
+    } catch (\Throwable $e) {
+        \Log::error('Failed to create notification: ' . $e->getMessage());
     }
+}
+
 
     private function haversineGreatCircleDistance($latitudeFrom, $longitudeFrom, $latitudeTo, $longitudeTo, $earthRadius = 6371)
     {

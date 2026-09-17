@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Notification as NotificationModel;
 use Kreait\Firebase\Factory;
 use Kreait\Firebase\Messaging\CloudMessage;
 use Kreait\Firebase\Messaging\Notification;
@@ -12,9 +13,11 @@ class FcmService
     protected $messaging = null;
     protected bool $enabled = false;
 
+    public const SILENT_TYPES = ['chat_message'];
+
     public function __construct()
     {
-        $this->enabled = (bool) config('firebase.send_notifications', false);
+        $this->enabled = (bool) config('firebase.send_notifications', true);
 
         if (!$this->enabled) {
             Log::debug('FCM notifications disabled in config.');
@@ -41,93 +44,174 @@ class FcmService
             $factory = (new Factory)->withServiceAccount($credentials);
             $this->messaging = $factory->createMessaging();
             Log::info('FCM service initialized successfully.');
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('FCM initialization failed: ' . $e->getMessage());
             $this->messaging = null;
         }
     }
 
     // ============================================================
-    // PUBLIC METHODS
+    // PREFERRED ENTRY POINT
     // ============================================================
 
-    /**
-     * Send notification to a User model (looks up the device token automatically)
-     * Used by RequestController and other places.
-     */
-    public function sendToUser($user, string $title, string $body, array $data = []): bool
+    public function sendFromNotification(NotificationModel $notification): bool
     {
-        $token = $this->getUserToken($user);
+        $user = $notification->user;
 
-        if (!$token) {
-            Log::info('User has no FCM token', ['user_id' => $user->id ?? null]);
+        if (!$user) {
+            Log::warning('Notification has no user', ['id' => $notification->id]);
             return false;
         }
 
-        return $this->sendToDevice($token, $title, $body, $data);
+        $token = $this->getUserToken($user);
+        if (!$token) {
+            Log::info('User has no FCM token', ['user_id' => $user->id]);
+            return false;
+        }
+
+        $title = trim((string) $notification->title);
+        $body  = trim((string) $notification->body);
+
+        if (!$this->isValidText($title) || !$this->isValidText($body)) {
+            Log::error('Notification row has invalid title/body — push skipped', [
+                'id'    => $notification->id,
+                'type'  => $notification->type,
+                'title' => $title,
+                'body'  => $body,
+            ]);
+            return false;
+        }
+
+        $type = (string) ($notification->type ?? 'general');
+
+        $data = array_merge(
+            is_array($notification->data) ? $notification->data : [],
+            [
+                'type'            => $type,
+                'notification_id' => (string) $notification->id,
+                'title'           => $title,
+                'body'            => $body,
+                'click_action'    => 'FLUTTER_NOTIFICATION_CLICK',
+            ]
+        );
+
+        if (in_array($type, self::SILENT_TYPES, true)) {
+            return $this->sendSilentDataToDevice($token, $data);
+        }
+
+        return $this->sendVisible(
+            $token,
+            $title,
+            $body,
+            $data,
+            $this->unreadCountFor($user)
+        );
     }
 
-    /**
-     * Send standard notification with System Tray Popup
-     * (Used for non-chat alerts: requests, approvals, etc.)
-     */
-    public function sendToDevice(string $deviceToken, string $title, string $body, array $data = []): bool
-    {
-        if (!$this->enabled || !$this->messaging || empty($deviceToken)) {
+    // ============================================================
+    // SENDERS — kreait/firebase-php v8 API (CloudMessage::new()->withToken)
+    // ============================================================
+
+    protected function sendVisible(
+        string $deviceToken,
+        string $title,
+        string $body,
+        array $data,
+        int $badge
+    ): bool {
+        if (!$this->ready($deviceToken)) {
             return false;
         }
 
-        // Never allow empty or pure numbers as title/body
-        $cleanTitle = $this->sanitizeText($title, 'NearbyFundi');
-        $cleanBody  = $this->sanitizeText($body, 'You have a new update');
-
         try {
-            $notification = Notification::create($cleanTitle, $cleanBody);
-
             $message = CloudMessage::new()
                 ->withToken($deviceToken)
-                ->withNotification($notification)
+                ->withNotification(Notification::create($title, $body))
+                ->withAndroidConfig([
+                    'priority' => 'high',
+                    'notification' => [
+                        'title'                   => $title,
+                        'body'                    => $body,
+                        'sound'                   => 'default',
+                        'click_action'            => 'FLUTTER_NOTIFICATION_CLICK',
+                        'channel_id'              => 'fundi_channel',
+                        'notification_priority'   => 'PRIORITY_MAX',
+                        'default_vibrate_timings' => true,
+                    ],
+                ])
+                ->withApnsConfig([
+                    'headers' => [
+                        'apns-priority'  => '10',
+                        'apns-push-type' => 'alert',
+                    ],
+                    'payload' => [
+                        'aps' => [
+                            'alert' => [
+                                'title' => $title,
+                                'body'  => $body,
+                            ],
+                            'sound' => 'default',
+                            'badge' => $badge,
+                        ],
+                    ],
+                ])
                 ->withData($this->sanitizeData($data));
 
             $this->messaging->send($message);
             return true;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('FCM send failed: ' . $e->getMessage());
             return false;
         }
     }
 
-    /**
-     * Send DATA-ONLY message (no system tray popup)
-     * Used for silent badge updates and chat messages.
-     */
     public function sendSilentDataToDevice(string $deviceToken, array $data = []): bool
     {
-        if (!$this->enabled || !$this->messaging || empty($deviceToken)) {
+        if (!$this->ready($deviceToken)) {
             return false;
         }
 
         try {
             $message = CloudMessage::new()
                 ->withToken($deviceToken)
+                ->withAndroidConfig([
+                    'priority' => 'high',
+                    // No 'notification' key → Android shows nothing in the tray.
+                ])
+                ->withApnsConfig([
+                    'headers' => [
+                        'apns-priority'  => '5',
+                        'apns-push-type' => 'background',
+                    ],
+                    'payload' => [
+                        'aps' => [
+                            'content-available' => 1,
+                        ],
+                    ],
+                ])
                 ->withData($this->sanitizeData($data));
 
             $this->messaging->send($message);
             Log::info('Silent FCM data message sent successfully');
             return true;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('Silent FCM send failed: ' . $e->getMessage());
             return false;
         }
     }
 
-    /**
-     * Send Chat Notification (Silent / Data-Only – no system tray)
-     */
     public function sendChatNotification($receiver, $sender, $message, $conversationId): bool
     {
         if (!$receiver || !$sender || !$message) {
             Log::warning('Missing data for chat notification');
+            return false;
+        }
+
+        if (!is_object($sender) || !is_object($message)) {
+            Log::error('sendChatNotification() requires model objects', [
+                'sender_type'  => get_debug_type($sender),
+                'message_type' => get_debug_type($message),
+            ]);
             return false;
         }
 
@@ -137,21 +221,26 @@ class FcmService
             return false;
         }
 
-        // Unread count for badge (you can later exclude chat if needed)
-        $unreadCount = $receiver->notifications()
-            ->where('is_read', false)
-            ->count();
+        // Sanitize title/body — never a bare number or empty string.
+        $senderName = trim((string) ($sender->name ?? ''));
+        $title      = $senderName !== '' ? $senderName : 'New Message';
+
+        $body = $this->getNotificationBody($message);
+        $body = trim($body);
+        if (!$this->isValidText($body)) {
+            $body = 'New message';
+        }
 
         $data = [
             'type'            => 'chat_message',
-            'title'           => $sender->name ?? 'New Message',
-            'body'            => $this->getNotificationBody($message),
+            'title'           => $title,
+            'body'            => $body,
             'conversation_id' => (string) $conversationId,
             'message_id'      => (string) ($message->id ?? ''),
-            'sender_id'       => (string) $sender->id,
-            'sender_name'     => $sender->name ?? 'Unknown',
+            'sender_id'       => (string) ($sender->id ?? ''),
+            'sender_name'     => $senderName !== '' ? $senderName : 'Unknown',
             'message_type'    => $message->message_type ?? 'text',
-            'unread_count'    => (string) ($unreadCount + 1),
+            'unread_count'    => (string) ($this->unreadCountFor($receiver) + 1),
             'timestamp'       => now()->toIso8601String(),
             'priority'        => 'high',
         ];
@@ -169,32 +258,34 @@ class FcmService
     // HELPERS
     // ============================================================
 
-    /**
-     * Sanitize title/body – never empty, never pure number
-     */
-    protected function sanitizeText(?string $value, string $fallback): string
+    protected function ready(string $deviceToken): bool
     {
-        $text = trim((string) $value);
-
-        if ($text === '' || is_numeric($text)) {
-            return $fallback;
-        }
-
-        return $text;
+        return $this->enabled && $this->messaging && !empty($deviceToken);
     }
 
-    /**
-     * Convert any payload values to strings (FCM requirement)
-     */
+    protected function isValidText(string $value): bool
+    {
+        return $value !== '' && !is_numeric($value);
+    }
+
+    protected function unreadCountFor($user): int
+    {
+        try {
+            return (int) $user->notifications()
+                ->where('is_read', false)
+                ->where('type', '!=', 'chat_message')
+                ->count();
+        } catch (\Throwable $e) {
+            return 0;
+        }
+    }
+
     protected function sanitizeData(array $data): array
     {
         $sanitized = [];
-
         foreach ($data as $key => $value) {
             if ($value === null) {
                 $sanitized[$key] = '';
-            } elseif (is_int($value) || is_float($value)) {
-                $sanitized[$key] = (string) $value;
             } elseif (is_bool($value)) {
                 $sanitized[$key] = $value ? 'true' : 'false';
             } elseif (is_array($value) || is_object($value)) {
@@ -203,47 +294,29 @@ class FcmService
                 $sanitized[$key] = (string) $value;
             }
         }
-
         return $sanitized;
     }
 
-    /**
-     * Resolve the device token from a user model
-     */
     protected function getUserToken($user): ?string
     {
-        if (!$user) {
-            return null;
-        }
+        if (!$user) return null;
+        if (!empty($user->fcm_device_token)) return $user->fcm_device_token;
+        if (!empty($user->device_token))    return $user->device_token;
 
-        if (!empty($user->fcm_device_token)) {
-            return $user->fcm_device_token;
-        }
-
-        if (!empty($user->device_token)) {
-            return $user->device_token;
-        }
-
-        if (method_exists($user, 'deviceTokens') && $user->deviceTokens) {
+        if (method_exists($user, 'deviceTokens') && $user->deviceTokens()) {
             $latest = $user->deviceTokens()->latest()->first();
-            if ($latest) {
-                return $latest->token;
-            }
+            if ($latest) return $latest->token;
         }
-
         return null;
     }
 
-    /**
-     * Build a readable body for chat messages
-     */
     protected function getNotificationBody($message): string
     {
-        if (empty($message)) {
+        if (empty($message) || !is_object($message)) {
             return 'New message';
         }
 
-        if (isset($message->message_type) && $message->message_type === 'text') {
+        if (($message->message_type ?? 'text') === 'text') {
             $content = trim((string) ($message->content ?? ''));
             return $content !== '' ? $content : 'New message';
         }
@@ -255,16 +328,14 @@ class FcmService
             'file'  => '📎 File',
         ];
 
-        $type = $fileTypeMap[$message->message_type ?? 'file'] ?? '📎 Attachment';
+        $type = $fileTypeMap[$message->message_type] ?? '📎 Attachment';
 
         if (!empty($message->file_name)) {
             $type .= ': ' . $message->file_name;
         }
-
         if (!empty($message->content)) {
             $type .= ' - ' . substr($message->content, 0, 50);
         }
-
         return $type;
     }
 }

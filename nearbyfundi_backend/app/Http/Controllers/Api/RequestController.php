@@ -7,11 +7,13 @@ use App\Models\RequestLog;
 use App\Models\Notification;
 use App\Models\Service;
 use App\Models\ServiceCategory;
+use App\Models\User;
 use App\Events\RequestCreated;
 use App\Events\RequestStatusUpdated;
 use App\Mail\RequestAcceptedMail;
 use App\Mail\RequestCreatedMail;
 use App\Mail\RequestCompletedMail;
+use App\Notifications\NewActivityNotification;
 use App\Services\FcmService;
 use App\Services\SmsNotificationService;
 use App\Traits\Auditable;
@@ -61,35 +63,40 @@ class RequestController extends BaseApiController
         }
     }
 
-    /**
-     * Create a clean DB notification.
-     * Title & body are always sanitized – never empty or numeric.
-     */
+
+
     private function createNotification(int $userId, string $title, string $body, string $type, array $data = []): void
-    {
-        try {
-            $cleanTitle = (trim($title) !== '' && !is_numeric($title))
-                ? trim($title)
-                : 'NearbyFundi';
-
-            $cleanBody = (trim($body) !== '' && !is_numeric($body))
-                ? trim($body)
-                : 'You have a new update';
-
-            $sanitizedData = $this->sanitizeData($data);
-
-            Notification::create([
-                'user_id' => $userId,
-                'title'   => $cleanTitle,
-                'body'    => $cleanBody,
-                'type'    => $type,
-                'data'    => $sanitizedData,
-                'is_read' => false,
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Failed to create notification: ' . $e->getMessage());
+{
+    try {
+        $user = User::find($userId);
+        if (!$user) {
+            Log::warning('createNotification: user not found', ['user_id' => $userId]);
+            return;
         }
+
+        $cleanTitle = (trim($title) !== '' && !is_numeric($title))
+            ? trim($title) : config('app.name', 'NearbyFundi');
+
+        $cleanBody = (trim($body) !== '' && !is_numeric($body))
+            ? trim($body) : 'You have a new update';
+
+        // 1. DB row
+        $notification = Notification::create([
+            'user_id' => $userId,
+            'title'   => $cleanTitle,
+            'body'    => $cleanBody,
+            'type'    => $type,
+            'data'    => $this->sanitizeData($data),
+            'is_read' => false,
+        ]);
+
+        // 2. FCM push (data-only for chat, visible otherwise)
+        app(FcmService::class)->sendFromNotification($notification->fresh('user'));
+
+    } catch (\Throwable $e) {
+        Log::error('Failed to create notification: ' . $e->getMessage());
     }
+}
 
     private function sanitizeData(array $data): array
     {
@@ -111,7 +118,8 @@ class RequestController extends BaseApiController
     }
 
     /**
-     * Send push + DB notification to customer about request status change
+     * Send DB notification to customer about request status change.
+     * FCM is handled by NewActivityNotification.
      */
     private function notifyCustomer(ServiceRequest $request, string $event, ?string $customTitle = null, ?string $customBody = null): void
     {
@@ -137,7 +145,8 @@ class RequestController extends BaseApiController
 
         $title = $customTitle ?? ($titles[$event] ?? 'Request Update');
         $body  = $customBody  ?? ($bodies[$event]  ?? "Your request #{$request->id} is now: " . str_replace('_', ' ', $event));
-        $data  = [
+
+        $data = [
             'request_id' => $request->id,
             'status'     => $event,
             'type'       => 'request_' . $event,
@@ -145,7 +154,6 @@ class RequestController extends BaseApiController
 
         try {
             if ($request->customer) {
-                $this->fcm->sendToUser($request->customer, $title, $body, $this->sanitizeData($data));
                 $this->createNotification(
                     $request->customer_id,
                     $title,
@@ -159,9 +167,6 @@ class RequestController extends BaseApiController
         }
     }
 
-    /**
-     * Haversine distance in km
-     */
     private function haversineDistance($lat1, $lon1, $lat2, $lon2): float
     {
         $earthRadius = 6371;
@@ -174,9 +179,6 @@ class RequestController extends BaseApiController
         return $earthRadius * $c;
     }
 
-    /**
-     * Check if the authenticated fundi owns this request
-     */
     private function isAssignedFundi($user, ServiceRequest $serviceRequest): bool
     {
         return $user
@@ -189,10 +191,6 @@ class RequestController extends BaseApiController
     // PUBLIC METHODS
     // ============================================================
 
-    /**
-     * Get services with their categories for request creation
-     * GET /v4/request-services
-     */
     public function getServicesWithCategories(Request $request)
     {
         try {
@@ -225,10 +223,6 @@ class RequestController extends BaseApiController
         }
     }
 
-    /**
-     * Get technicians by service and category
-     * GET /v4/technicians/by-service-category
-     */
     public function getTechniciansByServiceCategory(Request $request)
     {
         try {
@@ -283,10 +277,6 @@ class RequestController extends BaseApiController
         }
     }
 
-    /**
-     * CUSTOMER: Create a new request
-     * POST /v4/requests
-     */
     public function store(Request $request)
     {
         try {
@@ -393,33 +383,19 @@ class RequestController extends BaseApiController
                 Log::error('Failed to send request created email: ' . $e->getMessage());
             }
 
+            // Notify technician about new request
             try {
                 if ($serviceRequest->technician && $serviceRequest->technician->user) {
                     $technicianUser = $serviceRequest->technician->user;
                     $serviceName    = $serviceRequest->service->name ?? 'Service';
                     $categoryName   = $serviceRequest->category->category_name ?? '';
 
-                    $title = 'New Service Request';
-                    $body  = "You have a new request for {$serviceName}" . ($categoryName ? " ({$categoryName})" : '');
-
-                    $this->fcm->sendToUser(
-                        $technicianUser,
-                        $title,
-                        $body,
-                        $this->sanitizeData([
-                            'request_id'    => $serviceRequest->id,
-                            'type'          => 'new_request',
-                            'customer_name' => $user->name ?? 'Customer',
-                            'service_name'  => $serviceName,
-                            'category_name' => $categoryName,
-                            'description'   => $serviceRequest->description,
-                        ])
-                    );
-
                     $this->createNotification(
                         $technicianUser->id,
-                        $title,
-                        $body . " from {$user->name}",
+                        'New Service Request',
+                        "You have a new request for {$serviceName}"
+                            . ($categoryName ? " ({$categoryName})" : '')
+                            . " from {$user->name}",
                         'new_request',
                         [
                             'request_id'    => $serviceRequest->id,
@@ -459,10 +435,6 @@ class RequestController extends BaseApiController
         }
     }
 
-    /**
-     * Update request status
-     * PATCH /v4/requests/{id}/status
-     */
     public function updateStatus(Request $request, $id)
     {
         try {
@@ -481,7 +453,6 @@ class RequestController extends BaseApiController
 
             $allowed = false;
 
-            // FUNDI
             if ($user->hasRole('FUNDI')) {
                 if (!$this->isAssignedFundi($user, $serviceRequest)) {
                     return $this->forbidden(
@@ -504,16 +475,12 @@ class RequestController extends BaseApiController
                 if ($newStatus === 'completed' && in_array($oldStatus, ['accepted', 'on_the_way', 'arrived', 'in_progress'])) {
                     $allowed = true;
                 }
-            }
-            // CUSTOMER
-            elseif ($user->hasRole('CUSTOMER') && $newStatus === 'cancelled' && $oldStatus === 'pending') {
+            } elseif ($user->hasRole('CUSTOMER') && $newStatus === 'cancelled' && $oldStatus === 'pending') {
                 if ((int) $user->id !== (int) $serviceRequest->customer_id) {
                     return $this->forbidden('You can only cancel your own requests.');
                 }
                 $allowed = true;
-            }
-            // ADMIN / STAFF
-            elseif ($user->can('requests.status.update')) {
+            } elseif ($user->can('requests.status.update')) {
                 $allowed = true;
             }
 
@@ -571,36 +538,18 @@ class RequestController extends BaseApiController
         }
     }
 
-    /**
-     * Handle status change side-effects
-     */
     private function handleStatusChange(ServiceRequest $serviceRequest, string $newStatus): void
     {
         try {
             switch ($newStatus) {
-                case 'accepted':
-                    $this->handleAccepted($serviceRequest);
-                    break;
-                case 'rejected':
-                    $this->handleRejected($serviceRequest);
-                    break;
-                case 'cancelled':
-                    $this->handleCancelled($serviceRequest);
-                    break;
-                case 'in_progress':
-                    $this->handleInProgress($serviceRequest);
-                    break;
-                case 'completed':
-                    $this->handleCompleted($serviceRequest);
-                    break;
-                case 'on_the_way':
-                    $this->handleOnTheWay($serviceRequest);
-                    break;
-                case 'arrived':
-                    $this->handleArrived($serviceRequest);
-                    break;
-                default:
-                    break;
+                case 'accepted':    $this->handleAccepted($serviceRequest);    break;
+                case 'rejected':    $this->handleRejected($serviceRequest);    break;
+                case 'cancelled':   $this->handleCancelled($serviceRequest);   break;
+                case 'in_progress': $this->handleInProgress($serviceRequest);  break;
+                case 'completed':   $this->handleCompleted($serviceRequest);   break;
+                case 'on_the_way':  $this->handleOnTheWay($serviceRequest);    break;
+                case 'arrived':     $this->handleArrived($serviceRequest);     break;
+                default: break;
             }
         } catch (\Exception $e) {
             Log::error('Error handling status change: ' . $e->getMessage());
@@ -619,7 +568,6 @@ class RequestController extends BaseApiController
             Log::error('Failed to send accepted email: ' . $e->getMessage());
         }
 
-        // SMS to customer
         try {
             $technician = $serviceRequest->technician;
             $customer   = $serviceRequest->customer;
@@ -653,25 +601,10 @@ class RequestController extends BaseApiController
         try {
             $techName = $serviceRequest->technician->user->name ?? 'the fundi';
             if ($serviceRequest->customer) {
-                $title = 'Request Accepted';
-                $body  = "Your request has been accepted by {$techName}.";
-
-                $this->fcm->sendToUser(
-                    $serviceRequest->customer,
-                    $title,
-                    $body,
-                    $this->sanitizeData([
-                        'request_id'      => $serviceRequest->id,
-                        'status'          => 'accepted',
-                        'type'            => 'request_accepted',
-                        'technician_name' => $techName,
-                    ])
-                );
-
                 $this->createNotification(
                     $serviceRequest->customer_id,
-                    $title,
-                    $body,
+                    'Request Accepted',
+                    "Your request has been accepted by {$techName}.",
                     'request_accepted',
                     [
                         'request_id'      => $serviceRequest->id,
@@ -689,24 +622,10 @@ class RequestController extends BaseApiController
     {
         try {
             if ($serviceRequest->customer) {
-                $title = 'Request Rejected';
-                $body  = 'Sorry, your request has been rejected.';
-
-                $this->fcm->sendToUser(
-                    $serviceRequest->customer,
-                    $title,
-                    $body,
-                    $this->sanitizeData([
-                        'request_id' => $serviceRequest->id,
-                        'status'     => 'rejected',
-                        'type'       => 'request_rejected',
-                    ])
-                );
-
                 $this->createNotification(
                     $serviceRequest->customer_id,
-                    $title,
-                    $body,
+                    'Request Rejected',
+                    'Sorry, your request has been rejected.',
                     'request_rejected',
                     ['request_id' => $serviceRequest->id]
                 );
@@ -721,24 +640,11 @@ class RequestController extends BaseApiController
         try {
             if ($serviceRequest->technician && $serviceRequest->technician->user) {
                 $techUser = $serviceRequest->technician->user;
-                $title    = 'Request Cancelled';
-                $body     = "Customer cancelled request #{$serviceRequest->id}.";
-
-                $this->fcm->sendToUser(
-                    $techUser,
-                    $title,
-                    $body,
-                    $this->sanitizeData([
-                        'request_id' => $serviceRequest->id,
-                        'status'     => 'cancelled',
-                        'type'       => 'request_cancelled',
-                    ])
-                );
 
                 $this->createNotification(
                     $techUser->id,
-                    $title,
-                    $body,
+                    'Request Cancelled',
+                    "Customer cancelled request #{$serviceRequest->id}.",
                     'request_cancelled',
                     [
                         'request_id'    => $serviceRequest->id,
@@ -755,24 +661,10 @@ class RequestController extends BaseApiController
     {
         try {
             if ($serviceRequest->customer) {
-                $title = 'Request In Progress';
-                $body  = 'Your request is now in progress.';
-
-                $this->fcm->sendToUser(
-                    $serviceRequest->customer,
-                    $title,
-                    $body,
-                    $this->sanitizeData([
-                        'request_id' => $serviceRequest->id,
-                        'status'     => 'in_progress',
-                        'type'       => 'request_in_progress',
-                    ])
-                );
-
                 $this->createNotification(
                     $serviceRequest->customer_id,
-                    $title,
-                    $body,
+                    'Request In Progress',
+                    'Your request is now in progress.',
                     'request_in_progress',
                     ['request_id' => $serviceRequest->id]
                 );
@@ -795,25 +687,10 @@ class RequestController extends BaseApiController
         try {
             $techName = $serviceRequest->technician->user->name ?? 'the fundi';
             if ($serviceRequest->customer) {
-                $title = 'Request Completed';
-                $body  = "Your request has been completed by {$techName}.";
-
-                $this->fcm->sendToUser(
-                    $serviceRequest->customer,
-                    $title,
-                    $body,
-                    $this->sanitizeData([
-                        'request_id'      => $serviceRequest->id,
-                        'status'          => 'completed',
-                        'type'            => 'request_completed',
-                        'technician_name' => $techName,
-                    ])
-                );
-
                 $this->createNotification(
                     $serviceRequest->customer_id,
-                    $title,
-                    $body,
+                    'Request Completed',
+                    "Your request has been completed by {$techName}.",
                     'request_completed',
                     [
                         'request_id'      => $serviceRequest->id,
@@ -849,10 +726,6 @@ class RequestController extends BaseApiController
         );
     }
 
-    /**
-     * Cancel a request (customer only, pending only)
-     * DELETE /v4/requests/{id}/cancel
-     */
     public function cancel($id, Request $request)
     {
         try {
@@ -906,10 +779,6 @@ class RequestController extends BaseApiController
         }
     }
 
-    /**
-     * Get authenticated user's requests (customer or technician)
-     * GET /v4/requests/my
-     */
     public function myRequests(Request $request)
     {
         try {
@@ -968,10 +837,6 @@ class RequestController extends BaseApiController
         }
     }
 
-    /**
-     * Admin: list all requests with filters
-     * GET /v4/requests
-     */
     public function index(Request $request)
     {
         try {
@@ -989,27 +854,14 @@ class RequestController extends BaseApiController
                 },
             ]);
 
-            if ($request->filled('status')) {
-                $query->where('status', $request->status);
-            }
-            if ($request->filled('customer_id')) {
-                $query->where('customer_id', $request->customer_id);
-            }
-            if ($request->filled('technician_id')) {
-                $query->where('technician_id', $request->technician_id);
-            }
-            if ($request->filled('service_id')) {
-                $query->where('service_id', $request->service_id);
-            }
-            if ($request->filled('category_id')) {
-                $query->where('category_id', $request->category_id);
-            }
-            if ($request->filled('date_from')) {
-                $query->whereDate('created_at', '>=', $request->date_from);
-            }
-            if ($request->filled('date_to')) {
-                $query->whereDate('created_at', '<=', $request->date_to);
-            }
+            if ($request->filled('status'))         $query->where('status', $request->status);
+            if ($request->filled('customer_id'))    $query->where('customer_id', $request->customer_id);
+            if ($request->filled('technician_id'))  $query->where('technician_id', $request->technician_id);
+            if ($request->filled('service_id'))     $query->where('service_id', $request->service_id);
+            if ($request->filled('category_id'))    $query->where('category_id', $request->category_id);
+            if ($request->filled('date_from'))      $query->whereDate('created_at', '>=', $request->date_from);
+            if ($request->filled('date_to'))        $query->whereDate('created_at', '<=', $request->date_to);
+
             if ($request->filled('search')) {
                 $search = $request->search;
                 $query->where(function ($q) use ($search) {
@@ -1046,10 +898,6 @@ class RequestController extends BaseApiController
         }
     }
 
-    /**
-     * Admin: show single request details
-     * GET /v4/requests/{id}
-     */
     public function show($id, Request $request)
     {
         try {
@@ -1076,10 +924,6 @@ class RequestController extends BaseApiController
         }
     }
 
-    /**
-     * Admin: delete a request
-     * DELETE /v4/requests/{id}
-     */
     public function destroy($id, Request $request)
     {
         try {
@@ -1105,10 +949,6 @@ class RequestController extends BaseApiController
         }
     }
 
-    /**
-     * Get logs for a specific request (admin)
-     * GET /v4/requests/{requestId}/logs
-     */
     public function logs($requestId, Request $request)
     {
         try {
@@ -1128,10 +968,6 @@ class RequestController extends BaseApiController
         }
     }
 
-    /**
-     * Get request statistics (admin)
-     * GET /v4/requests/stats
-     */
     public function stats(Request $request)
     {
         try {
@@ -1161,10 +997,6 @@ class RequestController extends BaseApiController
         }
     }
 
-    /**
-     * Get requests for the authenticated customer
-     * GET /v4/requests/customer
-     */
     public function customerRequests(Request $request)
     {
         try {
@@ -1194,10 +1026,6 @@ class RequestController extends BaseApiController
         }
     }
 
-    /**
-     * Get requests for the authenticated technician
-     * GET /v4/requests/technician
-     */
     public function technicianRequests(Request $request)
     {
         try {
@@ -1244,10 +1072,6 @@ class RequestController extends BaseApiController
     // TRACKING METHODS
     // ============================================================
 
-    /**
-     * Technician marks request as "On the Way"
-     * PATCH /v4/requests/{id}/on-the-way
-     */
     public function markOnTheWay(Request $request, $id)
     {
         try {
@@ -1301,10 +1125,6 @@ class RequestController extends BaseApiController
         }
     }
 
-    /**
-     * Technician marks request as "Arrived"
-     * PATCH /v4/requests/{id}/arrive
-     */
     public function markArrived(Request $request, $id)
     {
         try {
@@ -1358,10 +1178,6 @@ class RequestController extends BaseApiController
         }
     }
 
-    /**
-     * Get live tracking data for a request
-     * GET /v4/requests/{id}/tracking
-     */
     public function trackingData($id)
     {
         try {
@@ -1377,7 +1193,7 @@ class RequestController extends BaseApiController
 
             if ($customerLat && $customerLng && $techLat && $techLng) {
                 $distance   = $this->haversineDistance($customerLat, $customerLng, $techLat, $techLng);
-                $etaMinutes = $distance * 2; // ~30 km/h average
+                $etaMinutes = $distance * 2;
                 $eta        = now()->addMinutes($etaMinutes)->toIso8601String();
             }
 
@@ -1403,10 +1219,6 @@ class RequestController extends BaseApiController
         }
     }
 
-    /**
-     * Update customer location for a request
-     * POST /v4/requests/{id}/location
-     */
     public function updateLocation(Request $request, $id)
     {
         try {
