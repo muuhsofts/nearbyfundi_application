@@ -1,22 +1,13 @@
 // src/pages/faqs/FaqFormModal.js
 import React, { useState, useEffect } from 'react';
 import {
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    TextField,
-    Button,
-    Box,
-    CircularProgress,
-    useMediaQuery,
-    useTheme,
-    Typography,
-    IconButton,
-    Stack,
+    Dialog, DialogTitle, DialogContent, DialogActions, TextField, Button,
+    CircularProgress, useMediaQuery, useTheme, Typography, IconButton, Stack,
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
+import { useLanguage } from 'context/LanguageContext';
 import { showSnackbar } from 'utils/snackbar';
+import { tFaq } from './faqlang';
 import appConfig from '../../config';
 
 const colors = appConfig.app.colors;
@@ -24,6 +15,8 @@ const colors = appConfig.app.colors;
 export default function FaqFormModal({ open, onClose, faq, createFaq, updateFaq }) {
     const theme = useTheme();
     const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
+    const { language } = useLanguage();
+    const t = (key) => tFaq(language, key);
 
     const [loading, setLoading] = useState(false);
     const [form, setForm] = useState({ question: '', answer: '', order: 0 });
@@ -50,9 +43,9 @@ export default function FaqFormModal({ open, onClose, faq, createFaq, updateFaq 
 
     const validate = () => {
         const newErrors = {};
-        if (!form.question.trim()) newErrors.question = 'Question is required';
-        if (!form.answer.trim()) newErrors.answer = 'Answer is required';
-        if (form.order < 0) newErrors.order = 'Order must be a positive number';
+        if (!form.question.trim()) newErrors.question = t('faq.modal.questionRequired');
+        if (!form.answer.trim()) newErrors.answer = t('faq.modal.answerRequired');
+        if (form.order < 0) newErrors.order = t('faq.modal.orderPositive');
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
@@ -65,14 +58,17 @@ export default function FaqFormModal({ open, onClose, faq, createFaq, updateFaq 
         try {
             if (faq) {
                 await updateFaq(faq.id, form);
-                showSnackbar({ type: 'success', message: 'FAQ updated successfully' });
+                showSnackbar({ type: 'success', message: t('faq.modal.updated') });
             } else {
                 await createFaq(form);
-                showSnackbar({ type: 'success', message: 'FAQ created successfully' });
+                showSnackbar({ type: 'success', message: t('faq.modal.created') });
             }
             onClose(true);
         } catch (err) {
-            showSnackbar({ type: 'error', message: err.response?.data?.message || 'Operation failed' });
+            showSnackbar({
+                type: 'error',
+                message: err.response?.data?.message || t('faq.modal.failed'),
+            });
         } finally {
             setLoading(false);
         }
@@ -91,7 +87,7 @@ export default function FaqFormModal({ open, onClose, faq, createFaq, updateFaq 
                     border: '1px solid',
                     borderColor: 'divider',
                     margin: fullScreen ? 0 : 2,
-                }
+                },
             }}
         >
             <form onSubmit={handleSubmit}>
@@ -108,14 +104,11 @@ export default function FaqFormModal({ open, onClose, faq, createFaq, updateFaq 
                         color: 'text.primary',
                     }}
                 >
-                    {faq ? 'Edit FAQ' : 'Create New FAQ'}
+                    {faq ? t('faq.modal.editTitle') : t('faq.modal.createTitle')}
                     <IconButton
                         onClick={() => onClose(false)}
                         size="small"
-                        sx={{
-                            color: 'text.secondary',
-                            '&:hover': { bgcolor: 'action.hover' },
-                        }}
+                        sx={{ color: 'text.secondary', '&:hover': { bgcolor: 'action.hover' } }}
                     >
                         <CloseIcon />
                     </IconButton>
@@ -124,13 +117,11 @@ export default function FaqFormModal({ open, onClose, faq, createFaq, updateFaq 
                 <DialogContent sx={{ pt: 3, pb: 1 }}>
                     <Stack spacing={2.5}>
                         <Typography variant="body2" color="text.secondary">
-                            {faq
-                                ? 'Update the frequently asked question and answer below.'
-                                : 'Create a new frequently asked question.'}
+                            {faq ? t('faq.modal.editDesc') : t('faq.modal.createDesc')}
                         </Typography>
 
                         <TextField
-                            label="Question"
+                            label={t('faq.modal.question')}
                             name="question"
                             value={form.question}
                             onChange={handleChange}
@@ -140,15 +131,13 @@ export default function FaqFormModal({ open, onClose, faq, createFaq, updateFaq 
                             rows={2}
                             error={!!errors.question}
                             helperText={errors.question}
-                            placeholder="Enter the frequently asked question..."
+                            placeholder={t('faq.modal.questionPlaceholder')}
                             disabled={loading}
                             sx={{
                                 '& .MuiOutlinedInput-root': {
                                     borderRadius: 2,
                                     bgcolor: 'action.hover',
-                                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                                        borderColor: colors.sea,
-                                    },
+                                    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: colors.sea },
                                     '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
                                         borderColor: colors.sea,
                                         borderWidth: 2,
@@ -156,15 +145,13 @@ export default function FaqFormModal({ open, onClose, faq, createFaq, updateFaq 
                                 },
                                 '& .MuiInputLabel-root': {
                                     color: 'text.secondary',
-                                    '&.Mui-focused': {
-                                        color: colors.sea,
-                                    },
+                                    '&.Mui-focused': { color: colors.sea },
                                 },
                             }}
                         />
 
                         <TextField
-                            label="Answer"
+                            label={t('faq.modal.answer')}
                             name="answer"
                             value={form.answer}
                             onChange={handleChange}
@@ -174,15 +161,13 @@ export default function FaqFormModal({ open, onClose, faq, createFaq, updateFaq 
                             rows={4}
                             error={!!errors.answer}
                             helperText={errors.answer}
-                            placeholder="Enter the answer to the question..."
+                            placeholder={t('faq.modal.answerPlaceholder')}
                             disabled={loading}
                             sx={{
                                 '& .MuiOutlinedInput-root': {
                                     borderRadius: 2,
                                     bgcolor: 'action.hover',
-                                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                                        borderColor: colors.sea,
-                                    },
+                                    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: colors.sea },
                                     '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
                                         borderColor: colors.sea,
                                         borderWidth: 2,
@@ -190,31 +175,27 @@ export default function FaqFormModal({ open, onClose, faq, createFaq, updateFaq 
                                 },
                                 '& .MuiInputLabel-root': {
                                     color: 'text.secondary',
-                                    '&.Mui-focused': {
-                                        color: colors.sea,
-                                    },
+                                    '&.Mui-focused': { color: colors.sea },
                                 },
                             }}
                         />
 
                         <TextField
-                            label="Display Order"
+                            label={t('faq.modal.order')}
                             name="order"
                             type="number"
                             value={form.order}
                             onChange={handleChange}
                             fullWidth
                             error={!!errors.order}
-                            helperText={errors.order || "Lower numbers appear first in the list"}
+                            helperText={errors.order || t('faq.modal.orderHelp')}
                             InputProps={{ inputProps: { min: 0 } }}
                             disabled={loading}
                             sx={{
                                 '& .MuiOutlinedInput-root': {
                                     borderRadius: 2,
                                     bgcolor: 'action.hover',
-                                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                                        borderColor: colors.sea,
-                                    },
+                                    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: colors.sea },
                                     '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
                                         borderColor: colors.sea,
                                         borderWidth: 2,
@@ -222,9 +203,7 @@ export default function FaqFormModal({ open, onClose, faq, createFaq, updateFaq 
                                 },
                                 '& .MuiInputLabel-root': {
                                     color: 'text.secondary',
-                                    '&.Mui-focused': {
-                                        color: colors.sea,
-                                    },
+                                    '&.Mui-focused': { color: colors.sea },
                                 },
                             }}
                         />
@@ -242,7 +221,7 @@ export default function FaqFormModal({ open, onClose, faq, createFaq, updateFaq 
                             '&:hover': { bgcolor: 'action.hover' },
                         }}
                     >
-                        Cancel
+                        {t('faq.modal.cancel')}
                     </Button>
                     <Button
                         type="submit"
@@ -258,7 +237,13 @@ export default function FaqFormModal({ open, onClose, faq, createFaq, updateFaq 
                             '&:disabled': { opacity: 0.6 },
                         }}
                     >
-                        {loading ? <CircularProgress size={24} color="inherit" /> : (faq ? 'Update' : 'Create')}
+                        {loading ? (
+                            <CircularProgress size={24} color="inherit" />
+                        ) : faq ? (
+                            t('faq.modal.update')
+                        ) : (
+                            t('faq.modal.create')
+                        )}
                     </Button>
                 </DialogActions>
             </form>

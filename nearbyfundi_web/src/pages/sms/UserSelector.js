@@ -1,32 +1,22 @@
 // src/pages/sms/UserSelector.jsx
 import React, { useState, useEffect } from 'react';
 import {
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    Button,
-    TextField,
-    InputAdornment,
-    List,
-    ListItem,
-    ListItemText,
-    ListItemAvatar,
-    Avatar,
-    Typography,
-    CircularProgress,
-    Box,
-    IconButton,
-    Divider,
-    Chip,
+    Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField,
+    InputAdornment, List, ListItem, ListItemText, ListItemAvatar, Avatar,
+    Typography, CircularProgress, Box, IconButton, Chip,
 } from '@mui/material';
 import { Search as SearchIcon, Close as CloseIcon, Person as PersonIcon } from '@mui/icons-material';
 import { useUserManagement } from 'hooks/useUser';
+import { useLanguage } from 'context/LanguageContext';
+import { tSms } from './smslang';
 import appConfig from '../../config';
 
 const colors = appConfig.app.colors;
 
 const UserSelector = ({ open, onClose, onSelect }) => {
+    const { language } = useLanguage();
+    const t = (key, replacements) => tSms(language, key, replacements);
+
     const [search, setSearch] = useState('');
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -35,9 +25,7 @@ const UserSelector = ({ open, onClose, onSelect }) => {
     const { getUsersDropdown } = useUserManagement();
 
     useEffect(() => {
-        if (open) {
-            loadUsers();
-        }
+        if (open) loadUsers();
     }, [open, search]);
 
     const loadUsers = async () => {
@@ -47,9 +35,7 @@ const UserSelector = ({ open, onClose, onSelect }) => {
                 search: search || undefined,
                 per_page: 20,
             });
-            if (response?.data?.data) {
-                setUsers(response.data.data);
-            }
+            if (response?.data?.data) setUsers(response.data.data);
         } catch (err) {
             console.error('Failed to load users:', err);
         } finally {
@@ -57,14 +43,10 @@ const UserSelector = ({ open, onClose, onSelect }) => {
         }
     };
 
-    const handleSelect = (user) => {
-        setSelectedUser(user);
-    };
+    const handleSelect = (user) => setSelectedUser(user);
 
     const handleConfirm = () => {
-        if (selectedUser) {
-            onSelect(selectedUser);
-        }
+        if (selectedUser) onSelect(selectedUser);
     };
 
     const handleClose = () => {
@@ -82,7 +64,7 @@ const UserSelector = ({ open, onClose, onSelect }) => {
             PaperProps={{ sx: { borderRadius: 2, backgroundColor: colors.light, maxHeight: '80vh' } }}
         >
             <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: colors.dark }}>
-                <Typography variant="h6">Select User</Typography>
+                <Typography variant="h6">{t('sms.userSelector.title')}</Typography>
                 <IconButton onClick={handleClose} size="small" sx={{ color: colors.rain }}>
                     <CloseIcon />
                 </IconButton>
@@ -91,7 +73,7 @@ const UserSelector = ({ open, onClose, onSelect }) => {
             <DialogContent>
                 <TextField
                     fullWidth
-                    placeholder="Search users by name, email, or phone..."
+                    placeholder={t('sms.userSelector.searchPlaceholder')}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     size="small"
@@ -115,7 +97,9 @@ const UserSelector = ({ open, onClose, onSelect }) => {
                     </Box>
                 ) : users.length === 0 ? (
                     <Box textAlign="center" py={3}>
-                        <Typography sx={{ color: colors.rain }}>No users found</Typography>
+                        <Typography sx={{ color: colors.rain }}>
+                            {t('sms.userSelector.noUsers')}
+                        </Typography>
                     </Box>
                 ) : (
                     <List sx={{ maxHeight: '50vh', overflow: 'auto' }}>
@@ -148,7 +132,7 @@ const UserSelector = ({ open, onClose, onSelect }) => {
                                             </Typography>
                                             {user.status === 'active' && (
                                                 <Chip
-                                                    label="Active"
+                                                    label={t('sms.common.active')}
                                                     size="small"
                                                     sx={{ height: 18, fontSize: 10, backgroundColor: colors.salat, color: 'white' }}
                                                 />
@@ -178,7 +162,7 @@ const UserSelector = ({ open, onClose, onSelect }) => {
 
             <DialogActions sx={{ p: 2, pt: 0 }}>
                 <Button onClick={handleClose} sx={{ color: colors.rain }}>
-                    Cancel
+                    {t('sms.common.cancel')}
                 </Button>
                 <Button
                     onClick={handleConfirm}
@@ -187,10 +171,10 @@ const UserSelector = ({ open, onClose, onSelect }) => {
                     sx={{
                         backgroundColor: colors.salat,
                         '&:hover': { backgroundColor: colors.dark },
-                        '&.Mui-disabled': { backgroundColor: colors.middle }
+                        '&.Mui-disabled': { backgroundColor: colors.middle },
                     }}
                 >
-                    Select User
+                    {t('sms.userSelector.selectButton')}
                 </Button>
             </DialogActions>
         </Dialog>

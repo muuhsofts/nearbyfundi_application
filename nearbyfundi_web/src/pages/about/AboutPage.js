@@ -1,37 +1,20 @@
 // src/pages/about/AboutPage.js
 import React, { useState, useEffect } from 'react';
 import {
-    Box,
-    Paper,
-    Typography,
-    Button,
-    CircularProgress,
-    Alert,
-    Card,
-    CardContent,
-    IconButton,
-    Tooltip,
-    TextField,
-    InputAdornment,
-    useMediaQuery,
-    useTheme,
-    Stack,
-    Grid,
-    alpha,
+    Box, Paper, Typography, Button, CircularProgress, Alert, Card, CardContent,
+    IconButton, TextField, InputAdornment, useMediaQuery, useTheme, Stack, Grid, alpha,
 } from '@mui/material';
 import {
-    Edit as EditIcon,
-    Refresh as RefreshIcon,
-    Add as AddIcon,
-    Search as SearchIcon,
-    Clear as ClearIcon,
-    Description as DescriptionIcon,
+    Edit as EditIcon, Refresh as RefreshIcon, Add as AddIcon,
+    Search as SearchIcon, Clear as ClearIcon, Description as DescriptionIcon,
     History as HistoryIcon,
 } from '@mui/icons-material';
 import { useAboutManagement } from 'hooks/useAbout';
 import { usePermissions } from 'hooks/usePermissions';
+import { useLanguage } from 'context/LanguageContext';
 import { showSnackbar } from 'utils/snackbar';
 import AboutFormModal from './AboutFormModal';
+import { tAbout } from './aboutlang';
 import appConfig from '../../config';
 
 const colors = appConfig.app.colors;
@@ -39,6 +22,8 @@ const colors = appConfig.app.colors;
 const AboutPage = () => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+    const { language } = useLanguage();
+    const t = (key) => tAbout(language, key);
 
     const { about, loading, error, getAbout, createAbout, updateAbout, clearError } = useAboutManagement();
     const { can } = usePermissions();
@@ -52,11 +37,13 @@ const AboutPage = () => {
         try {
             await getAbout();
         } catch {
-            showSnackbar({ type: 'error', message: 'Failed to load about content' });
+            showSnackbar({ type: 'error', message: t('about.loadFailed') });
         }
     };
 
-    useEffect(() => { loadAbout(); }, []);
+    useEffect(() => {
+        loadAbout();
+    }, []);
 
     const handleOpenModal = (data = null) => {
         setEditingAbout(data);
@@ -71,9 +58,10 @@ const AboutPage = () => {
 
     const aboutData = Array.isArray(about) && about.length > 0 ? about[0] : null;
 
-    // Search filter - show content if matches search
     const filteredContent = search.trim()
-        ? aboutData?.content?.toLowerCase().includes(search.toLowerCase()) ? aboutData : null
+        ? aboutData?.content?.toLowerCase().includes(search.toLowerCase())
+            ? aboutData
+            : null
         : aboutData;
 
     if (loading) {
@@ -91,7 +79,7 @@ const AboutPage = () => {
                     severity="error"
                     action={
                         <Button color="inherit" size="small" onClick={() => { clearError(); loadAbout(); }}>
-                            Retry
+                            {t('about.retry')}
                         </Button>
                     }
                     sx={{ borderRadius: 2 }}
@@ -115,15 +103,8 @@ const AboutPage = () => {
                     bgcolor: 'background.paper',
                 }}
             >
-                {/* ── HEADER ────────────────────────────────────────────── */}
-                <Box
-                    sx={{
-                        px: { xs: 2, sm: 3 },
-                        py: 2.5,
-                        borderBottom: '1px solid',
-                        borderColor: 'divider',
-                    }}
-                >
+                {/* HEADER */}
+                <Box sx={{ px: { xs: 2, sm: 3 }, py: 2.5, borderBottom: '1px solid', borderColor: 'divider' }}>
                     <Stack
                         direction={{ xs: 'column', sm: 'row' }}
                         justifyContent="space-between"
@@ -133,10 +114,10 @@ const AboutPage = () => {
                     >
                         <Box>
                             <Typography variant="h5" fontWeight={800} color="text.primary">
-                                About Page
+                                {t('about.title')}
                             </Typography>
                             <Typography variant="body2" color="text.secondary" fontWeight={500}>
-                                Manage your about page content
+                                {t('about.subtitle')}
                             </Typography>
                         </Box>
 
@@ -160,7 +141,7 @@ const AboutPage = () => {
                                         },
                                     }}
                                 >
-                                    Create About
+                                    {t('about.create')}
                                 </Button>
                             ) : canEdit && (
                                 <Button
@@ -181,7 +162,7 @@ const AboutPage = () => {
                                         },
                                     }}
                                 >
-                                    Edit About
+                                    {t('about.edit')}
                                 </Button>
                             )}
 
@@ -197,26 +178,18 @@ const AboutPage = () => {
                                     textTransform: 'none',
                                     borderColor: 'divider',
                                     color: 'text.primary',
-                                    '&:hover': {
-                                        borderColor: 'text.primary',
-                                        bgcolor: 'action.hover',
-                                    },
+                                    '&:hover': { borderColor: 'text.primary', bgcolor: 'action.hover' },
                                 }}
                             >
-                                Refresh
+                                {t('about.refresh')}
                             </Button>
                         </Stack>
                     </Stack>
 
-                    {/* ── FILTERS ──────────────────────────────────────── */}
-                    <Stack
-                        direction={{ xs: 'column', sm: 'row' }}
-                        spacing={1.5}
-                        alignItems={{ xs: 'stretch', sm: 'center' }}
-                        flexWrap="wrap"
-                    >
+                    {/* SEARCH */}
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', sm: 'center' }}>
                         <TextField
-                            placeholder="Search content..."
+                            placeholder={t('about.searchPlaceholder')}
                             size="small"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
@@ -249,13 +222,33 @@ const AboutPage = () => {
                     </Stack>
                 </Box>
 
-                {/* ── SUMMARY CARDS ────────────────────────────────────── */}
+                {/* SUMMARY CARDS */}
                 <Box sx={{ px: { xs: 2, sm: 3 }, pt: 2.5, pb: 1 }}>
                     <Grid container spacing={2}>
                         {[
-                            { label: 'Status', value: aboutData ? 'Published' : 'Not Created', color: aboutData ? '#10b981' : '#f59e0b', bg: aboutData ? '#ecfdf5' : '#fef3c7', icon: <DescriptionIcon sx={{ fontSize: 18 }} /> },
-                            { label: 'Word Count', value: aboutData?.content?.split(/\s+/).filter(Boolean).length || 0, color: '#3b82f6', bg: '#eff6ff', icon: <DescriptionIcon sx={{ fontSize: 18 }} /> },
-                            { label: 'Last Updated', value: aboutData?.updated_at ? new Date(aboutData.updated_at).toLocaleDateString() : 'Never', color: '#8b5cf6', bg: '#f3e8ff', icon: <HistoryIcon sx={{ fontSize: 18 }} /> },
+                            {
+                                label: t('about.status'),
+                                value: aboutData ? t('about.published') : t('about.notCreated'),
+                                color: aboutData ? '#10b981' : '#f59e0b',
+                                bg: aboutData ? '#ecfdf5' : '#fef3c7',
+                                icon: <DescriptionIcon sx={{ fontSize: 18 }} />,
+                            },
+                            {
+                                label: t('about.wordCount'),
+                                value: aboutData?.content?.split(/\s+/).filter(Boolean).length || 0,
+                                color: '#3b82f6',
+                                bg: '#eff6ff',
+                                icon: <DescriptionIcon sx={{ fontSize: 18 }} />,
+                            },
+                            {
+                                label: t('about.lastUpdated'),
+                                value: aboutData?.updated_at
+                                    ? new Date(aboutData.updated_at).toLocaleDateString()
+                                    : t('about.never'),
+                                color: '#8b5cf6',
+                                bg: '#f3e8ff',
+                                icon: <HistoryIcon sx={{ fontSize: 18 }} />,
+                            },
                         ].map((item, idx) => (
                             <Grid item xs={6} sm={4} key={idx}>
                                 <Card
@@ -285,7 +278,7 @@ const AboutPage = () => {
                     </Grid>
                 </Box>
 
-                {/* ── CONTENT DISPLAY ──────────────────────────────────── */}
+                {/* CONTENT */}
                 <Box sx={{ p: { xs: 2, sm: 3 } }}>
                     <Card
                         variant="outlined"
@@ -328,31 +321,30 @@ const AboutPage = () => {
                                     >
                                         <Typography variant="caption" color="text.secondary">
                                             <HistoryIcon sx={{ fontSize: 14, mr: 0.5, verticalAlign: 'middle' }} />
-                                            Last updated: {filteredContent.updated_at
-                                            ? new Date(filteredContent.updated_at).toLocaleString()
-                                            : 'Never'}
+                                            {t('about.lastUpdatedLabel')}:{' '}
+                                            {filteredContent.updated_at
+                                                ? new Date(filteredContent.updated_at).toLocaleString()
+                                                : t('about.never')}
                                         </Typography>
                                         {filteredContent.created_at && (
                                             <Typography variant="caption" color="text.secondary">
-                                                Created: {new Date(filteredContent.created_at).toLocaleString()}
+                                                {t('about.created')}: {new Date(filteredContent.created_at).toLocaleString()}
                                             </Typography>
                                         )}
                                         <Typography variant="caption" color="text.secondary">
-                                            {filteredContent.content.split(/\s+/).filter(Boolean).length} words
+                                            {filteredContent.content.split(/\s+/).filter(Boolean).length} {t('about.words')}
                                         </Typography>
                                     </Box>
                                 </>
                             ) : search ? (
                                 <Box textAlign="center" py={3}>
-                                    <Typography color="text.secondary">
-                                        No content matches your search.
-                                    </Typography>
+                                    <Typography color="text.secondary">{t('about.noMatch')}</Typography>
                                 </Box>
                             ) : (
                                 <Box textAlign="center" py={4}>
                                     <DescriptionIcon sx={{ fontSize: 56, color: 'text.disabled', mb: 1.5 }} />
                                     <Typography color="text.secondary" fontWeight={500}>
-                                        No about content available.
+                                        {t('about.noContent')}
                                     </Typography>
                                     {!aboutData && canEdit && (
                                         <Button
@@ -368,7 +360,7 @@ const AboutPage = () => {
                                                 '&:hover': { bgcolor: colors.dark || '#047857' },
                                             }}
                                         >
-                                            Create About Page
+                                            {t('about.createPage')}
                                         </Button>
                                     )}
                                 </Box>
@@ -378,7 +370,6 @@ const AboutPage = () => {
                 </Box>
             </Paper>
 
-            {/* ─── ABOUT FORM MODAL ────────────────────────────────────── */}
             <AboutFormModal
                 open={modalOpen}
                 onClose={handleCloseModal}

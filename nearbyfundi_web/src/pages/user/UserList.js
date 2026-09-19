@@ -33,7 +33,6 @@ import {
     Divider,
     Alert,
     Avatar,
-    Tooltip,
     Stack,
 } from '@mui/material';
 import {
@@ -63,60 +62,77 @@ import {
 } from '@mui/icons-material';
 import { useUserManagement } from 'hooks/useUser';
 import { usePermissions } from 'hooks/usePermissions';
+import { useLanguage } from 'context/LanguageContext';
 import { userService } from 'services/user.service';
 import { showSnackbar } from 'utils/snackbar';
 import UserFormModal from './UserFormModal';
+import { tUser } from './userlang';
 import appConfig from '../../config';
 
 const colors = appConfig.app.colors;
 
-// High-contrast status styles
-const statusStyles = {
+// ── Status styles (visual only, labels resolved via t()) ─────────────────
+const getStatusStyles = (t) => ({
     active: {
         color: '#047857',
         bg: '#d1fae5',
         border: '#10b981',
-        label: 'Active',
+        label: t('user.status.active'),
         icon: <CheckCircleIcon sx={{ fontSize: 16 }} />,
     },
     inactive: {
         color: '#4b5563',
         bg: '#f3f4f6',
         border: '#9ca3af',
-        label: 'Inactive',
+        label: t('user.status.inactive'),
         icon: <CancelIcon sx={{ fontSize: 16 }} />,
     },
     pending: {
         color: '#b45309',
         bg: '#fef3c7',
         border: '#f59e0b',
-        label: 'Pending',
+        label: t('user.status.pending'),
         icon: <PendingIcon sx={{ fontSize: 16 }} />,
     },
     suspended: {
         color: '#b91c1c',
         bg: '#fee2e2',
         border: '#ef4444',
-        label: 'Suspended',
+        label: t('user.status.suspended'),
         icon: <BlockIcon sx={{ fontSize: 16 }} />,
     },
-};
+});
 
-const headCells = [
-    { id: 'name', label: 'User' },
-    { id: 'email', label: 'Email' },
-    { id: 'phone', label: 'Phone' },
-    { id: 'role', label: 'Role' },
-    { id: 'status', label: 'Status' },
-    { id: 'subscription', label: 'Subscription' },
-    { id: 'created_at', label: 'Created' },
-    { id: 'actions', label: 'Actions', disableSort: true },
+// ── Head cells (labels resolved via t()) ────────────────────────────────
+const getHeadCells = (t) => [
+    { id: 'name', label: t('user.col.user') },
+    { id: 'email', label: t('user.col.email') },
+    { id: 'phone', label: t('user.col.phone') },
+    { id: 'role', label: t('user.col.role') },
+    { id: 'status', label: t('user.col.status') },
+    { id: 'subscription', label: t('user.col.subscription') },
+    { id: 'created_at', label: t('user.col.created') },
+    { id: 'actions', label: t('user.col.actions'), disableSort: true },
 ];
 
 const UsersList = () => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const showTableView = useMediaQuery(theme.breakpoints.up('md'));
+
+    const { language } = useLanguage();
+    const t = (key, replacements) => {
+        let str = tUser(language, key);
+        if (replacements) {
+            Object.entries(replacements).forEach(([k, v]) => {
+                str = str.replace(new RegExp(`\\{${k}\\}`, 'g'), v);
+            });
+        }
+        return str;
+    };
+
+    const statusStyles = useMemo(() => getStatusStyles(t), [language]);
+    const headCells = useMemo(() => getHeadCells(t), [language]);
 
     const {
         users,
@@ -218,7 +234,7 @@ const UsersList = () => {
             setTrashedTotal(data?.total || 0);
         } catch (error) {
             console.error('Failed to load deleted users', error);
-            showSnackbar({ type: 'error', message: 'Failed to load deleted users' });
+            showSnackbar({ type: 'error', message: t('user.msg.loadDeletedFailed') });
             setDeletedUsers([]);
             setTrashedTotal(0);
         } finally {
@@ -310,21 +326,21 @@ const UsersList = () => {
     const handleRestoreUser = async (userId) => {
         try {
             await userService.restoreUser(userId);
-            showSnackbar({ type: 'success', message: 'User restored successfully' });
+            showSnackbar({ type: 'success', message: t('user.msg.restored') });
             await fetchDeletedUsers();
             if (!showDeleted) await getUsers();
         } catch (error) {
-            showSnackbar({ type: 'error', message: 'Failed to restore user' });
+            showSnackbar({ type: 'error', message: t('user.msg.restoreFailed') });
         }
     };
 
     const handleForceDelete = async (userId) => {
         try {
             await userService.forceDeleteUser(userId);
-            showSnackbar({ type: 'success', message: 'User permanently deleted' });
+            showSnackbar({ type: 'success', message: t('user.msg.forceDeleted') });
             await fetchDeletedUsers();
         } catch (error) {
-            showSnackbar({ type: 'error', message: 'Failed to permanently delete user' });
+            showSnackbar({ type: 'error', message: t('user.msg.forceDeleteFailed') });
         }
     };
 
@@ -353,15 +369,15 @@ const UsersList = () => {
             switch (actionType) {
                 case 'restore':
                     openConfirmDialog(
-                        'Restore User',
-                        `Are you sure you want to restore ${selectedUser.name}?`,
+                        t('user.confirm.restoreTitle'),
+                        t('user.confirm.restoreMsg', { name: selectedUser.name }),
                         () => handleRestoreUser(selectedUser.id)
                     );
                     break;
                 case 'force_delete':
                     openConfirmDialog(
-                        'Permanently Delete User',
-                        `Are you sure you want to permanently delete ${selectedUser.name}?`,
+                        t('user.confirm.forceDeleteTitle'),
+                        t('user.confirm.forceDeleteMsg', { name: selectedUser.name }),
                         () => handleForceDelete(selectedUser.id)
                     );
                     break;
@@ -379,30 +395,30 @@ const UsersList = () => {
             case 'activate':
                 try {
                     await updateUser(selectedUser.id, { status: 'active' });
-                    showSnackbar({ type: 'success', message: 'User activated successfully' });
+                    showSnackbar({ type: 'success', message: t('user.msg.activated') });
                     await getUsers();
                 } catch (err) {
-                    showSnackbar({ type: 'error', message: 'Failed to activate user' });
+                    showSnackbar({ type: 'error', message: t('user.msg.activateFailed') });
                 }
                 break;
             case 'deactivate':
                 openConfirmDialog(
-                    'Deactivate User',
-                    `Are you sure you want to deactivate ${selectedUser.name}?`,
+                    t('user.confirm.deactivateTitle'),
+                    t('user.confirm.deactivateMsg', { name: selectedUser.name }),
                     () => updateUser(selectedUser.id, { status: 'inactive' })
                 );
                 break;
             case 'suspend':
                 openConfirmDialog(
-                    'Suspend User',
-                    `Are you sure you want to suspend ${selectedUser.name}?`,
+                    t('user.confirm.suspendTitle'),
+                    t('user.confirm.suspendMsg', { name: selectedUser.name }),
                     () => updateUser(selectedUser.id, { status: 'suspended' })
                 );
                 break;
             case 'delete':
                 openConfirmDialog(
-                    'Delete User',
-                    `Are you sure you want to delete ${selectedUser.name}?`,
+                    t('user.confirm.deleteTitle'),
+                    t('user.confirm.deleteMsg', { name: selectedUser.name }),
                     () => deleteUser(selectedUser.id)
                 );
                 break;
@@ -419,9 +435,9 @@ const UsersList = () => {
             case 'resend_otp':
                 try {
                     await userService.resendOtp(selectedUser.id);
-                    showSnackbar({ type: 'success', message: 'OTP sent successfully' });
+                    showSnackbar({ type: 'success', message: t('user.msg.otpSent') });
                 } catch (err) {
-                    showSnackbar({ type: 'error', message: 'Failed to send OTP' });
+                    showSnackbar({ type: 'error', message: t('user.msg.otpFailed') });
                 }
                 break;
             case 'verify_otp':
@@ -435,8 +451,8 @@ const UsersList = () => {
                 break;
             case 'mark_verified':
                 openConfirmDialog(
-                    'Mark as Verified',
-                    `Are you sure you want to mark ${selectedUser.name} as verified without OTP? This will activate the account immediately.`,
+                    t('user.confirm.markVerifiedTitle'),
+                    t('user.confirm.markVerifiedMsg', { name: selectedUser.name }),
                     () => handleMarkVerified(selectedUser.id)
                 );
                 break;
@@ -448,12 +464,12 @@ const UsersList = () => {
     const handleMarkVerified = async (userId) => {
         try {
             await markUserVerified(userId);
-            showSnackbar({ type: 'success', message: 'User marked as verified successfully' });
+            showSnackbar({ type: 'success', message: t('user.msg.verified') });
             await getUsers();
         } catch (err) {
             showSnackbar({
                 type: 'error',
-                message: err.response?.data?.message || 'Failed to mark user as verified',
+                message: err.response?.data?.message || t('user.msg.verifyFailed'),
             });
         }
     };
@@ -462,17 +478,17 @@ const UsersList = () => {
         const { userId, otp } = verifyOtpDialog;
 
         if (!otp || otp.length !== 6) {
-            setVerifyOtpDialog((prev) => ({ ...prev, error: 'Please enter a valid 6-digit OTP' }));
+            setVerifyOtpDialog((prev) => ({ ...prev, error: t('user.msg.otpInvalid') }));
             return;
         }
 
         try {
             await verifyUserOtp(userId, otp);
-            showSnackbar({ type: 'success', message: 'User verified and activated successfully' });
+            showSnackbar({ type: 'success', message: t('user.msg.verifySuccess') });
             setVerifyOtpDialog({ open: false, userId: null, userName: '', otp: '', error: '' });
             await getUsers();
         } catch (err) {
-            const errorMessage = err.response?.data?.message || 'Failed to verify OTP';
+            const errorMessage = err.response?.data?.message || t('user.msg.verifyFailed');
             showSnackbar({ type: 'error', message: errorMessage });
             setVerifyOtpDialog((prev) => ({ ...prev, error: errorMessage }));
         }
@@ -485,14 +501,14 @@ const UsersList = () => {
 
         try {
             await action();
-            showSnackbar({ type: 'success', message: 'Action completed successfully' });
+            showSnackbar({ type: 'success', message: t('user.actionSuccess') });
             if (showDeleted) {
                 await fetchDeletedUsers();
             } else {
                 await getUsers();
             }
         } catch (err) {
-            showSnackbar({ type: 'error', message: 'Action failed' });
+            showSnackbar({ type: 'error', message: t('user.actionFailed') });
         }
     };
 
@@ -500,17 +516,17 @@ const UsersList = () => {
         const { userId, password, confirmPassword } = passwordDialog;
 
         if (!password || password.length < 8) {
-            setPasswordDialog((prev) => ({ ...prev, error: 'Password must be at least 8 characters' }));
+            setPasswordDialog((prev) => ({ ...prev, error: t('user.msg.passwordShort') }));
             return;
         }
         if (password !== confirmPassword) {
-            setPasswordDialog((prev) => ({ ...prev, error: 'Passwords do not match' }));
+            setPasswordDialog((prev) => ({ ...prev, error: t('user.msg.passwordMismatch') }));
             return;
         }
 
         try {
             await userService.resetUserPassword(userId, password);
-            showSnackbar({ type: 'success', message: 'Password reset successfully' });
+            showSnackbar({ type: 'success', message: t('user.msg.passwordReset') });
             setPasswordDialog({
                 open: false,
                 userId: null,
@@ -521,10 +537,10 @@ const UsersList = () => {
             });
             await getUsers();
         } catch (err) {
-            showSnackbar({ type: 'error', message: 'Failed to reset password' });
+            showSnackbar({ type: 'error', message: t('user.msg.passwordResetFailed') });
             setPasswordDialog((prev) => ({
                 ...prev,
-                error: err.message || 'Failed to reset password',
+                error: err.message || t('user.msg.passwordResetFailed'),
             }));
         }
     };
@@ -544,10 +560,10 @@ const UsersList = () => {
 
     const getUserRoleName = (user) => {
         if (!user?.roles || !Array.isArray(user.roles) || user.roles.length === 0) {
-            return 'User';
+            return t('user.role.user');
         }
         const role = user.roles[0];
-        return role.display_name || role.name || 'User';
+        return role.display_name || role.name || t('user.role.user');
     };
 
     const getRoleIcon = (user) => {
@@ -595,17 +611,17 @@ const UsersList = () => {
             const expiry = new Date(expiresAt);
             const now = new Date();
             if (expiry < now) {
-                return { label: 'Expired', color: '#b91c1c', bg: '#fee2e2', border: '#ef4444' };
+                return { label: t('user.sub.expired'), color: '#b91c1c', bg: '#fee2e2', border: '#ef4444' };
             }
             const days = Math.ceil((expiry - now) / (1000 * 60 * 60 * 24));
-            return { label: `${days}d left`, color: '#047857', bg: '#d1fae5', border: '#10b981' };
+            return { label: `${days}${t('user.sub.daysLeft')}`, color: '#047857', bg: '#d1fae5', border: '#10b981' };
         }
 
         const map = {
-            active: { label: 'Active', color: '#047857', bg: '#d1fae5', border: '#10b981' },
-            inactive: { label: 'Inactive', color: '#4b5563', bg: '#f3f4f6', border: '#9ca3af' },
-            expired: { label: 'Expired', color: '#b91c1c', bg: '#fee2e2', border: '#ef4444' },
-            pending: { label: 'Pending', color: '#b45309', bg: '#fef3c7', border: '#f59e0b' },
+            active: { label: t('user.sub.active'), color: '#047857', bg: '#d1fae5', border: '#10b981' },
+            inactive: { label: t('user.sub.inactive'), color: '#4b5563', bg: '#f3f4f6', border: '#9ca3af' },
+            expired: { label: t('user.sub.expired'), color: '#b91c1c', bg: '#fee2e2', border: '#ef4444' },
+            pending: { label: t('user.sub.pending'), color: '#b45309', bg: '#fef3c7', border: '#f59e0b' },
         };
         return map[status] || map.inactive;
     };
@@ -625,7 +641,7 @@ const UsersList = () => {
                     }}
                 >
                     <Typography color="error" fontWeight={600}>
-                        You do not have permission to view users.
+                        {t('user.accessDenied')}
                     </Typography>
                 </Paper>
             </Box>
@@ -640,7 +656,7 @@ const UsersList = () => {
                     variant="filled"
                     action={
                         <Button color="inherit" size="small" onClick={() => { clearError(); getUsers(); }}>
-                            Retry
+                            {t('user.retry')}
                         </Button>
                     }
                     sx={{ borderRadius: 2 }}
@@ -686,10 +702,10 @@ const UsersList = () => {
                     >
                         <Box>
                             <Typography variant="h5" fontWeight={800} color="text.primary">
-                                User Management
+                                {t('user.title')}
                             </Typography>
                             <Typography variant="body2" color="text.secondary" fontWeight={500}>
-                                Manage accounts, roles and verification status
+                                {t('user.subtitle')}
                             </Typography>
                         </Box>
 
@@ -707,7 +723,7 @@ const UsersList = () => {
                                 }
                                 label={
                                     <Typography variant="body2" fontWeight={600}>
-                                        Show Deleted
+                                        {t('user.showDeleted')}
                                     </Typography>
                                 }
                             />
@@ -734,7 +750,7 @@ const UsersList = () => {
                                         },
                                     }}
                                 >
-                                    Add User
+                                    {t('user.add')}
                                 </Button>
                             )}
                         </Stack>
@@ -748,7 +764,7 @@ const UsersList = () => {
                         flexWrap="wrap"
                     >
                         <TextField
-                            placeholder="Search name, email, phone…"
+                            placeholder={t('user.searchPlaceholder')}
                             size="small"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
@@ -783,7 +799,7 @@ const UsersList = () => {
                             <>
                                 <TextField
                                     select
-                                    label="Status"
+                                    label={t('user.filter.status')}
                                     size="small"
                                     value={statusFilter}
                                     onChange={(e) => setStatusFilter(e.target.value)}
@@ -797,16 +813,16 @@ const UsersList = () => {
                                         },
                                     }}
                                 >
-                                    <MenuItem value="">All statuses</MenuItem>
-                                    <MenuItem value="active">Active</MenuItem>
-                                    <MenuItem value="inactive">Inactive</MenuItem>
-                                    <MenuItem value="pending">Pending</MenuItem>
-                                    <MenuItem value="suspended">Suspended</MenuItem>
+                                    <MenuItem value="">{t('user.filter.allStatuses')}</MenuItem>
+                                    <MenuItem value="active">{t('user.status.active')}</MenuItem>
+                                    <MenuItem value="inactive">{t('user.status.inactive')}</MenuItem>
+                                    <MenuItem value="pending">{t('user.status.pending')}</MenuItem>
+                                    <MenuItem value="suspended">{t('user.status.suspended')}</MenuItem>
                                 </TextField>
 
                                 <TextField
                                     select
-                                    label="Role"
+                                    label={t('user.filter.role')}
                                     size="small"
                                     value={roleFilter}
                                     onChange={(e) => setRoleFilter(e.target.value)}
@@ -820,12 +836,12 @@ const UsersList = () => {
                                         },
                                     }}
                                 >
-                                    <MenuItem value="">All roles</MenuItem>
-                                    <MenuItem value="ADMINISTRATOR">Administrator</MenuItem>
-                                    <MenuItem value="MANAGER">Manager</MenuItem>
-                                    <MenuItem value="MONITORING_OFFICER">Monitoring Officer</MenuItem>
-                                    <MenuItem value="FUNDI">Fundi</MenuItem>
-                                    <MenuItem value="CUSTOMER">Customer</MenuItem>
+                                    <MenuItem value="">{t('user.filter.allRoles')}</MenuItem>
+                                    <MenuItem value="ADMINISTRATOR">{t('user.role.admin')}</MenuItem>
+                                    <MenuItem value="MANAGER">{t('user.role.manager')}</MenuItem>
+                                    <MenuItem value="MONITORING_OFFICER">{t('user.role.monitoring')}</MenuItem>
+                                    <MenuItem value="FUNDI">{t('user.role.fundi')}</MenuItem>
+                                    <MenuItem value="CUSTOMER">{t('user.role.customer')}</MenuItem>
                                 </TextField>
                             </>
                         )}
@@ -847,7 +863,7 @@ const UsersList = () => {
                                 },
                             }}
                         >
-                            Refresh
+                            {t('user.refresh')}
                         </Button>
                     </Stack>
                 </Box>
@@ -901,7 +917,7 @@ const UsersList = () => {
                                     <TableRow>
                                         <TableCell colSpan={headCells.length} align="center" sx={{ py: 8 }}>
                                             <Typography color="text.secondary" fontWeight={500}>
-                                                {showDeleted ? 'No deleted users found' : 'No users found'}
+                                                {showDeleted ? t('user.noDeletedFound') : t('user.noFound')}
                                             </Typography>
                                         </TableCell>
                                     </TableRow>
@@ -1015,7 +1031,7 @@ const UsersList = () => {
                                                 <TableCell>
                                                     {showDeleted ? (
                                                         <Chip
-                                                            label="Deleted"
+                                                            label={t('user.status.deleted')}
                                                             size="small"
                                                             sx={{
                                                                 fontWeight: 700,
@@ -1093,7 +1109,7 @@ const UsersList = () => {
                                 }}
                             >
                                 <Typography color="text.secondary" fontWeight={500}>
-                                    {showDeleted ? 'No deleted users found' : 'No users found'}
+                                    {showDeleted ? t('user.noDeletedFound') : t('user.noFound')}
                                 </Typography>
                             </Paper>
                         ) : (
@@ -1201,7 +1217,7 @@ const UsersList = () => {
                                                     <Stack direction="row" spacing={1} flexWrap="wrap">
                                                         {showDeleted ? (
                                                             <Chip
-                                                                label="Deleted"
+                                                                label={t('user.status.deleted')}
                                                                 size="small"
                                                                 sx={{
                                                                     fontWeight: 700,
@@ -1227,7 +1243,7 @@ const UsersList = () => {
                                                         />
                                                     </Stack>
                                                     <Typography variant="caption" color="text.secondary" fontWeight={500}>
-                                                        Joined {formatDate(user.created_at)}
+                                                        {t('user.joined')} {formatDate(user.created_at)}
                                                     </Typography>
                                                 </Stack>
                                             </CardContent>
@@ -1285,7 +1301,7 @@ const UsersList = () => {
                         if (canRestore) {
                             menuItems.push(
                                 <MenuItem key="restore" onClick={() => handleAction('restore')} sx={{ fontWeight: 500 }}>
-                                    <RestoreIcon sx={{ mr: 1.5, color: '#10b981', fontSize: 20 }} /> Restore
+                                    <RestoreIcon sx={{ mr: 1.5, color: '#10b981', fontSize: 20 }} /> {t('user.action.restore')}
                                 </MenuItem>
                             );
                         }
@@ -1296,7 +1312,7 @@ const UsersList = () => {
                                     onClick={() => handleAction('force_delete')}
                                     sx={{ color: 'error.main', fontWeight: 500 }}
                                 >
-                                    <DeleteSweepIcon sx={{ mr: 1.5, fontSize: 20 }} /> Permanently Delete
+                                    <DeleteSweepIcon sx={{ mr: 1.5, fontSize: 20 }} /> {t('user.action.forceDelete')}
                                 </MenuItem>
                             );
                         }
@@ -1304,54 +1320,54 @@ const UsersList = () => {
                         if (canEdit) {
                             menuItems.push(
                                 <MenuItem key="edit" onClick={() => handleAction('edit')} sx={{ fontWeight: 500 }}>
-                                    <EditIcon sx={{ mr: 1.5, fontSize: 20, color: colors.sea || '#0f766e' }} /> Edit
+                                    <EditIcon sx={{ mr: 1.5, fontSize: 20, color: colors.sea || '#0f766e' }} /> {t('user.action.edit')}
                                 </MenuItem>
                             );
                         }
                         if (canActivate && selectedUser?.status !== 'active') {
                             menuItems.push(
                                 <MenuItem key="activate" onClick={() => handleAction('activate')} sx={{ fontWeight: 500 }}>
-                                    <VerifiedIcon sx={{ mr: 1.5, color: '#10b981', fontSize: 20 }} /> Activate
+                                    <VerifiedIcon sx={{ mr: 1.5, color: '#10b981', fontSize: 20 }} /> {t('user.action.activate')}
                                 </MenuItem>
                             );
                         }
                         if (canDeactivate && selectedUser?.status === 'active') {
                             menuItems.push(
                                 <MenuItem key="deactivate" onClick={() => handleAction('deactivate')} sx={{ fontWeight: 500 }}>
-                                    <BlockIcon sx={{ mr: 1.5, color: '#f59e0b', fontSize: 20 }} /> Deactivate
+                                    <BlockIcon sx={{ mr: 1.5, color: '#f59e0b', fontSize: 20 }} /> {t('user.action.deactivate')}
                                 </MenuItem>
                             );
                         }
                         if (canSuspend && selectedUser?.status !== 'suspended') {
                             menuItems.push(
                                 <MenuItem key="suspend" onClick={() => handleAction('suspend')} sx={{ fontWeight: 500 }}>
-                                    <LockOpenIcon sx={{ mr: 1.5, color: '#ef4444', fontSize: 20 }} /> Suspend
+                                    <LockOpenIcon sx={{ mr: 1.5, color: '#ef4444', fontSize: 20 }} /> {t('user.action.suspend')}
                                 </MenuItem>
                             );
                         }
                         if (canResetPassword) {
                             menuItems.push(
                                 <MenuItem key="reset_password" onClick={() => handleAction('reset_password')} sx={{ fontWeight: 500 }}>
-                                    <VpnKeyIcon sx={{ mr: 1.5, fontSize: 20 }} /> Reset Password
+                                    <VpnKeyIcon sx={{ mr: 1.5, fontSize: 20 }} /> {t('user.action.resetPassword')}
                                 </MenuItem>
                             );
                         }
                         if (canVerify && !selectedUser?.email_verified_at && selectedUser?.status !== 'deleted') {
                             menuItems.push(
                                 <MenuItem key="verify_otp" onClick={() => handleAction('verify_otp')} sx={{ fontWeight: 500 }}>
-                                    <VerifiedIcon sx={{ mr: 1.5, color: '#10b981', fontSize: 20 }} /> Verify OTP
+                                    <VerifiedIcon sx={{ mr: 1.5, color: '#10b981', fontSize: 20 }} /> {t('user.action.verifyOtp')}
                                 </MenuItem>
                             );
                             menuItems.push(
                                 <MenuItem key="mark_verified" onClick={() => handleAction('mark_verified')} sx={{ fontWeight: 500 }}>
-                                    <VerifiedIcon sx={{ mr: 1.5, color: '#3b82f6', fontSize: 20 }} /> Mark as Verified
+                                    <VerifiedIcon sx={{ mr: 1.5, color: '#3b82f6', fontSize: 20 }} /> {t('user.action.markVerified')}
                                 </MenuItem>
                             );
                         }
                         if (!selectedUser?.email_verified_at && selectedUser?.status !== 'deleted') {
                             menuItems.push(
                                 <MenuItem key="resend_otp" onClick={() => handleAction('resend_otp')} sx={{ fontWeight: 500 }}>
-                                    <EmailIcon sx={{ mr: 1.5, fontSize: 20 }} /> Resend OTP
+                                    <EmailIcon sx={{ mr: 1.5, fontSize: 20 }} /> {t('user.action.resendOtp')}
                                 </MenuItem>
                             );
                         }
@@ -1362,7 +1378,7 @@ const UsersList = () => {
                                     onClick={() => handleAction('delete')}
                                     sx={{ color: 'error.main', fontWeight: 500 }}
                                 >
-                                    <DeleteIcon sx={{ mr: 1.5, fontSize: 20 }} /> Delete
+                                    <DeleteIcon sx={{ mr: 1.5, fontSize: 20 }} /> {t('user.action.delete')}
                                 </MenuItem>
                             );
                         }
@@ -1400,13 +1416,13 @@ const UsersList = () => {
                 PaperProps={{ sx: { borderRadius: 3 } }}
             >
                 <DialogTitle sx={{ fontWeight: 700, pb: 1 }}>
-                    Reset Password for {passwordDialog.userName}
+                    {t('user.pwd.title', { name: passwordDialog.userName })}
                 </DialogTitle>
                 <DialogContent>
                     <TextField
                         fullWidth
                         type="password"
-                        label="New Password"
+                        label={t('user.pwd.new')}
                         value={passwordDialog.password}
                         onChange={(e) =>
                             setPasswordDialog((prev) => ({ ...prev, password: e.target.value, error: '' }))
@@ -1422,7 +1438,7 @@ const UsersList = () => {
                     <TextField
                         fullWidth
                         type="password"
-                        label="Confirm Password"
+                        label={t('user.pwd.confirm')}
                         value={passwordDialog.confirmPassword}
                         onChange={(e) =>
                             setPasswordDialog((prev) => ({
@@ -1453,7 +1469,7 @@ const UsersList = () => {
                         }
                         sx={{ fontWeight: 600, textTransform: 'none' }}
                     >
-                        Cancel
+                        {t('user.cancel')}
                     </Button>
                     <Button
                         onClick={handlePasswordReset}
@@ -1466,7 +1482,7 @@ const UsersList = () => {
                             '&:hover': { bgcolor: colors.dark || '#0d5c56' },
                         }}
                     >
-                        Reset Password
+                        {t('user.pwd.submit')}
                     </Button>
                 </DialogActions>
             </Dialog>
@@ -1482,16 +1498,16 @@ const UsersList = () => {
                 PaperProps={{ sx: { borderRadius: 3 } }}
             >
                 <DialogTitle sx={{ fontWeight: 700, pb: 1 }}>
-                    Verify OTP for {verifyOtpDialog.userName}
+                    {t('user.otp.title', { name: verifyOtpDialog.userName })}
                 </DialogTitle>
                 <DialogContent>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        Enter the 6-digit OTP sent to the user's email/phone.
+                        {t('user.otp.hint')}
                     </Typography>
                     <TextField
                         fullWidth
                         type="text"
-                        label="OTP Code"
+                        label={t('user.otp.label')}
                         value={verifyOtpDialog.otp}
                         onChange={(e) =>
                             setVerifyOtpDialog((prev) => ({
@@ -1502,7 +1518,7 @@ const UsersList = () => {
                         }
                         margin="dense"
                         size="small"
-                        placeholder="Enter 6-digit OTP"
+                        placeholder={t('user.otp.placeholder')}
                         error={!!verifyOtpDialog.error}
                         helperText={verifyOtpDialog.error}
                         inputProps={{ maxLength: 6 }}
@@ -1518,7 +1534,7 @@ const UsersList = () => {
                         }
                         sx={{ fontWeight: 600, textTransform: 'none' }}
                     >
-                        Cancel
+                        {t('user.cancel')}
                     </Button>
                     <Button
                         onClick={handleVerifyOtp}
@@ -1531,7 +1547,7 @@ const UsersList = () => {
                             '&:hover': { bgcolor: colors.dark || '#047857' },
                         }}
                     >
-                        Verify OTP
+                        {t('user.otp.submit')}
                     </Button>
                 </DialogActions>
             </Dialog>
@@ -1553,7 +1569,7 @@ const UsersList = () => {
                         onClick={() => setConfirmDialog((prev) => ({ ...prev, open: false }))}
                         sx={{ fontWeight: 600, textTransform: 'none' }}
                     >
-                        Cancel
+                        {t('user.cancel')}
                     </Button>
                     <Button
                         onClick={handleConfirm}
@@ -1561,7 +1577,7 @@ const UsersList = () => {
                         color="error"
                         sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 2 }}
                     >
-                        Confirm
+                        {t('user.confirm')}
                     </Button>
                 </DialogActions>
             </Dialog>

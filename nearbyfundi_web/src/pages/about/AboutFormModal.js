@@ -1,23 +1,13 @@
 // src/pages/about/AboutFormModal.js
 import React, { useState, useEffect } from 'react';
 import {
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    TextField,
-    Button,
-    Box,
-    CircularProgress,
-    useMediaQuery,
-    useTheme,
-    Typography,
-    IconButton,
-    Stack,
-    alpha,
+    Dialog, DialogTitle, DialogContent, DialogActions, TextField, Button,
+    CircularProgress, useMediaQuery, useTheme, Typography, IconButton, Stack,
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
+import { useLanguage } from 'context/LanguageContext';
 import { showSnackbar } from 'utils/snackbar';
+import { tAbout } from './aboutlang';
 import appConfig from '../../config';
 
 const colors = appConfig.app.colors;
@@ -25,6 +15,8 @@ const colors = appConfig.app.colors;
 export default function AboutFormModal({ open, onClose, aboutData, createAbout, updateAbout }) {
     const theme = useTheme();
     const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
+    const { language } = useLanguage();
+    const t = (key) => tAbout(language, key);
 
     const [loading, setLoading] = useState(false);
     const [form, setForm] = useState({ content: '' });
@@ -42,7 +34,7 @@ export default function AboutFormModal({ open, onClose, aboutData, createAbout, 
 
     const validate = () => {
         const newErrors = {};
-        if (!form.content.trim()) newErrors.content = 'Content is required';
+        if (!form.content.trim()) newErrors.content = t('about.modal.required');
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
@@ -55,14 +47,17 @@ export default function AboutFormModal({ open, onClose, aboutData, createAbout, 
         try {
             if (aboutData) {
                 await updateAbout({ content: form.content });
-                showSnackbar({ type: 'success', message: 'About page updated successfully' });
+                showSnackbar({ type: 'success', message: t('about.modal.updated') });
             } else {
                 await createAbout({ content: form.content });
-                showSnackbar({ type: 'success', message: 'About page created successfully' });
+                showSnackbar({ type: 'success', message: t('about.modal.created') });
             }
             onClose(true);
         } catch (err) {
-            showSnackbar({ type: 'error', message: err.response?.data?.message || 'Operation failed' });
+            showSnackbar({
+                type: 'error',
+                message: err.response?.data?.message || t('about.modal.failed'),
+            });
         } finally {
             setLoading(false);
         }
@@ -81,7 +76,7 @@ export default function AboutFormModal({ open, onClose, aboutData, createAbout, 
                     border: '1px solid',
                     borderColor: 'divider',
                     margin: fullScreen ? 0 : 2,
-                }
+                },
             }}
         >
             <form onSubmit={handleSubmit}>
@@ -98,14 +93,11 @@ export default function AboutFormModal({ open, onClose, aboutData, createAbout, 
                         color: 'text.primary',
                     }}
                 >
-                    {aboutData ? 'Edit About Page' : 'Create About Page'}
+                    {aboutData ? t('about.modal.editTitle') : t('about.modal.createTitle')}
                     <IconButton
                         onClick={() => onClose(false)}
                         size="small"
-                        sx={{
-                            color: 'text.secondary',
-                            '&:hover': { bgcolor: 'action.hover' },
-                        }}
+                        sx={{ color: 'text.secondary', '&:hover': { bgcolor: 'action.hover' } }}
                     >
                         <CloseIcon />
                     </IconButton>
@@ -114,13 +106,11 @@ export default function AboutFormModal({ open, onClose, aboutData, createAbout, 
                 <DialogContent sx={{ pt: 3, pb: 1 }}>
                     <Stack spacing={2.5}>
                         <Typography variant="body2" color="text.secondary">
-                            {aboutData
-                                ? 'Update the about page content below.'
-                                : 'Create new about page content.'}
+                            {aboutData ? t('about.modal.editDesc') : t('about.modal.createDesc')}
                         </Typography>
 
                         <TextField
-                            label="Content"
+                            label={t('about.modal.content')}
                             name="content"
                             value={form.content}
                             onChange={handleChange}
@@ -130,7 +120,7 @@ export default function AboutFormModal({ open, onClose, aboutData, createAbout, 
                             rows={14}
                             error={!!errors.content}
                             helperText={errors.content}
-                            placeholder="Enter about page content..."
+                            placeholder={t('about.modal.placeholder')}
                             disabled={loading}
                             sx={{
                                 '& .MuiOutlinedInput-root': {
@@ -139,9 +129,7 @@ export default function AboutFormModal({ open, onClose, aboutData, createAbout, 
                                     fontSize: '1rem',
                                     lineHeight: 1.8,
                                     bgcolor: 'action.hover',
-                                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                                        borderColor: colors.sea,
-                                    },
+                                    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: colors.sea },
                                     '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
                                         borderColor: colors.sea,
                                         borderWidth: 2,
@@ -149,9 +137,7 @@ export default function AboutFormModal({ open, onClose, aboutData, createAbout, 
                                 },
                                 '& .MuiInputLabel-root': {
                                     color: 'text.secondary',
-                                    '&.Mui-focused': {
-                                        color: colors.sea,
-                                    },
+                                    '&.Mui-focused': { color: colors.sea },
                                 },
                             }}
                         />
@@ -169,7 +155,7 @@ export default function AboutFormModal({ open, onClose, aboutData, createAbout, 
                             '&:hover': { bgcolor: 'action.hover' },
                         }}
                     >
-                        Cancel
+                        {t('about.modal.cancel')}
                     </Button>
                     <Button
                         type="submit"
@@ -185,7 +171,13 @@ export default function AboutFormModal({ open, onClose, aboutData, createAbout, 
                             '&:disabled': { opacity: 0.6 },
                         }}
                     >
-                        {loading ? <CircularProgress size={24} color="inherit" /> : (aboutData ? 'Update' : 'Create')}
+                        {loading ? (
+                            <CircularProgress size={24} color="inherit" />
+                        ) : aboutData ? (
+                            t('about.modal.update')
+                        ) : (
+                            t('about.modal.create')
+                        )}
                     </Button>
                 </DialogActions>
             </form>

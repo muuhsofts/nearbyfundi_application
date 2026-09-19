@@ -1,3 +1,4 @@
+// src/components/Layout/Layout.js
 import React from 'react';
 import { Outlet } from 'react-router-dom';
 import classnames from 'classnames';
@@ -6,10 +7,9 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import GithubIcon from '@mui/icons-material/GitHub';
 import FacebookIcon from '@mui/icons-material/Facebook';
 import TwitterIcon from '@mui/icons-material/Twitter';
-
 import { Fab, IconButton } from '@mui/material';
-import useStyles from './styles';
 
+import useStyles from './styles';
 import Header from '../Header';
 import Sidebar from '../Sidebar';
 import Footer from '../Footer';
@@ -20,6 +20,7 @@ import BreadCrumbs from '../../components/BreadCrumbs';
 import { useLayoutState } from 'context/LayoutContext';
 import { getSidebarStructure } from '../Sidebar/SidebarStructure';
 import { usePermissions } from 'hooks/usePermissions';
+import { useLanguage } from 'context/LanguageContext';
 
 function Layout() {
   const classes = useStyles();
@@ -32,10 +33,16 @@ function Layout() {
   };
 
   const layoutState = useLayoutState();
-
   const { can, permissions } = usePermissions();
+  const { t, language } = useLanguage();
+
   const permissionsReady = Array.isArray(permissions);
-  const dynamicStructure = permissionsReady ? getSidebarStructure(can) : [];
+
+  // Recompute sidebar when permissions or language change
+  const dynamicStructure = React.useMemo(() => {
+    if (!permissionsReady) return [];
+    return getSidebarStructure(can, t);
+  }, [permissionsReady, permissions, language, t, can]);
 
   return (
       <div className={classes.root}>
@@ -48,9 +55,10 @@ function Layout() {
             })}
         >
           <div className={classes.fakeToolbar} />
-          <BreadCrumbs />
 
-          {/* All nested routes render here */}
+          {/* Temporary safe call – will fix properly when you send BreadCrumbs */}
+          <BreadCrumbs structure={dynamicStructure || []} />
+
           <Outlet />
 
           <Fab
@@ -62,6 +70,7 @@ function Layout() {
           >
             <SettingsIcon style={{ color: '#fff' }} />
           </Fab>
+
           <ColorChangeThemePopper id={id} open={open} anchorEl={anchorEl} />
 
           <Footer>

@@ -1,13 +1,7 @@
+// src/components/Sidebar/SidebarStructure.js
 import {
   Dashboard as DashboardIcon,
-  People as UsersIcon,
-  Security as RolesIcon,
-  VpnKey as PermissionsIcon,
-  History as AuditIcon,
-  VpnKey as OTPIcon,
   Info as AboutIcon,
-  Description as TermsIcon,
-  Help as FaqIcon,
   Build as ServicesIcon,
   Engineering as TechniciansIcon,
   PhotoLibrary as PortfoliosIcon,
@@ -15,24 +9,28 @@ import {
   RequestPage as RequestsIcon,
   Settings as SettingsIcon,
   MonitorHeart as MonitoringIcon,
-  AccountBalance as FundIcon,
   Subscriptions as SubscriptionsIcon,
-  PrivacyTip as PrivacyPolicyIcon,
   Category as CategoryIcon,
   AttachMoney as FinanceIcon,
   Sms as SmsIcon,
 } from '@mui/icons-material';
 
+import { identityT } from './components/Sidebar/sidebarTranslations';
+
 const addIf = (condition, item) => (condition ? [item] : []);
 
-export function getSidebarStructure(hasPermission) {
+/**
+ * Production sidebar structure
+ * Only contains items that exist in the real application.
+ */
+export function getSidebarStructure(hasPermission, t = identityT) {
   const structure = [];
 
   // ----- Dashboard -----
   if (hasPermission('dashboard.view')) {
     structure.push({
       id: 1,
-      label: 'Dashboard',
+      label: t('sidebar.dashboard'),
       link: '/app/dashboard',
       icon: <DashboardIcon />,
     });
@@ -40,15 +38,28 @@ export function getSidebarStructure(hasPermission) {
 
   // ----- Static Pages -----
   const staticChildren = [
-    ...addIf(hasPermission('about.view'), { label: 'About', link: '/app/about' }),
-    ...addIf(hasPermission('terms.view'), { label: 'Terms', link: '/app/terms' }),
-    ...addIf(hasPermission('faqs.view'), { label: 'FAQs', link: '/app/faqs' }),
-    ...addIf(hasPermission('privacy.view'), { label: 'Privacy Policy', link: '/app/privacy-policy' }),
+    ...addIf(hasPermission('about.view'), {
+      label: t('sidebar.about'),
+      link: '/app/about',
+    }),
+    ...addIf(hasPermission('terms.view'), {
+      label: t('sidebar.terms'),
+      link: '/app/terms',
+    }),
+    ...addIf(hasPermission('faqs.view'), {
+      label: t('sidebar.faqs'),
+      link: '/app/faqs',
+    }),
+    ...addIf(hasPermission('privacy.view'), {
+      label: t('sidebar.privacy'),
+      link: '/app/privacy-policy',
+    }),
   ];
+
   if (staticChildren.length > 0) {
     structure.push({
       id: 2,
-      label: 'Static Pages',
+      label: t('sidebar.staticPages'),
       link: '#',
       icon: <AboutIcon />,
       children: staticChildren,
@@ -58,18 +69,20 @@ export function getSidebarStructure(hasPermission) {
   // ----- Services -----
   if (hasPermission('services.view')) {
     const servicesChildren = [
-      { label: 'All Services', link: '/app/services' },
+      { label: t('sidebar.allServices'), link: '/app/services' },
     ];
+
     if (hasPermission('service-categories.view')) {
       servicesChildren.push({
-        label: 'Categories',
+        label: t('sidebar.categories'),
         link: '/app/services/categories',
         icon: <CategoryIcon />,
       });
     }
+
     structure.push({
       id: 3,
-      label: 'Services',
+      label: t('sidebar.services'),
       link: '/app/services',
       icon: <ServicesIcon />,
       children: servicesChildren,
@@ -80,10 +93,12 @@ export function getSidebarStructure(hasPermission) {
   if (hasPermission('technicians.view')) {
     structure.push({
       id: 4,
-      label: 'Technicians',
+      label: t('sidebar.technicians'),
       link: '/app/technicians',
       icon: <TechniciansIcon />,
-      children: [{ label: 'All Technicians', link: '/app/technicians' }],
+      children: [
+        { label: t('sidebar.allTechnicians'), link: '/app/technicians' },
+      ],
     });
   }
 
@@ -91,7 +106,7 @@ export function getSidebarStructure(hasPermission) {
   if (hasPermission('portfolios.view')) {
     structure.push({
       id: 5,
-      label: 'Portfolios',
+      label: t('sidebar.portfolios'),
       link: '/app/portfolios',
       icon: <PortfoliosIcon />,
     });
@@ -101,10 +116,10 @@ export function getSidebarStructure(hasPermission) {
   if (hasPermission('posts.view')) {
     structure.push({
       id: 6,
-      label: 'Posts',
+      label: t('sidebar.posts'),
       link: '/app/posts',
       icon: <PostsIcon />,
-      children: [{ label: 'All Posts', link: '/app/posts' }],
+      children: [{ label: t('sidebar.allPosts'), link: '/app/posts' }],
     });
   }
 
@@ -112,10 +127,10 @@ export function getSidebarStructure(hasPermission) {
   if (hasPermission('requests.view')) {
     structure.push({
       id: 7,
-      label: 'Service Requests',
+      label: t('sidebar.serviceRequests'),
       link: '/app/requests',
       icon: <RequestsIcon />,
-      children: [{ label: 'All Requests', link: '/app/requests' }],
+      children: [{ label: t('sidebar.allRequests'), link: '/app/requests' }],
     });
   }
 
@@ -123,42 +138,26 @@ export function getSidebarStructure(hasPermission) {
   if (hasPermission('sms.view')) {
     structure.push({
       id: 14,
-      label: 'SMS Logs',
+      label: t('sidebar.smsLogs'),
       link: '/app/sms-logs',
       icon: <SmsIcon />,
-      children: [{ label: 'All SMS Logs', link: '/app/sms-logs' }],
+      children: [{ label: t('sidebar.allSmsLogs'), link: '/app/sms-logs' }],
     });
   }
 
-  // ----- Finance (Advanced Reports & Dashboards) -----
+  // ----- Finance -----
   if (hasPermission('finance.view')) {
     structure.push({
       id: 13,
-      label: 'Finance',
+      label: t('sidebar.finance'),
       link: '/app/finance',
       icon: <FinanceIcon />,
       children: [
-        { label: 'Subscriptions', link: '/app/finance/subscriptions' },
-        { label: 'Technicians', link: '/app/finance/technicians' },
-        { label: 'Customers', link: '/app/finance/customers' },
-        { label: 'Requests', link: '/app/finance/requests' },
+        { label: t('sidebar.subscriptions'), link: '/app/finance/subscriptions' },
+        { label: t('sidebar.technicians'), link: '/app/finance/technicians' },
+        { label: t('sidebar.customers'), link: '/app/finance/customers' },
+        { label: t('sidebar.requests'), link: '/app/finance/requests' },
       ],
-    });
-  }
-
-  // ----- Fund Management -----
-  const fundChildren = [
-    ...addIf(hasPermission('fund.view'), { label: 'Fund Management', link: '/app/fund' }),
-    ...addIf(hasPermission('fund.transactions.view'), { label: 'Fund Transactions', link: '/app/fund/transactions' }),
-    ...addIf(hasPermission('fund.reports.view'), { label: 'Fund Reports', link: '/app/fund/reports' }),
-  ];
-  if (fundChildren.length > 0) {
-    structure.push({
-      id: 11,
-      label: 'Fund',
-      link: '/app/fund',
-      icon: <FundIcon />,
-      children: fundChildren,
     });
   }
 
@@ -166,23 +165,35 @@ export function getSidebarStructure(hasPermission) {
   if (hasPermission('monitoring.view')) {
     structure.push({
       id: 10,
-      label: 'Monitoring',
+      label: t('sidebar.monitoring'),
       link: '/app/monitoring',
       icon: <MonitoringIcon />,
-      children: [{ label: 'Monitoring Dashboard', link: '/app/monitoring' }],
+      children: [
+        { label: t('sidebar.monitoringDashboard'), link: '/app/monitoring' },
+      ],
     });
   }
 
-  // ----- Subscriptions (Global) -----
+  // ----- Subscriptions -----
   const subscriptionChildren = [
-    ...addIf(hasPermission('subscriptions.view'), { label: 'All Subscriptions', link: '/app/subscriptions' }),
-    ...addIf(hasPermission('subscriptions.manage'), { label: 'Rate Cards', link: '/app/rate-cards' }),
-    ...addIf(hasPermission('subscriptions.manage'), { label: 'Payment Methods', link: '/app/payment-methods' }),
+    ...addIf(hasPermission('subscriptions.view'), {
+      label: t('sidebar.allSubscriptions'),
+      link: '/app/subscriptions',
+    }),
+    ...addIf(hasPermission('subscriptions.manage'), {
+      label: t('sidebar.rateCards'),
+      link: '/app/rate-cards',
+    }),
+    ...addIf(hasPermission('subscriptions.manage'), {
+      label: t('sidebar.paymentMethods'),
+      link: '/app/payment-methods',
+    }),
   ];
+
   if (subscriptionChildren.length > 0) {
     structure.push({
       id: 12,
-      label: 'Subscriptions',
+      label: t('sidebar.subscriptions'),
       link: '#',
       icon: <SubscriptionsIcon />,
       children: subscriptionChildren,
@@ -191,17 +202,36 @@ export function getSidebarStructure(hasPermission) {
 
   // ----- Settings -----
   const settingsChildren = [
-    ...addIf(hasPermission('users.view'), { label: 'Users', link: '/app/users' }),
-    ...addIf(hasPermission('roles.view'), { label: 'Roles', link: '/app/roles' }),
-    ...addIf(hasPermission('permissions.view'), { label: 'Permissions', link: '/app/permissions' }),
-    ...addIf(hasPermission('audit.view'), { label: 'Audit Logs', link: '/app/audit' }),
-    ...addIf(hasPermission('otp.view'), { label: 'OTP Management', link: '/app/otp' }),
-    ...addIf(hasPermission('profile.view'), { label: 'Profile', link: '/app/profile' }),
+    ...addIf(hasPermission('users.view'), {
+      label: t('sidebar.users'),
+      link: '/app/users',
+    }),
+    ...addIf(hasPermission('roles.view'), {
+      label: t('sidebar.roles'),
+      link: '/app/roles',
+    }),
+    ...addIf(hasPermission('permissions.view'), {
+      label: t('sidebar.permissions'),
+      link: '/app/permissions',
+    }),
+    ...addIf(hasPermission('audit.view'), {
+      label: t('sidebar.auditLogs'),
+      link: '/app/audit',
+    }),
+    ...addIf(hasPermission('otp.view'), {
+      label: t('sidebar.otpManagement'),
+      link: '/app/otp',
+    }),
+    ...addIf(hasPermission('profile.view'), {
+      label: t('sidebar.profile'),
+      link: '/app/profile',
+    }),
   ];
+
   if (settingsChildren.length > 0) {
     structure.push({
       id: 9,
-      label: 'Settings',
+      label: t('sidebar.settings'),
       link: '#',
       icon: <SettingsIcon />,
       children: settingsChildren,
@@ -211,117 +241,4 @@ export function getSidebarStructure(hasPermission) {
   return structure;
 }
 
-// =============================================================
-// STATIC STRUCTURE (fallback)
-// =============================================================
-const staticStructure = [
-  { id: 1, label: 'Dashboard', link: '/app/dashboard', icon: <DashboardIcon /> },
-  {
-    id: 2,
-    label: 'Static Pages',
-    link: '#',
-    icon: <AboutIcon />,
-    children: [
-      { label: 'About', link: '/app/about' },
-      { label: 'Terms', link: '/app/terms' },
-      { label: 'FAQs', link: '/app/faqs' },
-      { label: 'Privacy Policy', link: '/app/privacy-policy' },
-    ],
-  },
-  {
-    id: 3,
-    label: 'Services',
-    link: '/app/services',
-    icon: <ServicesIcon />,
-    children: [
-      { label: 'All Services', link: '/app/services' },
-      { label: 'Categories', link: '/app/services/categories' },
-    ],
-  },
-  {
-    id: 4,
-    label: 'Technicians',
-    link: '/app/technicians',
-    icon: <TechniciansIcon />,
-    children: [{ label: 'All Technicians', link: '/app/technicians' }],
-  },
-  { id: 5, label: 'Portfolios', link: '/app/portfolios', icon: <PortfoliosIcon /> },
-  {
-    id: 6,
-    label: 'Posts',
-    link: '/app/posts',
-    icon: <PostsIcon />,
-    children: [{ label: 'All Posts', link: '/app/posts' }],
-  },
-  {
-    id: 7,
-    label: 'Service Requests',
-    link: '/app/requests',
-    icon: <RequestsIcon />,
-    children: [{ label: 'All Requests', link: '/app/requests' }],
-  },
-  {
-    id: 14,
-    label: 'SMS Logs',
-    link: '/app/sms-logs',
-    icon: <SmsIcon />,
-    children: [{ label: 'All SMS Logs', link: '/app/sms-logs' }],
-  },
-  {
-    id: 13,
-    label: 'Finance',
-    link: '/app/finance',
-    icon: <FinanceIcon />,
-    children: [
-      { label: 'Subscriptions', link: '/app/finance/subscriptions' },
-      { label: 'Technicians', link: '/app/finance/technicians' },
-      { label: 'Customers', link: '/app/finance/customers' },
-      { label: 'Requests', link: '/app/finance/requests' },
-    ],
-  },
-  {
-    id: 11,
-    label: 'Fund',
-    link: '/app/fund',
-    icon: <FundIcon />,
-    children: [
-      { label: 'Fund Management', link: '/app/fund' },
-      { label: 'Fund Transactions', link: '/app/fund/transactions' },
-      { label: 'Fund Reports', link: '/app/fund/reports' },
-    ],
-  },
-  {
-    id: 10,
-    label: 'Monitoring',
-    link: '/app/monitoring',
-    icon: <MonitoringIcon />,
-    children: [{ label: 'Monitoring Dashboard', link: '/app/monitoring' }],
-  },
-  {
-    id: 12,
-    label: 'Subscriptions',
-    link: '#',
-    icon: <SubscriptionsIcon />,
-    children: [
-      { label: 'All Subscriptions', link: '/app/subscriptions' },
-      { label: 'Rate Cards', link: '/app/rate-cards' },
-      { label: 'Payment Methods', link: '/app/payment-methods' },
-    ],
-  },
-  {
-    id: 9,
-    label: 'Settings',
-    link: '#',
-    icon: <SettingsIcon />,
-    children: [
-      { label: 'Users', link: '/app/users' },
-      { label: 'Roles', link: '/app/roles' },
-      { label: 'Permissions', link: '/app/permissions' },
-      { label: 'Audit Logs', link: '/app/audit' },
-      { label: 'OTP Management', link: '/app/otp' },
-      { label: 'Profile', link: '/app/profile' },
-    ],
-  },
-];
-
-export default staticStructure;
+export default getSidebarStructure;

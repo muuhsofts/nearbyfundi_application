@@ -1,36 +1,19 @@
 // src/pages/roles/RolePermissionsModal.js
 import React, { useState, useEffect } from 'react';
 import {
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    Button,
-    Box,
-    CircularProgress,
-    Checkbox,
-    FormControlLabel,
-    Typography,
-    Divider,
-    TextField,
-    InputAdornment,
-    Accordion,
-    AccordionSummary,
-    AccordionDetails,
-    useMediaQuery,
-    useTheme,
-    IconButton,
-    Stack,
+    Dialog, DialogTitle, DialogContent, DialogActions, Button, Box,
+    CircularProgress, Checkbox, FormControlLabel, Typography, Divider,
+    TextField, InputAdornment, Accordion, AccordionSummary, AccordionDetails,
+    useMediaQuery, useTheme, IconButton, Stack,
 } from '@mui/material';
 import {
-    Search as SearchIcon,
-    ExpandMore as ExpandMoreIcon,
-    Close as CloseIcon,
-    Clear as ClearIcon,
+    Search as SearchIcon, ExpandMore as ExpandMoreIcon, Close as CloseIcon, Clear as ClearIcon,
 } from '@mui/icons-material';
 import { roleService } from 'services/role.service';
 import { permissionService } from 'services/permission.service';
+import { useLanguage } from 'context/LanguageContext';
 import { showSnackbar } from 'utils/snackbar';
+import { tRole } from './rolelang';
 import appConfig from '../../config';
 
 const colors = appConfig.app.colors;
@@ -58,6 +41,8 @@ const groupPermissions = (permissions) => {
 export default function RolePermissionsModal({ open, onClose, role }) {
     const theme = useTheme();
     const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
+    const { language } = useLanguage();
+    const t = (key) => tRole(language, key);
 
     const [loading, setLoading] = useState(false);
     const [allPermissions, setAllPermissions] = useState([]);
@@ -83,7 +68,7 @@ export default function RolePermissionsModal({ open, onClose, role }) {
             setSelectedPermissionIds(currentIds);
         } catch (err) {
             console.error(err);
-            showSnackbar({ type: 'error', message: 'Failed to load permissions' });
+            showSnackbar({ type: 'error', message: t('role.perm.loadFailed') });
         } finally {
             setLoading(false);
         }
@@ -99,10 +84,10 @@ export default function RolePermissionsModal({ open, onClose, role }) {
         setLoading(true);
         try {
             await roleService.assignPermissionsToRole(role.id, selectedPermissionIds);
-            showSnackbar({ type: 'success', message: 'Permissions updated successfully' });
+            showSnackbar({ type: 'success', message: t('role.perm.updated') });
             onClose();
         } catch (err) {
-            showSnackbar({ type: 'error', message: 'Failed to sync permissions' });
+            showSnackbar({ type: 'error', message: t('role.perm.failed') });
         } finally {
             setLoading(false);
         }
@@ -142,10 +127,10 @@ export default function RolePermissionsModal({ open, onClose, role }) {
             >
                 <Box>
                     <Typography variant="h6" fontWeight={800} color="text.primary">
-                        Manage Permissions
+                        {t('role.perm.title')}
                     </Typography>
                     <Typography variant="body2" color="text.secondary" fontWeight={500} sx={{ mt: 0.25 }}>
-                        Role: <strong>{role?.display_name || role?.name}</strong>
+                        {t('role.perm.roleLabel')}: <strong>{role?.display_name || role?.name}</strong>
                     </Typography>
                 </Box>
                 <IconButton
@@ -166,7 +151,7 @@ export default function RolePermissionsModal({ open, onClose, role }) {
 
             <DialogContent sx={{ px: { xs: 2.5, sm: 3 }, py: 2.5 }}>
                 <TextField
-                    placeholder="Search permissions…"
+                    placeholder={t('role.perm.search')}
                     size="small"
                     fullWidth
                     value={search}
@@ -207,7 +192,7 @@ export default function RolePermissionsModal({ open, onClose, role }) {
                             <Typography
                                 sx={{ textAlign: 'center', py: 4, color: 'text.secondary', fontWeight: 500 }}
                             >
-                                No permissions found
+                                {t('role.perm.noFound')}
                             </Typography>
                         ) : (
                             <Stack spacing={1.25}>
@@ -309,7 +294,7 @@ export default function RolePermissionsModal({ open, onClose, role }) {
                         '&:hover': { bgcolor: 'action.hover' },
                     }}
                 >
-                    Cancel
+                    {t('role.cancel')}
                 </Button>
                 <Button
                     onClick={handleSave}
@@ -331,7 +316,7 @@ export default function RolePermissionsModal({ open, onClose, role }) {
                     {loading ? (
                         <CircularProgress size={22} thickness={4} sx={{ color: '#fff' }} />
                     ) : (
-                        'Save Changes'
+                        t('role.perm.save')
                     )}
                 </Button>
             </DialogActions>

@@ -1,14 +1,12 @@
 // src/pages/finance/FinanceLayout.js
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { Box, Paper, Tabs, Tab } from '@mui/material';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
+import { useLanguage } from 'context/LanguageContext';
+import { tFin } from './financelang';
 import appConfig from '../../config';
 
-// Primary Report Provider
 import { ReportProvider } from 'context/ReportContext';
-
-// Import your module-specific Finance Providers
-// Adjust these import paths to match your context file locations
 import { FinanceSubscriptionProvider } from 'context/FinanceSubscriptionContext';
 import { FinanceTechnicianProvider } from 'context/FinanceTechnicianContext';
 import { FinanceCustomerProvider } from 'context/FinanceCustomerContext';
@@ -16,25 +14,27 @@ import { FinanceRequestProvider } from 'context/FinanceRequestContext';
 
 const colors = appConfig.app.colors;
 
-const TABS = [
-    { label: 'Subscriptions', value: '/app/finance/subscriptions' },
-    { label: 'Technicians', value: '/app/finance/technicians' },
-    { label: 'Customers', value: '/app/finance/customers' },
-    { label: 'Requests', value: '/app/finance/requests' },
+const getTabs = (t) => [
+    { label: t('fin.layout.subscriptions'), value: '/app/finance/subscriptions' },
+    { label: t('fin.layout.technicians'), value: '/app/finance/technicians' },
+    { label: t('fin.layout.customers'), value: '/app/finance/customers' },
+    { label: t('fin.layout.requests'), value: '/app/finance/requests' },
 ];
 
 const FinanceLayoutContent = () => {
     const location = useLocation();
     const navigate = useNavigate();
 
-    // Auto-redirect base /app/finance route to first tab
+    const { language } = useLanguage();
+    const t = (key, replacements) => tFin(language, key, replacements);
+    const TABS = useMemo(() => getTabs(t), [language]);
+
     useEffect(() => {
         if (location.pathname === '/app/finance' || location.pathname === '/app/finance/') {
             navigate('/app/finance/subscriptions', { replace: true });
         }
     }, [location.pathname, navigate]);
 
-    // Active tab matching (returns false if no tab matches to prevent MUI console error)
     const currentTab = TABS.find((tab) => location.pathname.startsWith(tab.value))?.value || false;
 
     return (
@@ -78,7 +78,6 @@ const FinanceLayoutContent = () => {
     );
 };
 
-// Provider composer helper for Finance module
 const FINANCE_PROVIDERS = [
     ReportProvider,
     FinanceSubscriptionProvider,

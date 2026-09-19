@@ -1,69 +1,34 @@
 // src/pages/roles/RoleList.js
 import React, { useState, useEffect } from 'react';
 import {
-    Box,
-    Button,
-    Chip,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogTitle,
-    IconButton,
-    InputAdornment,
-    Menu,
-    MenuItem,
-    Paper,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TablePagination,
-    TableRow,
-    TextField,
-    Typography,
-    useTheme,
-    useMediaQuery,
-    Card,
-    CardContent,
-    Divider,
-    CircularProgress,
-    Alert,
-    Stack,
+    Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
+    IconButton, InputAdornment, Menu, MenuItem, Paper, Table, TableBody,
+    TableCell, TableContainer, TableHead, TablePagination, TableRow, TextField,
+    Typography, useTheme, useMediaQuery, Card, CardContent, Divider,
+    CircularProgress, Alert, Stack,
 } from '@mui/material';
 import {
-    Add as AddIcon,
-    Edit as EditIcon,
-    Refresh as RefreshIcon,
-    Search as SearchIcon,
-    MoreVert as MoreVertIcon,
-    VpnKey as PermissionsIcon,
-    Shield as ShieldIcon,
-    Description as DescriptionIcon,
-    Delete as DeleteIcon,
-    Clear as ClearIcon,
+    Add as AddIcon, Edit as EditIcon, Refresh as RefreshIcon, Search as SearchIcon,
+    MoreVert as MoreVertIcon, VpnKey as PermissionsIcon, Shield as ShieldIcon,
+    Description as DescriptionIcon, Delete as DeleteIcon, Clear as ClearIcon,
 } from '@mui/icons-material';
 import { roleService } from 'services/role.service';
 import { usePermissions } from 'hooks/usePermissions';
+import { useLanguage } from 'context/LanguageContext';
 import { showSnackbar } from 'utils/snackbar';
 import RoleFormModal from './RoleFormModal';
 import RolePermissionsModal from './RolePermissionsModal';
+import { tRole } from './rolelang';
 import appConfig from '../../config';
 
 const colors = appConfig.app.colors;
-
-const headCells = [
-    { id: 'name', label: 'Role Name' },
-    { id: 'display_name', label: 'Display Name' },
-    { id: 'description', label: 'Description' },
-    { id: 'guard_name', label: 'Guard' },
-    { id: 'actions', label: 'Actions', disableSort: true },
-];
 
 export default function RoleList() {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const showTableView = useMediaQuery(theme.breakpoints.up('md'));
+    const { language } = useLanguage();
+    const t = (key) => tRole(language, key);
 
     const { can } = usePermissions();
     const canView = can('roles.view');
@@ -91,6 +56,14 @@ export default function RoleList() {
         action: null,
     });
 
+    const headCells = [
+        { id: 'name', label: t('role.col.name') },
+        { id: 'display_name', label: t('role.col.displayName') },
+        { id: 'description', label: t('role.col.description') },
+        { id: 'guard_name', label: t('role.col.guard') },
+        { id: 'actions', label: t('role.col.actions'), disableSort: true },
+    ];
+
     const fetchRoles = async () => {
         if (!canView) return;
         setLoading(true);
@@ -117,12 +90,12 @@ export default function RoleList() {
             } else {
                 setRoles([]);
                 setTotal(0);
-                setError(response?.data?.message || 'Failed to load roles');
+                setError(response?.data?.message || t('role.loadFailed'));
             }
         } catch (err) {
             console.error('Roles error:', err);
-            setError(err.message || 'Failed to load roles');
-            showSnackbar({ type: 'error', message: 'Failed to load roles' });
+            setError(err.message || t('role.loadFailed'));
+            showSnackbar({ type: 'error', message: t('role.loadFailed') });
             setRoles([]);
             setTotal(0);
         } finally {
@@ -173,11 +146,11 @@ export default function RoleList() {
         if (!selectedRole) return;
         setConfirmDialog({
             open: true,
-            title: 'Delete Role',
-            message: `Are you sure you want to delete role "${selectedRole.name}"?`,
+            title: t('role.deleteTitle'),
+            message: t('role.deleteMessage').replace('{name}', selectedRole.name),
             action: async () => {
                 await roleService.deleteRole(selectedRole.id);
-                showSnackbar({ type: 'success', message: 'Role deleted successfully' });
+                showSnackbar({ type: 'success', message: t('role.deleted') });
             },
         });
         handleMenuClose();
@@ -192,7 +165,7 @@ export default function RoleList() {
         } catch (err) {
             showSnackbar({
                 type: 'error',
-                message: err.response?.data?.message || 'Action failed',
+                message: err.response?.data?.message || t('role.actionFailed'),
             });
         }
     };
@@ -211,10 +184,10 @@ export default function RoleList() {
                     }}
                 >
                     <Typography color="error" fontWeight={600} variant="h6" gutterBottom>
-                        Access Denied
+                        {t('role.accessDenied')}
                     </Typography>
                     <Typography color="text.secondary">
-                        You do not have permission to view roles.
+                        {t('role.noPermission')}
                     </Typography>
                 </Paper>
             </Box>
@@ -236,7 +209,7 @@ export default function RoleList() {
                                 fetchRoles();
                             }}
                         >
-                            Retry
+                            {t('role.retry')}
                         </Button>
                     }
                     sx={{ borderRadius: 2 }}
@@ -280,10 +253,10 @@ export default function RoleList() {
                     >
                         <Box>
                             <Typography variant="h5" fontWeight={800} color="text.primary">
-                                Roles
+                                {t('role.title')}
                             </Typography>
                             <Typography variant="body2" color="text.secondary" fontWeight={500}>
-                                Manage system roles and their permissions
+                                {t('role.subtitle')}
                             </Typography>
                         </Box>
 
@@ -306,7 +279,7 @@ export default function RoleList() {
                                     },
                                 }}
                             >
-                                Add Role
+                                {t('role.add')}
                             </Button>
                         )}
                     </Stack>
@@ -317,7 +290,7 @@ export default function RoleList() {
                         alignItems={{ xs: 'stretch', sm: 'center' }}
                     >
                         <TextField
-                            placeholder="Search roles…"
+                            placeholder={t('role.searchPlaceholder')}
                             size="small"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
@@ -365,7 +338,7 @@ export default function RoleList() {
                                 },
                             }}
                         >
-                            Refresh
+                            {t('role.refresh')}
                         </Button>
                     </Stack>
                 </Box>
@@ -406,7 +379,7 @@ export default function RoleList() {
                                     <TableRow>
                                         <TableCell colSpan={5} align="center" sx={{ py: 8 }}>
                                             <Typography color="text.secondary" fontWeight={500}>
-                                                No roles found
+                                                {t('role.noFound')}
                                             </Typography>
                                         </TableCell>
                                     </TableRow>
@@ -493,7 +466,7 @@ export default function RoleList() {
                                 }}
                             >
                                 <Typography color="text.secondary" fontWeight={500}>
-                                    No roles found
+                                    {t('role.noFound')}
                                 </Typography>
                             </Paper>
                         ) : (
@@ -560,7 +533,7 @@ export default function RoleList() {
                                             <Stack direction="row" spacing={1} alignItems="center">
                                                 <ShieldIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
                                                 <Typography variant="caption" color="text.secondary" fontWeight={500}>
-                                                    Guard: {role.guard_name}
+                                                    {t('role.guard')}: {role.guard_name}
                                                 </Typography>
                                             </Stack>
                                         </CardContent>
@@ -613,16 +586,16 @@ export default function RoleList() {
             >
                 {canEdit && (
                     <MenuItem onClick={handleEdit} sx={{ fontWeight: 500 }}>
-                        <EditIcon sx={{ mr: 1.5, fontSize: 20, color: colors.sea || '#0f766e' }} /> Edit
+                        <EditIcon sx={{ mr: 1.5, fontSize: 20, color: colors.sea || '#0f766e' }} /> {t('role.edit')}
                     </MenuItem>
                 )}
                 {canAssignPermissions && (
                     <MenuItem onClick={handlePermissions} sx={{ fontWeight: 500 }}>
-                        <PermissionsIcon sx={{ mr: 1.5, fontSize: 20 }} /> Assign Permissions
+                        <PermissionsIcon sx={{ mr: 1.5, fontSize: 20 }} /> {t('role.assignPermissions')}
                     </MenuItem>
                 )}
                 <MenuItem onClick={handleDelete} sx={{ color: 'error.main', fontWeight: 500 }}>
-                    <DeleteIcon sx={{ mr: 1.5, fontSize: 20 }} /> Delete
+                    <DeleteIcon sx={{ mr: 1.5, fontSize: 20 }} /> {t('role.delete')}
                 </MenuItem>
             </Menu>
 
@@ -653,7 +626,7 @@ export default function RoleList() {
                         onClick={() => setConfirmDialog((prev) => ({ ...prev, open: false }))}
                         sx={{ fontWeight: 600, textTransform: 'none' }}
                     >
-                        Cancel
+                        {t('role.cancel')}
                     </Button>
                     <Button
                         onClick={handleConfirm}
@@ -661,7 +634,7 @@ export default function RoleList() {
                         color="error"
                         sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 2 }}
                     >
-                        Confirm
+                        {t('role.confirm')}
                     </Button>
                 </DialogActions>
             </Dialog>

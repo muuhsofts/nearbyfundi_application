@@ -1,39 +1,20 @@
-// src/pages/privacy/PrivacyPolicyPage.js
+// src/pages/privacy-policy/PrivacyPolicyPage.js
 import React, { useState, useEffect } from 'react';
 import {
-    Box,
-    Paper,
-    Typography,
-    Button,
-    CircularProgress,
-    Alert,
-    Card,
-    CardContent,
-    IconButton,
-    Tooltip,
-    TextField,
-    InputAdornment,
-    useMediaQuery,
-    useTheme,
-    Stack,
-    Grid,
-    alpha,
+    Box, Paper, Typography, Button, CircularProgress, Alert, Card, CardContent,
+    IconButton, TextField, InputAdornment, useMediaQuery, useTheme, Stack, Grid, alpha,
 } from '@mui/material';
 import {
-    Edit as EditIcon,
-    Refresh as RefreshIcon,
-    Add as AddIcon,
-    Delete as DeleteIcon,
-    Search as SearchIcon,
-    Clear as ClearIcon,
-    Description as DescriptionIcon,
-    History as HistoryIcon,
-    PrivacyTip as PrivacyTipIcon,
+    Edit as EditIcon, Refresh as RefreshIcon, Add as AddIcon, Delete as DeleteIcon,
+    Search as SearchIcon, Clear as ClearIcon, Description as DescriptionIcon,
+    History as HistoryIcon, PrivacyTip as PrivacyTipIcon,
 } from '@mui/icons-material';
 import { usePrivacyPolicyManagement } from 'hooks/usePrivacyPolicy';
 import { usePermissions } from 'hooks/usePermissions';
+import { useLanguage } from 'context/LanguageContext';
 import { showSnackbar } from 'utils/snackbar';
 import PrivacyPolicyFormModal from './components/PrivacyPolicyFormModal';
+import { tPrivacy } from './privacylang';
 import appConfig from '../../config';
 
 const colors = appConfig.app.colors;
@@ -41,6 +22,8 @@ const colors = appConfig.app.colors;
 const PrivacyPolicyPage = () => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+    const { language } = useLanguage();
+    const t = (key) => tPrivacy(language, key);
 
     const {
         privacyPolicies,
@@ -64,7 +47,7 @@ const PrivacyPolicyPage = () => {
         try {
             await getPrivacyPolicy();
         } catch {
-            showSnackbar({ type: 'error', message: 'Failed to load privacy policy' });
+            showSnackbar({ type: 'error', message: t('privacy.loadFailed') });
         }
     };
 
@@ -84,21 +67,28 @@ const PrivacyPolicyPage = () => {
     };
 
     const handleDelete = async (id) => {
-        if (!window.confirm('Are you sure you want to delete this privacy policy?')) return;
+        if (!window.confirm(t('privacy.deleteConfirm'))) return;
         try {
             await deletePrivacyPolicy(id);
-            showSnackbar({ type: 'success', message: 'Privacy policy deleted successfully' });
+            showSnackbar({ type: 'success', message: t('privacy.deleted') });
             loadPolicy();
         } catch (err) {
-            showSnackbar({ type: 'error', message: err.response?.data?.message || 'Delete failed' });
+            showSnackbar({
+                type: 'error',
+                message: err.response?.data?.message || t('privacy.deleteFailed'),
+            });
         }
     };
 
-    const policyData = Array.isArray(privacyPolicies) && privacyPolicies.length > 0 ? privacyPolicies[0] : null;
+    const policyData =
+        Array.isArray(privacyPolicies) && privacyPolicies.length > 0
+            ? privacyPolicies[0]
+            : null;
 
-    // Search filter
     const filteredContent = search.trim()
-        ? policyData?.content?.toLowerCase().includes(search.toLowerCase()) ? policyData : null
+        ? policyData?.content?.toLowerCase().includes(search.toLowerCase())
+            ? policyData
+            : null
         : policyData;
 
     if (loading) {
@@ -116,7 +106,7 @@ const PrivacyPolicyPage = () => {
                     severity="error"
                     action={
                         <Button color="inherit" size="small" onClick={() => { clearError(); loadPolicy(); }}>
-                            Retry
+                            {t('privacy.retry')}
                         </Button>
                     }
                     sx={{ borderRadius: 2 }}
@@ -140,15 +130,8 @@ const PrivacyPolicyPage = () => {
                     bgcolor: 'background.paper',
                 }}
             >
-                {/* ── HEADER ────────────────────────────────────────────── */}
-                <Box
-                    sx={{
-                        px: { xs: 2, sm: 3 },
-                        py: 2.5,
-                        borderBottom: '1px solid',
-                        borderColor: 'divider',
-                    }}
-                >
+                {/* HEADER */}
+                <Box sx={{ px: { xs: 2, sm: 3 }, py: 2.5, borderBottom: '1px solid', borderColor: 'divider' }}>
                     <Stack
                         direction={{ xs: 'column', sm: 'row' }}
                         justifyContent="space-between"
@@ -158,10 +141,10 @@ const PrivacyPolicyPage = () => {
                     >
                         <Box>
                             <Typography variant="h5" fontWeight={800} color="text.primary">
-                                Privacy Policy
+                                {t('privacy.title')}
                             </Typography>
                             <Typography variant="body2" color="text.secondary" fontWeight={500}>
-                                Manage your privacy policy content
+                                {t('privacy.subtitle')}
                             </Typography>
                         </Box>
 
@@ -185,7 +168,7 @@ const PrivacyPolicyPage = () => {
                                         },
                                     }}
                                 >
-                                    Create Policy
+                                    {t('privacy.create')}
                                 </Button>
                             ) : canEdit && (
                                 <>
@@ -207,7 +190,7 @@ const PrivacyPolicyPage = () => {
                                             },
                                         }}
                                     >
-                                        Edit
+                                        {t('privacy.edit')}
                                     </Button>
                                     <Button
                                         variant="contained"
@@ -227,7 +210,7 @@ const PrivacyPolicyPage = () => {
                                             },
                                         }}
                                     >
-                                        Delete
+                                        {t('privacy.delete')}
                                     </Button>
                                 </>
                             )}
@@ -244,26 +227,18 @@ const PrivacyPolicyPage = () => {
                                     textTransform: 'none',
                                     borderColor: 'divider',
                                     color: 'text.primary',
-                                    '&:hover': {
-                                        borderColor: 'text.primary',
-                                        bgcolor: 'action.hover',
-                                    },
+                                    '&:hover': { borderColor: 'text.primary', bgcolor: 'action.hover' },
                                 }}
                             >
-                                Refresh
+                                {t('privacy.refresh')}
                             </Button>
                         </Stack>
                     </Stack>
 
-                    {/* ── FILTERS ──────────────────────────────────────── */}
-                    <Stack
-                        direction={{ xs: 'column', sm: 'row' }}
-                        spacing={1.5}
-                        alignItems={{ xs: 'stretch', sm: 'center' }}
-                        flexWrap="wrap"
-                    >
+                    {/* SEARCH */}
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', sm: 'center' }}>
                         <TextField
-                            placeholder="Search content..."
+                            placeholder={t('privacy.searchPlaceholder')}
                             size="small"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
@@ -296,13 +271,33 @@ const PrivacyPolicyPage = () => {
                     </Stack>
                 </Box>
 
-                {/* ── SUMMARY CARDS ────────────────────────────────────── */}
+                {/* SUMMARY CARDS */}
                 <Box sx={{ px: { xs: 2, sm: 3 }, pt: 2.5, pb: 1 }}>
                     <Grid container spacing={2}>
                         {[
-                            { label: 'Status', value: policyData ? 'Published' : 'Not Created', color: policyData ? '#10b981' : '#f59e0b', bg: policyData ? '#ecfdf5' : '#fef3c7', icon: <PrivacyTipIcon sx={{ fontSize: 18 }} /> },
-                            { label: 'Word Count', value: policyData?.content?.split(/\s+/).filter(Boolean).length || 0, color: '#3b82f6', bg: '#eff6ff', icon: <DescriptionIcon sx={{ fontSize: 18 }} /> },
-                            { label: 'Last Updated', value: policyData?.updated_at ? new Date(policyData.updated_at).toLocaleDateString() : 'Never', color: '#8b5cf6', bg: '#f3e8ff', icon: <HistoryIcon sx={{ fontSize: 18 }} /> },
+                            {
+                                label: t('privacy.status'),
+                                value: policyData ? t('privacy.published') : t('privacy.notCreated'),
+                                color: policyData ? '#10b981' : '#f59e0b',
+                                bg: policyData ? '#ecfdf5' : '#fef3c7',
+                                icon: <PrivacyTipIcon sx={{ fontSize: 18 }} />,
+                            },
+                            {
+                                label: t('privacy.wordCount'),
+                                value: policyData?.content?.split(/\s+/).filter(Boolean).length || 0,
+                                color: '#3b82f6',
+                                bg: '#eff6ff',
+                                icon: <DescriptionIcon sx={{ fontSize: 18 }} />,
+                            },
+                            {
+                                label: t('privacy.lastUpdated'),
+                                value: policyData?.updated_at
+                                    ? new Date(policyData.updated_at).toLocaleDateString()
+                                    : t('privacy.never'),
+                                color: '#8b5cf6',
+                                bg: '#f3e8ff',
+                                icon: <HistoryIcon sx={{ fontSize: 18 }} />,
+                            },
                         ].map((item, idx) => (
                             <Grid item xs={6} sm={4} key={idx}>
                                 <Card
@@ -332,7 +327,7 @@ const PrivacyPolicyPage = () => {
                     </Grid>
                 </Box>
 
-                {/* ── CONTENT DISPLAY ──────────────────────────────────── */}
+                {/* CONTENT */}
                 <Box sx={{ p: { xs: 2, sm: 3 } }}>
                     <Card
                         variant="outlined"
@@ -375,31 +370,30 @@ const PrivacyPolicyPage = () => {
                                     >
                                         <Typography variant="caption" color="text.secondary">
                                             <HistoryIcon sx={{ fontSize: 14, mr: 0.5, verticalAlign: 'middle' }} />
-                                            Last updated: {filteredContent.updated_at
-                                            ? new Date(filteredContent.updated_at).toLocaleString()
-                                            : 'Never'}
+                                            {t('privacy.lastUpdatedLabel')}:{' '}
+                                            {filteredContent.updated_at
+                                                ? new Date(filteredContent.updated_at).toLocaleString()
+                                                : t('privacy.never')}
                                         </Typography>
                                         {filteredContent.created_at && (
                                             <Typography variant="caption" color="text.secondary">
-                                                Created: {new Date(filteredContent.created_at).toLocaleString()}
+                                                {t('privacy.created')}: {new Date(filteredContent.created_at).toLocaleString()}
                                             </Typography>
                                         )}
                                         <Typography variant="caption" color="text.secondary">
-                                            {filteredContent.content.split(/\s+/).filter(Boolean).length} words
+                                            {filteredContent.content.split(/\s+/).filter(Boolean).length} {t('privacy.words')}
                                         </Typography>
                                     </Box>
                                 </>
                             ) : search ? (
                                 <Box textAlign="center" py={3}>
-                                    <Typography color="text.secondary">
-                                        No content matches your search.
-                                    </Typography>
+                                    <Typography color="text.secondary">{t('privacy.noMatch')}</Typography>
                                 </Box>
                             ) : (
                                 <Box textAlign="center" py={4}>
                                     <PrivacyTipIcon sx={{ fontSize: 56, color: 'text.disabled', mb: 1.5 }} />
                                     <Typography color="text.secondary" fontWeight={500}>
-                                        No privacy policy content available.
+                                        {t('privacy.noContent')}
                                     </Typography>
                                     {!policyData && canEdit && (
                                         <Button
@@ -415,7 +409,7 @@ const PrivacyPolicyPage = () => {
                                                 '&:hover': { bgcolor: colors.dark || '#047857' },
                                             }}
                                         >
-                                            Create Privacy Policy
+                                            {t('privacy.createPage')}
                                         </Button>
                                     )}
                                 </Box>
@@ -425,7 +419,6 @@ const PrivacyPolicyPage = () => {
                 </Box>
             </Paper>
 
-            {/* ─── PRIVACY POLICY FORM MODAL ───────────────────────────── */}
             <PrivacyPolicyFormModal
                 open={modalOpen}
                 onClose={handleCloseModal}

@@ -1,22 +1,13 @@
 // src/pages/terms/TermsFormModal.js
 import React, { useState, useEffect } from 'react';
 import {
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    TextField,
-    Button,
-    Box,
-    CircularProgress,
-    useMediaQuery,
-    useTheme,
-    Typography,
-    IconButton,
-    Stack,
+    Dialog, DialogTitle, DialogContent, DialogActions, TextField, Button,
+    CircularProgress, useMediaQuery, useTheme, Typography, IconButton, Stack,
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
+import { useLanguage } from 'context/LanguageContext';
 import { showSnackbar } from 'utils/snackbar';
+import { tTerms } from './termslang';
 import appConfig from '../../config';
 
 const colors = appConfig.app.colors;
@@ -24,6 +15,8 @@ const colors = appConfig.app.colors;
 export default function TermsFormModal({ open, onClose, termsData, createTerms, updateTerms }) {
     const theme = useTheme();
     const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
+    const { language } = useLanguage();
+    const t = (key) => tTerms(language, key);
 
     const [loading, setLoading] = useState(false);
     const [form, setForm] = useState({ content: '' });
@@ -41,7 +34,7 @@ export default function TermsFormModal({ open, onClose, termsData, createTerms, 
 
     const validate = () => {
         const newErrors = {};
-        if (!form.content.trim()) newErrors.content = 'Content is required';
+        if (!form.content.trim()) newErrors.content = t('terms.modal.required');
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
@@ -54,14 +47,17 @@ export default function TermsFormModal({ open, onClose, termsData, createTerms, 
         try {
             if (termsData) {
                 await updateTerms({ content: form.content });
-                showSnackbar({ type: 'success', message: 'Terms & Conditions updated successfully' });
+                showSnackbar({ type: 'success', message: t('terms.modal.updated') });
             } else {
                 await createTerms({ content: form.content });
-                showSnackbar({ type: 'success', message: 'Terms & Conditions created successfully' });
+                showSnackbar({ type: 'success', message: t('terms.modal.created') });
             }
             onClose(true);
         } catch (err) {
-            showSnackbar({ type: 'error', message: err.response?.data?.message || 'Operation failed' });
+            showSnackbar({
+                type: 'error',
+                message: err.response?.data?.message || t('terms.modal.failed'),
+            });
         } finally {
             setLoading(false);
         }
@@ -80,7 +76,7 @@ export default function TermsFormModal({ open, onClose, termsData, createTerms, 
                     border: '1px solid',
                     borderColor: 'divider',
                     margin: fullScreen ? 0 : 2,
-                }
+                },
             }}
         >
             <form onSubmit={handleSubmit}>
@@ -97,14 +93,11 @@ export default function TermsFormModal({ open, onClose, termsData, createTerms, 
                         color: 'text.primary',
                     }}
                 >
-                    {termsData ? 'Edit Terms & Conditions' : 'Create Terms & Conditions'}
+                    {termsData ? t('terms.modal.editTitle') : t('terms.modal.createTitle')}
                     <IconButton
                         onClick={() => onClose(false)}
                         size="small"
-                        sx={{
-                            color: 'text.secondary',
-                            '&:hover': { bgcolor: 'action.hover' },
-                        }}
+                        sx={{ color: 'text.secondary', '&:hover': { bgcolor: 'action.hover' } }}
                     >
                         <CloseIcon />
                     </IconButton>
@@ -113,13 +106,11 @@ export default function TermsFormModal({ open, onClose, termsData, createTerms, 
                 <DialogContent sx={{ pt: 3, pb: 1 }}>
                     <Stack spacing={2.5}>
                         <Typography variant="body2" color="text.secondary">
-                            {termsData
-                                ? 'Update the terms and conditions content below.'
-                                : 'Create new terms and conditions content.'}
+                            {termsData ? t('terms.modal.editDesc') : t('terms.modal.createDesc')}
                         </Typography>
 
                         <TextField
-                            label="Content"
+                            label={t('terms.modal.content')}
                             name="content"
                             value={form.content}
                             onChange={handleChange}
@@ -129,7 +120,7 @@ export default function TermsFormModal({ open, onClose, termsData, createTerms, 
                             rows={14}
                             error={!!errors.content}
                             helperText={errors.content}
-                            placeholder="Enter terms and conditions content..."
+                            placeholder={t('terms.modal.placeholder')}
                             disabled={loading}
                             sx={{
                                 '& .MuiOutlinedInput-root': {
@@ -138,9 +129,7 @@ export default function TermsFormModal({ open, onClose, termsData, createTerms, 
                                     fontSize: '1rem',
                                     lineHeight: 1.8,
                                     bgcolor: 'action.hover',
-                                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                                        borderColor: colors.sea,
-                                    },
+                                    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: colors.sea },
                                     '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
                                         borderColor: colors.sea,
                                         borderWidth: 2,
@@ -148,9 +137,7 @@ export default function TermsFormModal({ open, onClose, termsData, createTerms, 
                                 },
                                 '& .MuiInputLabel-root': {
                                     color: 'text.secondary',
-                                    '&.Mui-focused': {
-                                        color: colors.sea,
-                                    },
+                                    '&.Mui-focused': { color: colors.sea },
                                 },
                             }}
                         />
@@ -168,7 +155,7 @@ export default function TermsFormModal({ open, onClose, termsData, createTerms, 
                             '&:hover': { bgcolor: 'action.hover' },
                         }}
                     >
-                        Cancel
+                        {t('terms.modal.cancel')}
                     </Button>
                     <Button
                         type="submit"
@@ -184,7 +171,13 @@ export default function TermsFormModal({ open, onClose, termsData, createTerms, 
                             '&:disabled': { opacity: 0.6 },
                         }}
                     >
-                        {loading ? <CircularProgress size={24} color="inherit" /> : (termsData ? 'Update' : 'Create')}
+                        {loading ? (
+                            <CircularProgress size={24} color="inherit" />
+                        ) : termsData ? (
+                            t('terms.modal.update')
+                        ) : (
+                            t('terms.modal.create')
+                        )}
                     </Button>
                 </DialogActions>
             </form>

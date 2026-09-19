@@ -1,24 +1,14 @@
 // src/pages/roles/RoleFormModal.js
 import React, { useState, useEffect } from 'react';
 import {
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    TextField,
-    Button,
-    Box,
-    CircularProgress,
-    useMediaQuery,
-    useTheme,
-    Typography,
-    IconButton,
-    Stack,
-    Divider,
+    Dialog, DialogTitle, DialogContent, DialogActions, TextField, Button,
+    Box, CircularProgress, useMediaQuery, useTheme, Typography, IconButton, Stack, Divider,
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
 import { useRoleManagement } from 'hooks/useRole';
+import { useLanguage } from 'context/LanguageContext';
 import { showSnackbar } from 'utils/snackbar';
+import { tRole } from './rolelang';
 import appConfig from '../../config';
 
 const colors = appConfig.app.colors;
@@ -26,6 +16,8 @@ const colors = appConfig.app.colors;
 export default function RoleFormModal({ open, onClose, role }) {
     const theme = useTheme();
     const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
+    const { language } = useLanguage();
+    const t = (key) => tRole(language, key);
 
     const { createRole, updateRole } = useRoleManagement();
     const [loading, setLoading] = useState(false);
@@ -64,16 +56,16 @@ export default function RoleFormModal({ open, onClose, role }) {
         try {
             if (role) {
                 await updateRole(role.id, form);
-                showSnackbar({ type: 'success', message: 'Role updated successfully' });
+                showSnackbar({ type: 'success', message: t('role.modal.updated') });
             } else {
                 await createRole(form);
-                showSnackbar({ type: 'success', message: 'Role created successfully' });
+                showSnackbar({ type: 'success', message: t('role.modal.created') });
             }
             onClose(true);
         } catch (err) {
             showSnackbar({
                 type: 'error',
-                message: err.response?.data?.message || 'Operation failed',
+                message: err.response?.data?.message || t('role.modal.failed'),
             });
         } finally {
             setLoading(false);
@@ -107,10 +99,10 @@ export default function RoleFormModal({ open, onClose, role }) {
                 >
                     <Box>
                         <Typography variant="h6" fontWeight={800} color="text.primary">
-                            {role ? 'Edit Role' : 'Add New Role'}
+                            {role ? t('role.modal.editTitle') : t('role.modal.createTitle')}
                         </Typography>
                         <Typography variant="body2" color="text.secondary" fontWeight={500} sx={{ mt: 0.25 }}>
-                            {role ? 'Update role details below' : 'Create a new role with a unique key'}
+                            {role ? t('role.modal.editDesc') : t('role.modal.createDesc')}
                         </Typography>
                     </Box>
                     <IconButton
@@ -132,14 +124,14 @@ export default function RoleFormModal({ open, onClose, role }) {
                 <DialogContent sx={{ px: { xs: 2.5, sm: 3 }, py: 2.5 }}>
                     <Stack spacing={2.25}>
                         <TextField
-                            label="Role Name (key)"
+                            label={t('role.modal.name')}
                             name="name"
                             value={form.name}
                             onChange={handleChange}
                             required
                             fullWidth
                             size="small"
-                            helperText="Unique identifier, uppercase e.g. ADMINISTRATOR"
+                            helperText={t('role.modal.nameHelp')}
                             sx={{
                                 '& .MuiOutlinedInput-root': {
                                     borderRadius: 2,
@@ -152,7 +144,7 @@ export default function RoleFormModal({ open, onClose, role }) {
                         />
 
                         <TextField
-                            label="Display Name"
+                            label={t('role.modal.displayName')}
                             name="display_name"
                             value={form.display_name}
                             onChange={handleChange}
@@ -171,7 +163,7 @@ export default function RoleFormModal({ open, onClose, role }) {
                         />
 
                         <TextField
-                            label="Description"
+                            label={t('role.modal.description')}
                             name="description"
                             value={form.description}
                             onChange={handleChange}
@@ -191,14 +183,14 @@ export default function RoleFormModal({ open, onClose, role }) {
                         />
 
                         <TextField
-                            label="Guard Name"
+                            label={t('role.modal.guard')}
                             name="guard_name"
                             value={form.guard_name}
                             onChange={handleChange}
                             required
                             fullWidth
                             size="small"
-                            helperText="Usually 'web' or 'api'"
+                            helperText={t('role.modal.guardHelp')}
                             sx={{
                                 '& .MuiOutlinedInput-root': {
                                     borderRadius: 2,
@@ -225,7 +217,7 @@ export default function RoleFormModal({ open, onClose, role }) {
                             '&:hover': { bgcolor: 'action.hover' },
                         }}
                     >
-                        Cancel
+                        {t('role.cancel')}
                     </Button>
                     <Button
                         type="submit"
@@ -247,9 +239,9 @@ export default function RoleFormModal({ open, onClose, role }) {
                         {loading ? (
                             <CircularProgress size={22} thickness={4} sx={{ color: '#fff' }} />
                         ) : role ? (
-                            'Update Role'
+                            t('role.modal.update')
                         ) : (
-                            'Create Role'
+                            t('role.modal.create')
                         )}
                     </Button>
                 </DialogActions>

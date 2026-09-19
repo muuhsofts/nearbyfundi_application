@@ -1,47 +1,22 @@
 // src/pages/services/ServicesList.js
 import React, { useState, useEffect } from 'react';
 import {
-    Box,
-    Paper,
-    Typography,
-    Button,
-    TextField,
-    InputAdornment,
-    IconButton,
-    Menu,
-    MenuItem,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    CircularProgress,
-    useMediaQuery,
-    useTheme,
-    Card,
-    CardContent,
-    Avatar,
-    Tooltip,
-    Alert,
-    Grid,
-    Chip,
-    Stack,
-    alpha,
+    Box, Paper, Typography, Button, TextField, InputAdornment, IconButton,
+    Menu, MenuItem, Dialog, DialogTitle, DialogContent, DialogActions,
+    CircularProgress, useMediaQuery, useTheme, Card, CardContent, Grid,
+    Chip, Stack, alpha, Alert,
 } from '@mui/material';
 import {
-    Add as AddIcon,
-    Search as SearchIcon,
-    Refresh as RefreshIcon,
-    MoreVert as MoreVertIcon,
-    Edit as EditIcon,
-    Delete as DeleteIcon,
-    Build as BuildIcon,
-    People as PeopleIcon,
-    Clear as ClearIcon,
+    Add as AddIcon, Search as SearchIcon, Refresh as RefreshIcon,
+    MoreVert as MoreVertIcon, Edit as EditIcon, Delete as DeleteIcon,
+    Build as BuildIcon, People as PeopleIcon, Clear as ClearIcon,
     Category as CategoryIcon,
 } from '@mui/icons-material';
 import { serviceService } from 'services/service.service';
 import { usePermissions } from 'hooks/usePermissions';
+import { useLanguage } from 'context/LanguageContext';
 import { showSnackbar } from 'utils/snackbar';
+import { tService } from './serviceslang';
 import ServiceFormModal from './ServiceFormModal';
 import TechniciansModal from './TechniciansModal';
 import appConfig from '../../config';
@@ -51,7 +26,9 @@ const colors = appConfig.app.colors;
 const ServicesList = () => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-    const showTableView = useMediaQuery(theme.breakpoints.up('md'));
+
+    const { language } = useLanguage();
+    const t = (key, replacements) => tService(language, key, replacements);
 
     const [groupedData, setGroupedData] = useState([]);
     const [filteredData, setFilteredData] = useState([]);
@@ -65,16 +42,11 @@ const ServicesList = () => {
     const [selectedService, setSelectedService] = useState(null);
 
     const [techniciansModal, setTechniciansModal] = useState({
-        open: false,
-        serviceId: null,
-        serviceName: '',
+        open: false, serviceId: null, serviceName: '',
     });
 
     const [confirmDialog, setConfirmDialog] = useState({
-        open: false,
-        title: '',
-        message: '',
-        action: null,
+        open: false, title: '', message: '', action: null,
     });
 
     const [search, setSearch] = useState('');
@@ -100,7 +72,7 @@ const ServicesList = () => {
             }
         } catch (err) {
             console.error('Grouped services error:', err);
-            setError(err.message || 'Failed to load services');
+            setError(err.message || t('service.list.loadFailed'));
         } finally {
             setLoading(false);
         }
@@ -143,12 +115,12 @@ const ServicesList = () => {
     const handleDelete = async (id) => {
         try {
             await serviceService.deleteService(id);
-            showSnackbar({ type: 'success', message: 'Service deleted successfully' });
+            showSnackbar({ type: 'success', message: t('service.list.deleteSuccess') });
             await loadGroupedServices();
             return true;
         } catch (err) {
             console.error('Delete error:', err);
-            const errorMessage = err.response?.data?.message || 'Failed to delete service';
+            const errorMessage = err.response?.data?.message || t('service.list.deleteFailed');
             showSnackbar({ type: 'error', message: errorMessage });
             throw err;
         }
@@ -158,11 +130,7 @@ const ServicesList = () => {
         if (!confirmDialog.action) return;
         const action = confirmDialog.action;
         setConfirmDialog(prev => ({ ...prev, open: false }));
-        try {
-            await action();
-        } catch (err) {
-            console.error('Confirm action failed:', err);
-        }
+        try { await action(); } catch (err) { console.error('Confirm action failed:', err); }
     };
 
     const handleViewTechnicians = (serviceId, serviceName) => {
@@ -173,15 +141,14 @@ const ServicesList = () => {
         try {
             const response = await serviceService.getService(service.id);
             if (response?.data?.status === 'success') {
-                const fullService = response.data.data;
-                setEditingService(fullService);
+                setEditingService(response.data.data);
                 setOpenModal(true);
             } else {
-                showSnackbar({ type: 'error', message: 'Failed to load service details' });
+                showSnackbar({ type: 'error', message: t('service.list.loadDetailsFailed') });
             }
         } catch (err) {
             console.error('Error fetching service details:', err);
-            showSnackbar({ type: 'error', message: 'Failed to load service details' });
+            showSnackbar({ type: 'error', message: t('service.list.loadDetailsFailed') });
         }
         handleMenuClose();
     };
@@ -189,18 +156,9 @@ const ServicesList = () => {
     if (!canView) {
         return (
             <Box p={3}>
-                <Paper
-                    elevation={0}
-                    sx={{
-                        p: 4,
-                        textAlign: 'center',
-                        borderRadius: 3,
-                        border: '1px solid',
-                        borderColor: 'divider',
-                    }}
-                >
+                <Paper elevation={0} sx={{ p: 4, textAlign: 'center', borderRadius: 3, border: '1px solid', borderColor: 'divider' }}>
                     <Typography color="error" fontWeight={600}>
-                        You do not have permission to view services.
+                        {t('service.accessDenied')}
                     </Typography>
                 </Paper>
             </Box>
@@ -214,7 +172,7 @@ const ServicesList = () => {
                     severity="error"
                     action={
                         <Button color="inherit" size="small" onClick={() => { setError(null); loadGroupedServices(); }}>
-                            Retry
+                            {t('service.common.retry')}
                         </Button>
                     }
                     sx={{ borderRadius: 2 }}
@@ -225,85 +183,52 @@ const ServicesList = () => {
         );
     }
 
-    // Summary stats
     const totalServices = groupedData.reduce((acc, cat) => acc + cat.services.length, 0);
     const totalCategories = groupedData.length;
 
     return (
         <Box sx={{ width: '100%', p: { xs: 1.5, sm: 2.5 }, m: 0, bgcolor: 'background.default' }}>
-            <Paper
-                elevation={0}
-                sx={{
-                    width: '100%',
-                    borderRadius: 3,
-                    overflow: 'hidden',
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    bgcolor: 'background.paper',
-                }}
-            >
-                {/* ── HEADER ────────────────────────────────────────────── */}
-                <Box
-                    sx={{
-                        px: { xs: 2, sm: 3 },
-                        py: 2.5,
-                        borderBottom: '1px solid',
-                        borderColor: 'divider',
-                    }}
-                >
-                    <Stack
-                        direction={{ xs: 'column', sm: 'row' }}
-                        justifyContent="space-between"
-                        alignItems={{ xs: 'stretch', sm: 'center' }}
-                        spacing={2}
-                        mb={2.5}
-                    >
+            <Paper elevation={0} sx={{
+                width: '100%', borderRadius: 3, overflow: 'hidden',
+                border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper',
+            }}>
+                {/* ── HEADER ─────────────────────────────────── */}
+                <Box sx={{ px: { xs: 2, sm: 3 }, py: 2.5, borderBottom: '1px solid', borderColor: 'divider' }}>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between"
+                           alignItems={{ xs: 'stretch', sm: 'center' }} spacing={2} mb={2.5}>
                         <Box>
                             <Typography variant="h5" fontWeight={800} color="text.primary">
-                                Service Management
+                                {t('service.list.title')}
                             </Typography>
                             <Typography variant="body2" color="text.secondary" fontWeight={500}>
-                                Manage service categories and technician assignments
+                                {t('service.list.subtitle')}
                             </Typography>
                         </Box>
 
                         <Stack direction="row" spacing={1.5} alignItems="center" justifyContent={{ xs: 'space-between', sm: 'flex-end' }}>
                             {canCreate && (
                                 <Button
-                                    variant="contained"
-                                    startIcon={<AddIcon />}
+                                    variant="contained" startIcon={<AddIcon />}
                                     onClick={() => { setEditingService(null); setOpenModal(true); }}
                                     size={isMobile ? 'small' : 'medium'}
                                     sx={{
-                                        borderRadius: 2,
-                                        fontWeight: 700,
-                                        textTransform: 'none',
-                                        px: 2.5,
-                                        boxShadow: 'none',
+                                        borderRadius: 2, fontWeight: 700, textTransform: 'none', px: 2.5, boxShadow: 'none',
                                         bgcolor: colors.salat || '#10b981',
-                                        '&:hover': {
-                                            bgcolor: colors.dark || '#047857',
-                                            boxShadow: '0 4px 12px rgba(16,185,129,0.35)',
-                                        },
+                                        '&:hover': { bgcolor: colors.dark || '#047857', boxShadow: '0 4px 12px rgba(16,185,129,0.35)' },
                                     }}
                                 >
-                                    Add Service
+                                    {t('service.list.addService')}
                                 </Button>
                             )}
                         </Stack>
                     </Stack>
 
-                    {/* ── FILTERS ──────────────────────────────────────── */}
-                    <Stack
-                        direction={{ xs: 'column', sm: 'row' }}
-                        spacing={1.5}
-                        alignItems={{ xs: 'stretch', sm: 'center' }}
-                        flexWrap="wrap"
-                    >
+                    {/* ── FILTERS ─────────────────────────────── */}
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}
+                           alignItems={{ xs: 'stretch', sm: 'center' }} flexWrap="wrap">
                         <TextField
-                            placeholder="Search services..."
-                            size="small"
-                            value={search}
+                            placeholder={t('service.list.searchPlaceholder')}
+                            size="small" value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             InputProps={{
                                 startAdornment: (
@@ -320,11 +245,9 @@ const ServicesList = () => {
                                 ) : null,
                             }}
                             sx={{
-                                minWidth: { xs: '100%', sm: 260 },
-                                flexGrow: { xs: 1, sm: 0 },
+                                minWidth: { xs: '100%', sm: 260 }, flexGrow: { xs: 1, sm: 0 },
                                 '& .MuiOutlinedInput-root': {
-                                    borderRadius: 2,
-                                    bgcolor: 'action.hover',
+                                    borderRadius: 2, bgcolor: 'action.hover',
                                     '& fieldset': { borderColor: 'transparent' },
                                     '&:hover fieldset': { borderColor: 'divider' },
                                     '&.Mui-focused fieldset': { borderColor: 'primary.main' },
@@ -333,47 +256,33 @@ const ServicesList = () => {
                         />
 
                         <Button
-                            variant="outlined"
-                            startIcon={<RefreshIcon />}
-                            onClick={loadGroupedServices}
-                            disabled={loading}
+                            variant="outlined" startIcon={<RefreshIcon />}
+                            onClick={loadGroupedServices} disabled={loading}
                             size={isMobile ? 'small' : 'medium'}
                             sx={{
-                                borderRadius: 2,
-                                fontWeight: 600,
-                                textTransform: 'none',
-                                borderColor: 'divider',
-                                color: 'text.primary',
-                                '&:hover': {
-                                    borderColor: 'text.primary',
-                                    bgcolor: 'action.hover',
-                                },
+                                borderRadius: 2, fontWeight: 600, textTransform: 'none',
+                                borderColor: 'divider', color: 'text.primary',
+                                '&:hover': { borderColor: 'text.primary', bgcolor: 'action.hover' },
                             }}
                         >
-                            Refresh
+                            {t('service.common.refresh')}
                         </Button>
                     </Stack>
                 </Box>
 
-                {/* ── SUMMARY CARDS ────────────────────────────────────── */}
+                {/* ── SUMMARY CARDS ────────────────────────── */}
                 <Box sx={{ px: { xs: 2, sm: 3 }, pt: 2.5, pb: 1 }}>
                     <Grid container spacing={2}>
                         {[
-                            { label: 'Total Services', value: totalServices, color: '#3b82f6', bg: '#eff6ff', icon: <BuildIcon sx={{ fontSize: 18 }} /> },
-                            { label: 'Categories', value: totalCategories, color: '#8b5cf6', bg: '#f3e8ff', icon: <CategoryIcon sx={{ fontSize: 18 }} /> },
-                            { label: 'Technicians', value: new Set(groupedData.flatMap(cat => cat.services.flatMap(s => s.technicians?.map(t => t.id) || []))).size, color: '#10b981', bg: '#ecfdf5', icon: <PeopleIcon sx={{ fontSize: 18 }} /> },
+                            { label: t('service.list.stat.totalServices'), value: totalServices, color: '#3b82f6', bg: '#eff6ff', icon: <BuildIcon sx={{ fontSize: 18 }} /> },
+                            { label: t('service.list.stat.categories'), value: totalCategories, color: '#8b5cf6', bg: '#f3e8ff', icon: <CategoryIcon sx={{ fontSize: 18 }} /> },
+                            { label: t('service.list.stat.technicians'), value: new Set(groupedData.flatMap(cat => cat.services.flatMap(s => s.technicians?.map(tc => tc.id) || []))).size, color: '#10b981', bg: '#ecfdf5', icon: <PeopleIcon sx={{ fontSize: 18 }} /> },
                         ].map((item, idx) => (
                             <Grid item xs={6} sm={4} key={idx}>
-                                <Card
-                                    elevation={0}
-                                    sx={{
-                                        borderRadius: 2,
-                                        border: '1px solid',
-                                        borderColor: 'divider',
-                                        backgroundColor: item.bg,
-                                        height: '100%',
-                                    }}
-                                >
+                                <Card elevation={0} sx={{
+                                    borderRadius: 2, border: '1px solid', borderColor: 'divider',
+                                    backgroundColor: item.bg, height: '100%',
+                                }}>
                                     <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
                                         <Box display="flex" alignItems="center" justifyContent="space-between">
                                             <Typography variant="caption" sx={{ color: item.color, fontWeight: 600 }}>
@@ -391,33 +300,24 @@ const ServicesList = () => {
                     </Grid>
                 </Box>
 
-                {/* ── SERVICES GRID ────────────────────────────────────── */}
+                {/* ── SERVICES GRID ─────────────────────────── */}
                 <Box sx={{ p: { xs: 2, sm: 3 } }}>
                     {loading ? (
                         <Box display="flex" justifyContent="center" py={6}>
                             <CircularProgress size={36} thickness={4} />
                         </Box>
                     ) : filteredData.length === 0 ? (
-                        <Paper
-                            variant="outlined"
-                            sx={{
-                                p: 5,
-                                textAlign: 'center',
-                                borderRadius: 3,
-                                borderStyle: 'dashed',
-                            }}
-                        >
+                        <Paper variant="outlined" sx={{ p: 5, textAlign: 'center', borderRadius: 3, borderStyle: 'dashed' }}>
                             <BuildIcon sx={{ fontSize: 56, color: 'text.disabled', mb: 2 }} />
                             <Typography color="text.secondary" fontWeight={500}>
-                                {search ? 'No services match your search' : 'No categories or services found'}
+                                {search ? t('service.list.noMatch') : t('service.list.noFound')}
                             </Typography>
                             {search && (
                                 <Button
-                                    variant="outlined"
-                                    onClick={() => setSearch('')}
+                                    variant="outlined" onClick={() => setSearch('')}
                                     sx={{ mt: 2, borderRadius: 2, textTransform: 'none' }}
                                 >
-                                    Clear Search
+                                    {t('service.list.clearSearch')}
                                 </Button>
                             )}
                         </Paper>
@@ -427,31 +327,21 @@ const ServicesList = () => {
                                 key={category.category_id}
                                 elevation={0}
                                 sx={{
-                                    mb: 3,
-                                    p: { xs: 2, sm: 3 },
-                                    borderRadius: 2.5,
-                                    border: '1px solid',
-                                    borderColor: 'divider',
+                                    mb: 3, p: { xs: 2, sm: 3 }, borderRadius: 2.5,
+                                    border: '1px solid', borderColor: 'divider',
                                     bgcolor: alpha(colors.sea, 0.02),
                                 }}
                             >
-                                <Stack
-                                    direction="row"
-                                    justifyContent="space-between"
-                                    alignItems="center"
-                                    mb={2.5}
-                                    flexWrap="wrap"
-                                    gap={1}
-                                >
+                                <Stack direction="row" justifyContent="space-between" alignItems="center"
+                                       mb={2.5} flexWrap="wrap" gap={1}>
                                     <Typography variant="h6" fontWeight={700} color="text.primary">
                                         <CategoryIcon sx={{ fontSize: 22, mr: 1, verticalAlign: 'middle', color: colors.sea }} />
                                         {category.category_name}
                                         <Chip
-                                            label={`${category.services.length} services`}
+                                            label={t('service.list.servicesCount', { n: category.services.length })}
                                             size="small"
                                             sx={{
-                                                ml: 1.5,
-                                                fontWeight: 600,
+                                                ml: 1.5, fontWeight: 600,
                                                 bgcolor: alpha(colors.sea, 0.08),
                                                 color: colors.sea,
                                             }}
@@ -465,27 +355,19 @@ const ServicesList = () => {
                                             <Card
                                                 elevation={0}
                                                 sx={{
-                                                    height: '100%',
-                                                    borderRadius: 2.5,
-                                                    border: '1px solid',
-                                                    borderColor: 'divider',
+                                                    height: '100%', borderRadius: 2.5,
+                                                    border: '1px solid', borderColor: 'divider',
                                                     transition: 'all 0.25s ease',
                                                     '&:hover': {
                                                         borderColor: colors.sea,
                                                         boxShadow: '0 8px 24px rgba(0,0,0,0.06)',
                                                         transform: 'translateY(-2px)',
                                                     },
-                                                    display: 'flex',
-                                                    flexDirection: 'column',
+                                                    display: 'flex', flexDirection: 'column',
                                                 }}
                                             >
                                                 <CardContent sx={{ p: 2.5, flex: 1, display: 'flex', flexDirection: 'column' }}>
-                                                    <Stack
-                                                        direction="row"
-                                                        justifyContent="space-between"
-                                                        alignItems="flex-start"
-                                                        mb={1.5}
-                                                    >
+                                                    <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={1.5}>
                                                         <Typography variant="subtitle1" fontWeight={700} color="text.primary">
                                                             {service.name}
                                                         </Typography>
@@ -494,10 +376,7 @@ const ServicesList = () => {
                                                             onClick={(e) => handleMenuOpen(e, service)}
                                                             sx={{
                                                                 color: 'text.secondary',
-                                                                '&:hover': {
-                                                                    bgcolor: 'action.hover',
-                                                                    color: 'text.primary',
-                                                                },
+                                                                '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
                                                             }}
                                                         >
                                                             <MoreVertIcon fontSize="small" />
@@ -510,36 +389,29 @@ const ServicesList = () => {
                                                         </Typography>
                                                     )}
 
-                                                    <Box
-                                                        display="flex"
-                                                        alignItems="center"
-                                                        gap={0.5}
-                                                        sx={{ mb: 1.5, mt: 'auto' }}
-                                                    >
+                                                    <Box display="flex" alignItems="center" gap={0.5} sx={{ mb: 1.5, mt: 'auto' }}>
                                                         <PeopleIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                                                         <Typography variant="body2" fontWeight={500} color="text.primary">
-                                                            {service.technicians_count || 0} technician{service.technicians_count !== 1 ? 's' : ''}
+                                                            {t('service.list.techniciansCount', {
+                                                                n: service.technicians_count || 0,
+                                                                s: service.technicians_count !== 1 ? 's' : '',
+                                                            })}
                                                         </Typography>
                                                     </Box>
 
                                                     <Button
-                                                        variant="outlined"
-                                                        size="small"
-                                                        fullWidth
+                                                        variant="outlined" size="small" fullWidth
                                                         onClick={() => handleViewTechnicians(service.id, service.name)}
                                                         sx={{
-                                                            borderRadius: 2,
-                                                            textTransform: 'none',
-                                                            fontWeight: 600,
-                                                            borderColor: 'divider',
-                                                            color: colors.sea || '#0f766e',
+                                                            borderRadius: 2, textTransform: 'none', fontWeight: 600,
+                                                            borderColor: 'divider', color: colors.sea || '#0f766e',
                                                             '&:hover': {
                                                                 borderColor: colors.sea || '#0f766e',
                                                                 bgcolor: alpha(colors.sea, 0.06),
                                                             },
                                                         }}
                                                     >
-                                                        View Technicians
+                                                        {t('service.list.viewTechnicians')}
                                                     </Button>
                                                 </CardContent>
                                             </Card>
@@ -552,30 +424,27 @@ const ServicesList = () => {
                 </Box>
             </Paper>
 
-            {/* ─── ACTION MENU ───────────────────────────────────────────── */}
+            {/* ─── ACTION MENU ─────────────────────────────── */}
             <Menu
                 anchorEl={actionMenu}
                 open={Boolean(actionMenu)}
                 onClose={handleMenuClose}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                 transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-                PaperProps={{
-                    elevation: 8,
-                    sx: { borderRadius: 2, minWidth: 180, mt: 0.5 },
-                }}
+                PaperProps={{ elevation: 8, sx: { borderRadius: 2, minWidth: 180, mt: 0.5 } }}
             >
                 {canEdit && (
                     <MenuItem onClick={() => handleEdit(selectedService)} sx={{ fontWeight: 500 }}>
                         <EditIcon sx={{ mr: 1.5, fontSize: 20, color: colors.sea || '#0f766e' }} />
-                        Edit
+                        {t('service.common.edit')}
                     </MenuItem>
                 )}
                 {canDelete && (
                     <MenuItem
                         onClick={() => {
                             openConfirmDialog(
-                                'Delete Service',
-                                `Are you sure you want to delete "${selectedService?.name}"? This action cannot be undone.`,
+                                t('service.delete.title'),
+                                t('service.delete.message', { name: selectedService?.name }),
                                 () => handleDelete(selectedService?.id)
                             );
                             handleMenuClose();
@@ -583,12 +452,12 @@ const ServicesList = () => {
                         sx={{ color: 'error.main', fontWeight: 500 }}
                     >
                         <DeleteIcon sx={{ mr: 1.5, fontSize: 20 }} />
-                        Delete
+                        {t('service.common.delete')}
                     </MenuItem>
                 )}
             </Menu>
 
-            {/* ─── SERVICE FORM MODAL ──────────────────────────────────── */}
+            {/* ─── SERVICE FORM MODAL ──────────────────────── */}
             <ServiceFormModal
                 open={openModal}
                 onClose={() => {
@@ -599,7 +468,7 @@ const ServicesList = () => {
                 service={editingService}
             />
 
-            {/* ─── TECHNICIANS MODAL ───────────────────────────────────── */}
+            {/* ─── TECHNICIANS MODAL ───────────────────────── */}
             <TechniciansModal
                 open={techniciansModal.open}
                 onClose={() => setTechniciansModal({ open: false, serviceId: null, serviceName: '' })}
@@ -607,17 +476,12 @@ const ServicesList = () => {
                 serviceName={techniciansModal.serviceName}
             />
 
-            {/* ─── CONFIRMATION DIALOG ─────────────────────────────────── */}
+            {/* ─── CONFIRMATION DIALOG ─────────────────────── */}
             <Dialog
                 open={confirmDialog.open}
                 onClose={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
-                fullWidth
-                maxWidth="xs"
-                PaperProps={{
-                    sx: {
-                        borderRadius: 3,
-                    },
-                }}
+                fullWidth maxWidth="xs"
+                PaperProps={{ sx: { borderRadius: 3 } }}
             >
                 <DialogTitle sx={{ fontWeight: 700, pb: 1, color: 'text.primary' }}>
                     {confirmDialog.title}
@@ -630,15 +494,14 @@ const ServicesList = () => {
                         onClick={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
                         sx={{ fontWeight: 600, textTransform: 'none' }}
                     >
-                        Cancel
+                        {t('service.common.cancel')}
                     </Button>
                     <Button
                         onClick={handleConfirm}
-                        variant="contained"
-                        color="error"
+                        variant="contained" color="error"
                         sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 2 }}
                     >
-                        Confirm
+                        {t('service.common.confirm')}
                     </Button>
                 </DialogActions>
             </Dialog>

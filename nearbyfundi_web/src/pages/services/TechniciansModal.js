@@ -1,49 +1,31 @@
 // src/pages/services/TechniciansModal.js
 import React, { useState, useEffect } from 'react';
 import {
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    Button,
-    List,
-    ListItem,
-    ListItemAvatar,
-    Avatar,
-    ListItemText,
-    CircularProgress,
-    Typography,
-    Box,
-    IconButton,
-    Chip,
-    Rating,
-    Stack,
-    Divider,
-    Alert,
-    alpha,
+    Dialog, DialogTitle, DialogContent, DialogActions, Button, List,
+    ListItem, ListItemAvatar, Avatar, ListItemText, CircularProgress,
+    Typography, Box, IconButton, Chip, Rating, Stack, Divider, Alert, alpha,
 } from '@mui/material';
 import {
-    Close as CloseIcon,
-    Phone as PhoneIcon,
-    Work as WorkIcon,
-    LocationOn as LocationIcon,
-    Star as StarIcon,
-    Person as PersonIcon,
+    Close as CloseIcon, Phone as PhoneIcon, Work as WorkIcon,
+    LocationOn as LocationIcon, Star as StarIcon, Person as PersonIcon,
 } from '@mui/icons-material';
 import { serviceService } from 'services/service.service';
+import { useLanguage } from 'context/LanguageContext';
+import { tService } from './serviceslang';
 import appConfig from '../../config';
 
 const colors = appConfig.app.colors;
 
 const TechniciansModal = ({ open, onClose, serviceId, serviceName }) => {
+    const { language } = useLanguage();
+    const t = (key, replacements) => tService(language, key, replacements);
+
     const [technicians, setTechnicians] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
     useEffect(() => {
-        if (open && serviceId) {
-            loadTechnicians();
-        }
+        if (open && serviceId) loadTechnicians();
     }, [open, serviceId]);
 
     const loadTechnicians = async () => {
@@ -60,7 +42,7 @@ const TechniciansModal = ({ open, onClose, serviceId, serviceName }) => {
             }
         } catch (err) {
             console.error('Error loading technicians:', err);
-            setError('Failed to load technicians. Please try again later.');
+            setError(t('service.tech.loadingFailed'));
             setTechnicians([]);
         } finally {
             setLoading(false);
@@ -69,9 +51,7 @@ const TechniciansModal = ({ open, onClose, serviceId, serviceName }) => {
 
     const getImageUrl = (path) => {
         if (!path) return null;
-        if (path.startsWith('http://') || path.startsWith('https://')) {
-            return path;
-        }
+        if (path.startsWith('http://') || path.startsWith('https://')) return path;
         const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
         const cleanPath = path.replace(/^\/+/, '');
         return `${baseUrl}/storage/${cleanPath}`;
@@ -83,32 +63,23 @@ const TechniciansModal = ({ open, onClose, serviceId, serviceName }) => {
         <Dialog
             open={open}
             onClose={onClose}
-            maxWidth="sm"
-            fullWidth
+            maxWidth="sm" fullWidth
             PaperProps={{
-                sx: {
-                    borderRadius: 3,
-                    border: '1px solid',
-                    borderColor: 'divider',
-                }
+                sx: { borderRadius: 3, border: '1px solid', borderColor: 'divider' },
             }}
         >
             <DialogTitle
                 sx={{
-                    pb: 1.5,
-                    borderBottom: '1px solid',
-                    borderColor: 'divider',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
+                    pb: 1.5, borderBottom: '1px solid', borderColor: 'divider',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 }}
             >
                 <Box>
                     <Typography variant="h6" fontWeight={700} color="text.primary">
-                        Technicians for
+                        {t('service.tech.title')}
                     </Typography>
                     <Typography variant="h6" fontWeight={700} color={colors.sea || '#0f766e'}>
-                        {serviceName || 'Service'}
+                        {serviceName || t('service.tech.fallbackService')}
                     </Typography>
                 </Box>
                 <IconButton
@@ -126,8 +97,7 @@ const TechniciansModal = ({ open, onClose, serviceId, serviceName }) => {
             <DialogContent
                 dividers
                 sx={{
-                    borderColor: 'divider',
-                    p: 0,
+                    borderColor: 'divider', p: 0,
                     '& .MuiDialogContent-dividers': { borderTop: '1px solid', borderColor: 'divider' },
                 }}
             >
@@ -143,7 +113,7 @@ const TechniciansModal = ({ open, onClose, serviceId, serviceName }) => {
                     <Box textAlign="center" py={5}>
                         <PersonIcon sx={{ fontSize: 56, color: 'text.disabled', mb: 1.5 }} />
                         <Typography color="text.secondary" fontWeight={500}>
-                            No technicians assigned to this service.
+                            {t('service.tech.none')}
                         </Typography>
                     </Box>
                 ) : (
@@ -152,8 +122,8 @@ const TechniciansModal = ({ open, onClose, serviceId, serviceName }) => {
                             const user = tech.user || {};
                             const servicesCount = tech.services?.length || 0;
                             const rating = parseFloat(tech.rating) || 0;
-                            const phone = user.phone || 'N/A';
-                            const area = tech.area || 'Unknown area';
+                            const phone = user.phone || t('service.common.na');
+                            const area = tech.area || t('service.common.unknownArea');
                             const completedJobs = tech.completed_jobs_count || 0;
                             const profilePhotoUrl = tech.profile_photo ? getImageUrl(tech.profile_photo) : null;
 
@@ -162,24 +132,18 @@ const TechniciansModal = ({ open, onClose, serviceId, serviceName }) => {
                                     <ListItem
                                         alignItems="flex-start"
                                         sx={{
-                                            py: 2.5,
-                                            px: 2.5,
+                                            py: 2.5, px: 2.5,
                                             transition: 'background-color 0.15s',
-                                            '&:hover': {
-                                                bgcolor: alpha(colors.sea, 0.03),
-                                            },
+                                            '&:hover': { bgcolor: alpha(colors.sea, 0.03) },
                                         }}
                                     >
                                         <ListItemAvatar>
                                             <Avatar
                                                 src={profilePhotoUrl}
                                                 sx={{
-                                                    width: 52,
-                                                    height: 52,
+                                                    width: 52, height: 52,
                                                     bgcolor: colors.sea || '#0f766e',
-                                                    color: '#fff',
-                                                    fontSize: '1.2rem',
-                                                    fontWeight: 700,
+                                                    color: '#fff', fontSize: '1.2rem', fontWeight: 700,
                                                     border: `2px solid ${alpha(colors.sea, 0.15)}`,
                                                 }}
                                             >
@@ -191,32 +155,30 @@ const TechniciansModal = ({ open, onClose, serviceId, serviceName }) => {
                                             primary={
                                                 <Stack direction="row" alignItems="center" flexWrap="wrap" gap={1}>
                                                     <Typography variant="subtitle1" fontWeight={700} color="text.primary">
-                                                        {user.name || 'Unknown'}
+                                                        {user.name || t('service.common.unknown')}
                                                     </Typography>
                                                     {tech.verified && (
                                                         <Chip
-                                                            label="Verified"
+                                                            label={t('service.status.verified')}
                                                             size="small"
                                                             sx={{
                                                                 fontWeight: 600,
                                                                 bgcolor: '#d1fae5',
                                                                 color: '#047857',
                                                                 border: '1px solid #10b981',
-                                                                height: 22,
-                                                                fontSize: '0.65rem',
+                                                                height: 22, fontSize: '0.65rem',
                                                             }}
                                                         />
                                                     )}
                                                     <Chip
-                                                        label={`${servicesCount} service${servicesCount !== 1 ? 's' : ''}`}
+                                                        label={t('service.list.servicesCount', { n: servicesCount })}
                                                         size="small"
                                                         icon={<WorkIcon sx={{ fontSize: 14 }} />}
                                                         sx={{
                                                             fontWeight: 600,
                                                             bgcolor: alpha(colors.sea, 0.08),
                                                             color: colors.sea,
-                                                            height: 22,
-                                                            fontSize: '0.65rem',
+                                                            height: 22, fontSize: '0.65rem',
                                                         }}
                                                     />
                                                     <Chip
@@ -225,8 +187,7 @@ const TechniciansModal = ({ open, onClose, serviceId, serviceName }) => {
                                                         sx={{
                                                             fontWeight: 600,
                                                             bgcolor: 'action.hover',
-                                                            height: 22,
-                                                            fontSize: '0.65rem',
+                                                            height: 22, fontSize: '0.65rem',
                                                         }}
                                                     />
                                                 </Stack>
@@ -263,16 +224,14 @@ const TechniciansModal = ({ open, onClose, serviceId, serviceName }) => {
 
                                                     {tech.experience !== undefined && tech.experience !== null && (
                                                         <Typography variant="body2" color="text.secondary">
-                                                            {tech.experience} years experience
+                                                            {t('service.tech.yearsExperience', { n: tech.experience })}
                                                         </Typography>
                                                     )}
                                                 </Stack>
                                             }
                                         />
                                     </ListItem>
-                                    {index < technicians.length - 1 && (
-                                        <Divider sx={{ mx: 2.5 }} />
-                                    )}
+                                    {index < technicians.length - 1 && <Divider sx={{ mx: 2.5 }} />}
                                 </React.Fragment>
                             );
                         })}
@@ -285,15 +244,12 @@ const TechniciansModal = ({ open, onClose, serviceId, serviceName }) => {
                     onClick={onClose}
                     variant="contained"
                     sx={{
-                        borderRadius: 2,
-                        fontWeight: 700,
-                        textTransform: 'none',
-                        px: 3,
+                        borderRadius: 2, fontWeight: 700, textTransform: 'none', px: 3,
                         bgcolor: colors.sea || '#0f766e',
                         '&:hover': { bgcolor: colors.dark || '#0d5c56' },
                     }}
                 >
-                    Close
+                    {t('service.common.close')}
                 </Button>
             </DialogActions>
         </Dialog>

@@ -21,7 +21,9 @@ import classNames from 'classnames';
 import useStyles from './styles';
 import { toggleSidebar, useLayoutDispatch, useLayoutState } from 'context/LayoutContext';
 import { useAuth } from 'context/AuthContext';
+import { useLanguage } from 'context/LanguageContext';
 import { NotificationBell } from 'pages/monitoring/components/NotificationBell';
+import LanguageSwitcher from 'components/LanguageSwitcher/LanguageSwitcher';
 
 const profileImg = '/assets/logo.png';
 
@@ -29,6 +31,7 @@ export default function Header() {
   const classes = useStyles();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { t } = useLanguage();
   const layoutState = useLayoutState();
   const layoutDispatch = useLayoutDispatch();
 
@@ -39,15 +42,13 @@ export default function Header() {
     navigate('/login');
   };
 
-  // Handle notification click
   const handleNotificationClick = (notification) => {
     if (notification?.viewAll) {
       navigate('/app/monitoring');
       return;
     }
-    // Navigate to monitoring with specific request
     navigate('/app/monitoring', {
-      state: { selectedRequestId: notification?.request_id }
+      state: { selectedRequestId: notification?.request_id },
     });
   };
 
@@ -60,9 +61,13 @@ export default function Header() {
               className={classNames(classes.headerMenuButton, classes.headerMenuButtonCollapse)}
           >
             {layoutState.isSidebarOpened ? (
-                <ArrowBackIcon classes={{ root: classNames(classes.headerIcon, classes.headerIconCollapse) }} />
+                <ArrowBackIcon
+                    classes={{ root: classNames(classes.headerIcon, classes.headerIconCollapse) }}
+                />
             ) : (
-                <MenuIcon classes={{ root: classNames(classes.headerIcon, classes.headerIconCollapse) }} />
+                <MenuIcon
+                    classes={{ root: classNames(classes.headerIcon, classes.headerIconCollapse) }}
+                />
             )}
           </IconButton>
 
@@ -71,6 +76,9 @@ export default function Header() {
           </Typography>
 
           <div className={classes.grow} />
+
+          {/* Language Switcher */}
+          <LanguageSwitcher iconColor="rgba(255, 255, 255, 0.7)" />
 
           {/* Notification Bell */}
           <NotificationBell onNotificationClick={handleNotificationClick} />
@@ -87,11 +95,12 @@ export default function Header() {
             </Avatar>
           </IconButton>
 
-          {/* ✅ Fixed: replaced Typography with Box to avoid <div> inside <p> and removed non-boolean 'block' */}
           <Box sx={{ display: 'flex', alignItems: 'center', ml: 1 }}>
-            <Box component="span" className={classes.profileLabel}>Hi,&nbsp;</Box>
+            <Box component="span" className={classes.profileLabel}>
+              {t('header.greeting')}&nbsp;
+            </Box>
             <Box component="span" fontWeight="bold" className={classes.profileLabel}>
-              {user?.name?.split(' ')[0] || 'User'}
+              {user?.name?.split(' ')[0] || t('header.user')}
             </Box>
           </Box>
 
@@ -117,11 +126,15 @@ export default function Header() {
                 }}
             >
               <AccountIcon className={classes.profileMenuIcon} />
-              Profile
+              {t('header.profile')}
             </MenuItem>
             <div className={classes.profileMenuUser}>
-              <Typography className={classes.profileMenuLink} color="primary" onClick={handleLogout}>
-                Sign Out
+              <Typography
+                  className={classes.profileMenuLink}
+                  color="primary"
+                  onClick={handleLogout}
+              >
+                {t('header.signout')}
               </Typography>
             </div>
           </Menu>

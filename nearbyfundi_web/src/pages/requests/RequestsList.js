@@ -1,34 +1,10 @@
 // src/pages/requests/RequestsList.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
-    Box,
-    Paper,
-    Typography,
-    Button,
-    Grid,
-    Card,
-    CardContent,
-    TextField,
-    MenuItem,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    TablePagination,
-    Chip,
-    CircularProgress,
-    Tooltip,
-    Stack,
-    Avatar,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    Divider,
-    TableSortLabel,
-    IconButton,
+    Box, Paper, Typography, Button, Grid, Card, CardContent, TextField, MenuItem,
+    Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TablePagination,
+    Chip, CircularProgress, Tooltip, Stack, Avatar, Dialog, DialogTitle,
+    DialogContent, DialogActions, Divider, TableSortLabel, IconButton,
 } from '@mui/material';
 import {
     Refresh as RefreshIcon,
@@ -50,25 +26,32 @@ import {
 } from '@mui/icons-material';
 import { requestService } from 'services/request.service';
 import { usePermissions } from 'hooks/usePermissions';
+import { useLanguage } from 'context/LanguageContext';
 import { showSnackbar } from 'utils/snackbar';
+import { tReq } from './requestslang';
 import { format } from 'date-fns';
 import appConfig from '../../config';
 
 const colors = appConfig.app.colors;
 
-const STATUS_COLORS = {
-    pending: { color: '#f59e0b', bg: '#fef3c7', label: 'Pending', icon: <PendingIcon sx={{ fontSize: 14 }} /> },
-    accepted: { color: '#10b981', bg: '#d1fae5', label: 'Accepted', icon: <CheckCircleIcon sx={{ fontSize: 14 }} /> },
-    rejected: { color: '#ef4444', bg: '#fee2e2', label: 'Rejected', icon: <CancelIcon sx={{ fontSize: 14 }} /> },
-    cancelled: { color: '#6b7280', bg: '#f3f4f6', label: 'Cancelled', icon: <CancelIcon sx={{ fontSize: 14 }} /> },
-    in_progress: { color: '#3b82f6', bg: '#eff6ff', label: 'In Progress', icon: <HourglassIcon sx={{ fontSize: 14 }} /> },
-    completed: { color: '#10b981', bg: '#d1fae5', label: 'Completed', icon: <CheckCircleIcon sx={{ fontSize: 14 }} /> },
-};
+// Status color map (labels resolved via t())
+const getStatusColors = (t) => ({
+    pending: { color: '#f59e0b', bg: '#fef3c7', label: t('req.status.pending'), icon: <PendingIcon sx={{ fontSize: 14 }} /> },
+    accepted: { color: '#10b981', bg: '#d1fae5', label: t('req.status.accepted'), icon: <CheckCircleIcon sx={{ fontSize: 14 }} /> },
+    rejected: { color: '#ef4444', bg: '#fee2e2', label: t('req.status.rejected'), icon: <CancelIcon sx={{ fontSize: 14 }} /> },
+    cancelled: { color: '#6b7280', bg: '#f3f4f6', label: t('req.status.cancelled'), icon: <CancelIcon sx={{ fontSize: 14 }} /> },
+    in_progress: { color: '#3b82f6', bg: '#eff6ff', label: t('req.status.in_progress'), icon: <HourglassIcon sx={{ fontSize: 14 }} /> },
+    completed: { color: '#10b981', bg: '#d1fae5', label: t('req.status.completed'), icon: <CheckCircleIcon sx={{ fontSize: 14 }} /> },
+});
 
 const RequestsList = () => {
     const { can } = usePermissions();
     const canView = can('requests.view');
     const canDelete = can('requests.delete');
+
+    const { language } = useLanguage();
+    const t = (key, replacements) => tReq(language, key, replacements);
+    const STATUS_COLORS = useMemo(() => getStatusColors(t), [language]);
 
     const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -121,16 +104,14 @@ const RequestsList = () => {
             }
         } catch (err) {
             console.error('Requests error:', err);
-            showSnackbar({ type: 'error', message: err.message || 'Failed to load requests' });
+            showSnackbar({ type: 'error', message: err.message || t('req.toast.loadFailed') });
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        if (canView) {
-            loadRequests();
-        }
+        if (canView) loadRequests();
     }, [page, rowsPerPage, search, statusFilter, canView]);
 
     const refreshAll = () => {
@@ -150,12 +131,12 @@ const RequestsList = () => {
     const handleDeleteRequest = async (id) => {
         try {
             await requestService.deleteRequest(id);
-            showSnackbar({ type: 'success', message: 'Request deleted successfully' });
+            showSnackbar({ type: 'success', message: t('req.toast.deleteSuccess') });
             await loadRequests();
             return true;
         } catch (err) {
             console.error('Delete error:', err);
-            const errorMessage = err.response?.data?.message || 'Failed to delete request';
+            const errorMessage = err.response?.data?.message || t('req.toast.deleteFailed');
             showSnackbar({ type: 'error', message: errorMessage });
             throw err;
         }
@@ -194,9 +175,7 @@ const RequestsList = () => {
                     backgroundColor: st.bg,
                     color: st.color,
                     fontWeight: 600,
-                    '& .MuiChip-icon': {
-                        color: st.color,
-                    },
+                    '& .MuiChip-icon': { color: st.color },
                 }}
             />
         );
@@ -204,26 +183,18 @@ const RequestsList = () => {
 
     const formatDate = (dateStr) => {
         if (!dateStr) return '-';
-        try {
-            return format(new Date(dateStr), 'MMM d, yyyy');
-        } catch {
-            return '-';
-        }
+        try { return format(new Date(dateStr), 'MMM d, yyyy'); } catch { return '-'; }
     };
 
     const formatDateFull = (dateStr) => {
         if (!dateStr) return '-';
-        try {
-            return format(new Date(dateStr), 'MMM d, yyyy h:mm a');
-        } catch {
-            return '-';
-        }
+        try { return format(new Date(dateStr), 'MMM d, yyyy h:mm a'); } catch { return '-'; }
     };
 
     if (!canView) {
         return (
             <Paper sx={{ p: 3, textAlign: 'center' }}>
-                <Typography color="error">You do not have permission to view requests.</Typography>
+                <Typography color="error">{t('req.accessDenied')}</Typography>
             </Paper>
         );
     }
@@ -240,9 +211,7 @@ const RequestsList = () => {
             <Paper
                 elevation={0}
                 sx={{
-                    p: 2,
-                    mb: 3,
-                    borderRadius: 3,
+                    p: 2, mb: 3, borderRadius: 3,
                     border: `1px solid ${colors.middle}`,
                     backgroundColor: '#fff',
                 }}
@@ -250,24 +219,24 @@ const RequestsList = () => {
                 <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap alignItems="center">
                     <TextField
                         select
-                        label="Status"
+                        label={t('req.filter.status')}
                         size="small"
                         value={statusFilter}
                         onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }}
                         sx={{ minWidth: 140 }}
                     >
-                        <MenuItem value="all">All</MenuItem>
-                        <MenuItem value="pending">Pending</MenuItem>
-                        <MenuItem value="accepted">Accepted</MenuItem>
-                        <MenuItem value="rejected">Rejected</MenuItem>
-                        <MenuItem value="cancelled">Cancelled</MenuItem>
-                        <MenuItem value="in_progress">In Progress</MenuItem>
-                        <MenuItem value="completed">Completed</MenuItem>
+                        <MenuItem value="all">{t('req.common.all')}</MenuItem>
+                        <MenuItem value="pending">{t('req.status.pending')}</MenuItem>
+                        <MenuItem value="accepted">{t('req.status.accepted')}</MenuItem>
+                        <MenuItem value="rejected">{t('req.status.rejected')}</MenuItem>
+                        <MenuItem value="cancelled">{t('req.status.cancelled')}</MenuItem>
+                        <MenuItem value="in_progress">{t('req.status.in_progress')}</MenuItem>
+                        <MenuItem value="completed">{t('req.status.completed')}</MenuItem>
                     </TextField>
 
                     <TextField
                         size="small"
-                        placeholder="Search requests..."
+                        placeholder={t('req.filter.searchPlaceholder')}
                         value={search}
                         onChange={(e) => { setSearch(e.target.value); setPage(0); }}
                         sx={{ minWidth: 200 }}
@@ -280,7 +249,7 @@ const RequestsList = () => {
                         startIcon={<RefreshIcon />}
                         onClick={refreshAll}
                     >
-                        Refresh
+                        {t('req.common.refresh')}
                     </Button>
                 </Stack>
             </Paper>
@@ -288,10 +257,10 @@ const RequestsList = () => {
             {/* Summary Cards */}
             <Grid container spacing={2} sx={{ mb: 3 }}>
                 {[
-                    { label: 'Total Requests', value: totalRequests, color: '#3b82f6', bg: '#eff6ff' },
-                    { label: 'Pending', value: pendingCount, color: '#f59e0b', bg: '#fef3c7' },
-                    { label: 'In Progress', value: inProgressCount, color: '#8b5cf6', bg: '#f3e8ff' },
-                    { label: 'Completed', value: completedCount, color: '#10b981', bg: '#ecfdf5' },
+                    { label: t('req.stats.total'), value: totalRequests, color: '#3b82f6', bg: '#eff6ff' },
+                    { label: t('req.stats.pending'), value: pendingCount, color: '#f59e0b', bg: '#fef3c7' },
+                    { label: t('req.stats.inProgress'), value: inProgressCount, color: '#8b5cf6', bg: '#f3e8ff' },
+                    { label: t('req.stats.completed'), value: completedCount, color: '#10b981', bg: '#ecfdf5' },
                 ].map((item, idx) => (
                     <Grid item xs={12} sm={6} md={3} key={idx}>
                         <Card
@@ -337,7 +306,7 @@ const RequestsList = () => {
                     }}
                 >
                     <Typography variant="h6" fontWeight={600}>
-                        Service Requests
+                        {t('req.table.title')}
                     </Typography>
                 </Box>
 
@@ -347,7 +316,7 @@ const RequestsList = () => {
                     </Box>
                 ) : requests.length === 0 ? (
                     <Box sx={{ py: 6, textAlign: 'center' }}>
-                        <Typography color="text.secondary">No requests found</Typography>
+                        <Typography color="text.secondary">{t('req.table.noFound')}</Typography>
                     </Box>
                 ) : (
                     <>
@@ -355,20 +324,22 @@ const RequestsList = () => {
                             <Table>
                                 <TableHead sx={{ backgroundColor: '#f8fafc' }}>
                                     <TableRow>
-                                        <TableCell sx={{ fontWeight: 700 }}>Customer</TableCell>
-                                        <TableCell sx={{ fontWeight: 700 }}>Technician</TableCell>
-                                        <TableCell sx={{ fontWeight: 700 }}>Service</TableCell>
-                                        <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
+                                        <TableCell sx={{ fontWeight: 700 }}>{t('req.table.col.customer')}</TableCell>
+                                        <TableCell sx={{ fontWeight: 700 }}>{t('req.table.col.technician')}</TableCell>
+                                        <TableCell sx={{ fontWeight: 700 }}>{t('req.table.col.service')}</TableCell>
+                                        <TableCell sx={{ fontWeight: 700 }}>{t('req.table.col.status')}</TableCell>
                                         <TableCell sx={{ fontWeight: 700 }}>
                                             <TableSortLabel
                                                 active={orderBy === 'created_at'}
                                                 direction={orderBy === 'created_at' ? order : 'asc'}
                                                 onClick={() => handleRequestSort('created_at')}
                                             >
-                                                Created
+                                                {t('req.table.col.created')}
                                             </TableSortLabel>
                                         </TableCell>
-                                        <TableCell sx={{ fontWeight: 700 }} align="center">Actions</TableCell>
+                                        <TableCell sx={{ fontWeight: 700 }} align="center">
+                                            {t('req.table.col.actions')}
+                                        </TableCell>
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
@@ -378,10 +349,8 @@ const RequestsList = () => {
                                                 <Box display="flex" alignItems="center" gap={1}>
                                                     <Avatar
                                                         sx={{
-                                                            width: 32,
-                                                            height: 32,
-                                                            bgcolor: colors.sea,
-                                                            fontSize: 14,
+                                                            width: 32, height: 32,
+                                                            bgcolor: colors.sea, fontSize: 14,
                                                         }}
                                                     >
                                                         {request.customer?.name?.charAt(0).toUpperCase() || <PersonIcon />}
@@ -401,10 +370,8 @@ const RequestsList = () => {
                                                     <Avatar
                                                         src={request.technician?.profile_photo || undefined}
                                                         sx={{
-                                                            width: 32,
-                                                            height: 32,
-                                                            bgcolor: colors.sea,
-                                                            fontSize: 14,
+                                                            width: 32, height: 32,
+                                                            bgcolor: colors.sea, fontSize: 14,
                                                         }}
                                                     >
                                                         {request.technician?.name?.charAt(0).toUpperCase() || <PersonIcon />}
@@ -431,7 +398,7 @@ const RequestsList = () => {
                                             <TableCell>{getStatusChip(request.status)}</TableCell>
                                             <TableCell>{formatDate(request.created_at)}</TableCell>
                                             <TableCell align="center">
-                                                <Tooltip title="View Request">
+                                                <Tooltip title={t('req.table.viewTooltip')}>
                                                     <Button
                                                         size="small"
                                                         variant="outlined"
@@ -447,23 +414,23 @@ const RequestsList = () => {
                                                             },
                                                         }}
                                                     >
-                                                        View
+                                                        {t('req.common.view')}
                                                     </Button>
                                                 </Tooltip>
                                                 {canDelete && (
-                                                    <Tooltip title="Delete Request">
+                                                    <Tooltip title={t('req.table.deleteTooltip')}>
                                                         <Button
                                                             size="small"
                                                             variant="outlined"
                                                             color="error"
                                                             startIcon={<DeleteIcon />}
                                                             onClick={() => openConfirmDialog(
-                                                                'Delete Request',
-                                                                'Are you sure you want to delete this request?',
+                                                                t('req.delete.title'),
+                                                                t('req.delete.message'),
                                                                 () => handleDeleteRequest(request.id)
                                                             )}
                                                         >
-                                                            Delete
+                                                            {t('req.common.delete')}
                                                         </Button>
                                                     </Tooltip>
                                                 )}
@@ -490,7 +457,7 @@ const RequestsList = () => {
                 )}
             </Paper>
 
-            {/* Request Detail Dialog - Clean & Detailed */}
+            {/* Request Detail Dialog */}
             <Dialog
                 open={openViewDialog}
                 onClose={handleCloseDialog}
@@ -510,7 +477,7 @@ const RequestsList = () => {
                             <Box display="flex" justifyContent="space-between" alignItems="flex-start">
                                 <Box>
                                     <Typography variant="h6" fontWeight={600} color={colors.dark}>
-                                        Request Details
+                                        {t('req.dialog.title')}
                                     </Typography>
                                     <Box display="flex" alignItems="center" gap={2} mt={1}>
                                         {getStatusChip(selectedRequest.status)}
@@ -535,7 +502,7 @@ const RequestsList = () => {
                             <Box mb={3}>
                                 <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ color: colors.dark, display: 'flex', alignItems: 'center', gap: 1 }}>
                                     <NotesIcon sx={{ fontSize: 18, color: colors.sea }} />
-                                    Description
+                                    {t('req.dialog.description')}
                                 </Typography>
                                 <Paper
                                     variant="outlined"
@@ -547,7 +514,7 @@ const RequestsList = () => {
                                     }}
                                 >
                                     <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                                        {selectedRequest.description || 'No description provided'}
+                                        {selectedRequest.description || t('req.dialog.noDescription')}
                                     </Typography>
                                 </Paper>
                             </Box>
@@ -559,15 +526,11 @@ const RequestsList = () => {
                                 {/* Customer Details */}
                                 <Grid item xs={12} md={6}>
                                     <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ color: colors.dark }}>
-                                        Customer Information
+                                        {t('req.dialog.customerInfo')}
                                     </Typography>
                                     <Paper
                                         variant="outlined"
-                                        sx={{
-                                            p: 2.5,
-                                            borderColor: colors.middle,
-                                            borderRadius: 2,
-                                        }}
+                                        sx={{ p: 2.5, borderColor: colors.middle, borderRadius: 2 }}
                                     >
                                         <Stack spacing={1.5}>
                                             <Box display="flex" alignItems="center" gap={1.5}>
@@ -576,10 +539,10 @@ const RequestsList = () => {
                                                 </Avatar>
                                                 <Box>
                                                     <Typography variant="body1" fontWeight={500}>
-                                                        {selectedRequest.customer?.name || 'Unknown'}
+                                                        {selectedRequest.customer?.name || t('req.common.unknown')}
                                                     </Typography>
                                                     <Typography variant="caption" color="text.secondary">
-                                                        Customer ID: {selectedRequest.customer?.id || 'N/A'}
+                                                        {t('req.dialog.customerId', { id: selectedRequest.customer?.id || t('req.common.none') })}
                                                     </Typography>
                                                 </Box>
                                             </Box>
@@ -587,13 +550,13 @@ const RequestsList = () => {
                                             <Box display="flex" alignItems="center" gap={1.5}>
                                                 <EmailIcon fontSize="small" sx={{ color: colors.rain, width: 20 }} />
                                                 <Typography variant="body2">
-                                                    {selectedRequest.customer?.email || 'N/A'}
+                                                    {selectedRequest.customer?.email || t('req.common.none')}
                                                 </Typography>
                                             </Box>
                                             <Box display="flex" alignItems="center" gap={1.5}>
                                                 <PhoneIcon fontSize="small" sx={{ color: colors.rain, width: 20 }} />
                                                 <Typography variant="body2">
-                                                    {selectedRequest.customer?.phone || 'N/A'}
+                                                    {selectedRequest.customer?.phone || t('req.common.none')}
                                                 </Typography>
                                             </Box>
                                             {selectedRequest.customer?.address && (
@@ -611,15 +574,11 @@ const RequestsList = () => {
                                 {/* Technician Details */}
                                 <Grid item xs={12} md={6}>
                                     <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ color: colors.dark }}>
-                                        Technician Information
+                                        {t('req.dialog.technicianInfo')}
                                     </Typography>
                                     <Paper
                                         variant="outlined"
-                                        sx={{
-                                            p: 2.5,
-                                            borderColor: colors.middle,
-                                            borderRadius: 2,
-                                        }}
+                                        sx={{ p: 2.5, borderColor: colors.middle, borderRadius: 2 }}
                                     >
                                         <Stack spacing={1.5}>
                                             <Box display="flex" alignItems="center" gap={1.5}>
@@ -631,10 +590,10 @@ const RequestsList = () => {
                                                 </Avatar>
                                                 <Box>
                                                     <Typography variant="body1" fontWeight={500}>
-                                                        {selectedRequest.technician?.name || 'Not Assigned'}
+                                                        {selectedRequest.technician?.name || t('req.common.notAssigned')}
                                                     </Typography>
                                                     <Typography variant="caption" color="text.secondary">
-                                                        Technician ID: {selectedRequest.technician?.id || 'N/A'}
+                                                        {t('req.dialog.technicianId', { id: selectedRequest.technician?.id || t('req.common.none') })}
                                                     </Typography>
                                                 </Box>
                                             </Box>
@@ -642,7 +601,7 @@ const RequestsList = () => {
                                             <Box display="flex" alignItems="center" gap={1.5}>
                                                 <BuildIcon fontSize="small" sx={{ color: colors.rain, width: 20 }} />
                                                 <Typography variant="body2">
-                                                    {selectedRequest.service?.name || 'N/A'}
+                                                    {selectedRequest.service?.name || t('req.common.none')}
                                                 </Typography>
                                             </Box>
                                             {selectedRequest.technician?.area && (
@@ -672,7 +631,7 @@ const RequestsList = () => {
                                     <Divider sx={{ my: 3, borderColor: colors.middle }} />
                                     <Box>
                                         <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ color: colors.dark }}>
-                                            Activity Log
+                                            {t('req.dialog.activityLog')}
                                         </Typography>
                                         <Paper
                                             variant="outlined"
@@ -713,7 +672,7 @@ const RequestsList = () => {
                                                             }}
                                                         />
                                                         <Typography variant="caption" color="text.secondary">
-                                                            by {log.user?.name || 'System'}
+                                                            {t('req.dialog.byUser', { name: log.user?.name || t('req.common.system') })}
                                                         </Typography>
                                                         {log.notes && (
                                                             <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
@@ -734,7 +693,7 @@ const RequestsList = () => {
                                     <Divider sx={{ my: 3, borderColor: colors.middle }} />
                                     <Box>
                                         <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ color: colors.dark }}>
-                                            Schedule Information
+                                            {t('req.dialog.scheduleInfo')}
                                         </Typography>
                                         <Paper
                                             variant="outlined"
@@ -750,15 +709,15 @@ const RequestsList = () => {
                                                     <Box display="flex" alignItems="center" gap={1.5}>
                                                         <CalendarIcon fontSize="small" sx={{ color: colors.rain }} />
                                                         <Typography variant="body2">
-                                                            <strong>Date:</strong> {formatDateFull(selectedRequest.scheduled_date)}
+                                                            <strong>{t('req.dialog.scheduleDate')}</strong> {formatDateFull(selectedRequest.scheduled_date)}
                                                         </Typography>
                                                     </Box>
                                                 )}
                                                 {selectedRequest.scheduled_time && (
                                                     <Box display="flex" alignItems="center" gap={1.5}>
-                                                        <ScheduleIcon fontSize="small" sx={{ color: colors.rain }} />
+                                                        <CalendarIcon fontSize="small" sx={{ color: colors.rain }} />
                                                         <Typography variant="body2">
-                                                            <strong>Time:</strong> {selectedRequest.scheduled_time}
+                                                            <strong>{t('req.dialog.scheduleTime')}</strong> {selectedRequest.scheduled_time}
                                                         </Typography>
                                                     </Box>
                                                 )}
@@ -779,7 +738,7 @@ const RequestsList = () => {
                                     px: 4,
                                 }}
                             >
-                                Close
+                                {t('req.dialog.close')}
                             </Button>
                         </DialogActions>
                     </>
@@ -793,10 +752,7 @@ const RequestsList = () => {
                 fullWidth
                 maxWidth="xs"
                 PaperProps={{
-                    sx: {
-                        borderRadius: 3,
-                        border: `1px solid ${colors.middle}`,
-                    },
+                    sx: { borderRadius: 3, border: `1px solid ${colors.middle}` },
                 }}
             >
                 <DialogTitle sx={{ pb: 1, fontWeight: 600, color: colors.dark }}>
@@ -811,14 +767,14 @@ const RequestsList = () => {
                         variant="outlined"
                         sx={{ borderColor: colors.middle, color: colors.rain }}
                     >
-                        Cancel
+                        {t('req.common.cancel')}
                     </Button>
                     <Button
                         onClick={handleConfirm}
                         variant="contained"
                         color="error"
                     >
-                        Confirm
+                        {t('req.common.confirm')}
                     </Button>
                 </DialogActions>
             </Dialog>

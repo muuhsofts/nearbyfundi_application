@@ -1,3 +1,4 @@
+// src/pages/dashboard/Dashboard.js
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     Box, Paper, Typography, Button, Grid, Card, CardContent, TextField, MenuItem,
@@ -27,6 +28,8 @@ import {
 import { usePermissions } from 'hooks/usePermissions';
 import { useReportManagement } from 'hooks/useReport';
 import { showSnackbar } from 'utils/snackbar';
+import { useLanguage } from 'context/LanguageContext';
+import { tDashboard } from './components/dashlang';
 import appConfig from '../../config';
 
 const colors = appConfig.app.colors || {
@@ -35,77 +38,8 @@ const colors = appConfig.app.colors || {
 };
 
 // ---------------------------------------------------------------------------
-// Domain config
+// Status colors (shared)
 // ---------------------------------------------------------------------------
-const DOMAINS = {
-    customers: {
-        label: 'Customers',
-        chartColor: '#3b82f6',
-        icon: PeopleIcon,
-        statuses: ['active', 'pending', 'suspended'],
-        columns: ['Name', 'Email', 'Phone', 'Status', 'Active', 'Created'],
-        renderRow: (row) => [
-            <RowPrimary key="name" title={row.name} subtitle={row.email} />,
-            row.email,
-            row.phone || '-',
-            <StatusChip key="status" value={row.status} />,
-            row.is_active ? 'Yes' : 'No',
-            formatDate(row.created_at),
-        ],
-    },
-    requests: {
-        label: 'Requests',
-        chartColor: '#8b5cf6',
-        icon: RequestIcon,
-        statuses: ['pending', 'accepted', 'on_the_way', 'completed', 'rejected', 'cancelled'],
-        columns: ['Customer', 'Technician', 'Service', 'Status', 'Description', 'Created'],
-        renderRow: (row) => [
-            row.customer?.name || '-',
-            row.technician?.user?.name || '-',
-            row.service?.name || '-',
-            <StatusChip key="status" value={row.status} />,
-            <Tooltip key="desc" title={row.description || ''}>
-                <Typography variant="body2" noWrap sx={{ maxWidth: { xs: 120, sm: 220 } }}>
-                    {row.description || '-'}
-                </Typography>
-            </Tooltip>,
-            formatDate(row.created_at),
-        ],
-    },
-    subscriptions: {
-        label: 'Subscriptions',
-        chartColor: '#10b981',
-        icon: SubIcon,
-        statuses: ['pending', 'active', 'expired', 'cancelled'],
-        columns: ['User', 'Plan', 'Amount', 'Status', 'Payment Method', 'Created', 'Expiry'],
-        renderRow: (row) => [
-            <RowPrimary key="user" title={row.user?.name} subtitle={row.user?.email} />,
-            row.rate_card?.name || '-',
-            row.amount_paid != null ? `TZS ${Number(row.amount_paid).toLocaleString()}` : '-',
-            <StatusChip key="status" value={row.status} />,
-            row.payment_method || '-',
-            formatDate(row.created_at),
-            formatDate(row.expiry_date),
-        ],
-    },
-    technicians: {
-        label: 'Technicians',
-        chartColor: '#f59e0b',
-        icon: TechIcon,
-        statuses: ['approved', 'pending', 'rejected'],
-        columns: ['Name', 'Email', 'Area', 'Rating', 'Verification', 'Online', 'Created'],
-        renderRow: (row) => [
-            <RowPrimary key="name" title={row.user?.name} subtitle={row.user?.email} />,
-            row.user?.email || '-',
-            row.area || '-',
-            row.rating ?? '-',
-            <StatusChip key="status" value={row.verification_status} />,
-            row.is_online ? 'Yes' : 'No',
-            formatDate(row.created_at),
-        ],
-    },
-};
-
 const STATUS_COLORS = {
     active: { color: '#10b981', bg: '#d1fae5' },
     approved: { color: '#10b981', bg: '#d1fae5' },
@@ -119,6 +53,9 @@ const STATUS_COLORS = {
     cancelled: { color: '#6b7280', bg: '#f3f4f6' },
 };
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 function formatDate(d) {
     if (!d) return '-';
     try {
@@ -161,7 +98,7 @@ function RowPrimary({ title, subtitle }) {
     );
 }
 
-function GrowthPill({ value }) {
+function GrowthPill({ value, t }) {
     if (value === undefined || value === null) return null;
     const isUp = value >= 0;
     const Icon = isUp ? TrendingUpIcon : TrendingDownIcon;
@@ -171,15 +108,12 @@ function GrowthPill({ value }) {
             <Icon sx={{ fontSize: 15 }} />
             <Typography variant="caption" fontWeight={700}>
                 {isUp ? '+' : ''}
-                {value}% vs last period
+                {value}% {t('dashboard.vsLastPeriod')}
             </Typography>
         </Stack>
     );
 }
 
-// ---------------------------------------------------------------------------
-// Daily insights from trend buckets
-// ---------------------------------------------------------------------------
 function buildDailyInsights(buckets = []) {
     if (!buckets.length) {
         return { today: null, yesterday: null, weekSoFar: null, lastLabel: null };
@@ -220,7 +154,9 @@ function buildDailyInsights(buckets = []) {
 const Dashboard = () => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-    const isTablet = useMediaQuery(theme.breakpoints.down('md'));
+
+    const { language } = useLanguage();
+    const t = (key) => tDashboard(language, key);
 
     const { can } = usePermissions();
     const canView = can('reports.view');
@@ -234,7 +170,6 @@ const Dashboard = () => {
         loadingTrends,
         loadingDetailed,
         loadingOverview,
-        exporting,
         getSummary,
         getTrends,
         getDetailed,
@@ -257,11 +192,113 @@ const Dashboard = () => {
     const [exportFmt, setExportFmt] = useState(null);
 
     // Chart type
-    const [chartType, setChartType] = useState('line'); // 'line' | 'bar'
+    const [chartType, setChartType] = useState('line');
+
+    // Domain config (language-aware)
+    const DOMAINS = useMemo(
+        () => ({
+            customers: {
+                label: t('dashboard.domain.customers'),
+                chartColor: '#3b82f6',
+                icon: PeopleIcon,
+                statuses: ['active', 'pending', 'suspended'],
+                columns: [
+                    t('dashboard.col.name'),
+                    t('dashboard.col.email'),
+                    t('dashboard.col.phone'),
+                    t('dashboard.col.status'),
+                    t('dashboard.col.active'),
+                    t('dashboard.col.created'),
+                ],
+                renderRow: (row) => [
+                    <RowPrimary key="name" title={row.name} subtitle={row.email} />,
+                    row.email,
+                    row.phone || '-',
+                    <StatusChip key="status" value={row.status} />,
+                    row.is_active ? t('common.yes') : t('common.no'),
+                    formatDate(row.created_at),
+                ],
+            },
+            requests: {
+                label: t('dashboard.domain.requests'),
+                chartColor: '#8b5cf6',
+                icon: RequestIcon,
+                statuses: ['pending', 'accepted', 'on_the_way', 'completed', 'rejected', 'cancelled'],
+                columns: [
+                    t('dashboard.col.customer'),
+                    t('dashboard.col.technician'),
+                    t('dashboard.col.service'),
+                    t('dashboard.col.status'),
+                    t('dashboard.col.description'),
+                    t('dashboard.col.created'),
+                ],
+                renderRow: (row) => [
+                    row.customer?.name || '-',
+                    row.technician?.user?.name || '-',
+                    row.service?.name || '-',
+                    <StatusChip key="status" value={row.status} />,
+                    <Tooltip key="desc" title={row.description || ''}>
+                        <Typography variant="body2" noWrap sx={{ maxWidth: { xs: 120, sm: 220 } }}>
+                            {row.description || '-'}
+                        </Typography>
+                    </Tooltip>,
+                    formatDate(row.created_at),
+                ],
+            },
+            subscriptions: {
+                label: t('dashboard.domain.subscriptions'),
+                chartColor: '#10b981',
+                icon: SubIcon,
+                statuses: ['pending', 'active', 'expired', 'cancelled'],
+                columns: [
+                    t('dashboard.col.user'),
+                    t('dashboard.col.plan'),
+                    t('dashboard.col.amount'),
+                    t('dashboard.col.status'),
+                    t('dashboard.col.paymentMethod'),
+                    t('dashboard.col.created'),
+                    t('dashboard.col.expiry'),
+                ],
+                renderRow: (row) => [
+                    <RowPrimary key="user" title={row.user?.name} subtitle={row.user?.email} />,
+                    row.rate_card?.name || '-',
+                    row.amount_paid != null ? `TZS ${Number(row.amount_paid).toLocaleString()}` : '-',
+                    <StatusChip key="status" value={row.status} />,
+                    row.payment_method || '-',
+                    formatDate(row.created_at),
+                    formatDate(row.expiry_date),
+                ],
+            },
+            technicians: {
+                label: t('dashboard.domain.technicians'),
+                chartColor: '#f59e0b',
+                icon: TechIcon,
+                statuses: ['approved', 'pending', 'rejected'],
+                columns: [
+                    t('dashboard.col.name'),
+                    t('dashboard.col.email'),
+                    t('dashboard.col.area'),
+                    t('dashboard.col.rating'),
+                    t('dashboard.col.verification'),
+                    t('dashboard.col.online'),
+                    t('dashboard.col.created'),
+                ],
+                renderRow: (row) => [
+                    <RowPrimary key="name" title={row.user?.name} subtitle={row.user?.email} />,
+                    row.user?.email || '-',
+                    row.area || '-',
+                    row.rating ?? '-',
+                    <StatusChip key="status" value={row.verification_status} />,
+                    row.is_online ? t('common.yes') : t('common.no'),
+                    formatDate(row.created_at),
+                ],
+            },
+        }),
+        [language]
+    );
 
     const domainConfig = DOMAINS[domain];
 
-    // Auto daily for week/month
     const effectiveGranularity = useMemo(() => {
         if (granularity) return granularity;
         if (range === 'week' || range === 'month') return 'daily';
@@ -348,7 +385,7 @@ const Dashboard = () => {
             window.URL.revokeObjectURL(url);
             showSnackbar({ type: 'success', message: 'Report exported successfully' });
         } catch {
-            // context already shows error
+            // handled by context
         } finally {
             setExportFmt(null);
         }
@@ -363,41 +400,41 @@ const Dashboard = () => {
         () => [
             {
                 key: 'customers',
-                label: 'Customers',
+                label: t('dashboard.domain.customers'),
                 color: DOMAINS.customers.chartColor,
                 bg: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
                 icon: PeopleIcon,
             },
             {
                 key: 'requests',
-                label: 'Requests',
+                label: t('dashboard.domain.requests'),
                 color: DOMAINS.requests.chartColor,
                 bg: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)',
                 icon: RequestIcon,
             },
             {
                 key: 'subscriptions',
-                label: 'Subscriptions',
+                label: t('dashboard.domain.subscriptions'),
                 color: DOMAINS.subscriptions.chartColor,
                 bg: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)',
                 icon: SubIcon,
             },
             {
                 key: 'technicians',
-                label: 'Technicians',
+                label: t('dashboard.domain.technicians'),
                 color: DOMAINS.technicians.chartColor,
                 bg: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
                 icon: TechIcon,
             },
         ],
-        []
+        [language]
     );
 
     if (!canView) {
         return (
             <Paper sx={{ p: 4, textAlign: 'center', borderRadius: 3, m: 2 }}>
                 <Typography color="error" variant="h6">
-                    You do not have permission to view Reports.
+                    {t('dashboard.noPermission')}
                 </Typography>
             </Paper>
         );
@@ -435,22 +472,22 @@ const Dashboard = () => {
                 >
                     <TextField
                         select
-                        label="Range"
+                        label={t('dashboard.range')}
                         size="small"
                         value={range}
                         onChange={(e) => setRange(e.target.value)}
                         sx={{ minWidth: { xs: '100%', sm: 140 } }}
                     >
-                        <MenuItem value="week">This Week</MenuItem>
-                        <MenuItem value="month">This Month</MenuItem>
-                        <MenuItem value="year">This Year</MenuItem>
-                        <MenuItem value="custom">Custom</MenuItem>
+                        <MenuItem value="week">{t('dashboard.thisWeek')}</MenuItem>
+                        <MenuItem value="month">{t('dashboard.thisMonth')}</MenuItem>
+                        <MenuItem value="year">{t('dashboard.thisYear')}</MenuItem>
+                        <MenuItem value="custom">{t('dashboard.custom')}</MenuItem>
                     </TextField>
 
                     {range === 'custom' && (
                         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ width: { xs: '100%', sm: 'auto' } }}>
                             <TextField
-                                label="From"
+                                label={t('dashboard.from')}
                                 type="date"
                                 size="small"
                                 value={dateFrom}
@@ -459,7 +496,7 @@ const Dashboard = () => {
                                 fullWidth={isMobile}
                             />
                             <TextField
-                                label="To"
+                                label={t('dashboard.to')}
                                 type="date"
                                 size="small"
                                 value={dateTo}
@@ -472,36 +509,36 @@ const Dashboard = () => {
 
                     <TextField
                         select
-                        label="Granularity"
+                        label={t('dashboard.granularity')}
                         size="small"
                         value={granularity}
                         onChange={(e) => setGranularity(e.target.value)}
                         sx={{ minWidth: { xs: '100%', sm: 150 } }}
-                        helperText={!granularity ? `Auto → ${effectiveGranularity}` : ' '}
+                        helperText={!granularity ? `${t('dashboard.auto')} → ${effectiveGranularity}` : ' '}
                         FormHelperTextProps={{ sx: { mt: 0.25, mb: 0 } }}
                     >
-                        <MenuItem value="">Auto ({effectiveGranularity})</MenuItem>
-                        <MenuItem value="daily">Daily</MenuItem>
-                        <MenuItem value="weekly">Weekly</MenuItem>
-                        <MenuItem value="monthly">Monthly</MenuItem>
+                        <MenuItem value="">{t('dashboard.auto')} ({effectiveGranularity})</MenuItem>
+                        <MenuItem value="daily">{t('dashboard.daily')}</MenuItem>
+                        <MenuItem value="weekly">{t('dashboard.weekly')}</MenuItem>
+                        <MenuItem value="monthly">{t('dashboard.monthly')}</MenuItem>
                     </TextField>
 
                     <Box flexGrow={1} sx={{ display: { xs: 'none', md: 'block' } }} />
 
                     <Stack direction="row" spacing={1.5} justifyContent={{ xs: 'flex-end', md: 'flex-start' }}>
                         <Tooltip title="Export all domains as one Excel workbook">
-                            <span>
-                                <Button
-                                    size="small"
-                                    variant="outlined"
-                                    startIcon={<ExcelIcon />}
-                                    onClick={() => handleExport('xlsx', 'all')}
-                                    disabled={!!exportFmt}
-                                    sx={{ borderRadius: 2 }}
-                                >
-                                    {isMobile ? 'All' : 'Export All'}
-                                </Button>
-                            </span>
+              <span>
+                <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<ExcelIcon />}
+                    onClick={() => handleExport('xlsx', 'all')}
+                    disabled={!!exportFmt}
+                    sx={{ borderRadius: 2 }}
+                >
+                  {t('dashboard.exportAll')}
+                </Button>
+              </span>
                         </Tooltip>
                         <Button
                             variant="contained"
@@ -510,7 +547,7 @@ const Dashboard = () => {
                             disabled={loadingOverview || loadingTrends}
                             sx={{ borderRadius: 2 }}
                         >
-                            Refresh
+                            {t('dashboard.refresh')}
                         </Button>
                     </Stack>
                 </Stack>
@@ -531,12 +568,12 @@ const Dashboard = () => {
                     <Stack direction="row" alignItems="center" spacing={1} mb={2}>
                         <TodayIcon sx={{ color: colors.primary, fontSize: 22 }} />
                         <Typography variant="h6" fontWeight={700}>
-                            Daily Summary
+                            {t('dashboard.dailySummary')}
                         </Typography>
                         {dailyInsights.lastLabel && (
                             <Chip
                                 size="small"
-                                label={`Latest: ${dailyInsights.lastLabel}`}
+                                label={`${t('dashboard.latest')}: ${dailyInsights.lastLabel}`}
                                 sx={{ height: 22, fontWeight: 600 }}
                             />
                         )}
@@ -553,9 +590,9 @@ const Dashboard = () => {
                     ) : (
                         <Grid container spacing={2}>
                             {[
-                                { title: 'Today / Latest Day', data: dailyInsights.today, icon: TodayIcon },
-                                { title: 'Previous Day', data: dailyInsights.yesterday, icon: null },
-                                { title: 'Last 7 Days (in range)', data: dailyInsights.weekSoFar, icon: WeekIcon },
+                                { title: t('dashboard.todayLatestDay'), data: dailyInsights.today, icon: TodayIcon },
+                                { title: t('dashboard.previousDay'), data: dailyInsights.yesterday, icon: null },
+                                { title: t('dashboard.last7Days'), data: dailyInsights.weekSoFar, icon: WeekIcon },
                             ].map((block) => (
                                 <Grid item xs={12} sm={4} key={block.title}>
                                     <Box
@@ -583,27 +620,27 @@ const Dashboard = () => {
                                         {block.data ? (
                                             <Stack spacing={0.4}>
                                                 <Typography variant="body2">
-                                                    Customers: <strong>{block.data.customers}</strong>
+                                                    {t('dashboard.customers')}: <strong>{block.data.customers}</strong>
                                                 </Typography>
                                                 <Typography variant="body2">
-                                                    Requests: <strong>{block.data.requests}</strong>
+                                                    {t('dashboard.requests')}: <strong>{block.data.requests}</strong>
                                                 </Typography>
                                                 <Typography variant="body2">
-                                                    Subscriptions: <strong>{block.data.subscriptions}</strong>
+                                                    {t('dashboard.subscriptions')}: <strong>{block.data.subscriptions}</strong>
                                                 </Typography>
                                                 <Typography variant="body2">
-                                                    Revenue:{' '}
+                                                    {t('dashboard.revenue')}:{' '}
                                                     <strong>
                                                         TZS {Number(block.data.subscriptions_revenue).toLocaleString()}
                                                     </strong>
                                                 </Typography>
                                                 <Typography variant="body2">
-                                                    Technicians: <strong>{block.data.technicians}</strong>
+                                                    {t('dashboard.technicians')}: <strong>{block.data.technicians}</strong>
                                                 </Typography>
                                             </Stack>
                                         ) : (
                                             <Typography variant="body2" color="text.secondary">
-                                                No data
+                                                {t('dashboard.noData')}
                                             </Typography>
                                         )}
                                     </Box>
@@ -658,7 +695,7 @@ const Dashboard = () => {
                                                     >
                                                         {headline[item.key]?.count ?? 0}
                                                     </Typography>
-                                                    <GrowthPill value={headline[item.key]?.growth} />
+                                                    <GrowthPill value={headline[item.key]?.growth} t={t} />
                                                     {item.key === 'subscriptions' && (
                                                         <Typography
                                                             variant="caption"
@@ -667,7 +704,7 @@ const Dashboard = () => {
                                                             mt={0.75}
                                                             fontWeight={500}
                                                         >
-                                                            Revenue: TZS{' '}
+                                                            {t('dashboard.revenueLabel')}: TZS{' '}
                                                             {Number(headline.subscriptions?.revenue || 0).toLocaleString()}
                                                             {headline.subscriptions?.revenue_growth != null && (
                                                                 <Box component="span" ml={0.75}>
@@ -704,7 +741,7 @@ const Dashboard = () => {
                 })}
             </Grid>
 
-            {/* ===================== COMBINED TREND (Line + Histogram) ===================== */}
+            {/* ===================== COMBINED TREND ===================== */}
             <Paper
                 elevation={0}
                 sx={{
@@ -725,7 +762,7 @@ const Dashboard = () => {
                 >
                     <Box>
                         <Typography variant="h6" fontWeight={700}>
-                            Combined Trend
+                            {t('dashboard.combinedTrend')}
                             <Typography
                                 component="span"
                                 variant="body2"
@@ -739,7 +776,7 @@ const Dashboard = () => {
                         {(range === 'week' || range === 'month') && (
                             <Chip
                                 size="small"
-                                label="Daily view"
+                                label={t('dashboard.dailyView')}
                                 color="primary"
                                 variant="outlined"
                                 sx={{ mt: 0.75, height: 22, fontWeight: 600 }}
@@ -755,7 +792,7 @@ const Dashboard = () => {
                             onClick={() => setChartType('line')}
                             sx={{ borderRadius: 2, textTransform: 'none', px: 1.5 }}
                         >
-                            Line
+                            {t('dashboard.line')}
                         </Button>
                         <Button
                             size="small"
@@ -764,7 +801,7 @@ const Dashboard = () => {
                             onClick={() => setChartType('bar')}
                             sx={{ borderRadius: 2, textTransform: 'none', px: 1.5 }}
                         >
-                            Histogram
+                            {t('dashboard.histogram')}
                         </Button>
                     </Stack>
                 </Stack>
@@ -775,7 +812,7 @@ const Dashboard = () => {
                     </Box>
                 ) : trendBuckets.length === 0 ? (
                     <Box sx={{ height: 360, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Typography color="text.secondary">No data available for the selected period</Typography>
+                        <Typography color="text.secondary">{t('dashboard.noDataPeriod')}</Typography>
                     </Box>
                 ) : chartType === 'line' ? (
                     <ResponsiveContainer width="100%" height={isMobile ? 300 : 380}>
@@ -802,7 +839,7 @@ const Dashboard = () => {
                             <Area
                                 type="monotone"
                                 dataKey="customers"
-                                name="Customers"
+                                name={t('dashboard.domain.customers')}
                                 stroke={DOMAINS.customers.chartColor}
                                 fill={`url(#grad-${DOMAINS.customers.label})`}
                                 strokeWidth={2.5}
@@ -812,7 +849,7 @@ const Dashboard = () => {
                             <Area
                                 type="monotone"
                                 dataKey="requests"
-                                name="Requests"
+                                name={t('dashboard.domain.requests')}
                                 stroke={DOMAINS.requests.chartColor}
                                 fill={`url(#grad-${DOMAINS.requests.label})`}
                                 strokeWidth={2.5}
@@ -822,7 +859,7 @@ const Dashboard = () => {
                             <Area
                                 type="monotone"
                                 dataKey="subscriptions"
-                                name="Subscriptions"
+                                name={t('dashboard.domain.subscriptions')}
                                 stroke={DOMAINS.subscriptions.chartColor}
                                 fill={`url(#grad-${DOMAINS.subscriptions.label})`}
                                 strokeWidth={2.5}
@@ -832,7 +869,7 @@ const Dashboard = () => {
                             <Area
                                 type="monotone"
                                 dataKey="technicians"
-                                name="Technicians"
+                                name={t('dashboard.domain.technicians')}
                                 stroke={DOMAINS.technicians.chartColor}
                                 fill={`url(#grad-${DOMAINS.technicians.label})`}
                                 strokeWidth={2.5}
@@ -863,28 +900,28 @@ const Dashboard = () => {
                             <Legend wrapperStyle={{ paddingTop: 14 }} />
                             <Bar
                                 dataKey="customers"
-                                name="Customers"
+                                name={t('dashboard.domain.customers')}
                                 fill={DOMAINS.customers.chartColor}
                                 radius={[4, 4, 0, 0]}
                                 maxBarSize={26}
                             />
                             <Bar
                                 dataKey="requests"
-                                name="Requests"
+                                name={t('dashboard.domain.requests')}
                                 fill={DOMAINS.requests.chartColor}
                                 radius={[4, 4, 0, 0]}
                                 maxBarSize={26}
                             />
                             <Bar
                                 dataKey="subscriptions"
-                                name="Subscriptions"
+                                name={t('dashboard.domain.subscriptions')}
                                 fill={DOMAINS.subscriptions.chartColor}
                                 radius={[4, 4, 0, 0]}
                                 maxBarSize={26}
                             />
                             <Bar
                                 dataKey="technicians"
-                                name="Technicians"
+                                name={t('dashboard.domain.technicians')}
                                 fill={DOMAINS.technicians.chartColor}
                                 radius={[4, 4, 0, 0]}
                                 maxBarSize={26}
@@ -936,7 +973,7 @@ const Dashboard = () => {
                         }}
                     >
                         <Typography variant="h6" fontWeight={700} mb={2}>
-                            {domainConfig.label} by Status
+                            {domainConfig.label} {t('dashboard.byStatus')}
                         </Typography>
                         {loadingSummary ? (
                             <Box sx={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -944,7 +981,7 @@ const Dashboard = () => {
                             </Box>
                         ) : pieData.length === 0 ? (
                             <Box sx={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <Typography color="text.secondary">No data for this period</Typography>
+                                <Typography color="text.secondary">{t('dashboard.noData')}</Typography>
                             </Box>
                         ) : (
                             <ResponsiveContainer width="100%" height={280}>
@@ -977,7 +1014,7 @@ const Dashboard = () => {
                     {/* Totals + Export */}
                     <Grid item xs={12} md={7} sx={{ p: { xs: 2, sm: 3 } }}>
                         <Typography variant="h6" fontWeight={700} mb={2}>
-                            Totals
+                            {t('dashboard.totals')}
                         </Typography>
                         <Grid container spacing={1.5}>
                             {Object.entries(summary.totals || {}).map(([key, value]) => (
@@ -1012,32 +1049,32 @@ const Dashboard = () => {
 
                         <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap>
                             <Tooltip title={`Export ${domainConfig.label} as CSV`}>
-                                <span>
-                                    <Button
-                                        size="small"
-                                        variant="outlined"
-                                        startIcon={<CsvIcon />}
-                                        onClick={() => handleExport('csv')}
-                                        disabled={!!exportFmt}
-                                        sx={{ borderRadius: 2 }}
-                                    >
-                                        CSV
-                                    </Button>
-                                </span>
+                <span>
+                  <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<CsvIcon />}
+                      onClick={() => handleExport('csv')}
+                      disabled={!!exportFmt}
+                      sx={{ borderRadius: 2 }}
+                  >
+                    {t('dashboard.exportCsv')}
+                  </Button>
+                </span>
                             </Tooltip>
                             <Tooltip title={`Export ${domainConfig.label} as Excel`}>
-                                <span>
-                                    <Button
-                                        size="small"
-                                        variant="outlined"
-                                        startIcon={<ExcelIcon />}
-                                        onClick={() => handleExport('xlsx')}
-                                        disabled={!!exportFmt}
-                                        sx={{ borderRadius: 2 }}
-                                    >
-                                        Excel
-                                    </Button>
-                                </span>
+                <span>
+                  <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<ExcelIcon />}
+                      onClick={() => handleExport('xlsx')}
+                      disabled={!!exportFmt}
+                      sx={{ borderRadius: 2 }}
+                  >
+                    {t('dashboard.exportExcel')}
+                  </Button>
+                </span>
                             </Tooltip>
                         </Stack>
                     </Grid>
@@ -1066,7 +1103,7 @@ const Dashboard = () => {
                     }}
                 >
                     <Typography variant="h6" fontWeight={700}>
-                        {domainConfig.label} Records
+                        {domainConfig.label} {t('dashboard.records')}
                     </Typography>
                     <Stack
                         direction={{ xs: 'column', sm: 'row' }}
@@ -1075,7 +1112,7 @@ const Dashboard = () => {
                     >
                         <TextField
                             select
-                            label="Status"
+                            label={t('dashboard.status')}
                             size="small"
                             value={status}
                             onChange={(e) => {
@@ -1084,7 +1121,7 @@ const Dashboard = () => {
                             }}
                             sx={{ minWidth: { xs: '100%', sm: 150 } }}
                         >
-                            <MenuItem value="all">All</MenuItem>
+                            <MenuItem value="all">{t('dashboard.all')}</MenuItem>
                             {domainConfig.statuses.map((s) => (
                                 <MenuItem key={s} value={s} sx={{ textTransform: 'capitalize' }}>
                                     {s.replace(/_/g, ' ')}
@@ -1093,7 +1130,7 @@ const Dashboard = () => {
                         </TextField>
                         <TextField
                             size="small"
-                            placeholder="Search..."
+                            placeholder={t('dashboard.search')}
                             value={search}
                             onChange={(e) => {
                                 setSearch(e.target.value);
@@ -1128,7 +1165,7 @@ const Dashboard = () => {
                                             align="center"
                                             sx={{ py: 6 }}
                                         >
-                                            <Typography color="text.secondary">No records found</Typography>
+                                            <Typography color="text.secondary">{t('dashboard.noRecords')}</Typography>
                                         </TableCell>
                                     </TableRow>
                                 ) : (

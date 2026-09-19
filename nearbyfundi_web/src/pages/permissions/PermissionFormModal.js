@@ -1,24 +1,14 @@
 // src/pages/permissions/PermissionFormModal.js
 import React, { useState, useEffect } from 'react';
 import {
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    TextField,
-    Button,
-    CircularProgress,
-    useMediaQuery,
-    useTheme,
-    Typography,
-    IconButton,
-    Stack,
-    Divider,
-    Box,
+    Dialog, DialogTitle, DialogContent, DialogActions, TextField, Button,
+    CircularProgress, useMediaQuery, useTheme, Typography, IconButton, Stack, Divider, Box,
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
 import { permissionService } from 'services/permission.service';
+import { useLanguage } from 'context/LanguageContext';
 import { showSnackbar } from 'utils/snackbar';
+import { tPerm } from './permissionlang';
 import appConfig from '../../config';
 
 const colors = appConfig.app.colors;
@@ -26,6 +16,8 @@ const colors = appConfig.app.colors;
 export default function PermissionFormModal({ open, onClose, permission }) {
     const theme = useTheme();
     const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
+    const { language } = useLanguage();
+    const t = (key) => tPerm(language, key);
 
     const [loading, setLoading] = useState(false);
     const [form, setForm] = useState({
@@ -63,16 +55,16 @@ export default function PermissionFormModal({ open, onClose, permission }) {
         try {
             if (permission) {
                 await permissionService.updatePermission(permission.id, form);
-                showSnackbar({ type: 'success', message: 'Permission updated successfully' });
+                showSnackbar({ type: 'success', message: t('perm.modal.updated') });
             } else {
                 await permissionService.createPermission(form);
-                showSnackbar({ type: 'success', message: 'Permission created successfully' });
+                showSnackbar({ type: 'success', message: t('perm.modal.created') });
             }
             onClose(true);
         } catch (err) {
             showSnackbar({
                 type: 'error',
-                message: err.response?.data?.message || 'Operation failed',
+                message: err.response?.data?.message || t('perm.modal.failed'),
             });
         } finally {
             setLoading(false);
@@ -106,12 +98,10 @@ export default function PermissionFormModal({ open, onClose, permission }) {
                 >
                     <Box>
                         <Typography variant="h6" fontWeight={800} color="text.primary">
-                            {permission ? 'Edit Permission' : 'Add New Permission'}
+                            {permission ? t('perm.modal.editTitle') : t('perm.modal.createTitle')}
                         </Typography>
                         <Typography variant="body2" color="text.secondary" fontWeight={500} sx={{ mt: 0.25 }}>
-                            {permission
-                                ? 'Update permission details below'
-                                : 'Create a new permission with a unique key'}
+                            {permission ? t('perm.modal.editDesc') : t('perm.modal.createDesc')}
                         </Typography>
                     </Box>
                     <IconButton
@@ -133,14 +123,14 @@ export default function PermissionFormModal({ open, onClose, permission }) {
                 <DialogContent sx={{ px: { xs: 2.5, sm: 3 }, py: 2.5 }}>
                     <Stack spacing={2.25}>
                         <TextField
-                            label="Permission Name (key)"
+                            label={t('perm.modal.name')}
                             name="name"
                             value={form.name}
                             onChange={handleChange}
                             required
                             fullWidth
                             size="small"
-                            helperText="Unique identifier, e.g. users.view"
+                            helperText={t('perm.modal.nameHelp')}
                             sx={{
                                 '& .MuiOutlinedInput-root': {
                                     borderRadius: 2,
@@ -153,7 +143,7 @@ export default function PermissionFormModal({ open, onClose, permission }) {
                         />
 
                         <TextField
-                            label="Display Name"
+                            label={t('perm.modal.displayName')}
                             name="display_name"
                             value={form.display_name}
                             onChange={handleChange}
@@ -172,7 +162,7 @@ export default function PermissionFormModal({ open, onClose, permission }) {
                         />
 
                         <TextField
-                            label="Description"
+                            label={t('perm.modal.description')}
                             name="description"
                             value={form.description}
                             onChange={handleChange}
@@ -192,14 +182,14 @@ export default function PermissionFormModal({ open, onClose, permission }) {
                         />
 
                         <TextField
-                            label="Guard Name"
+                            label={t('perm.modal.guard')}
                             name="guard_name"
                             value={form.guard_name}
                             onChange={handleChange}
                             required
                             fullWidth
                             size="small"
-                            helperText="Usually 'web' or 'api'"
+                            helperText={t('perm.modal.guardHelp')}
                             sx={{
                                 '& .MuiOutlinedInput-root': {
                                     borderRadius: 2,
@@ -226,7 +216,7 @@ export default function PermissionFormModal({ open, onClose, permission }) {
                             '&:hover': { bgcolor: 'action.hover' },
                         }}
                     >
-                        Cancel
+                        {t('perm.cancel')}
                     </Button>
                     <Button
                         type="submit"
@@ -248,9 +238,9 @@ export default function PermissionFormModal({ open, onClose, permission }) {
                         {loading ? (
                             <CircularProgress size={22} thickness={4} sx={{ color: '#fff' }} />
                         ) : permission ? (
-                            'Update Permission'
+                            t('perm.modal.update')
                         ) : (
-                            'Create Permission'
+                            t('perm.modal.create')
                         )}
                     </Button>
                 </DialogActions>

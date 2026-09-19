@@ -1,82 +1,82 @@
-// App.js
 import React from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { setNavigator } from "router/navigation";
-import { AuthProvider, useAuth } from "context/AuthContext";
+import { setNavigator } from 'router/navigation';
+import { AuthProvider, useAuth } from 'context/AuthContext';
 
 // System Components
-import Documentation from "components/Documentation";
-import Layout from "components/Layout";
-import Login from "pages/login/Login";
-import VerifyOTP from "pages/verify_otp/VerifyOTP";
-import ResetPassword from "pages/reset_password/ResetPassword";
-import ForgotPassword from "pages/forgot_password/ForgotPassword";
-import Error from "pages/error/Error";
+import Documentation from 'components/Documentation';
+import Layout from 'components/Layout';
+import Login from 'pages/login/Login';
+import VerifyOTP from 'pages/verify_otp/VerifyOTP';
+import ResetPassword from 'pages/reset_password/ResetPassword';
+import ForgotPassword from 'pages/forgot_password/ForgotPassword';
+import Error from 'pages/error/Error';
 
 // Primary Pages
-import Profile from "pages/profile";
-import Dashboard from "pages/dashboard/Dashboard";
-import UsersList from "pages/user";
-import PermissionsList from "pages/permissions/PermissionList";
-import RoleList from "pages/roles/RoleList";
-import AuditList from "pages/audit/AuditList";
-import OtpList from "pages/otp/OtpList";
-import AboutPage from "pages/about/AboutPage";
-import TermsPage from "pages/terms/TermsPage";
-import FaqList from "pages/faqs/FaqList";
-import TechniciansList from "pages/technicians/TechniciansList";
-import TechnicianDetails from "pages/technicians/TechnicianDetails";
-import PortfoliosList from "pages/portfolios/PortfoliosList";
-import PostsList from "pages/posts/PostsList";
-import RequestsList from "pages/requests/RequestsList";
-import ServicesList from "pages/services/ServicesList";
-import CategoriesList from "pages/categories/CategoriesList";
-import MonitoringMap from "pages/monitoring/MonitoringMap";
-import PrivacyPolicyPage from "pages/privacy-policy/PrivacyPolicyPage";
+import Profile from 'pages/profile';
+import Dashboard from 'pages/dashboard/Dashboard';
+import UsersList from 'pages/user';
+import PermissionsList from 'pages/permissions/PermissionList';
+import RoleList from 'pages/roles/RoleList';
+import AuditList from 'pages/audit/AuditList';
+import OtpList from 'pages/otp/OtpList';
+import AboutPage from 'pages/about/AboutPage';
+import TermsPage from 'pages/terms/TermsPage';
+import FaqList from 'pages/faqs/FaqList';
+import TechniciansList from 'pages/technicians/TechniciansList';
+import TechnicianDetails from 'pages/technicians/TechnicianDetails';
+import PortfoliosList from 'pages/portfolios/PortfoliosList';
+import PostsList from 'pages/posts/PostsList';
+import RequestsList from 'pages/requests/RequestsList';
+import ServicesList from 'pages/services/ServicesList';
+import CategoriesList from 'pages/categories/CategoriesList';
+import MonitoringMap from 'pages/monitoring/MonitoringMap';
+import PrivacyPolicyPage from 'pages/privacy-policy/PrivacyPolicyPage';
 
 // Subscription Pages
-import SubscriptionList from "pages/subscriptions/SubscriptionList";
-import RateCardManagement from "pages/subscriptions/RateCardManagement";
-import PaymentMethodManagement from "pages/subscriptions/PaymentMethodManagement";
+import SubscriptionList from 'pages/subscriptions/SubscriptionList';
+import RateCardManagement from 'pages/subscriptions/RateCardManagement';
+import PaymentMethodManagement from 'pages/subscriptions/PaymentMethodManagement';
 
 // Finance Pages
-import FinanceLayout from "pages/finance/FinanceLayout";
-import FinanceSubscriptions from "pages/finance/FinanceSubscriptions";
-import FinanceTechnicians from "pages/finance/FinanceTechnicians";
-import FinanceCustomers from "pages/finance/FinanceCustomers";
-import FinanceRequests from "pages/finance/FinanceRequests";
+import FinanceLayout from 'pages/finance/FinanceLayout';
+import FinanceSubscriptions from 'pages/finance/FinanceSubscriptions';
+import FinanceTechnicians from 'pages/finance/FinanceTechnicians';
+import FinanceCustomers from 'pages/finance/FinanceCustomers';
+import FinanceRequests from 'pages/finance/FinanceRequests';
 
 // SMS Logs Pages
-import SmsLogsList from "pages/sms/SmsLogsList";
+import SmsLogsList from 'pages/sms/SmsLogsList';
 
 // Context Providers
-import { UserProvider } from "context/UserContext";
-import { RoleProvider } from "context/RoleContext";
-import { PermissionProvider } from "context/PermissionContext";
-import { AuditProvider } from "context/AuditContext";
-import { OtpProvider } from "context/OtpContext";
-import { DashboardProvider } from "context/DashboardContext";
-import { AboutProvider } from "context/AboutContext";
-import { TermsProvider } from "context/TermsContext";
-import { FaqProvider } from "context/FaqContext";
-import { ServiceProvider } from "context/ServiceContext";
-import { TechnicianProvider } from "context/TechnicianContext";
-import { AdminTechnicianProvider } from "context/AdminTechnicianContext";
-import { PortfolioProvider } from "context/PortfolioContext";
-import { PostProvider } from "context/PostContext";
-import { CommentProvider } from "context/CommentContext";
-import { LikeProvider } from "context/LikeContext";
-import { RequestProvider } from "context/RequestContext";
-import { ReportProvider } from "context/ReportContext";
+import { LanguageProvider } from 'context/LanguageContext';
+import { UserProvider } from 'context/UserContext';
+import { RoleProvider } from 'context/RoleContext';
+import { PermissionProvider } from 'context/PermissionContext';
+import { AuditProvider } from 'context/AuditContext';
+import { OtpProvider } from 'context/OtpContext';
+import { DashboardProvider } from 'context/DashboardContext';
+import { AboutProvider } from 'context/AboutContext';
+import { TermsProvider } from 'context/TermsContext';
+import { FaqProvider } from 'context/FaqContext';
+import { ServiceProvider } from 'context/ServiceContext';
+import { TechnicianProvider } from 'context/TechnicianContext';
+import { AdminTechnicianProvider } from 'context/AdminTechnicianContext';
+import { PortfolioProvider } from 'context/PortfolioContext';
+import { PostProvider } from 'context/PostContext';
+import { CommentProvider } from 'context/CommentContext';
+import { LikeProvider } from 'context/LikeContext';
+import { RequestProvider } from 'context/RequestContext';
+import { ReportProvider } from 'context/ReportContext';
 import {
     RateCardProvider,
     PaymentMethodProvider,
     SubscriptionProvider,
-} from "context/SubscriptionContext";
-import { PrivacyPolicyProvider } from "context/PrivacyPolicyContext";
-import { SmsProvider } from "context/SmsContext";
+} from 'context/SubscriptionContext';
+import { PrivacyPolicyProvider } from 'context/PrivacyPolicyContext';
+import { SmsProvider } from 'context/SmsContext';
 
 // Route Guards
 const PrivateRoute = ({ children, isAuthenticated }) => {
@@ -103,7 +103,14 @@ function AppContent() {
 
     if (isLoading) {
         return (
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+            <div
+                style={{
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    height: '100vh',
+                }}
+            >
                 Loading...
             </div>
         );
@@ -112,10 +119,38 @@ function AppContent() {
     return (
         <Routes>
             {/* Public Routes */}
-            <Route path="/login" element={<PublicRoute isAuthenticated={isAuthenticated}><Login /></PublicRoute>} />
-            <Route path="/verify-otp" element={<PublicRoute isAuthenticated={isAuthenticated}><VerifyOTP /></PublicRoute>} />
-            <Route path="/reset-password" element={<PublicRoute isAuthenticated={isAuthenticated}><ResetPassword /></PublicRoute>} />
-            <Route path="/forgot-password" element={<PublicRoute isAuthenticated={isAuthenticated}><ForgotPassword /></PublicRoute>} />
+            <Route
+                path="/login"
+                element={
+                    <PublicRoute isAuthenticated={isAuthenticated}>
+                        <Login />
+                    </PublicRoute>
+                }
+            />
+            <Route
+                path="/verify-otp"
+                element={
+                    <PublicRoute isAuthenticated={isAuthenticated}>
+                        <VerifyOTP />
+                    </PublicRoute>
+                }
+            />
+            <Route
+                path="/reset-password"
+                element={
+                    <PublicRoute isAuthenticated={isAuthenticated}>
+                        <ResetPassword />
+                    </PublicRoute>
+                }
+            />
+            <Route
+                path="/forgot-password"
+                element={
+                    <PublicRoute isAuthenticated={isAuthenticated}>
+                        <ForgotPassword />
+                    </PublicRoute>
+                }
+            />
 
             {/* Error Pages */}
             <Route path="/403" element={<Error code={403} />} />
@@ -125,7 +160,14 @@ function AppContent() {
             <Route path="/documentation/*" element={<Documentation />} />
 
             {/* Protected Routes */}
-            <Route path="/app/*" element={<PrivateRoute isAuthenticated={isAuthenticated}><Layout /></PrivateRoute>}>
+            <Route
+                path="/app/*"
+                element={
+                    <PrivateRoute isAuthenticated={isAuthenticated}>
+                        <Layout />
+                    </PrivateRoute>
+                }
+            >
                 <Route path="profile" element={<Profile />} />
                 <Route path="dashboard" element={<Dashboard />} />
                 <Route path="users" element={<UsersList />} />
@@ -187,6 +229,7 @@ function AppContent() {
 
 // Context Provider Composer
 const PROVIDERS = [
+    LanguageProvider, // ← keep only this one
     AuthProvider,
     DashboardProvider,
     UserProvider,

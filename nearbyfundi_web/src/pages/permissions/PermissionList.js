@@ -1,67 +1,33 @@
 // src/pages/permissions/PermissionsList.js
 import React, { useState, useEffect } from 'react';
 import {
-    Box,
-    Button,
-    Chip,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogTitle,
-    IconButton,
-    InputAdornment,
-    Menu,
-    MenuItem,
-    Paper,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TablePagination,
-    TableRow,
-    TextField,
-    Typography,
-    useTheme,
-    useMediaQuery,
-    Card,
-    CardContent,
-    Divider,
-    CircularProgress,
-    Alert,
-    Stack,
+    Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
+    IconButton, InputAdornment, Menu, MenuItem, Paper, Table, TableBody,
+    TableCell, TableContainer, TableHead, TablePagination, TableRow, TextField,
+    Typography, useTheme, useMediaQuery, Card, CardContent, Divider,
+    CircularProgress, Alert, Stack,
 } from '@mui/material';
 import {
-    Add as AddIcon,
-    Edit as EditIcon,
-    Refresh as RefreshIcon,
-    Search as SearchIcon,
-    MoreVert as MoreVertIcon,
-    Label as LabelIcon,
-    Shield as ShieldIcon,
-    Description as DescriptionIcon,
-    Clear as ClearIcon,
+    Add as AddIcon, Edit as EditIcon, Refresh as RefreshIcon, Search as SearchIcon,
+    MoreVert as MoreVertIcon, Label as LabelIcon, Shield as ShieldIcon,
+    Description as DescriptionIcon, Clear as ClearIcon,
 } from '@mui/icons-material';
 import PermissionFormModal from './PermissionFormModal';
 import { showSnackbar } from 'utils/snackbar';
 import { permissionService } from 'services/permission.service';
 import { usePermissions } from 'hooks/usePermissions';
+import { useLanguage } from 'context/LanguageContext';
+import { tPerm } from './permissionlang';
 import appConfig from '../../config';
 
 const colors = appConfig.app.colors;
-
-const headCells = [
-    { id: 'name', label: 'Permission Key' },
-    { id: 'display_name', label: 'Display Name' },
-    { id: 'description', label: 'Description' },
-    { id: 'guard_name', label: 'Guard' },
-    { id: 'actions', label: 'Actions', disableSort: true },
-];
 
 export default function PermissionsList() {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const showTableView = useMediaQuery(theme.breakpoints.up('md'));
+    const { language } = useLanguage();
+    const t = (key) => tPerm(language, key);
 
     const { can } = usePermissions();
     const canView = can('permissions.view') || can('roles.assign_permissions');
@@ -85,6 +51,14 @@ export default function PermissionsList() {
         message: '',
         action: null,
     });
+
+    const headCells = [
+        { id: 'name', label: t('perm.col.key') },
+        { id: 'display_name', label: t('perm.col.displayName') },
+        { id: 'description', label: t('perm.col.description') },
+        { id: 'guard_name', label: t('perm.col.guard') },
+        { id: 'actions', label: t('perm.col.actions'), disableSort: true },
+    ];
 
     const fetchPermissions = async () => {
         if (!canView) return;
@@ -118,8 +92,8 @@ export default function PermissionsList() {
             }
         } catch (err) {
             console.error('Permissions error:', err);
-            setError(err.message || 'Failed to load permissions');
-            showSnackbar({ type: 'error', message: 'Failed to load permissions' });
+            setError(err.message || t('perm.loadFailed'));
+            showSnackbar({ type: 'error', message: t('perm.loadFailed') });
             setPermissions([]);
             setTotal(0);
         } finally {
@@ -162,7 +136,7 @@ export default function PermissionsList() {
             await confirmDialog.action();
             fetchPermissions();
         } catch (err) {
-            showSnackbar({ type: 'error', message: 'Action failed' });
+            showSnackbar({ type: 'error', message: t('perm.actionFailed') });
         }
     };
 
@@ -180,10 +154,10 @@ export default function PermissionsList() {
                     }}
                 >
                     <Typography color="error" fontWeight={600} variant="h6" gutterBottom>
-                        Access Denied
+                        {t('perm.accessDenied')}
                     </Typography>
                     <Typography color="text.secondary">
-                        You do not have permission to view permissions.
+                        {t('perm.noPermission')}
                     </Typography>
                 </Paper>
             </Box>
@@ -205,7 +179,7 @@ export default function PermissionsList() {
                                 fetchPermissions();
                             }}
                         >
-                            Retry
+                            {t('perm.retry')}
                         </Button>
                     }
                     sx={{ borderRadius: 2 }}
@@ -247,10 +221,10 @@ export default function PermissionsList() {
                     >
                         <Box>
                             <Typography variant="h5" fontWeight={800} color="text.primary">
-                                Permissions
+                                {t('perm.title')}
                             </Typography>
                             <Typography variant="body2" color="text.secondary" fontWeight={500}>
-                                Manage system permissions and access keys
+                                {t('perm.subtitle')}
                             </Typography>
                         </Box>
 
@@ -273,7 +247,7 @@ export default function PermissionsList() {
                                     },
                                 }}
                             >
-                                Add Permission
+                                {t('perm.add')}
                             </Button>
                         )}
                     </Stack>
@@ -284,7 +258,7 @@ export default function PermissionsList() {
                         alignItems={{ xs: 'stretch', sm: 'center' }}
                     >
                         <TextField
-                            placeholder="Search permissions…"
+                            placeholder={t('perm.searchPlaceholder')}
                             size="small"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
@@ -332,7 +306,7 @@ export default function PermissionsList() {
                                 },
                             }}
                         >
-                            Refresh
+                            {t('perm.refresh')}
                         </Button>
                     </Stack>
                 </Box>
@@ -373,7 +347,7 @@ export default function PermissionsList() {
                                     <TableRow>
                                         <TableCell colSpan={5} align="center" sx={{ py: 8 }}>
                                             <Typography color="text.secondary" fontWeight={500}>
-                                                No permissions found
+                                                {t('perm.noFound')}
                                             </Typography>
                                         </TableCell>
                                     </TableRow>
@@ -462,7 +436,7 @@ export default function PermissionsList() {
                                 }}
                             >
                                 <Typography color="text.secondary" fontWeight={500}>
-                                    No permissions found
+                                    {t('perm.noFound')}
                                 </Typography>
                             </Paper>
                         ) : (
@@ -501,7 +475,7 @@ export default function PermissionsList() {
                                                         },
                                                         '& .MuiChip-label': {
                                                             overflow: 'hidden',
-                                                            textOverflow: 'ellipsis'  ,
+                                                            textOverflow: 'ellipsis',
                                                         },
                                                     }}
                                                 />
@@ -534,7 +508,7 @@ export default function PermissionsList() {
                                             <Stack direction="row" spacing={1} alignItems="center">
                                                 <ShieldIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
                                                 <Typography variant="caption" color="text.secondary" fontWeight={500}>
-                                                    Guard: {perm.guard_name}
+                                                    {t('perm.guard')}: {perm.guard_name}
                                                 </Typography>
                                             </Stack>
                                         </CardContent>
@@ -587,7 +561,7 @@ export default function PermissionsList() {
             >
                 {canEdit && (
                     <MenuItem onClick={handleEdit} sx={{ fontWeight: 500 }}>
-                        <EditIcon sx={{ mr: 1.5, fontSize: 20, color: colors.sea || '#0f766e' }} /> Edit
+                        <EditIcon sx={{ mr: 1.5, fontSize: 20, color: colors.sea || '#0f766e' }} /> {t('perm.edit')}
                     </MenuItem>
                 )}
             </Menu>
@@ -615,7 +589,7 @@ export default function PermissionsList() {
                         onClick={() => setConfirmDialog((prev) => ({ ...prev, open: false }))}
                         sx={{ fontWeight: 600, textTransform: 'none' }}
                     >
-                        Cancel
+                        {t('perm.cancel')}
                     </Button>
                     <Button
                         onClick={handleConfirm}
@@ -623,7 +597,7 @@ export default function PermissionsList() {
                         color="error"
                         sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 2 }}
                     >
-                        Confirm
+                        {t('perm.confirm')}
                     </Button>
                 </DialogActions>
             </Dialog>

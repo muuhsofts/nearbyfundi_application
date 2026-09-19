@@ -1,27 +1,16 @@
 // src/pages/users/UserFormModal.jsx
 import React, { useState, useEffect } from 'react';
 import {
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    TextField,
-    Button,
-    MenuItem,
-    Box,
-    CircularProgress,
-    useMediaQuery,
-    useTheme,
-    IconButton,
-    Alert,
-    Typography,
-    Stack,
-    Divider,
+    Dialog, DialogTitle, DialogContent, DialogActions, TextField, Button,
+    MenuItem, Box, CircularProgress, useMediaQuery, useTheme, IconButton,
+    Alert, Typography, Stack, Divider,
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
 import { useUserManagement } from 'hooks/useUser';
 import { useRoleManagement } from 'hooks/useRole';
+import { useLanguage } from 'context/LanguageContext';
 import { showSnackbar } from 'utils/snackbar';
+import { tUser } from './userlang';
 import appConfig from '../../config';
 
 const colors = appConfig.app.colors;
@@ -29,6 +18,8 @@ const colors = appConfig.app.colors;
 export default function UserFormModal({ open, onClose, user }) {
     const theme = useTheme();
     const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
+    const { language } = useLanguage();
+    const t = (key) => tUser(language, key);
 
     const { createUser, updateUser } = useUserManagement();
     const { dropdownRoles = [], dropdownLoading, fetchDropdownRoles } = useRoleManagement();
@@ -46,14 +37,12 @@ export default function UserFormModal({ open, onClose, user }) {
     });
     const [errors, setErrors] = useState({});
 
-    // Fetch roles when modal opens
     useEffect(() => {
         if (open) {
             fetchDropdownRoles();
         }
     }, [open, fetchDropdownRoles]);
 
-    // Populate form when editing
     useEffect(() => {
         if (user) {
             const userRole = user.roles?.[0]?.name || '';
@@ -94,15 +83,15 @@ export default function UserFormModal({ open, onClose, user }) {
     const validate = () => {
         const newErrors = {};
 
-        if (!form.name.trim()) newErrors.name = 'Name is required';
-        if (!form.email.trim()) newErrors.email = 'Email is required';
-        if (!form.role) newErrors.role = 'Role is required';
+        if (!form.name.trim()) newErrors.name = t('user.form.nameRequired');
+        if (!form.email.trim()) newErrors.email = t('user.form.emailRequired');
+        if (!form.role) newErrors.role = t('user.form.roleRequired');
 
         if (!user) {
-            if (!form.password) newErrors.password = 'Password is required';
-            else if (form.password.length < 8) newErrors.password = 'Password must be at least 8 characters';
+            if (!form.password) newErrors.password = t('user.form.passwordRequired');
+            else if (form.password.length < 8) newErrors.password = t('user.msg.passwordShort');
             if (form.password !== form.password_confirmation) {
-                newErrors.password_confirmation = 'Passwords do not match';
+                newErrors.password_confirmation = t('user.msg.passwordMismatch');
             }
         }
 
@@ -126,7 +115,7 @@ export default function UserFormModal({ open, onClose, user }) {
                     status: form.status,
                     role: form.role,
                 });
-                showSnackbar({ type: 'success', message: 'User updated successfully' });
+                showSnackbar({ type: 'success', message: t('user.form.updated') });
                 onClose(true);
             } else {
                 await createUser({
@@ -137,15 +126,15 @@ export default function UserFormModal({ open, onClose, user }) {
                     password: form.password,
                     password_confirmation: form.password_confirmation,
                 });
-                showSnackbar({ type: 'success', message: 'User created successfully' });
+                showSnackbar({ type: 'success', message: t('user.form.created') });
                 onClose(true);
             }
         } catch (err) {
             if (err.response?.data?.errors) {
                 setValidationErrors(err.response.data.errors);
-                showSnackbar({ type: 'error', message: 'Please check the form for errors.' });
+                showSnackbar({ type: 'error', message: t('user.form.checkErrors') });
             } else {
-                showSnackbar({ type: 'error', message: err.message || 'Operation failed' });
+                showSnackbar({ type: 'error', message: err.message || t('user.form.failed') });
             }
         } finally {
             setLoading(false);
@@ -169,7 +158,6 @@ export default function UserFormModal({ open, onClose, user }) {
             }}
         >
             <form onSubmit={handleSubmit}>
-                {/* Header */}
                 <DialogTitle
                     sx={{
                         px: { xs: 2.5, sm: 3 },
@@ -182,12 +170,10 @@ export default function UserFormModal({ open, onClose, user }) {
                 >
                     <Box>
                         <Typography variant="h6" fontWeight={800} color="text.primary">
-                            {user ? 'Edit User' : 'Add New User'}
+                            {user ? t('user.form.editTitle') : t('user.form.createTitle')}
                         </Typography>
                         <Typography variant="body2" color="text.secondary" fontWeight={500} sx={{ mt: 0.25 }}>
-                            {user
-                                ? 'Update user details and role'
-                                : 'Create a new account with role and credentials'}
+                            {user ? t('user.form.editDesc') : t('user.form.createDesc')}
                         </Typography>
                     </Box>
                     <IconButton
@@ -208,13 +194,8 @@ export default function UserFormModal({ open, onClose, user }) {
 
                 <DialogContent sx={{ px: { xs: 2.5, sm: 3 }, py: 2.5 }}>
                     <Stack spacing={2.25}>
-                        {/* Validation Errors */}
                         {Object.keys(validationErrors).length > 0 && (
-                            <Alert
-                                severity="error"
-                                variant="filled"
-                                sx={{ borderRadius: 2, fontWeight: 500 }}
-                            >
+                            <Alert severity="error" variant="filled" sx={{ borderRadius: 2, fontWeight: 500 }}>
                                 {Object.values(validationErrors)
                                     .flat()
                                     .map((msg, idx) => (
@@ -223,9 +204,8 @@ export default function UserFormModal({ open, onClose, user }) {
                             </Alert>
                         )}
 
-                        {/* Full Name */}
                         <TextField
-                            label="Full Name"
+                            label={t('user.form.name')}
                             name="name"
                             value={form.name}
                             onChange={handleChange}
@@ -246,9 +226,8 @@ export default function UserFormModal({ open, onClose, user }) {
                             }}
                         />
 
-                        {/* Email */}
                         <TextField
-                            label="Email"
+                            label={t('user.form.email')}
                             name="email"
                             type="email"
                             value={form.email}
@@ -261,7 +240,7 @@ export default function UserFormModal({ open, onClose, user }) {
                             helperText={
                                 errors.email ||
                                 validationErrors.email?.[0] ||
-                                (user ? 'Email cannot be changed' : '')
+                                (user ? t('user.form.emailLocked') : '')
                             }
                             sx={{
                                 '& .MuiOutlinedInput-root': {
@@ -274,9 +253,8 @@ export default function UserFormModal({ open, onClose, user }) {
                             }}
                         />
 
-                        {/* Phone */}
                         <TextField
-                            label="Phone"
+                            label={t('user.form.phone')}
                             name="phone"
                             value={form.phone}
                             onChange={handleChange}
@@ -284,7 +262,7 @@ export default function UserFormModal({ open, onClose, user }) {
                             size="small"
                             disabled={isFormLoading}
                             error={!!validationErrors.phone}
-                            helperText={validationErrors.phone?.[0] || 'Optional'}
+                            helperText={validationErrors.phone?.[0] || t('user.form.phoneOptional')}
                             sx={{
                                 '& .MuiOutlinedInput-root': {
                                     borderRadius: 2,
@@ -296,10 +274,9 @@ export default function UserFormModal({ open, onClose, user }) {
                             }}
                         />
 
-                        {/* Role */}
                         <TextField
                             select
-                            label="Role"
+                            label={t('user.form.role')}
                             name="role"
                             value={form.role}
                             onChange={handleChange}
@@ -320,7 +297,7 @@ export default function UserFormModal({ open, onClose, user }) {
                             }}
                         >
                             <MenuItem value="" disabled>
-                                {dropdownLoading ? 'Loading roles…' : 'Select Role'}
+                                {dropdownLoading ? t('user.form.loadingRoles') : t('user.form.selectRole')}
                             </MenuItem>
                             {Array.isArray(dropdownRoles) && dropdownRoles.length > 0 ? (
                                 dropdownRoles.map((role) => (
@@ -329,15 +306,14 @@ export default function UserFormModal({ open, onClose, user }) {
                                     </MenuItem>
                                 ))
                             ) : (
-                                !dropdownLoading && <MenuItem disabled>No roles available</MenuItem>
+                                !dropdownLoading && <MenuItem disabled>{t('user.form.noRoles')}</MenuItem>
                             )}
                         </TextField>
 
-                        {/* Password Fields (create only) */}
                         {!user && (
                             <>
                                 <TextField
-                                    label="Password"
+                                    label={t('user.form.password')}
                                     name="password"
                                     type="password"
                                     value={form.password}
@@ -349,7 +325,7 @@ export default function UserFormModal({ open, onClose, user }) {
                                     helperText={
                                         errors.password ||
                                         validationErrors.password?.[0] ||
-                                        'Minimum 8 characters'
+                                        t('user.form.passwordMin')
                                     }
                                     disabled={isFormLoading}
                                     sx={{
@@ -363,7 +339,7 @@ export default function UserFormModal({ open, onClose, user }) {
                                     }}
                                 />
                                 <TextField
-                                    label="Confirm Password"
+                                    label={t('user.form.confirmPassword')}
                                     name="password_confirmation"
                                     type="password"
                                     value={form.password_confirmation}
@@ -394,11 +370,10 @@ export default function UserFormModal({ open, onClose, user }) {
                             </>
                         )}
 
-                        {/* Status (edit only) */}
                         {user && (
                             <TextField
                                 select
-                                label="Status"
+                                label={t('user.form.status')}
                                 name="status"
                                 value={form.status}
                                 onChange={handleChange}
@@ -415,10 +390,10 @@ export default function UserFormModal({ open, onClose, user }) {
                                     },
                                 }}
                             >
-                                <MenuItem value="active">Active</MenuItem>
-                                <MenuItem value="inactive">Inactive</MenuItem>
-                                <MenuItem value="pending">Pending</MenuItem>
-                                <MenuItem value="suspended">Suspended</MenuItem>
+                                <MenuItem value="active">{t('user.status.active')}</MenuItem>
+                                <MenuItem value="inactive">{t('user.status.inactive')}</MenuItem>
+                                <MenuItem value="pending">{t('user.status.pending')}</MenuItem>
+                                <MenuItem value="suspended">{t('user.status.suspended')}</MenuItem>
                             </TextField>
                         )}
                     </Stack>
@@ -426,14 +401,7 @@ export default function UserFormModal({ open, onClose, user }) {
 
                 <Divider />
 
-                {/* Actions */}
-                <DialogActions
-                    sx={{
-                        px: { xs: 2.5, sm: 3 },
-                        py: 2,
-                        gap: 1.5,
-                    }}
-                >
+                <DialogActions sx={{ px: { xs: 2.5, sm: 3 }, py: 2, gap: 1.5 }}>
                     <Button
                         onClick={() => onClose(false)}
                         disabled={isFormLoading}
@@ -444,7 +412,7 @@ export default function UserFormModal({ open, onClose, user }) {
                             '&:hover': { bgcolor: 'action.hover' },
                         }}
                     >
-                        Cancel
+                        {t('user.cancel')}
                     </Button>
                     <Button
                         type="submit"
@@ -469,9 +437,9 @@ export default function UserFormModal({ open, onClose, user }) {
                         {loading ? (
                             <CircularProgress size={22} thickness={4} sx={{ color: '#fff' }} />
                         ) : user ? (
-                            'Update User'
+                            t('user.form.update')
                         ) : (
-                            'Create User'
+                            t('user.form.create')
                         )}
                     </Button>
                 </DialogActions>

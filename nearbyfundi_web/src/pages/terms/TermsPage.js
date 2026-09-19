@@ -1,38 +1,20 @@
 // src/pages/terms/TermsPage.js
 import React, { useState, useEffect } from 'react';
 import {
-    Box,
-    Paper,
-    Typography,
-    Button,
-    CircularProgress,
-    Alert,
-    Card,
-    CardContent,
-    IconButton,
-    Tooltip,
-    TextField,
-    InputAdornment,
-    useMediaQuery,
-    useTheme,
-    Stack,
-    Grid,
-    alpha,
+    Box, Paper, Typography, Button, CircularProgress, Alert, Card, CardContent,
+    IconButton, TextField, InputAdornment, useMediaQuery, useTheme, Stack, Grid, alpha,
 } from '@mui/material';
 import {
-    Edit as EditIcon,
-    Refresh as RefreshIcon,
-    Add as AddIcon,
-    Search as SearchIcon,
-    Clear as ClearIcon,
-    Description as DescriptionIcon,
-    History as HistoryIcon,
-    Gavel as GavelIcon,
+    Edit as EditIcon, Refresh as RefreshIcon, Add as AddIcon,
+    Search as SearchIcon, Clear as ClearIcon, Description as DescriptionIcon,
+    History as HistoryIcon, Gavel as GavelIcon,
 } from '@mui/icons-material';
 import { useTermsManagement } from 'hooks/useTerms';
 import { usePermissions } from 'hooks/usePermissions';
+import { useLanguage } from 'context/LanguageContext';
 import { showSnackbar } from 'utils/snackbar';
 import TermsFormModal from './TermsFormModal';
+import { tTerms } from './termslang';
 import appConfig from '../../config';
 
 const colors = appConfig.app.colors;
@@ -40,6 +22,8 @@ const colors = appConfig.app.colors;
 const TermsPage = () => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+    const { language } = useLanguage();
+    const t = (key) => tTerms(language, key);
 
     const { terms, loading, error, getTerms, createTerms, updateTerms, clearError } = useTermsManagement();
     const { can } = usePermissions();
@@ -53,11 +37,13 @@ const TermsPage = () => {
         try {
             await getTerms();
         } catch {
-            showSnackbar({ type: 'error', message: 'Failed to load terms content' });
+            showSnackbar({ type: 'error', message: t('terms.loadFailed') });
         }
     };
 
-    useEffect(() => { loadTerms(); }, []);
+    useEffect(() => {
+        loadTerms();
+    }, []);
 
     const handleOpenModal = (data = null) => {
         setEditingTerms(data);
@@ -72,9 +58,10 @@ const TermsPage = () => {
 
     const termsData = Array.isArray(terms) && terms.length > 0 ? terms[0] : null;
 
-    // Search filter
     const filteredContent = search.trim()
-        ? termsData?.content?.toLowerCase().includes(search.toLowerCase()) ? termsData : null
+        ? termsData?.content?.toLowerCase().includes(search.toLowerCase())
+            ? termsData
+            : null
         : termsData;
 
     if (loading) {
@@ -92,7 +79,7 @@ const TermsPage = () => {
                     severity="error"
                     action={
                         <Button color="inherit" size="small" onClick={() => { clearError(); loadTerms(); }}>
-                            Retry
+                            {t('terms.retry')}
                         </Button>
                     }
                     sx={{ borderRadius: 2 }}
@@ -116,15 +103,8 @@ const TermsPage = () => {
                     bgcolor: 'background.paper',
                 }}
             >
-                {/* ── HEADER ────────────────────────────────────────────── */}
-                <Box
-                    sx={{
-                        px: { xs: 2, sm: 3 },
-                        py: 2.5,
-                        borderBottom: '1px solid',
-                        borderColor: 'divider',
-                    }}
-                >
+                {/* HEADER */}
+                <Box sx={{ px: { xs: 2, sm: 3 }, py: 2.5, borderBottom: '1px solid', borderColor: 'divider' }}>
                     <Stack
                         direction={{ xs: 'column', sm: 'row' }}
                         justifyContent="space-between"
@@ -134,10 +114,10 @@ const TermsPage = () => {
                     >
                         <Box>
                             <Typography variant="h5" fontWeight={800} color="text.primary">
-                                Terms & Conditions
+                                {t('terms.title')}
                             </Typography>
                             <Typography variant="body2" color="text.secondary" fontWeight={500}>
-                                Manage your terms and conditions content
+                                {t('terms.subtitle')}
                             </Typography>
                         </Box>
 
@@ -161,7 +141,7 @@ const TermsPage = () => {
                                         },
                                     }}
                                 >
-                                    Create Terms
+                                    {t('terms.create')}
                                 </Button>
                             ) : canEdit && (
                                 <Button
@@ -182,7 +162,7 @@ const TermsPage = () => {
                                         },
                                     }}
                                 >
-                                    Edit Terms
+                                    {t('terms.edit')}
                                 </Button>
                             )}
 
@@ -204,20 +184,15 @@ const TermsPage = () => {
                                     },
                                 }}
                             >
-                                Refresh
+                                {t('terms.refresh')}
                             </Button>
                         </Stack>
                     </Stack>
 
-                    {/* ── FILTERS ──────────────────────────────────────── */}
-                    <Stack
-                        direction={{ xs: 'column', sm: 'row' }}
-                        spacing={1.5}
-                        alignItems={{ xs: 'stretch', sm: 'center' }}
-                        flexWrap="wrap"
-                    >
+                    {/* SEARCH */}
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', sm: 'center' }}>
                         <TextField
-                            placeholder="Search content..."
+                            placeholder={t('terms.searchPlaceholder')}
                             size="small"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
@@ -250,13 +225,33 @@ const TermsPage = () => {
                     </Stack>
                 </Box>
 
-                {/* ── SUMMARY CARDS ────────────────────────────────────── */}
+                {/* SUMMARY CARDS */}
                 <Box sx={{ px: { xs: 2, sm: 3 }, pt: 2.5, pb: 1 }}>
                     <Grid container spacing={2}>
                         {[
-                            { label: 'Status', value: termsData ? 'Published' : 'Not Created', color: termsData ? '#10b981' : '#f59e0b', bg: termsData ? '#ecfdf5' : '#fef3c7', icon: <GavelIcon sx={{ fontSize: 18 }} /> },
-                            { label: 'Word Count', value: termsData?.content?.split(/\s+/).filter(Boolean).length || 0, color: '#3b82f6', bg: '#eff6ff', icon: <DescriptionIcon sx={{ fontSize: 18 }} /> },
-                            { label: 'Last Updated', value: termsData?.updated_at ? new Date(termsData.updated_at).toLocaleDateString() : 'Never', color: '#8b5cf6', bg: '#f3e8ff', icon: <HistoryIcon sx={{ fontSize: 18 }} /> },
+                            {
+                                label: t('terms.status'),
+                                value: termsData ? t('terms.published') : t('terms.notCreated'),
+                                color: termsData ? '#10b981' : '#f59e0b',
+                                bg: termsData ? '#ecfdf5' : '#fef3c7',
+                                icon: <GavelIcon sx={{ fontSize: 18 }} />,
+                            },
+                            {
+                                label: t('terms.wordCount'),
+                                value: termsData?.content?.split(/\s+/).filter(Boolean).length || 0,
+                                color: '#3b82f6',
+                                bg: '#eff6ff',
+                                icon: <DescriptionIcon sx={{ fontSize: 18 }} />,
+                            },
+                            {
+                                label: t('terms.lastUpdated'),
+                                value: termsData?.updated_at
+                                    ? new Date(termsData.updated_at).toLocaleDateString()
+                                    : t('terms.never'),
+                                color: '#8b5cf6',
+                                bg: '#f3e8ff',
+                                icon: <HistoryIcon sx={{ fontSize: 18 }} />,
+                            },
                         ].map((item, idx) => (
                             <Grid item xs={6} sm={4} key={idx}>
                                 <Card
@@ -286,7 +281,7 @@ const TermsPage = () => {
                     </Grid>
                 </Box>
 
-                {/* ── CONTENT DISPLAY ──────────────────────────────────── */}
+                {/* CONTENT */}
                 <Box sx={{ p: { xs: 2, sm: 3 } }}>
                     <Card
                         variant="outlined"
@@ -329,31 +324,30 @@ const TermsPage = () => {
                                     >
                                         <Typography variant="caption" color="text.secondary">
                                             <HistoryIcon sx={{ fontSize: 14, mr: 0.5, verticalAlign: 'middle' }} />
-                                            Last updated: {filteredContent.updated_at
-                                            ? new Date(filteredContent.updated_at).toLocaleString()
-                                            : 'Never'}
+                                            {t('terms.lastUpdatedLabel')}:{' '}
+                                            {filteredContent.updated_at
+                                                ? new Date(filteredContent.updated_at).toLocaleString()
+                                                : t('terms.never')}
                                         </Typography>
                                         {filteredContent.created_at && (
                                             <Typography variant="caption" color="text.secondary">
-                                                Created: {new Date(filteredContent.created_at).toLocaleString()}
+                                                {t('terms.created')}: {new Date(filteredContent.created_at).toLocaleString()}
                                             </Typography>
                                         )}
                                         <Typography variant="caption" color="text.secondary">
-                                            {filteredContent.content.split(/\s+/).filter(Boolean).length} words
+                                            {filteredContent.content.split(/\s+/).filter(Boolean).length} {t('terms.words')}
                                         </Typography>
                                     </Box>
                                 </>
                             ) : search ? (
                                 <Box textAlign="center" py={3}>
-                                    <Typography color="text.secondary">
-                                        No content matches your search.
-                                    </Typography>
+                                    <Typography color="text.secondary">{t('terms.noMatch')}</Typography>
                                 </Box>
                             ) : (
                                 <Box textAlign="center" py={4}>
                                     <GavelIcon sx={{ fontSize: 56, color: 'text.disabled', mb: 1.5 }} />
                                     <Typography color="text.secondary" fontWeight={500}>
-                                        No terms and conditions content available.
+                                        {t('terms.noContent')}
                                     </Typography>
                                     {!termsData && canEdit && (
                                         <Button
@@ -369,7 +363,7 @@ const TermsPage = () => {
                                                 '&:hover': { bgcolor: colors.dark || '#047857' },
                                             }}
                                         >
-                                            Create Terms & Conditions
+                                            {t('terms.createPage')}
                                         </Button>
                                     )}
                                 </Box>
@@ -379,7 +373,6 @@ const TermsPage = () => {
                 </Box>
             </Paper>
 
-            {/* ─── TERMS FORM MODAL ────────────────────────────────────── */}
             <TermsFormModal
                 open={modalOpen}
                 onClose={handleCloseModal}

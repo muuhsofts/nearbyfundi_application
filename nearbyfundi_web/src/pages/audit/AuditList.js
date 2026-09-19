@@ -1,52 +1,16 @@
 // src/pages/audit/AuditList.js
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-    Box,
-    Button,
-    Chip,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogTitle,
-    IconButton,
-    InputAdornment,
-    Menu,
-    MenuItem,
-    Paper,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TablePagination,
-    TableRow,
-    TextField,
-    Typography,
-    FormControl,
-    InputLabel,
-    Select,
-    Grid,
-    Card,
-    CardContent,
-    CircularProgress,
-    useTheme,
-    useMediaQuery,
-    Divider,
-    Alert,
-    Stack,
-    Avatar,
+    Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
+    IconButton, InputAdornment, Menu, MenuItem, Paper, Table, TableBody,
+    TableCell, TableContainer, TableHead, TablePagination, TableRow, TextField,
+    Typography, FormControl, InputLabel, Select, Grid, Card, CardContent,
+    CircularProgress, useTheme, useMediaQuery, Divider, Alert, Stack, Avatar,
 } from '@mui/material';
 import {
-    Refresh as RefreshIcon,
-    Search as SearchIcon,
-    MoreVert as MoreVertIcon,
-    Visibility as ViewIcon,
-    Person as PersonIcon,
-    AccessTime as TimeIcon,
-    Public as IpIcon,
-    Http as MethodIcon,
-    Clear as ClearIcon,
-    Close as CloseIcon,
+    Refresh as RefreshIcon, Search as SearchIcon, MoreVert as MoreVertIcon,
+    Visibility as ViewIcon, AccessTime as TimeIcon, Public as IpIcon,
+    Http as MethodIcon, Clear as ClearIcon, Close as CloseIcon,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -54,26 +18,19 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 
 import { auditService } from 'services/audit.service';
 import { usePermissions } from 'hooks/usePermissions';
+import { useLanguage } from 'context/LanguageContext';
 import { showSnackbar } from 'utils/snackbar';
+import { tAudit } from './auditlang';
 import appConfig from '../../config';
 
 const colors = appConfig.app.colors;
-
-const headCells = [
-    { id: 'created_at', label: 'Date & Time' },
-    { id: 'user', label: 'User' },
-    { id: 'action', label: 'Action' },
-    { id: 'module', label: 'Module' },
-    { id: 'description', label: 'Description' },
-    { id: 'ip_address', label: 'IP' },
-    { id: 'request_method', label: 'Method' },
-    { id: 'actions', label: 'Actions', disableSort: true },
-];
 
 export default function AuditList() {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const showTableView = useMediaQuery(theme.breakpoints.up('md'));
+    const { language } = useLanguage();
+    const t = (key) => tAudit(language, key);
 
     const { can } = usePermissions();
     const canView = can('audit.view');
@@ -100,6 +57,17 @@ export default function AuditList() {
     const [viewModalOpen, setViewModalOpen] = useState(false);
     const [selectedAudit, setSelectedAudit] = useState(null);
     const [actionMenu, setActionMenu] = useState(null);
+
+    const headCells = [
+        { id: 'created_at', label: t('audit.col.dateTime') },
+        { id: 'user', label: t('audit.col.user') },
+        { id: 'action', label: t('audit.col.action') },
+        { id: 'module', label: t('audit.col.module') },
+        { id: 'description', label: t('audit.col.description') },
+        { id: 'ip_address', label: t('audit.col.ip') },
+        { id: 'request_method', label: t('audit.col.method') },
+        { id: 'actions', label: t('audit.col.actions'), disableSort: true },
+    ];
 
     useEffect(() => {
         if (canView) {
@@ -143,12 +111,12 @@ export default function AuditList() {
             }
         } catch (err) {
             console.error('Audit error:', err);
-            setError(err.message || 'Failed to load audit trails');
-            showSnackbar({ type: 'error', message: 'Failed to load audit trails' });
+            setError(err.message || t('audit.loadFailed'));
+            showSnackbar({ type: 'error', message: t('audit.loadFailed') });
         } finally {
             setLoading(false);
         }
-    }, [page, rowsPerPage, search, moduleFilter, actionFilter, fromDate, toDate, canView]);
+    }, [page, rowsPerPage, search, moduleFilter, actionFilter, fromDate, toDate, canView, language]);
 
     useEffect(() => {
         if (canView) fetchAudits();
@@ -171,7 +139,7 @@ export default function AuditList() {
 
             const userMap = {};
             audits.forEach((a) => {
-                const userName = a.user?.name || a.user_name || 'Unknown';
+                const userName = a.user?.name || a.user_name || t('audit.unknown');
                 const userEmail = a.user?.email || a.user_email || 'unknown@email.com';
                 const key = `${userName}-${userEmail}`;
                 if (!userMap[key]) {
@@ -192,7 +160,7 @@ export default function AuditList() {
         } finally {
             setStatsLoading(false);
         }
-    }, [audits, canView]);
+    }, [audits, canView, language]);
 
     useEffect(() => {
         if (canView) fetchStats();
@@ -213,7 +181,7 @@ export default function AuditList() {
     const formatDate = (dateStr) => {
         if (!dateStr) return '—';
         try {
-            return new Date(dateStr).toLocaleString('en-US', {
+            return new Date(dateStr).toLocaleString(language === 'sw' ? 'sw-TZ' : 'en-US', {
                 year: 'numeric',
                 month: 'short',
                 day: 'numeric',
@@ -240,10 +208,10 @@ export default function AuditList() {
                     }}
                 >
                     <Typography color="error" fontWeight={600} variant="h6" gutterBottom>
-                        Access Denied
+                        {t('audit.accessDenied')}
                     </Typography>
                     <Typography color="text.secondary">
-                        You do not have permission to view audit trails.
+                        {t('audit.noPermission')}
                     </Typography>
                 </Paper>
             </Box>
@@ -265,7 +233,7 @@ export default function AuditList() {
                                 fetchAudits();
                             }}
                         >
-                            Retry
+                            {t('audit.retry')}
                         </Button>
                     }
                     sx={{ borderRadius: 2 }}
@@ -288,19 +256,10 @@ export default function AuditList() {
                     stats && (
                         <Grid container spacing={2} sx={{ mb: 3 }}>
                             <Grid item xs={6} sm={6} md={3}>
-                                <Card
-                                    elevation={0}
-                                    sx={{
-                                        borderRadius: 3,
-                                        border: '1px solid',
-                                        borderColor: 'divider',
-                                        background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
-                                        height: '100%',
-                                    }}
-                                >
+                                <Card elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)', height: '100%' }}>
                                     <CardContent sx={{ p: 2.25 }}>
                                         <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
-                                            Total Records
+                                            {t('audit.stats.total')}
                                         </Typography>
                                         <Typography variant="h4" fontWeight={800} color="#0369a1" sx={{ mt: 0.5, lineHeight: 1.1 }}>
                                             {stats.total ?? 0}
@@ -309,19 +268,10 @@ export default function AuditList() {
                                 </Card>
                             </Grid>
                             <Grid item xs={6} sm={6} md={3}>
-                                <Card
-                                    elevation={0}
-                                    sx={{
-                                        borderRadius: 3,
-                                        border: '1px solid',
-                                        borderColor: 'divider',
-                                        background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)',
-                                        height: '100%',
-                                    }}
-                                >
+                                <Card elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)', height: '100%' }}>
                                     <CardContent sx={{ p: 2.25 }}>
                                         <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
-                                            Today
+                                            {t('audit.stats.today')}
                                         </Typography>
                                         <Typography variant="h4" fontWeight={800} color="#047857" sx={{ mt: 0.5, lineHeight: 1.1 }}>
                                             {stats.today ?? 0}
@@ -330,19 +280,10 @@ export default function AuditList() {
                                 </Card>
                             </Grid>
                             <Grid item xs={6} sm={6} md={3}>
-                                <Card
-                                    elevation={0}
-                                    sx={{
-                                        borderRadius: 3,
-                                        border: '1px solid',
-                                        borderColor: 'divider',
-                                        background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
-                                        height: '100%',
-                                    }}
-                                >
+                                <Card elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)', height: '100%' }}>
                                     <CardContent sx={{ p: 2.25 }}>
                                         <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
-                                            This Week
+                                            {t('audit.stats.thisWeek')}
                                         </Typography>
                                         <Typography variant="h4" fontWeight={800} color="#b45309" sx={{ mt: 0.5, lineHeight: 1.1 }}>
                                             {stats.this_week ?? 0}
@@ -351,19 +292,10 @@ export default function AuditList() {
                                 </Card>
                             </Grid>
                             <Grid item xs={6} sm={6} md={3}>
-                                <Card
-                                    elevation={0}
-                                    sx={{
-                                        borderRadius: 3,
-                                        border: '1px solid',
-                                        borderColor: 'divider',
-                                        background: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)',
-                                        height: '100%',
-                                    }}
-                                >
+                                <Card elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', background: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)', height: '100%' }}>
                                     <CardContent sx={{ p: 2.25 }}>
                                         <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
-                                            Top Users
+                                            {t('audit.stats.topUsers')}
                                         </Typography>
                                         <Box sx={{ mt: 0.75 }}>
                                             {stats.by_user && stats.by_user.length > 0 ? (
@@ -374,7 +306,7 @@ export default function AuditList() {
                                                 ))
                                             ) : (
                                                 <Typography variant="caption" color="text.secondary">
-                                                    No data
+                                                    {t('audit.noData')}
                                                 </Typography>
                                             )}
                                         </Box>
@@ -386,32 +318,15 @@ export default function AuditList() {
                 )}
 
                 {/* Main Panel */}
-                <Paper
-                    elevation={0}
-                    sx={{
-                        width: '100%',
-                        borderRadius: 3,
-                        overflow: 'hidden',
-                        border: '1px solid',
-                        borderColor: 'divider',
-                        bgcolor: 'background.paper',
-                    }}
-                >
+                <Paper elevation={0} sx={{ width: '100%', borderRadius: 3, overflow: 'hidden', border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
                     {/* Header + Filters */}
-                    <Box
-                        sx={{
-                            px: { xs: 2, sm: 3 },
-                            py: 2.5,
-                            borderBottom: '1px solid',
-                            borderColor: 'divider',
-                        }}
-                    >
+                    <Box sx={{ px: { xs: 2, sm: 3 }, py: 2.5, borderBottom: '1px solid', borderColor: 'divider' }}>
                         <Box mb={2.5}>
                             <Typography variant="h5" fontWeight={800} color="text.primary">
-                                Audit Trails
+                                {t('audit.title')}
                             </Typography>
                             <Typography variant="body2" color="text.secondary" fontWeight={500}>
-                                Track every action performed in the system
+                                {t('audit.subtitle')}
                             </Typography>
                         </Box>
 
@@ -420,7 +335,7 @@ export default function AuditList() {
                                 <TextField
                                     fullWidth
                                     size="small"
-                                    placeholder="Search…"
+                                    placeholder={t('audit.filter.search')}
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
                                     InputProps={{
@@ -451,10 +366,10 @@ export default function AuditList() {
 
                             <Grid item xs={12} sm={6} md={2}>
                                 <FormControl fullWidth size="small">
-                                    <InputLabel>Module</InputLabel>
+                                    <InputLabel>{t('audit.filter.module')}</InputLabel>
                                     <Select
                                         value={moduleFilter}
-                                        label="Module"
+                                        label={t('audit.filter.module')}
                                         onChange={(e) => setModuleFilter(e.target.value)}
                                         sx={{
                                             borderRadius: 2,
@@ -463,11 +378,9 @@ export default function AuditList() {
                                             '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' },
                                         }}
                                     >
-                                        <MenuItem value="all">All Modules</MenuItem>
+                                        <MenuItem value="all">{t('audit.filter.allModules')}</MenuItem>
                                         {modules.map((m) => (
-                                            <MenuItem key={m} value={m}>
-                                                {m}
-                                            </MenuItem>
+                                            <MenuItem key={m} value={m}>{m}</MenuItem>
                                         ))}
                                     </Select>
                                 </FormControl>
@@ -475,10 +388,10 @@ export default function AuditList() {
 
                             <Grid item xs={12} sm={6} md={2}>
                                 <FormControl fullWidth size="small">
-                                    <InputLabel>Action</InputLabel>
+                                    <InputLabel>{t('audit.filter.action')}</InputLabel>
                                     <Select
                                         value={actionFilter}
-                                        label="Action"
+                                        label={t('audit.filter.action')}
                                         onChange={(e) => setActionFilter(e.target.value)}
                                         sx={{
                                             borderRadius: 2,
@@ -487,11 +400,9 @@ export default function AuditList() {
                                             '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' },
                                         }}
                                     >
-                                        <MenuItem value="all">All Actions</MenuItem>
+                                        <MenuItem value="all">{t('audit.filter.allActions')}</MenuItem>
                                         {actions.map((a) => (
-                                            <MenuItem key={a} value={a}>
-                                                {a}
-                                            </MenuItem>
+                                            <MenuItem key={a} value={a}>{a}</MenuItem>
                                         ))}
                                     </Select>
                                 </FormControl>
@@ -499,7 +410,7 @@ export default function AuditList() {
 
                             <Grid item xs={12} sm={6} md={1.5}>
                                 <DatePicker
-                                    label="From"
+                                    label={t('audit.filter.from')}
                                     value={fromDate}
                                     onChange={setFromDate}
                                     slotProps={{
@@ -521,7 +432,7 @@ export default function AuditList() {
 
                             <Grid item xs={12} sm={6} md={1.5}>
                                 <DatePicker
-                                    label="To"
+                                    label={t('audit.filter.to')}
                                     value={toDate}
                                     onChange={setToDate}
                                     slotProps={{
@@ -554,13 +465,10 @@ export default function AuditList() {
                                         textTransform: 'none',
                                         borderColor: 'divider',
                                         color: 'text.primary',
-                                        '&:hover': {
-                                            borderColor: 'text.primary',
-                                            bgcolor: 'action.hover',
-                                        },
+                                        '&:hover': { borderColor: 'text.primary', bgcolor: 'action.hover' },
                                     }}
                                 >
-                                    Refresh
+                                    {t('audit.refresh')}
                                 </Button>
                             </Grid>
                         </Grid>
@@ -602,14 +510,14 @@ export default function AuditList() {
                                         <TableRow>
                                             <TableCell colSpan={8} align="center" sx={{ py: 8 }}>
                                                 <Typography color="text.secondary" fontWeight={500}>
-                                                    No audit records found
+                                                    {t('audit.noRecords')}
                                                 </Typography>
                                             </TableCell>
                                         </TableRow>
                                     ) : (
                                         audits.map((audit, idx) => {
-                                            const userName = audit.user?.name || audit.user_name || 'Unknown';
-                                            const userEmail = audit.user?.email || audit.user_email || 'No email';
+                                            const userName = audit.user?.name || audit.user_name || t('audit.unknown');
+                                            const userEmail = audit.user?.email || audit.user_email || t('audit.noEmail');
                                             return (
                                                 <TableRow
                                                     key={`${audit.created_at}-${idx}`}
@@ -638,12 +546,8 @@ export default function AuditList() {
                                                                 {userName.charAt(0).toUpperCase()}
                                                             </Avatar>
                                                             <Box>
-                                                                <Typography variant="body2" fontWeight={600}>
-                                                                    {userName}
-                                                                </Typography>
-                                                                <Typography variant="caption" color="text.secondary">
-                                                                    {userEmail}
-                                                                </Typography>
+                                                                <Typography variant="body2" fontWeight={600}>{userName}</Typography>
+                                                                <Typography variant="caption" color="text.secondary">{userEmail}</Typography>
                                                             </Box>
                                                         </Stack>
                                                     </TableCell>
@@ -662,17 +566,11 @@ export default function AuditList() {
                                                         />
                                                     </TableCell>
                                                     <TableCell>
-                                                        <Typography variant="body2" fontWeight={500}>
-                                                            {audit.module || '—'}
-                                                        </Typography>
+                                                        <Typography variant="body2" fontWeight={500}>{audit.module || '—'}</Typography>
                                                     </TableCell>
                                                     <TableCell sx={{ maxWidth: 260 }}>
-                                                        <Typography
-                                                            variant="body2"
-                                                            color="text.secondary"
-                                                            sx={{ wordBreak: 'break-word' }}
-                                                        >
-                                                            {audit.description?.substring(0, 55) || 'No description'}
+                                                        <Typography variant="body2" color="text.secondary" sx={{ wordBreak: 'break-word' }}>
+                                                            {audit.description?.substring(0, 55) || t('audit.noDescription')}
                                                             {audit.description?.length > 55 && '…'}
                                                         </Typography>
                                                     </TableCell>
@@ -686,11 +584,7 @@ export default function AuditList() {
                                                             label={audit.request_method || 'N/A'}
                                                             size="small"
                                                             variant="outlined"
-                                                            sx={{
-                                                                height: 24,
-                                                                fontWeight: 600,
-                                                                borderColor: 'divider',
-                                                            }}
+                                                            sx={{ height: 24, fontWeight: 600, borderColor: 'divider' }}
                                                         />
                                                     </TableCell>
                                                     <TableCell align="center">
@@ -699,10 +593,7 @@ export default function AuditList() {
                                                             onClick={(e) => handleMenuOpen(e, audit)}
                                                             sx={{
                                                                 color: 'text.secondary',
-                                                                '&:hover': {
-                                                                    bgcolor: 'action.hover',
-                                                                    color: 'text.primary',
-                                                                },
+                                                                '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
                                                             }}
                                                         >
                                                             <MoreVertIcon />
@@ -722,42 +613,24 @@ export default function AuditList() {
                                     <CircularProgress size={36} thickness={4} />
                                 </Box>
                             ) : audits.length === 0 ? (
-                                <Paper
-                                    variant="outlined"
-                                    sx={{
-                                        p: 5,
-                                        textAlign: 'center',
-                                        borderRadius: 3,
-                                        borderStyle: 'dashed',
-                                    }}
-                                >
+                                <Paper variant="outlined" sx={{ p: 5, textAlign: 'center', borderRadius: 3, borderStyle: 'dashed' }}>
                                     <Typography color="text.secondary" fontWeight={500}>
-                                        No audit records found
+                                        {t('audit.noRecords')}
                                     </Typography>
                                 </Paper>
                             ) : (
                                 <Stack spacing={2}>
                                     {audits.map((audit, idx) => {
-                                        const userName = audit.user?.name || audit.user_name || 'Unknown';
-                                        const userEmail = audit.user?.email || audit.user_email || 'No email';
+                                        const userName = audit.user?.name || audit.user_name || t('audit.unknown');
+                                        const userEmail = audit.user?.email || audit.user_email || t('audit.noEmail');
                                         return (
                                             <Card
                                                 key={`${audit.created_at}-${idx}`}
                                                 elevation={0}
-                                                sx={{
-                                                    borderRadius: 3,
-                                                    border: '1px solid',
-                                                    borderColor: 'divider',
-                                                    overflow: 'hidden',
-                                                }}
+                                                sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}
                                             >
                                                 <CardContent sx={{ p: 2.25 }}>
-                                                    <Stack
-                                                        direction="row"
-                                                        justifyContent="space-between"
-                                                        alignItems="flex-start"
-                                                        mb={1.5}
-                                                    >
+                                                    <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={1.5}>
                                                         <Stack direction="row" spacing={1} alignItems="center">
                                                             <TimeIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
                                                             <Typography variant="body2" color="text.secondary" fontWeight={500}>
@@ -790,18 +663,14 @@ export default function AuditList() {
                                                             {userName.charAt(0).toUpperCase()}
                                                         </Avatar>
                                                         <Box>
-                                                            <Typography variant="body2" fontWeight={600}>
-                                                                {userName}
-                                                            </Typography>
-                                                            <Typography variant="caption" color="text.secondary">
-                                                                {userEmail}
-                                                            </Typography>
+                                                            <Typography variant="body2" fontWeight={600}>{userName}</Typography>
+                                                            <Typography variant="caption" color="text.secondary">{userEmail}</Typography>
                                                         </Box>
                                                     </Stack>
 
                                                     <Stack direction="row" justifyContent="space-between" mb={1}>
                                                         <Typography variant="body2" color="text.secondary">
-                                                            Module: <strong>{audit.module || '—'}</strong>
+                                                            {t('audit.col.module')}: <strong>{audit.module || '—'}</strong>
                                                         </Typography>
                                                         <Stack direction="row" spacing={0.5} alignItems="center">
                                                             <IpIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
@@ -824,7 +693,7 @@ export default function AuditList() {
                                                     <Divider sx={{ my: 1.5 }} />
 
                                                     <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                                                        {audit.description || 'No description'}
+                                                        {audit.description || t('audit.noDescription')}
                                                     </Typography>
 
                                                     <Box display="flex" justifyContent="flex-end">
@@ -838,7 +707,7 @@ export default function AuditList() {
                                                                 color: colors.sea || '#0f766e',
                                                             }}
                                                         >
-                                                            View Details
+                                                            {t('audit.viewDetails')}
                                                         </Button>
                                                     </Box>
                                                 </CardContent>
@@ -851,13 +720,7 @@ export default function AuditList() {
                     )}
 
                     {/* Pagination */}
-                    <Box
-                        sx={{
-                            borderTop: '1px solid',
-                            borderColor: 'divider',
-                            bgcolor: 'action.hover',
-                        }}
-                    >
+                    <Box sx={{ borderTop: '1px solid', borderColor: 'divider', bgcolor: 'action.hover' }}>
                         <TablePagination
                             rowsPerPageOptions={[5, 10, 25, 50]}
                             component="div"
@@ -885,13 +748,10 @@ export default function AuditList() {
                     onClose={handleMenuClose}
                     anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                     transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-                    PaperProps={{
-                        elevation: 8,
-                        sx: { borderRadius: 2, minWidth: 160, mt: 0.5 },
-                    }}
+                    PaperProps={{ elevation: 8, sx: { borderRadius: 2, minWidth: 160, mt: 0.5 } }}
                 >
                     <MenuItem onClick={handleViewDetails} sx={{ fontWeight: 500 }}>
-                        <ViewIcon sx={{ mr: 1.5, fontSize: 20 }} /> View Details
+                        <ViewIcon sx={{ mr: 1.5, fontSize: 20 }} /> {t('audit.viewDetails')}
                     </MenuItem>
                 </Menu>
 
@@ -901,12 +761,7 @@ export default function AuditList() {
                     onClose={() => setViewModalOpen(false)}
                     maxWidth="md"
                     fullWidth
-                    PaperProps={{
-                        sx: {
-                            borderRadius: { xs: 0, sm: 3 },
-                            bgcolor: 'background.paper',
-                        },
-                    }}
+                    PaperProps={{ sx: { borderRadius: { xs: 0, sm: 3 }, bgcolor: 'background.paper' } }}
                 >
                     <DialogTitle
                         sx={{
@@ -920,10 +775,10 @@ export default function AuditList() {
                     >
                         <Box>
                             <Typography variant="h6" fontWeight={800}>
-                                Audit Trail Details
+                                {t('audit.modal.title')}
                             </Typography>
                             <Typography variant="body2" color="text.secondary" fontWeight={500}>
-                                Full record information
+                                {t('audit.modal.subtitle')}
                             </Typography>
                         </Box>
                         <IconButton
@@ -965,42 +820,42 @@ export default function AuditList() {
                                     },
                                 }}
                             >
-                                <dt>Date & Time</dt>
+                                <dt>{t('audit.modal.dateTime')}</dt>
                                 <dd>{formatDate(selectedAudit.created_at)}</dd>
 
-                                <dt>User</dt>
+                                <dt>{t('audit.modal.user')}</dt>
                                 <dd>
-                                    {selectedAudit.user?.name || selectedAudit.user_name || 'Unknown'} (
-                                    {selectedAudit.user?.email || selectedAudit.user_email || 'No email'})
+                                    {selectedAudit.user?.name || selectedAudit.user_name || t('audit.unknown')} (
+                                    {selectedAudit.user?.email || selectedAudit.user_email || t('audit.noEmail')})
                                 </dd>
 
-                                <dt>Role</dt>
+                                <dt>{t('audit.modal.role')}</dt>
                                 <dd>{selectedAudit.user?.role || selectedAudit.user_role || 'N/A'}</dd>
 
-                                <dt>Action</dt>
+                                <dt>{t('audit.modal.action')}</dt>
                                 <dd>{selectedAudit.action}</dd>
 
-                                <dt>Module</dt>
+                                <dt>{t('audit.modal.module')}</dt>
                                 <dd>{selectedAudit.module || '—'}</dd>
 
-                                <dt>Description</dt>
-                                <dd>{selectedAudit.description || 'No description'}</dd>
+                                <dt>{t('audit.modal.description')}</dt>
+                                <dd>{selectedAudit.description || t('audit.noDescription')}</dd>
 
-                                <dt>IP Address</dt>
+                                <dt>{t('audit.modal.ip')}</dt>
                                 <dd style={{ fontFamily: 'monospace' }}>{selectedAudit.ip_address}</dd>
 
-                                <dt>Request Method</dt>
+                                <dt>{t('audit.modal.method')}</dt>
                                 <dd>{selectedAudit.request_method || 'N/A'}</dd>
 
-                                <dt>Request URL</dt>
+                                <dt>{t('audit.modal.url')}</dt>
                                 <dd style={{ wordBreak: 'break-all' }}>{selectedAudit.request_url || 'N/A'}</dd>
 
-                                <dt>User Agent</dt>
+                                <dt>{t('audit.modal.userAgent')}</dt>
                                 <dd style={{ wordBreak: 'break-all' }}>{selectedAudit.user_agent || 'N/A'}</dd>
 
                                 {selectedAudit.old_data && (
                                     <>
-                                        <dt>Old Data</dt>
+                                        <dt>{t('audit.modal.oldData')}</dt>
                                         <dd>
                                             <Box
                                                 component="pre"
@@ -1025,7 +880,7 @@ export default function AuditList() {
 
                                 {selectedAudit.new_data && (
                                     <>
-                                        <dt>New Data</dt>
+                                        <dt>{t('audit.modal.newData')}</dt>
                                         <dd>
                                             <Box
                                                 component="pre"
@@ -1069,7 +924,7 @@ export default function AuditList() {
                                 },
                             }}
                         >
-                            Close
+                            {t('audit.close')}
                         </Button>
                     </DialogActions>
                 </Dialog>

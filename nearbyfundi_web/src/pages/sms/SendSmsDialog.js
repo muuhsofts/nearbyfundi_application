@@ -1,31 +1,22 @@
 // src/pages/sms/SendSmsDialog.jsx
 import React, { useState, useEffect } from 'react';
 import {
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    Button,
-    TextField,
-    Box,
-    Typography,
-    CircularProgress,
-    FormControl,
-    InputLabel,
-    Select,
-    MenuItem,
-    Chip,
-    Alert,
-    IconButton,
-    InputAdornment,
+    Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField,
+    Box, Typography, CircularProgress, FormControl, InputLabel, Select,
+    MenuItem, Chip, Alert, IconButton, InputAdornment,
 } from '@mui/material';
 import { Close as CloseIcon, Send as SendIcon } from '@mui/icons-material';
 import { useUserManagement } from 'hooks/useUser';
+import { useLanguage } from 'context/LanguageContext';
+import { tSms } from './smslang';
 import appConfig from '../../config';
 
 const colors = appConfig.app.colors;
 
 const SendSmsDialog = ({ open, onClose, onSend }) => {
+    const { language } = useLanguage();
+    const t = (key, replacements) => tSms(language, key, replacements);
+
     const [loading, setLoading] = useState(false);
     const [recipient, setRecipient] = useState('');
     const [message, setMessage] = useState('');
@@ -38,21 +29,15 @@ const SendSmsDialog = ({ open, onClose, onSend }) => {
     const { getUsersDropdown } = useUserManagement();
 
     useEffect(() => {
-        if (open) {
-            loadUsers();
-        }
+        if (open) loadUsers();
     }, [open]);
 
-    useEffect(() => {
-        setCharCount(message.length);
-    }, [message]);
+    useEffect(() => { setCharCount(message.length); }, [message]);
 
     const loadUsers = async () => {
         try {
             const response = await getUsersDropdown({ search: userSearch });
-            if (response?.data?.data) {
-                setUsers(response.data.data);
-            }
+            if (response?.data?.data) setUsers(response.data.data);
         } catch (err) {
             console.error('Failed to load users:', err);
         }
@@ -60,11 +45,11 @@ const SendSmsDialog = ({ open, onClose, onSend }) => {
 
     const handleSend = async () => {
         if (!recipient && !selectedUser) {
-            setError('Please select a recipient');
+            setError(t('sms.send.errorRecipient'));
             return;
         }
         if (!message.trim()) {
-            setError('Please enter a message');
+            setError(t('sms.send.errorMessage'));
             return;
         }
 
@@ -79,7 +64,7 @@ const SendSmsDialog = ({ open, onClose, onSend }) => {
             };
             await onSend(data);
         } catch (err) {
-            setError(err.response?.data?.message || 'Failed to send SMS');
+            setError(err.response?.data?.message || t('sms.send.errorSendFailed'));
         } finally {
             setLoading(false);
         }
@@ -93,7 +78,7 @@ const SendSmsDialog = ({ open, onClose, onSend }) => {
 
     const handleUserSelect = (user) => {
         setSelectedUser(user);
-        setRecipient(user.phone || '');
+        setRecipient(user?.phone || '');
         setError('');
     };
 
@@ -116,6 +101,13 @@ const SendSmsDialog = ({ open, onClose, onSend }) => {
         return Math.ceil(charCount / 153);
     };
 
+    const parts = getMessageParts();
+    const charCountLabel = t('sms.send.charCount', {
+        n: charCount,
+        parts,
+        s: parts > 1 ? 's' : '',
+    });
+
     return (
         <Dialog
             open={open}
@@ -127,7 +119,7 @@ const SendSmsDialog = ({ open, onClose, onSend }) => {
             <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: colors.dark }}>
                 <Box display="flex" alignItems="center" gap={1}>
                     <SendIcon sx={{ color: colors.salat }} />
-                    <Typography variant="h6">Send SMS</Typography>
+                    <Typography variant="h6">{t('sms.send.title')}</Typography>
                 </Box>
                 <IconButton onClick={onClose} size="small" sx={{ color: colors.rain }}>
                     <CloseIcon />
@@ -135,30 +127,26 @@ const SendSmsDialog = ({ open, onClose, onSend }) => {
             </DialogTitle>
 
             <DialogContent>
-                {error && (
-                    <Alert severity="error" sx={{ mb: 2 }}>
-                        {error}
-                    </Alert>
-                )}
+                {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
                 {/* User Selection */}
                 <Box mb={2}>
                     <FormControl fullWidth size="small">
-                        <InputLabel>Select User (Optional)</InputLabel>
+                        <InputLabel>{t('sms.send.selectUserOptional')}</InputLabel>
                         <Select
                             value={selectedUser?.id || ''}
                             onChange={(e) => {
                                 const user = users.find(u => u.id === e.target.value);
                                 if (user) handleUserSelect(user);
                             }}
-                            label="Select User (Optional)"
+                            label={t('sms.send.selectUserOptional')}
                             sx={{
                                 backgroundColor: colors.sky,
                                 borderRadius: 2,
                                 '& .MuiOutlinedInput-notchedOutline': { borderColor: colors.middle },
                             }}
                         >
-                            <MenuItem value="">None</MenuItem>
+                            <MenuItem value="">{t('sms.common.none')}</MenuItem>
                             {users.map((user) => (
                                 <MenuItem key={user.id} value={user.id}>
                                     {user.name} - {user.phone || user.email}
@@ -169,7 +157,7 @@ const SendSmsDialog = ({ open, onClose, onSend }) => {
                     {selectedUser && (
                         <Box mt={1}>
                             <Chip
-                                label={`Selected: ${selectedUser.name} (${selectedUser.phone || selectedUser.email})`}
+                                label={`${t('sms.send.selectedPrefix')} ${selectedUser.name} (${selectedUser.phone || selectedUser.email})`}
                                 onDelete={() => handleUserSelect(null)}
                                 size="small"
                                 sx={{ backgroundColor: colors.wave, color: colors.sea }}
@@ -181,8 +169,8 @@ const SendSmsDialog = ({ open, onClose, onSend }) => {
                 {/* Recipient */}
                 <TextField
                     fullWidth
-                    label="Recipient Phone Number"
-                    placeholder="e.g., 255XXXXXXXXX"
+                    label={t('sms.send.recipientLabel')}
+                    placeholder={t('sms.send.recipientPlaceholder')}
                     value={recipient}
                     onChange={(e) => handleRecipientChange(e.target.value)}
                     disabled={!!selectedUser}
@@ -197,8 +185,8 @@ const SendSmsDialog = ({ open, onClose, onSend }) => {
                 {/* Message */}
                 <TextField
                     fullWidth
-                    label="Message"
-                    placeholder="Type your message here..."
+                    label={t('sms.send.messageLabel')}
+                    placeholder={t('sms.send.messagePlaceholder')}
                     multiline
                     rows={4}
                     value={message}
@@ -213,12 +201,9 @@ const SendSmsDialog = ({ open, onClose, onSend }) => {
                             <InputAdornment position="end" sx={{ alignItems: 'flex-end' }}>
                                 <Typography
                                     variant="caption"
-                                    sx={{
-                                        color: getCharCountColor(),
-                                        fontWeight: 500,
-                                    }}
+                                    sx={{ color: getCharCountColor(), fontWeight: 500 }}
                                 >
-                                    {charCount} chars ({getMessageParts()} part{getMessageParts() > 1 ? 's' : ''})
+                                    {charCountLabel}
                                 </Typography>
                             </InputAdornment>
                         ),
@@ -232,13 +217,10 @@ const SendSmsDialog = ({ open, onClose, onSend }) => {
                     variant="outlined"
                     sx={{ borderColor: colors.middle, color: colors.rain }}
                 >
-                    Clear
+                    {t('sms.common.clear')}
                 </Button>
-                <Button
-                    onClick={onClose}
-                    sx={{ color: colors.rain }}
-                >
-                    Cancel
+                <Button onClick={onClose} sx={{ color: colors.rain }}>
+                    {t('sms.common.cancel')}
                 </Button>
                 <Button
                     onClick={handleSend}
@@ -248,10 +230,10 @@ const SendSmsDialog = ({ open, onClose, onSend }) => {
                     sx={{
                         backgroundColor: colors.salat,
                         '&:hover': { backgroundColor: colors.dark },
-                        '&.Mui-disabled': { backgroundColor: colors.middle }
+                        '&.Mui-disabled': { backgroundColor: colors.middle },
                     }}
                 >
-                    {loading ? 'Sending...' : 'Send SMS'}
+                    {loading ? t('sms.send.sending') : t('sms.send.sendButton')}
                 </Button>
             </DialogActions>
         </Dialog>

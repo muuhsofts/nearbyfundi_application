@@ -4,27 +4,9 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet'
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
-    Box,
-    Paper,
-    Typography,
-    Chip,
-    IconButton,
-    Button,
-    Drawer,
-    Avatar,
-    Divider,
-    CircularProgress,
-    Alert,
-    Snackbar,
-    Fab,
-    Zoom,
-    useMediaQuery,
-    useTheme,
-    Tooltip,
-    FormControl,
-    InputLabel,
-    Select,
-    MenuItem,
+    Box, Paper, Typography, Chip, IconButton, Button, Drawer, Avatar,
+    Divider, CircularProgress, Alert, Snackbar, Fab, Zoom,
+    useMediaQuery, useTheme, Tooltip, FormControl, InputLabel, Select, MenuItem,
 } from '@mui/material';
 import {
     Refresh as RefreshIcon,
@@ -44,6 +26,8 @@ import {
 } from '@mui/icons-material';
 import { usePermissions } from 'hooks';
 import { monitoringService } from 'services/monitoring.service';
+import { useLanguage } from 'context/LanguageContext';
+import { tMon } from './monitoringlang';
 import { NotificationBell } from './components/NotificationBell';
 
 // ─── Constants ───────────────────────────────────────────────
@@ -58,7 +42,6 @@ const POLL_MS = 15000;
 const TRACKING_POLL_MS = 10000;
 const OSRM_BASE_URL = 'https://router.project-osrm.org/route/v1/driving';
 
-// ✅ Include on_the_way and arrived as trackable
 const TRACKABLE_STATUSES = ['accepted', 'on_the_way', 'arrived', 'in_progress'];
 
 // ─── Pulse animations ────────────────────────────────────────
@@ -134,7 +117,6 @@ const createMarkerIcon = (status, isTimeout, dayAgo, dimmed, techPhoto = null) =
         }
     }
 
-    // Large circular photo marker for active statuses
     if (techPhoto && (status === 'accepted' || status === 'on_the_way' || status === 'arrived' || status === 'in_progress')) {
         const photoSize = 88;
         const borderColor = status === 'in_progress' ? '#8b5cf6' : status === 'on_the_way' ? '#f97316' : status === 'arrived' ? '#8b5cf6' : '#22c55e';
@@ -234,6 +216,10 @@ const MonitoringMap = () => {
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const { can } = usePermissions();
 
+    // ✅ LANGUAGE HOOKS
+    const { language } = useLanguage();
+    const t = (key, replacements) => tMon(language, key, replacements);
+
     const canView = can('monitoring.view');
     const canCall = can('technicians.call');
 
@@ -269,11 +255,11 @@ const MonitoringMap = () => {
             setRequests(data.requests || []);
             setCounts(data.counts || {});
         } catch (err) {
-            setError(err.response?.data?.message || 'Failed to load map data');
+            setError(err.response?.data?.message || t('mon.map.loadFailed'));
         } finally {
             setLoading(false);
         }
-    }, [statusFilter]);
+    }, [statusFilter, language]);
 
     useEffect(() => {
         setLoading(true);
@@ -345,7 +331,7 @@ const MonitoringMap = () => {
         } catch (err) {
             setToast({
                 severity: 'error',
-                message: err.response?.data?.message || 'Failed to get call details',
+                message: err.response?.data?.message || t('mon.map.toast.callFailed'),
             });
         }
     };
@@ -436,9 +422,9 @@ const MonitoringMap = () => {
                 });
             }
         } catch (err) {
-            setTrackingError(err.response?.data?.message || 'Failed to fetch tracking data');
+            setTrackingError(err.response?.data?.message || t('mon.map.toast.trackingFailed'));
         }
-    }, []);
+    }, [language]);
 
     useEffect(() => {
         if (trackingIntervalRef.current) {
@@ -467,7 +453,7 @@ const MonitoringMap = () => {
     if (!canView) {
         return (
             <Box p={3}>
-                <Alert severity="error">You do not have permission to view the monitoring map.</Alert>
+                <Alert severity="error">{t('mon.map.accessDenied')}</Alert>
             </Box>
         );
     }
@@ -556,10 +542,10 @@ const MonitoringMap = () => {
                                 <Popup>
                                     <Box sx={{ minWidth: 220 }}>
                                         <Typography variant="subtitle2" fontWeight="bold">
-                                            {r.customer?.name || 'Unknown Customer'}
+                                            {r.customer?.name || t('mon.common.unknownCustomer')}
                                         </Typography>
                                         <Typography variant="caption" display="block" color="text.secondary">
-                                            {r.service?.name || 'Service'} · {r.status}
+                                            {r.service?.name || t('mon.common.service')} · {r.status}
                                             {r.is_timeout ? ` · ⚠️ ${r.minutes_elapsed}m` : ''}
                                         </Typography>
 
@@ -579,7 +565,7 @@ const MonitoringMap = () => {
                                                             {r.technician.name}
                                                         </Typography>
                                                         <Typography variant="caption" color="text.secondary">
-                                                            {r.technician.area || 'Technician'}
+                                                            {r.technician.area || t('mon.common.technician')}
                                                         </Typography>
                                                     </Box>
                                                 </Box>
@@ -617,56 +603,56 @@ const MonitoringMap = () => {
                 >
                     <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
                         <Typography variant="subtitle1" fontWeight="bold">
-                            🗺️ Monitoring
+                            {t('mon.map.title')}
                         </Typography>
 
                         <FormControl size="small" sx={{ minWidth: 120 }}>
-                            <InputLabel>Filter</InputLabel>
+                            <InputLabel>{t('mon.map.filter')}</InputLabel>
                             <Select
                                 value={statusFilter}
-                                label="Filter"
+                                label={t('mon.map.filter')}
                                 onChange={(e) => setStatusFilter(e.target.value)}
                             >
-                                <MenuItem value="all">All</MenuItem>
-                                <MenuItem value="pending">🔴 Pending</MenuItem>
-                                <MenuItem value="accepted">🟢 Accepted</MenuItem>
-                                <MenuItem value="on_the_way">🟠 On the Way</MenuItem>
-                                <MenuItem value="arrived">🟣 Arrived</MenuItem>
-                                <MenuItem value="in_progress">🟣 In Progress</MenuItem>
-                                <MenuItem value="completed">🔵 Completed</MenuItem>
+                                <MenuItem value="all">{t('mon.map.filterAll')}</MenuItem>
+                                <MenuItem value="pending">{t('mon.map.filterPending')}</MenuItem>
+                                <MenuItem value="accepted">{t('mon.map.filterAccepted')}</MenuItem>
+                                <MenuItem value="on_the_way">{t('mon.map.filterOnTheWay')}</MenuItem>
+                                <MenuItem value="arrived">{t('mon.map.filterArrived')}</MenuItem>
+                                <MenuItem value="in_progress">{t('mon.map.filterInProgress')}</MenuItem>
+                                <MenuItem value="completed">{t('mon.map.filterCompleted')}</MenuItem>
                             </Select>
                         </FormControl>
 
-                        <Chip label={`Total: ${counts.total || 0}`} size="small" />
+                        <Chip label={t('mon.map.chipTotal', { n: counts.total || 0 })} size="small" />
                         <Chip
-                            label={`Pending: ${counts.pending || 0}`}
+                            label={t('mon.map.chipPending', { n: counts.pending || 0 })}
                             size="small"
                             sx={{ bgcolor: '#fee2e2', color: '#991b1b' }}
                         />
                         <Chip
-                            label={`Accepted: ${counts.accepted || 0}`}
+                            label={t('mon.map.chipAccepted', { n: counts.accepted || 0 })}
                             size="small"
                             sx={{ bgcolor: '#d1fae5', color: '#065f46' }}
                         />
                         <Chip
-                            label={`On Way: ${counts.on_the_way || 0}`}
+                            label={t('mon.map.chipOnWay', { n: counts.on_the_way || 0 })}
                             size="small"
                             sx={{ bgcolor: '#ffedd5', color: '#9a3412' }}
                         />
                         <Chip
-                            label={`Arrived: ${counts.arrived || 0}`}
+                            label={t('mon.map.chipArrived', { n: counts.arrived || 0 })}
                             size="small"
                             sx={{ bgcolor: '#ede9fe', color: '#4c1d95' }}
                         />
                         <Chip
-                            label={`Completed: ${counts.completed || 0}`}
+                            label={t('mon.map.chipCompleted', { n: counts.completed || 0 })}
                             size="small"
                             sx={{ bgcolor: '#dbeafe', color: '#1e40af' }}
                         />
                     </Box>
 
                     <Box display="flex" alignItems="center" gap={1}>
-                        <Tooltip title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}>
+                        <Tooltip title={isFullscreen ? t('mon.map.exitFullscreen') : t('mon.map.fullscreen')}>
                             <IconButton size="small" onClick={toggleFullscreen} sx={{ color: '#1a73e8' }}>
                                 {isFullscreen ? <FullscreenExitIcon /> : <FullscreenIcon />}
                             </IconButton>
@@ -692,7 +678,7 @@ const MonitoringMap = () => {
                     }}
                     action={
                         <Button color="inherit" size="small" onClick={load}>
-                            Retry
+                            {t('mon.map.retry')}
                         </Button>
                     }
                 >
@@ -725,7 +711,7 @@ const MonitoringMap = () => {
                         {routeLoading ? (
                             <>
                                 <CircularProgress size={14} />
-                                <Typography variant="caption">Calculating route…</Typography>
+                                <Typography variant="caption">{t('mon.map.calculatingRoute')}</Typography>
                             </>
                         ) : routeInfo ? (
                             <>
@@ -733,16 +719,16 @@ const MonitoringMap = () => {
                                 {!routeInfo.isFallback ? (
                                     <>
                                         <Typography variant="caption" fontWeight="600">
-                                            {routeInfo.distanceKm.toFixed(1)} km (road)
+                                            {t('mon.map.kmRoad', { km: routeInfo.distanceKm.toFixed(1) })}
                                         </Typography>
                                         <TimerIcon sx={{ fontSize: 14, color: '#6b7280' }} />
                                         <Typography variant="caption" color="text.secondary">
-                                            {Math.round(routeInfo.durationMin)} min
+                                            {t('mon.map.min', { n: Math.round(routeInfo.durationMin) })}
                                         </Typography>
                                     </>
                                 ) : (
                                     <Typography variant="caption" color="text.secondary">
-                                        ⚠️ Direct line
+                                        {t('mon.map.directLine')}
                                     </Typography>
                                 )}
                             </>
@@ -762,11 +748,11 @@ const MonitoringMap = () => {
                                 }}
                             />
                             <Typography variant="caption" fontWeight="600" sx={{ color: '#16a34a' }}>
-                                {trackingData.distance_km} km live
+                                {t('mon.map.kmLive', { km: trackingData.distance_km })}
                             </Typography>
                             {trackingData.eta_minutes != null && (
                                 <Typography variant="caption" color="text.secondary">
-                                    · ETA {trackingData.eta_minutes} min
+                                    {t('mon.map.eta', { n: trackingData.eta_minutes })}
                                 </Typography>
                             )}
                         </Box>
@@ -793,20 +779,20 @@ const MonitoringMap = () => {
                 }}
             >
                 <Paper elevation={3} sx={{ borderRadius: 2, overflow: 'hidden' }}>
-                    <Tooltip title="Zoom in">
+                    <Tooltip title={t('mon.map.zoomIn')}>
                         <IconButton size="small" onClick={handleZoomIn} sx={{ borderRadius: 0, py: 1 }}>
                             <AddIcon />
                         </IconButton>
                     </Tooltip>
                     <Divider />
-                    <Tooltip title="Zoom out">
+                    <Tooltip title={t('mon.map.zoomOut')}>
                         <IconButton size="small" onClick={handleZoomOut} sx={{ borderRadius: 0, py: 1 }}>
                             <RemoveIcon />
                         </IconButton>
                     </Tooltip>
                 </Paper>
 
-                <Tooltip title="Recenter / Fit All">
+                <Tooltip title={t('mon.map.recenter')}>
                     <Fab
                         size="small"
                         onClick={handleRecenter}
@@ -847,31 +833,31 @@ const MonitoringMap = () => {
                 >
                     <Box display="flex" alignItems="center" gap={1.5}>
                         <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: RED }} />
-                        <Typography variant="caption">Pending</Typography>
+                        <Typography variant="caption">{t('mon.map.legendPending')}</Typography>
                     </Box>
                     <Box display="flex" alignItems="center" gap={1.5}>
                         <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: GREEN }} />
-                        <Typography variant="caption">Accepted</Typography>
+                        <Typography variant="caption">{t('mon.map.legendAccepted')}</Typography>
                     </Box>
                     <Box display="flex" alignItems="center" gap={1.5}>
                         <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: ORANGE }} />
-                        <Typography variant="caption">On the Way</Typography>
+                        <Typography variant="caption">{t('mon.map.legendOnWay')}</Typography>
                     </Box>
                     <Box display="flex" alignItems="center" gap={1.5}>
                         <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: PURPLE }} />
-                        <Typography variant="caption">Arrived</Typography>
+                        <Typography variant="caption">{t('mon.map.legendArrived')}</Typography>
                     </Box>
                     <Box display="flex" alignItems="center" gap={1.5}>
                         <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: BLUE }} />
-                        <Typography variant="caption">Completed</Typography>
+                        <Typography variant="caption">{t('mon.map.legendCompleted')}</Typography>
                     </Box>
                     <Box display="flex" alignItems="center" gap={1.5}>
                         <Typography variant="caption">⚠️</Typography>
-                        <Typography variant="caption">Waiting 5+ min</Typography>
+                        <Typography variant="caption">{t('mon.map.legendWaiting')}</Typography>
                     </Box>
                     <Box display="flex" alignItems="center" gap={1.5}>
                         <Box sx={{ width: 16, height: 3, bgcolor: '#9ca3af', borderRadius: 1 }} />
-                        <Typography variant="caption">Route</Typography>
+                        <Typography variant="caption">{t('mon.map.legendRoute')}</Typography>
                     </Box>
                     <Box display="flex" alignItems="center" gap={1.5}>
                         <Box
@@ -883,7 +869,7 @@ const MonitoringMap = () => {
                                 animation: 'pulseLiveDot 1.6s infinite',
                             }}
                         />
-                        <Typography variant="caption">Live GPS</Typography>
+                        <Typography variant="caption">{t('mon.map.legendLiveGps')}</Typography>
                     </Box>
                 </Paper>
             )}
@@ -907,7 +893,9 @@ const MonitoringMap = () => {
                     <Box sx={{ p: 3, overflowY: 'auto', height: '100%' }}>
                         {/* Header */}
                         <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                            <Typography variant="h6">Request #{selected.id}</Typography>
+                            <Typography variant="h6">
+                                {t('mon.map.detail.title', { id: selected.id })}
+                            </Typography>
                             <IconButton onClick={() => setSelected(null)}>
                                 <CloseIcon />
                             </IconButton>
@@ -915,7 +903,11 @@ const MonitoringMap = () => {
 
                         {/* Status chips */}
                         <Box display="flex" gap={1} flexWrap="wrap" mb={2}>
-                            <Chip label={selected.service?.name || 'Service'} size="small" variant="outlined" />
+                            <Chip
+                                label={selected.service?.name || t('mon.common.service')}
+                                size="small"
+                                variant="outlined"
+                            />
                             <Chip
                                 label={selected.status}
                                 size="small"
@@ -961,15 +953,18 @@ const MonitoringMap = () => {
                                     <RouteIcon sx={{ fontSize: 18, color: routeColor }} />
                                     {routeLoading ? (
                                         <Typography variant="body2" color="text.secondary">
-                                            Calculating route…
+                                            {t('mon.map.detail.routeCalc')}
                                         </Typography>
                                     ) : routeInfo?.isFallback ? (
-                                        <Typography variant="body2">⚠️ Direct line (no road data)</Typography>
+                                        <Typography variant="body2">
+                                            {t('mon.map.detail.directLine')}
+                                        </Typography>
                                     ) : routeInfo ? (
                                         <Typography variant="body2">
-                                            <strong>{routeInfo.distanceKm.toFixed(1)} km</strong> (road) ·{' '}
-                                            <TimerIcon sx={{ fontSize: 14, verticalAlign: 'middle', ml: 0.5 }} />{' '}
-                                            <strong>{Math.round(routeInfo.durationMin)} min</strong> ETA
+                                            {t('mon.map.detail.kmRoadEta', {
+                                                km: routeInfo.distanceKm.toFixed(1),
+                                                min: Math.round(routeInfo.durationMin),
+                                            })}
                                         </Typography>
                                     ) : null}
                                 </Box>
@@ -986,9 +981,12 @@ const MonitoringMap = () => {
                                             }}
                                         />
                                         <Typography variant="body2" fontWeight="600" sx={{ color: '#16a34a' }}>
-                                            {trackingData.distance_km} km live (straight-line)
-                                            {trackingData.eta_minutes != null &&
-                                                ` · ETA ~${trackingData.eta_minutes} min`}
+                                            {trackingData.eta_minutes != null
+                                                ? t('mon.map.detail.kmLiveEta', {
+                                                    km: trackingData.distance_km,
+                                                    min: trackingData.eta_minutes,
+                                                })
+                                                : t('mon.map.detail.kmLive', { km: trackingData.distance_km })}
                                         </Typography>
                                     </Box>
                                 )}
@@ -999,7 +997,9 @@ const MonitoringMap = () => {
                                         color="text.secondary"
                                         sx={{ display: 'block', mt: 0.5 }}
                                     >
-                                        Last GPS update: {new Date(trackingData.last_updated).toLocaleTimeString()}
+                                        {t('mon.map.detail.lastGpsUpdate', {
+                                            time: new Date(trackingData.last_updated).toLocaleTimeString(),
+                                        })}
                                     </Typography>
                                 )}
                             </Box>
@@ -1007,17 +1007,17 @@ const MonitoringMap = () => {
 
                         {/* Description */}
                         <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600, mt: 1 }}>
-                            Description
+                            {t('mon.map.detail.description')}
                         </Typography>
                         <Typography sx={{ mb: 2, fontSize: '0.9rem', color: '#374151' }}>
-                            {selected.description || 'No description'}
+                            {selected.description || t('mon.map.detail.noDescription')}
                         </Typography>
 
                         <Divider sx={{ my: 2 }} />
 
                         {/* Customer */}
                         <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, color: '#1a73e8' }}>
-                            👤 Customer
+                            {t('mon.map.detail.customer')}
                         </Typography>
                         <Box display="flex" alignItems="center" gap={2} mb={2}>
                             <Avatar sx={{ width: 96, height: 96, bgcolor: '#e5e7eb', fontSize: '2rem' }}>
@@ -1025,13 +1025,17 @@ const MonitoringMap = () => {
                             </Avatar>
                             <Box>
                                 <Typography fontWeight="600" fontSize="1.1rem">
-                                    {selected.customer?.name || 'Unknown'}
+                                    {selected.customer?.name || t('mon.common.unknown')}
                                 </Typography>
                                 <Typography variant="body2" color="text.secondary">
-                                    📞 {selected.customer?.phone || 'No phone'}
+                                    {t('mon.map.detail.customerPhone', {
+                                        phone: selected.customer?.phone || t('mon.common.noPhone'),
+                                    })}
                                 </Typography>
                                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                                    📍 {selected.customer?.area || selected.area || 'Location not available'}
+                                    {t('mon.map.detail.customerArea', {
+                                        area: selected.customer?.area || selected.area || t('mon.map.detail.locationNA'),
+                                    })}
                                 </Typography>
                             </Box>
                         </Box>
@@ -1040,10 +1044,10 @@ const MonitoringMap = () => {
 
                         {/* Technician */}
                         <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, color: '#22c55e' }}>
-                            🔧 Technician
+                            {t('mon.map.detail.technician')}
                             {trackingData && TRACKABLE_STATUSES.includes(selected.status) && (
                                 <Chip
-                                    label="LIVE"
+                                    label={t('mon.map.detail.live')}
                                     size="small"
                                     sx={{
                                         ml: 1,
@@ -1073,11 +1077,15 @@ const MonitoringMap = () => {
                                             {selected.technician.name}
                                         </Typography>
                                         <Typography variant="body2" color="text.secondary">
-                                            📍 {selected.technician.area || 'Area not set'}
+                                            {t('mon.map.detail.techArea', {
+                                                area: selected.technician.area || t('mon.map.detail.areaNotSet'),
+                                            })}
                                         </Typography>
                                         {selected.technician.phone && (
                                             <Typography variant="body2" color="text.secondary">
-                                                📞 {formatPhoneDisplay(selected.technician.phone)}
+                                                {t('mon.map.detail.techPhone', {
+                                                    phone: formatPhoneDisplay(selected.technician.phone),
+                                                })}
                                             </Typography>
                                         )}
                                         {selected.technician.rating > 0 && (
@@ -1106,7 +1114,7 @@ const MonitoringMap = () => {
                                                 textTransform: 'none',
                                             }}
                                         >
-                                            Call
+                                            {t('mon.common.call')}
                                         </Button>
                                         <Button
                                             variant="contained"
@@ -1120,14 +1128,14 @@ const MonitoringMap = () => {
                                                 textTransform: 'none',
                                             }}
                                         >
-                                            WhatsApp
+                                            {t('mon.common.whatsapp')}
                                         </Button>
                                     </Box>
                                 )}
                             </>
                         ) : (
                             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                                No technician assigned yet
+                                {t('mon.common.noTechnicianAssignedYet')}
                             </Typography>
                         )}
                     </Box>
@@ -1152,7 +1160,7 @@ const MonitoringMap = () => {
                                 href={callInfo.call_url}
                                 sx={{ bgcolor: '#22c55e' }}
                             >
-                                Call
+                                {t('mon.common.call')}
                             </Button>
                             <Button
                                 variant="contained"
@@ -1161,7 +1169,7 @@ const MonitoringMap = () => {
                                 target="_blank"
                                 sx={{ bgcolor: '#25d366' }}
                             >
-                                WhatsApp
+                                {t('mon.common.whatsapp')}
                             </Button>
                         </Box>
                     </Box>

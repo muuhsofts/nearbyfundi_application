@@ -89,7 +89,7 @@ export default function Sidebar({ mobileOpen, onClose }) {
         <Box sx={{ overflow: 'auto' }}>
             <Toolbar sx={{ justifyContent: 'center' }}>
                 <Typography variant="h6" noWrap component="div">
-                    IMS Portal
+                    NEARBY FUNDI Portal
                 </Typography>
             </Toolbar>
             <List>{renderMenu(sidebarItems)}</List>

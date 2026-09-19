@@ -1,49 +1,16 @@
+// src/pages/otp/OtpList.js
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-    Box,
-    Button,
-    Chip,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogTitle,
-    IconButton,
-    InputAdornment,
-    Paper,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TablePagination,
-    TableRow,
-    TextField,
-    Typography,
-    FormControl,
-    InputLabel,
-    Select,
-    MenuItem,
-    Grid,
-    Card,
-    CardContent,
-    CircularProgress,
-    Tooltip,
-    useTheme,
-    useMediaQuery,
-    Alert,
-    Stack,
+    Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
+    IconButton, InputAdornment, Paper, Table, TableBody, TableCell, TableContainer,
+    TableHead, TablePagination, TableRow, TextField, Typography, FormControl,
+    InputLabel, Select, MenuItem, Grid, Card, CardContent, CircularProgress,
+    Tooltip, useTheme, useMediaQuery, Alert, Stack,
 } from '@mui/material';
 import {
-    Refresh as RefreshIcon,
-    Search as SearchIcon,
-    DeleteSweep as CleanupIcon,
-    CheckCircle as UsedIcon,
-    Cancel as UnusedIcon,
-    Email as EmailIcon,
-    Schedule as ScheduleIcon,
-    Computer as IpIcon,
-    Label as TypeIcon,
-    Clear as ClearIcon,
+    Refresh as RefreshIcon, Search as SearchIcon, DeleteSweep as CleanupIcon,
+    CheckCircle as UsedIcon, Cancel as UnusedIcon, Email as EmailIcon,
+    Schedule as ScheduleIcon, Computer as IpIcon, Label as TypeIcon, Clear as ClearIcon,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -51,25 +18,19 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 
 import { otpService } from 'services/otp.service';
 import { usePermissions } from 'hooks/usePermissions';
+import { useLanguage } from 'context/LanguageContext';
 import { showSnackbar } from 'utils/snackbar';
+import { tOtp } from './otplang';
 import appConfig from '../../config';
 
 const colors = appConfig.app.colors;
-
-const headCells = [
-    { id: 'email', label: 'Email' },
-    { id: 'type', label: 'Type' },
-    { id: 'otp', label: 'OTP' },
-    { id: 'is_used', label: 'Used' },
-    { id: 'expires_at', label: 'Expires At' },
-    { id: 'created_at', label: 'Created At' },
-    { id: 'ip_address', label: 'IP' },
-];
 
 export default function OtpList() {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const showTableView = useMediaQuery(theme.breakpoints.up('md'));
+    const { language } = useLanguage();
+    const t = (key) => tOtp(language, key);
 
     const { can } = usePermissions();
     const canView = can('otp.view');
@@ -97,6 +58,30 @@ export default function OtpList() {
         message: '',
         action: null,
     });
+
+    const headCells = [
+        { id: 'email', label: t('otp.col.email') },
+        { id: 'type', label: t('otp.col.type') },
+        { id: 'otp', label: t('otp.col.otp') },
+        { id: 'is_used', label: t('otp.col.used') },
+        { id: 'expires_at', label: t('otp.col.expiresAt') },
+        { id: 'created_at', label: t('otp.col.createdAt') },
+        { id: 'ip_address', label: t('otp.col.ip') },
+    ];
+
+    const typeOptions = [
+        { value: 'all', label: t('otp.filter.allTypes') },
+        { value: 'registration', label: t('otp.filter.registration') },
+        { value: 'password_reset', label: t('otp.filter.passwordReset') },
+        { value: 'email_verification', label: t('otp.filter.emailVerification') },
+        { value: 'login', label: t('otp.filter.login') },
+    ];
+
+    const usedOptions = [
+        { value: 'all', label: t('otp.filter.all') },
+        { value: 'true', label: t('otp.filter.used') },
+        { value: 'false', label: t('otp.filter.unused') },
+    ];
 
     const fetchOtps = useCallback(async () => {
         if (!canView) return;
@@ -137,15 +122,15 @@ export default function OtpList() {
             }
         } catch (err) {
             console.error('OTP error:', err);
-            setError(err.message || 'Failed to load OTP records');
-            showSnackbar({ type: 'error', message: 'Failed to load OTP records' });
+            setError(err.message || t('otp.loadFailed'));
+            showSnackbar({ type: 'error', message: t('otp.loadFailed') });
             setOtps([]);
             setTotal(0);
             setStats(null);
         } finally {
             setLoading(false);
         }
-    }, [page, rowsPerPage, email, typeFilter, usedFilter, expiredFilter, startDate, endDate, canView]);
+    }, [page, rowsPerPage, email, typeFilter, usedFilter, expiredFilter, startDate, endDate, canView, language]);
 
     useEffect(() => {
         if (canView) fetchOtps();
@@ -154,19 +139,19 @@ export default function OtpList() {
     const handleCleanupExpired = () => {
         setConfirmDialog({
             open: true,
-            title: 'Cleanup Expired OTPs',
-            message: 'This will permanently delete all expired and unused OTP records. Are you sure?',
+            title: t('otp.cleanupTitle'),
+            message: t('otp.cleanupMessage'),
             action: async () => {
                 try {
                     const response = await otpService.cleanup();
                     if (response?.data?.status === 'success') {
                         showSnackbar({
                             type: 'success',
-                            message: response.data.message || 'Cleanup completed',
+                            message: response.data.message || t('otp.cleanupSuccess'),
                         });
                         fetchOtps();
                     } else {
-                        throw new Error(response?.data?.message || 'Cleanup failed');
+                        throw new Error(response?.data?.message || t('otp.cleanupFailed'));
                     }
                 } catch (err) {
                     showSnackbar({ type: 'error', message: err.message });
@@ -181,14 +166,14 @@ export default function OtpList() {
         try {
             await confirmDialog.action();
         } catch (err) {
-            showSnackbar({ type: 'error', message: 'Action failed' });
+            showSnackbar({ type: 'error', message: t('otp.actionFailed') });
         }
     };
 
     const formatDate = (dateStr) => {
         if (!dateStr) return '—';
         try {
-            return new Date(dateStr).toLocaleString('en-US', {
+            return new Date(dateStr).toLocaleString(language === 'sw' ? 'sw-TZ' : 'en-US', {
                 year: 'numeric',
                 month: 'short',
                 day: 'numeric',
@@ -214,10 +199,10 @@ export default function OtpList() {
                     }}
                 >
                     <Typography color="error" fontWeight={600} variant="h6" gutterBottom>
-                        Access Denied
+                        {t('otp.accessDenied')}
                     </Typography>
                     <Typography color="text.secondary">
-                        You do not have permission to view OTP records.
+                        {t('otp.noPermission')}
                     </Typography>
                 </Paper>
             </Box>
@@ -239,7 +224,7 @@ export default function OtpList() {
                                 fetchOtps();
                             }}
                         >
-                            Retry
+                            {t('otp.retry')}
                         </Button>
                     }
                     sx={{ borderRadius: 2 }}
@@ -249,20 +234,6 @@ export default function OtpList() {
             </Box>
         );
     }
-
-    const typeOptions = [
-        { value: 'all', label: 'All Types' },
-        { value: 'registration', label: 'Registration' },
-        { value: 'password_reset', label: 'Password Reset' },
-        { value: 'email_verification', label: 'Email Verification' },
-        { value: 'login', label: 'Login' },
-    ];
-
-    const usedOptions = [
-        { value: 'all', label: 'All' },
-        { value: 'true', label: 'Used' },
-        { value: 'false', label: 'Unused' },
-    ];
 
     return (
         <LocalizationProvider dateAdapter={AdapterDateFns}>
@@ -283,7 +254,7 @@ export default function OtpList() {
                             >
                                 <CardContent sx={{ p: 2.25 }}>
                                     <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
-                                        Total OTPs
+                                        {t('otp.stats.total')}
                                     </Typography>
                                     <Typography variant="h4" fontWeight={800} color="#0369a1" sx={{ mt: 0.5, lineHeight: 1.1 }}>
                                         {stats.total ?? 0}
@@ -304,7 +275,7 @@ export default function OtpList() {
                             >
                                 <CardContent sx={{ p: 2.25 }}>
                                     <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
-                                        Used
+                                        {t('otp.stats.used')}
                                     </Typography>
                                     <Typography variant="h4" fontWeight={800} color="#047857" sx={{ mt: 0.5, lineHeight: 1.1 }}>
                                         {stats.used ?? 0}
@@ -325,7 +296,7 @@ export default function OtpList() {
                             >
                                 <CardContent sx={{ p: 2.25 }}>
                                     <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
-                                        Unused
+                                        {t('otp.stats.unused')}
                                     </Typography>
                                     <Typography variant="h4" fontWeight={800} color="#b45309" sx={{ mt: 0.5, lineHeight: 1.1 }}>
                                         {stats.unused ?? 0}
@@ -346,7 +317,7 @@ export default function OtpList() {
                             >
                                 <CardContent sx={{ p: 2.25 }}>
                                     <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
-                                        Expired
+                                        {t('otp.stats.expired')}
                                     </Typography>
                                     <Typography variant="h4" fontWeight={800} color="#b91c1c" sx={{ mt: 0.5, lineHeight: 1.1 }}>
                                         {stats.expired ?? 0}
@@ -367,10 +338,10 @@ export default function OtpList() {
                             >
                                 <CardContent sx={{ p: 2.25 }}>
                                     <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
-                                        By Type
+                                        {t('otp.stats.byType')}
                                     </Typography>
                                     <Typography variant="caption" component="div" fontWeight={600} color="text.primary" sx={{ mt: 0.75 }}>
-                                        {stats.by_type?.map((t) => `${t.type}: ${t.count}`).join(', ') || 'N/A'}
+                                        {stats.by_type?.map((item) => `${item.type}: ${item.count}`).join(', ') || 'N/A'}
                                     </Typography>
                                 </CardContent>
                             </Card>
@@ -408,15 +379,15 @@ export default function OtpList() {
                         >
                             <Box>
                                 <Typography variant="h5" fontWeight={800} color="text.primary">
-                                    OTP Management
+                                    {t('otp.title')}
                                 </Typography>
                                 <Typography variant="body2" color="text.secondary" fontWeight={500}>
-                                    View and manage one-time passwords
+                                    {t('otp.subtitle')}
                                 </Typography>
                             </Box>
 
                             {canCleanup && (
-                                <Tooltip title="Delete expired & unused OTPs">
+                                <Tooltip title={t('otp.cleanupTooltip')}>
                                     <Button
                                         variant="contained"
                                         startIcon={<CleanupIcon />}
@@ -434,7 +405,7 @@ export default function OtpList() {
                                             },
                                         }}
                                     >
-                                        Cleanup Expired
+                                        {t('otp.cleanup')}
                                     </Button>
                                 </Tooltip>
                             )}
@@ -445,7 +416,7 @@ export default function OtpList() {
                                 <TextField
                                     fullWidth
                                     size="small"
-                                    placeholder="Search email…"
+                                    placeholder={t('otp.filter.email')}
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
                                     InputProps={{
@@ -476,10 +447,10 @@ export default function OtpList() {
 
                             <Grid item xs={12} sm={6} md={1.8}>
                                 <FormControl fullWidth size="small">
-                                    <InputLabel>Type</InputLabel>
+                                    <InputLabel>{t('otp.filter.type')}</InputLabel>
                                     <Select
                                         value={typeFilter}
-                                        label="Type"
+                                        label={t('otp.filter.type')}
                                         onChange={(e) => setTypeFilter(e.target.value)}
                                         sx={{
                                             borderRadius: 2,
@@ -499,10 +470,10 @@ export default function OtpList() {
 
                             <Grid item xs={12} sm={6} md={1.8}>
                                 <FormControl fullWidth size="small">
-                                    <InputLabel>Used Status</InputLabel>
+                                    <InputLabel>{t('otp.filter.usedStatus')}</InputLabel>
                                     <Select
                                         value={usedFilter}
-                                        label="Used Status"
+                                        label={t('otp.filter.usedStatus')}
                                         onChange={(e) => setUsedFilter(e.target.value)}
                                         sx={{
                                             borderRadius: 2,
@@ -522,10 +493,10 @@ export default function OtpList() {
 
                             <Grid item xs={12} sm={6} md={1.6}>
                                 <FormControl fullWidth size="small">
-                                    <InputLabel>Expired</InputLabel>
+                                    <InputLabel>{t('otp.filter.expired')}</InputLabel>
                                     <Select
                                         value={expiredFilter ? 'true' : 'false'}
-                                        label="Expired"
+                                        label={t('otp.filter.expired')}
                                         onChange={(e) => setExpiredFilter(e.target.value === 'true')}
                                         sx={{
                                             borderRadius: 2,
@@ -534,15 +505,15 @@ export default function OtpList() {
                                             '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' },
                                         }}
                                     >
-                                        <MenuItem value="false">All</MenuItem>
-                                        <MenuItem value="true">Expired Only</MenuItem>
+                                        <MenuItem value="false">{t('otp.filter.all')}</MenuItem>
+                                        <MenuItem value="true">{t('otp.filter.expiredOnly')}</MenuItem>
                                     </Select>
                                 </FormControl>
                             </Grid>
 
                             <Grid item xs={12} sm={6} md={1.6}>
                                 <DatePicker
-                                    label="Start"
+                                    label={t('otp.filter.start')}
                                     value={startDate}
                                     onChange={setStartDate}
                                     slotProps={{
@@ -564,7 +535,7 @@ export default function OtpList() {
 
                             <Grid item xs={12} sm={6} md={1.6}>
                                 <DatePicker
-                                    label="End"
+                                    label={t('otp.filter.end')}
                                     value={endDate}
                                     onChange={setEndDate}
                                     slotProps={{
@@ -603,7 +574,7 @@ export default function OtpList() {
                                         },
                                     }}
                                 >
-                                    Refresh
+                                    {t('otp.refresh')}
                                 </Button>
                             </Grid>
                         </Grid>
@@ -645,7 +616,7 @@ export default function OtpList() {
                                         <TableRow>
                                             <TableCell colSpan={headCells.length} align="center" sx={{ py: 8 }}>
                                                 <Typography color="text.secondary" fontWeight={500}>
-                                                    No OTP records found
+                                                    {t('otp.noRecords')}
                                                 </Typography>
                                             </TableCell>
                                         </TableRow>
@@ -698,7 +669,7 @@ export default function OtpList() {
                                                         {otp.is_used ? (
                                                             <Chip
                                                                 icon={<UsedIcon sx={{ fontSize: 16 }} />}
-                                                                label="Used"
+                                                                label={t('otp.used')}
                                                                 size="small"
                                                                 sx={{
                                                                     fontWeight: 700,
@@ -712,7 +683,7 @@ export default function OtpList() {
                                                         ) : (
                                                             <Chip
                                                                 icon={<UnusedIcon sx={{ fontSize: 16 }} />}
-                                                                label="Unused"
+                                                                label={t('otp.unused')}
                                                                 size="small"
                                                                 sx={{
                                                                     fontWeight: 700,
@@ -732,7 +703,7 @@ export default function OtpList() {
                                                             color={isExpired ? 'error.main' : 'text.secondary'}
                                                         >
                                                             {formatDate(otp.expires_at)}
-                                                            {isExpired && ' (Expired)'}
+                                                            {isExpired && ` (${t('otp.expired')})`}
                                                         </Typography>
                                                     </TableCell>
                                                     <TableCell>
@@ -769,7 +740,7 @@ export default function OtpList() {
                                     }}
                                 >
                                     <Typography color="text.secondary" fontWeight={500}>
-                                        No OTP records found
+                                        {t('otp.noRecords')}
                                     </Typography>
                                 </Paper>
                             ) : (
@@ -803,7 +774,7 @@ export default function OtpList() {
                                                         {otp.is_used ? (
                                                             <Chip
                                                                 icon={<UsedIcon sx={{ fontSize: 14 }} />}
-                                                                label="Used"
+                                                                label={t('otp.used')}
                                                                 size="small"
                                                                 sx={{
                                                                     fontWeight: 700,
@@ -816,7 +787,7 @@ export default function OtpList() {
                                                         ) : (
                                                             <Chip
                                                                 icon={<UnusedIcon sx={{ fontSize: 14 }} />}
-                                                                label="Unused"
+                                                                label={t('otp.unused')}
                                                                 size="small"
                                                                 sx={{
                                                                     fontWeight: 700,
@@ -857,14 +828,14 @@ export default function OtpList() {
                                                             fontWeight={500}
                                                             color={isExpired ? 'error.main' : 'text.secondary'}
                                                         >
-                                                            Expires: {formatDate(otp.expires_at)}
-                                                            {isExpired && ' (Expired)'}
+                                                            {t('otp.expires')}: {formatDate(otp.expires_at)}
+                                                            {isExpired && ` (${t('otp.expired')})`}
                                                         </Typography>
                                                     </Stack>
 
                                                     <Stack direction="row" justifyContent="space-between" alignItems="center">
                                                         <Typography variant="caption" color="text.secondary" fontWeight={500}>
-                                                            Created: {formatDate(otp.created_at)}
+                                                            {t('otp.created')}: {formatDate(otp.created_at)}
                                                         </Typography>
                                                         <Stack direction="row" spacing={0.5} alignItems="center">
                                                             <IpIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
@@ -927,7 +898,7 @@ export default function OtpList() {
                             onClick={() => setConfirmDialog((prev) => ({ ...prev, open: false }))}
                             sx={{ fontWeight: 600, textTransform: 'none' }}
                         >
-                            Cancel
+                            {t('otp.cancel')}
                         </Button>
                         <Button
                             onClick={handleConfirm}
@@ -935,7 +906,7 @@ export default function OtpList() {
                             color="error"
                             sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 2 }}
                         >
-                            Confirm
+                            {t('otp.confirm')}
                         </Button>
                     </DialogActions>
                 </Dialog>

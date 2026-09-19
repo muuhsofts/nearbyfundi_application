@@ -1,5 +1,5 @@
-// src/pages/subscriptions/SubscriptionList.jsx
-import React, { useState, useEffect, useCallback } from 'react';
+// src/pages/subscriptions/SubscriptionList.js
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     Box, Paper, Typography, Button, Table, TableBody, TableCell, TableContainer,
     TableHead, TableRow, TablePagination, TableSortLabel, TextField, InputAdornment,
@@ -21,38 +21,44 @@ import {
 import { usePermissions } from 'hooks/usePermissions';
 import { subscriptionService } from 'services/subscription.service';
 import { showSnackbar } from 'utils/snackbar';
+import { useLanguage } from 'context/LanguageContext';
+import { tSub } from './subscriptionslang';
 import api from 'services/api';
 import appConfig from '../../config';
 
 const colors = appConfig.app.colors;
-
-const headCells = [
-    { id: 'user', label: 'User' },
-    { id: 'plan', label: 'Plan' },
-    { id: 'amount', label: 'Amount' },
-    { id: 'status', label: 'Status' },
-    { id: 'payment_method', label: 'Payment Method' },
-    { id: 'payment_ref', label: 'Reference' },
-    { id: 'created_at', label: 'Date' },
-    { id: 'expiry_date', label: 'Expiry' },
-    { id: 'actions', label: 'Actions', disableSort: true },
-];
-
-const statusStyles = {
-    pending: { color: '#b45309', bg: '#fef3c7', border: '#f59e0b', label: 'Pending', icon: <PendingIcon sx={{ fontSize: 16 }} /> },
-    active: { color: '#047857', bg: '#d1fae5', border: '#10b981', label: 'Active', icon: <ActiveIcon sx={{ fontSize: 16 }} /> },
-    expired: { color: '#b91c1c', bg: '#fee2e2', border: '#ef4444', label: 'Expired', icon: <ExpiredIcon sx={{ fontSize: 16 }} /> },
-    cancelled: { color: '#4b5563', bg: '#f3f4f6', border: '#9ca3af', label: 'Cancelled', icon: <CancelledIcon sx={{ fontSize: 16 }} /> },
-};
 
 const SubscriptionList = () => {
     const theme = useTheme();
     const showTableView = useMediaQuery(theme.breakpoints.up('md'));
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
+    const { language } = useLanguage();
+    const t = (key, replacements) => tSub(language, key, replacements);
+
     const { can } = usePermissions();
     const canApprove = can('subscriptions.approve');
     const canView = can('subscriptions.view');
+
+    // ── Translated constants ────────────────────────────────────────────
+    const headCells = useMemo(() => [
+        { id: 'user', label: t('sub.list.col.user') },
+        { id: 'plan', label: t('sub.list.col.plan') },
+        { id: 'amount', label: t('sub.list.col.amount') },
+        { id: 'status', label: t('sub.list.col.status') },
+        { id: 'payment_method', label: t('sub.list.col.paymentMethod') },
+        { id: 'payment_ref', label: t('sub.list.col.reference') },
+        { id: 'created_at', label: t('sub.list.col.date') },
+        { id: 'expiry_date', label: t('sub.list.col.expiry') },
+        { id: 'actions', label: t('sub.list.col.actions'), disableSort: true },
+    ], [language]);
+
+    const statusStyles = useMemo(() => ({
+        pending: { color: '#b45309', bg: '#fef3c7', border: '#f59e0b', label: t('sub.list.status.pending'), icon: <PendingIcon sx={{ fontSize: 16 }} /> },
+        active: { color: '#047857', bg: '#d1fae5', border: '#10b981', label: t('sub.list.status.active'), icon: <ActiveIcon sx={{ fontSize: 16 }} /> },
+        expired: { color: '#b91c1c', bg: '#fee2e2', border: '#ef4444', label: t('sub.list.status.expired'), icon: <ExpiredIcon sx={{ fontSize: 16 }} /> },
+        cancelled: { color: '#4b5563', bg: '#f3f4f6', border: '#9ca3af', label: t('sub.list.status.cancelled'), icon: <CancelledIcon sx={{ fontSize: 16 }} /> },
+    }), [language]);
 
     const [subscriptions, setSubscriptions] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -83,10 +89,8 @@ const SubscriptionList = () => {
         setError(null);
         try {
             const params = {
-                page: page + 1,
-                per_page: rowsPerPage,
-                search: search || undefined,
-                status: statusFilter || undefined,
+                page: page + 1, per_page: rowsPerPage,
+                search: search || undefined, status: statusFilter || undefined,
             };
             const response = await subscriptionService.getSubscriptions(params);
             if (response?.data?.status === 'success') {
@@ -104,16 +108,16 @@ const SubscriptionList = () => {
                     });
                 }
             } else {
-                setError('Failed to load subscriptions');
+                setError(t('sub.list.msg.loadFailed'));
             }
         } catch (err) {
             console.error(err);
-            setError(err.message || 'Failed to load subscriptions');
-            showSnackbar({ type: 'error', message: 'Failed to load subscriptions' });
+            setError(err.message || t('sub.list.msg.loadFailed'));
+            showSnackbar({ type: 'error', message: t('sub.list.msg.loadFailed') });
         } finally {
             setLoading(false);
         }
-    }, [canView, page, rowsPerPage, search, statusFilter]);
+    }, [canView, page, rowsPerPage, search, statusFilter, language]);
 
     const fetchStats = useCallback(async () => {
         try {
@@ -127,9 +131,7 @@ const SubscriptionList = () => {
                     cancelled_count: data.cancelled || data.cancelled_count || 0,
                 });
             }
-        } catch (err) {
-            console.error(err);
-        }
+        } catch (err) { console.error(err); }
     }, []);
 
     useEffect(() => { fetchSubscriptions(); }, [fetchSubscriptions]);
@@ -137,7 +139,6 @@ const SubscriptionList = () => {
 
     const refresh = () => { fetchSubscriptions(); fetchStats(); };
 
-    // Approve / Reject / Invoice / View handlers remain the same as original
     const openApproveDialog = (sub) => {
         setApproveDialog({ open: true, subscription: sub, loading: false, progress: 0, status: 'idle', error: null });
         setActionMenu(null);
@@ -151,12 +152,12 @@ const SubscriptionList = () => {
         setApproveDialog(prev => ({ ...prev, loading: true, status: 'confirming', progress: 10, error: null }));
 
         const steps = [
-            { progress: 20, status: 'Validating subscription...' },
-            { progress: 40, status: 'Processing payment confirmation...' },
-            { progress: 60, status: 'Updating subscription status...' },
-            { progress: 80, status: 'Generating invoice...' },
-            { progress: 90, status: 'Sending notification...' },
-            { progress: 100, status: 'Complete!' },
+            { progress: 20, status: t('sub.list.approve.validating') },
+            { progress: 40, status: t('sub.list.approve.processingPayment') },
+            { progress: 60, status: t('sub.list.approve.updatingStatus') },
+            { progress: 80, status: t('sub.list.approve.generatingInvoice') },
+            { progress: 90, status: t('sub.list.approve.sendingNotification') },
+            { progress: 100, status: t('sub.list.approve.complete') },
         ];
         let currentStep = 0;
         const progressInterval = setInterval(() => {
@@ -171,25 +172,31 @@ const SubscriptionList = () => {
             await subscriptionService.approveSubscription(approveDialog.subscription.id);
             clearInterval(progressInterval);
             setApproveDialog(prev => ({ ...prev, progress: 100, status: 'done', loading: false }));
-            showSnackbar({ type: 'success', message: `Subscription #${approveDialog.subscription.id} approved successfully!` });
+            showSnackbar({
+                type: 'success',
+                message: t('sub.list.msg.approved', { id: approveDialog.subscription.id }),
+            });
             setTimeout(() => { closeApproveDialog(); refresh(); }, 1500);
         } catch (err) {
             clearInterval(progressInterval);
             setApproveDialog(prev => ({
                 ...prev, loading: false, status: 'error',
-                error: err.message || 'Approval failed. Please try again.',
+                error: err.message || t('sub.list.approve.errorDefault'),
             }));
-            showSnackbar({ type: 'error', message: 'Approval failed: ' + (err.message || 'Unknown error') });
+            showSnackbar({
+                type: 'error',
+                message: t('sub.list.msg.approveFailed', { msg: err.message || 'Unknown error' }),
+            });
         }
     };
 
     const handleReject = async (id, reason) => {
         try {
             await subscriptionService.rejectSubscription(id, reason);
-            showSnackbar({ type: 'success', message: `Subscription #${id} rejected` });
+            showSnackbar({ type: 'success', message: t('sub.list.msg.rejected', { id }) });
             refresh();
         } catch (err) {
-            showSnackbar({ type: 'error', message: 'Rejection failed' });
+            showSnackbar({ type: 'error', message: t('sub.list.msg.rejectFailed') });
         }
         setActionMenu(null);
         setRejectDialog({ open: false, reason: '', subscriptionId: null });
@@ -197,7 +204,7 @@ const SubscriptionList = () => {
 
     const handleViewInvoice = useCallback(async (sub) => {
         if (!sub.invoice?.id) {
-            showSnackbar({ type: 'warning', message: 'No invoice available' });
+            showSnackbar({ type: 'warning', message: t('sub.list.msg.noInvoice') });
             return;
         }
         setDownloadingInvoice(sub.id);
@@ -212,19 +219,19 @@ const SubscriptionList = () => {
             link.click();
             document.body.removeChild(link);
             window.URL.revokeObjectURL(url);
-            showSnackbar({ type: 'success', message: 'Invoice downloaded successfully' });
+            showSnackbar({ type: 'success', message: t('sub.list.msg.invoiceDownloaded') });
         } catch (error) {
             if (sub.invoice?.pdf_url) {
                 window.open(sub.invoice.pdf_url, '_blank');
-                showSnackbar({ type: 'info', message: 'Invoice opened in new tab' });
+                showSnackbar({ type: 'info', message: t('sub.list.msg.invoiceOpened') });
             } else {
-                showSnackbar({ type: 'error', message: 'Failed to download invoice' });
+                showSnackbar({ type: 'error', message: t('sub.list.msg.invoiceFailed') });
             }
         } finally {
             setDownloadingInvoice(null);
         }
         setActionMenu(null);
-    }, []);
+    }, [language]);
 
     const handleViewDetails = (sub) => {
         setViewDialog({ open: true, subscription: sub });
@@ -243,9 +250,18 @@ const SubscriptionList = () => {
         setOrderBy(property);
     };
 
-    // Export helpers (same logic)
+    // ── Export helpers ──────────────────────────────────────────────────
+    const formatDate = (dateStr) => {
+        if (!dateStr) return '—';
+        try { return new Date(dateStr).toLocaleDateString(); } catch { return '—'; }
+    };
+
     const exportCSV = () => {
-        const headers = ['User', 'Plan', 'Amount', 'Status', 'Payment Method', 'Reference', 'Date', 'Expiry'];
+        const headers = [
+            t('sub.list.col.user'), t('sub.list.col.plan'), t('sub.list.col.amount'),
+            t('sub.list.col.status'), t('sub.list.col.paymentMethod'), t('sub.list.col.reference'),
+            t('sub.list.col.date'), t('sub.list.col.expiry'),
+        ];
         const rows = subscriptions.map(sub => [
             sub.user?.name || '-', sub.rate_card?.name || '-', sub.amount || '-',
             sub.status || '-', sub.payment_method || '-', sub.payment_reference || '-',
@@ -268,7 +284,11 @@ const SubscriptionList = () => {
     };
 
     const exportExcel = () => {
-        const headers = ['User', 'Plan', 'Amount', 'Status', 'Payment Method', 'Reference', 'Date', 'Expiry'];
+        const headers = [
+            t('sub.list.col.user'), t('sub.list.col.plan'), t('sub.list.col.amount'),
+            t('sub.list.col.status'), t('sub.list.col.paymentMethod'), t('sub.list.col.reference'),
+            t('sub.list.col.date'), t('sub.list.col.expiry'),
+        ];
         let html = `<html><head><meta charset="UTF-8"><title>Subscriptions Report</title></head><body>
             <h2>Subscriptions Report - ${new Date().toLocaleDateString()}</h2>
             <table border="1" cellpadding="5"><thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>`;
@@ -290,49 +310,48 @@ const SubscriptionList = () => {
         window.URL.revokeObjectURL(url);
     };
 
-    const formatDate = (dateStr) => {
-        if (!dateStr) return '—';
-        try { return new Date(dateStr).toLocaleDateString(); } catch { return '—'; }
-    };
-
     const isExpired = (sub) => sub.expiry_date ? new Date(sub.expiry_date) < new Date() : false;
 
     const getStatusChip = (status, expiryDate) => {
         if (status === 'active' && expiryDate && new Date(expiryDate) < new Date()) status = 'expired';
         const s = statusStyles[status] || statusStyles.cancelled;
         return (
-            <Chip
-                icon={s.icon}
-                label={s.label}
-                size="small"
-                sx={{
-                    backgroundColor: s.bg,
-                    color: s.color,
-                    fontWeight: 700,
-                    border: `1.5px solid ${s.border}`,
-                    height: 28,
-                    '& .MuiChip-icon': { color: s.color },
-                }}
-            />
+            <Chip icon={s.icon} label={s.label} size="small" sx={{
+                backgroundColor: s.bg, color: s.color, fontWeight: 700,
+                border: `1.5px solid ${s.border}`, height: 28,
+                '& .MuiChip-icon': { color: s.color },
+            }} />
         );
     };
 
     if (!canView) {
         return (
             <Box p={3}>
-                <Paper elevation={0} sx={{ p: 4, textAlign: 'center', borderRadius: 3, border: '1px solid', borderColor: 'divider' }}>
-                    <Typography color="error" fontWeight={600}>You do not have permission.</Typography>
+                <Paper elevation={0} sx={{
+                    p: 4, textAlign: 'center', borderRadius: 3,
+                    border: '1px solid', borderColor: 'divider',
+                }}>
+                    <Typography color="error" fontWeight={600}>{t('sub.list.accessDenied')}</Typography>
                 </Paper>
             </Box>
         );
     }
 
     const statCards = [
-        { title: 'Pending', count: stats.pending_count || 0, color: '#b45309', bg: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)' },
-        { title: 'Active', count: stats.active_count || 0, color: '#047857', bg: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)' },
-        { title: 'Expired', count: stats.expired_count || 0, color: '#b91c1c', bg: 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)' },
-        { title: 'Cancelled', count: stats.cancelled_count || 0, color: '#4b5563', bg: 'linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)' },
+        { title: t('sub.list.pending'), count: stats.pending_count || 0, color: '#b45309', bg: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)' },
+        { title: t('sub.list.active'), count: stats.active_count || 0, color: '#047857', bg: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)' },
+        { title: t('sub.list.expired'), count: stats.expired_count || 0, color: '#b91c1c', bg: 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)' },
+        { title: t('sub.list.cancelled'), count: stats.cancelled_count || 0, color: '#4b5563', bg: 'linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)' },
     ];
+
+    const inputSx = {
+        '& .MuiOutlinedInput-root': {
+            borderRadius: 2, bgcolor: 'action.hover',
+            '& fieldset': { borderColor: 'transparent' },
+            '&:hover fieldset': { borderColor: 'divider' },
+            '&.Mui-focused fieldset': { borderColor: 'primary.main' },
+        },
+    };
 
     return (
         <>
@@ -376,25 +395,26 @@ const SubscriptionList = () => {
                 }}>
                     {/* Header */}
                     <Box className="no-print" sx={{ px: { xs: 2, sm: 3 }, py: 2.5, borderBottom: '1px solid', borderColor: 'divider' }}>
-                        <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'center' }} spacing={2} mb={2.5}>
+                        <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between"
+                               alignItems={{ xs: 'stretch', sm: 'center' }} spacing={2} mb={2.5}>
                             <Box>
-                                <Typography variant="h5" fontWeight={800}>Subscriptions</Typography>
+                                <Typography variant="h5" fontWeight={800}>{t('sub.list.title')}</Typography>
                                 <Typography variant="body2" color="text.secondary" fontWeight={500}>
-                                    Manage and approve user subscriptions
+                                    {t('sub.list.subtitle')}
                                 </Typography>
                             </Box>
                             <Stack direction="row" spacing={1} flexWrap="wrap">
                                 <Button size="small" variant="outlined" startIcon={<CsvIcon />} onClick={exportCSV}
                                         sx={{ borderRadius: 2, fontWeight: 600, textTransform: 'none', borderColor: 'divider' }}>
-                                    CSV
+                                    {t('sub.list.export.csv')}
                                 </Button>
                                 <Button size="small" variant="outlined" startIcon={<PdfIcon />} onClick={exportPDF}
                                         sx={{ borderRadius: 2, fontWeight: 600, textTransform: 'none', borderColor: 'divider' }}>
-                                    PDF
+                                    {t('sub.list.export.pdf')}
                                 </Button>
                                 <Button size="small" variant="outlined" startIcon={<ExcelIcon />} onClick={exportExcel}
                                         sx={{ borderRadius: 2, fontWeight: 600, textTransform: 'none', borderColor: 'divider' }}>
-                                    Excel
+                                    {t('sub.list.export.excel')}
                                 </Button>
                                 <Button variant="contained" startIcon={<RefreshIcon />} onClick={refresh}
                                         sx={{
@@ -402,17 +422,16 @@ const SubscriptionList = () => {
                                             bgcolor: colors.sea || '#0f766e',
                                             '&:hover': { bgcolor: colors.dark || '#0d5c56', boxShadow: '0 4px 12px rgba(15,118,110,0.35)' },
                                         }}>
-                                    Refresh
+                                    {t('sub.common.refresh')}
                                 </Button>
                             </Stack>
                         </Stack>
 
                         {/* Filters */}
-                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', sm: 'center' }} flexWrap="wrap">
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}
+                               alignItems={{ xs: 'stretch', sm: 'center' }} flexWrap="wrap">
                             <TextField
-                                placeholder="Search…"
-                                size="small"
-                                value={search}
+                                placeholder={t('sub.list.searchPlaceholder')} size="small" value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 InputProps={{
                                     startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" color="action" /></InputAdornment>,
@@ -422,18 +441,10 @@ const SubscriptionList = () => {
                                         </InputAdornment>
                                     ) : null,
                                 }}
-                                sx={{
-                                    minWidth: { xs: '100%', sm: 220 },
-                                    '& .MuiOutlinedInput-root': {
-                                        borderRadius: 2, bgcolor: 'action.hover',
-                                        '& fieldset': { borderColor: 'transparent' },
-                                        '&:hover fieldset': { borderColor: 'divider' },
-                                        '&.Mui-focused fieldset': { borderColor: 'primary.main' },
-                                    },
-                                }}
+                                sx={{ ...inputSx, minWidth: { xs: '100%', sm: 220 } }}
                             />
                             <TextField
-                                select label="Status" size="small" value={statusFilter}
+                                select label={t('sub.common.status')} size="small" value={statusFilter}
                                 onChange={(e) => setStatusFilter(e.target.value)}
                                 sx={{
                                     minWidth: 140,
@@ -444,11 +455,11 @@ const SubscriptionList = () => {
                                     },
                                 }}
                             >
-                                <MenuItem value="">All</MenuItem>
-                                <MenuItem value="pending">Pending</MenuItem>
-                                <MenuItem value="active">Active</MenuItem>
-                                <MenuItem value="expired">Expired</MenuItem>
-                                <MenuItem value="cancelled">Cancelled</MenuItem>
+                                <MenuItem value="">{t('sub.common.all')}</MenuItem>
+                                <MenuItem value="pending">{t('sub.list.status.pending')}</MenuItem>
+                                <MenuItem value="active">{t('sub.list.status.active')}</MenuItem>
+                                <MenuItem value="expired">{t('sub.list.status.expired')}</MenuItem>
+                                <MenuItem value="cancelled">{t('sub.list.status.cancelled')}</MenuItem>
                             </TextField>
                             <Button
                                 size="small"
@@ -457,30 +468,31 @@ const SubscriptionList = () => {
                                 onClick={() => setShowFilters(!showFilters)}
                                 sx={{ borderRadius: 2, fontWeight: 600, textTransform: 'none' }}
                             >
-                                Filters
+                                {t('sub.list.filters')}
                             </Button>
                         </Stack>
 
                         {showFilters && (
-                            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mt: 2, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
-                                <TextField label="Date From" type="date" size="small" value={dateFrom}
+                            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}
+                                   sx={{ mt: 2, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+                                <TextField label={t('sub.list.dateFrom')} type="date" size="small" value={dateFrom}
                                            onChange={(e) => setDateFrom(e.target.value)} InputLabelProps={{ shrink: true }}
                                            sx={{ minWidth: 160, '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
-                                <TextField label="Date To" type="date" size="small" value={dateTo}
+                                <TextField label={t('sub.list.dateTo')} type="date" size="small" value={dateTo}
                                            onChange={(e) => setDateTo(e.target.value)} InputLabelProps={{ shrink: true }}
                                            sx={{ minWidth: 160, '& .MuiOutlinedInput-root': { borderRadius: 2 } }} />
-                                <Button size="small" variant="contained" onClick={refresh} sx={{ borderRadius: 2, fontWeight: 600, textTransform: 'none' }}>
-                                    Apply
+                                <Button size="small" variant="contained" onClick={refresh}
+                                        sx={{ borderRadius: 2, fontWeight: 600, textTransform: 'none' }}>
+                                    {t('sub.list.apply')}
                                 </Button>
                                 <Button size="small" onClick={() => { setDateFrom(''); setDateTo(''); refresh(); }}
                                         sx={{ fontWeight: 600, textTransform: 'none' }}>
-                                    Clear
+                                    {t('sub.list.clear')}
                                 </Button>
                             </Stack>
                         )}
                     </Box>
 
-                    {/* Table / Cards – same structure as before but with updated styling */}
                     {loading ? (
                         <Box sx={{ py: 8, textAlign: 'center' }}><CircularProgress size={36} thickness={4} /></Box>
                     ) : error ? (
@@ -513,7 +525,9 @@ const SubscriptionList = () => {
                                     {subscriptions.length === 0 ? (
                                         <TableRow>
                                             <TableCell colSpan={headCells.length} align="center" sx={{ py: 8 }}>
-                                                <Typography color="text.secondary" fontWeight={500}>No subscriptions found</Typography>
+                                                <Typography color="text.secondary" fontWeight={500}>
+                                                    {t('sub.list.noFound')}
+                                                </Typography>
                                             </TableCell>
                                         </TableRow>
                                     ) : (
@@ -555,7 +569,8 @@ const SubscriptionList = () => {
                                                             <CalendarIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
                                                             <Typography variant="caption" fontWeight={500}>{formatDate(sub.expiry_date)}</Typography>
                                                             {sub.expiry_date && (
-                                                                <Badge color={new Date(sub.expiry_date) < new Date() ? 'error' : 'success'} variant="dot" sx={{ ml: 0.5 }} />
+                                                                <Badge color={new Date(sub.expiry_date) < new Date() ? 'error' : 'success'}
+                                                                       variant="dot" sx={{ ml: 0.5 }} />
                                                             )}
                                                         </Stack>
                                                     </TableCell>
@@ -577,11 +592,10 @@ const SubscriptionList = () => {
                             </Table>
                         </TableContainer>
                     ) : (
-                        /* Mobile cards – same data, updated styling */
                         <Box sx={{ p: { xs: 2, sm: 2.5 } }}>
                             {subscriptions.length === 0 ? (
                                 <Paper variant="outlined" sx={{ p: 5, textAlign: 'center', borderRadius: 3, borderStyle: 'dashed' }}>
-                                    <Typography color="text.secondary" fontWeight={500}>No subscriptions found</Typography>
+                                    <Typography color="text.secondary" fontWeight={500}>{t('sub.list.noFound')}</Typography>
                                 </Paper>
                             ) : (
                                 <Stack spacing={2}>
@@ -606,19 +620,19 @@ const SubscriptionList = () => {
                                                     <Divider sx={{ my: 1.5 }} />
                                                     <Grid container spacing={1.5}>
                                                         <Grid item xs={6}>
-                                                            <Typography variant="caption" color="text.secondary">Plan</Typography>
+                                                            <Typography variant="caption" color="text.secondary">{t('sub.list.col.plan')}</Typography>
                                                             <Typography variant="body2" fontWeight={600}>{sub.rate_card?.name || '—'}</Typography>
                                                         </Grid>
                                                         <Grid item xs={6}>
-                                                            <Typography variant="caption" color="text.secondary">Amount</Typography>
+                                                            <Typography variant="caption" color="text.secondary">{t('sub.list.col.amount')}</Typography>
                                                             <Typography variant="body2" fontWeight={700} color={colors.sea || '#0f766e'}>{sub.amount || '—'}</Typography>
                                                         </Grid>
                                                         <Grid item xs={6}>
-                                                            <Typography variant="caption" color="text.secondary">Payment</Typography>
+                                                            <Typography variant="caption" color="text.secondary">{t('sub.list.col.paymentMethod')}</Typography>
                                                             <Typography variant="body2">{sub.payment_method || '—'}</Typography>
                                                         </Grid>
                                                         <Grid item xs={6}>
-                                                            <Typography variant="caption" color="text.secondary">Expiry</Typography>
+                                                            <Typography variant="caption" color="text.secondary">{t('sub.list.col.expiry')}</Typography>
                                                             <Typography variant="body2">{formatDate(sub.expiry_date)}</Typography>
                                                         </Grid>
                                                     </Grid>
@@ -627,12 +641,12 @@ const SubscriptionList = () => {
                                                             <>
                                                                 <Button size="small" variant="contained" color="success" onClick={() => openApproveDialog(sub)}
                                                                         sx={{ borderRadius: 2, fontWeight: 600, textTransform: 'none' }}>
-                                                                    Approve
+                                                                    {t('sub.list.action.approve')}
                                                                 </Button>
                                                                 <Button size="small" variant="contained" color="error"
                                                                         onClick={() => setRejectDialog({ open: true, reason: '', subscriptionId: sub.id })}
                                                                         sx={{ borderRadius: 2, fontWeight: 600, textTransform: 'none' }}>
-                                                                    Reject
+                                                                    {t('sub.list.action.reject')}
                                                                 </Button>
                                                             </>
                                                         )}
@@ -640,12 +654,12 @@ const SubscriptionList = () => {
                                                             <Button size="small" startIcon={downloadingInvoice === sub.id ? <CircularProgress size={14} /> : <DownloadIcon />}
                                                                     onClick={() => handleViewInvoice(sub)} disabled={downloadingInvoice === sub.id}
                                                                     sx={{ fontWeight: 600, textTransform: 'none' }}>
-                                                                Invoice
+                                                                {t('sub.list.action.invoice')}
                                                             </Button>
                                                         )}
                                                         <Button size="small" variant="outlined" onClick={() => handleViewDetails(sub)}
                                                                 sx={{ borderRadius: 2, fontWeight: 600, textTransform: 'none' }}>
-                                                            Details
+                                                            {t('sub.list.action.details')}
                                                         </Button>
                                                     </Stack>
                                                 </CardContent>
@@ -671,7 +685,7 @@ const SubscriptionList = () => {
                     </Box>
                 </Paper>
 
-                {/* Action Menu, Reject Dialog, Approve Dialog, View Dialog – keep original logic, only visual polish */}
+                {/* Action Menu */}
                 <Menu
                     anchorEl={actionMenu}
                     open={Boolean(actionMenu)}
@@ -683,57 +697,60 @@ const SubscriptionList = () => {
                     {selectedSub?.status === 'pending' && canApprove && (
                         <>
                             <MenuItem onClick={() => openApproveDialog(selectedSub)} sx={{ fontWeight: 500 }}>
-                                <ApproveIcon sx={{ mr: 1.5, color: 'success.main', fontSize: 20 }} /> Approve
+                                <ApproveIcon sx={{ mr: 1.5, color: 'success.main', fontSize: 20 }} /> {t('sub.list.action.approve')}
                             </MenuItem>
                             <MenuItem onClick={() => {
                                 setRejectDialog({ open: true, reason: '', subscriptionId: selectedSub.id });
                                 handleMenuClose();
                             }} sx={{ fontWeight: 500 }}>
-                                <RejectIcon sx={{ mr: 1.5, color: 'error.main', fontSize: 20 }} /> Reject
+                                <RejectIcon sx={{ mr: 1.5, color: 'error.main', fontSize: 20 }} /> {t('sub.list.action.reject')}
                             </MenuItem>
                             <Divider />
                         </>
                     )}
                     <MenuItem onClick={() => handleViewDetails(selectedSub)} sx={{ fontWeight: 500 }}>
-                        <InfoIcon sx={{ mr: 1.5, fontSize: 20 }} /> View Details
+                        <InfoIcon sx={{ mr: 1.5, fontSize: 20 }} /> {t('sub.list.action.viewDetails')}
                     </MenuItem>
                     {selectedSub?.invoice && (
                         <MenuItem onClick={() => handleViewInvoice(selectedSub)} sx={{ fontWeight: 500 }}>
-                            <DownloadIcon sx={{ mr: 1.5, fontSize: 20 }} /> Download Invoice
+                            <DownloadIcon sx={{ mr: 1.5, fontSize: 20 }} /> {t('sub.list.action.downloadInvoice')}
                         </MenuItem>
                     )}
                 </Menu>
 
                 {/* Reject Dialog */}
-                <Dialog open={rejectDialog.open} onClose={() => setRejectDialog({ open: false, reason: '', subscriptionId: null })}
+                <Dialog open={rejectDialog.open}
+                        onClose={() => setRejectDialog({ open: false, reason: '', subscriptionId: null })}
                         PaperProps={{ sx: { borderRadius: 3 } }}>
                     <DialogTitle sx={{ fontWeight: 700, pb: 1 }}>
                         <Stack direction="row" spacing={1} alignItems="center">
-                            <RejectIcon color="error" /> Reject Subscription
+                            <RejectIcon color="error" /> {t('sub.list.reject.title')}
                         </Stack>
                     </DialogTitle>
                     <DialogContent>
                         <TextField
-                            autoFocus margin="dense" label="Reason (optional)" fullWidth multiline rows={3}
+                            autoFocus margin="dense" label={t('sub.list.reject.reason')} fullWidth multiline rows={3}
                             value={rejectDialog.reason || ''}
                             onChange={(e) => setRejectDialog(prev => ({ ...prev, reason: e.target.value }))}
-                            placeholder="Enter reason for rejection…"
+                            placeholder={t('sub.list.reject.placeholder')}
                             sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
                         />
                     </DialogContent>
                     <DialogActions sx={{ px: 3, pb: 2.5 }}>
                         <Button onClick={() => setRejectDialog({ open: false, reason: '', subscriptionId: null })}
-                                sx={{ fontWeight: 600, textTransform: 'none' }}>Cancel</Button>
+                                sx={{ fontWeight: 600, textTransform: 'none' }}>
+                            {t('sub.common.cancel')}
+                        </Button>
                         <Button
                             onClick={() => rejectDialog.subscriptionId && handleReject(rejectDialog.subscriptionId, rejectDialog.reason)}
                             color="error" variant="contained"
                             sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 2 }}>
-                            Reject
+                            {t('sub.list.action.reject')}
                         </Button>
                     </DialogActions>
                 </Dialog>
 
-                {/* Approve Dialog – keep all progress logic, only polish visuals */}
+                {/* Approve Dialog */}
                 <Dialog
                     open={approveDialog.open}
                     onClose={approveDialog.loading ? null : closeApproveDialog}
@@ -758,56 +775,59 @@ const SubscriptionList = () => {
                             </Avatar>
                             <Box>
                                 <Typography variant="h6" fontWeight={800}>
-                                    {approveDialog.status === 'done' ? 'Approved Successfully!' :
-                                        approveDialog.status === 'error' ? 'Approval Failed' : 'Confirm Approval'}
+                                    {approveDialog.status === 'done' ? t('sub.list.approve.successTitle') :
+                                        approveDialog.status === 'error' ? t('sub.list.approve.errorTitle') :
+                                            t('sub.list.approve.confirmTitle')}
                                 </Typography>
                                 {approveDialog.subscription && (
                                     <Typography variant="body2" color="text.secondary">
-                                        Subscription #{approveDialog.subscription.id}
+                                        {t('sub.list.approve.subscriptionNo', { id: approveDialog.subscription.id })}
                                     </Typography>
                                 )}
                             </Box>
                         </Stack>
                     </DialogTitle>
                     <DialogContent>
-                        {/* Keep all original content blocks for idle / confirming / done / error */}
                         {approveDialog.status === 'idle' && (
                             <Box sx={{ py: 1 }}>
                                 <Alert severity="info" sx={{ mb: 2, borderRadius: 2 }}>
-                                    You are about to approve this subscription. The user will gain access immediately.
+                                    {t('sub.list.approve.infoAlert')}
                                 </Alert>
-                                <Paper elevation={0} sx={{ p: 2, mb: 2, borderRadius: 2, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
+                                <Paper elevation={0} sx={{
+                                    p: 2, mb: 2, borderRadius: 2, bgcolor: 'action.hover',
+                                    border: '1px solid', borderColor: 'divider',
+                                }}>
                                     <Stack direction="row" spacing={2} alignItems="center">
                                         <Avatar sx={{ width: 48, height: 48, bgcolor: colors.sea || '#0f766e', fontWeight: 700 }}>
                                             {approveDialog.subscription?.user?.name?.[0]?.toUpperCase() || 'U'}
                                         </Avatar>
                                         <Box>
                                             <Typography variant="subtitle1" fontWeight={700}>
-                                                {approveDialog.subscription?.user?.name || 'Unknown User'}
+                                                {approveDialog.subscription?.user?.name || t('sub.list.approve.unknownUser')}
                                             </Typography>
                                             <Typography variant="body2" color="text.secondary">
-                                                {approveDialog.subscription?.user?.email || 'No email'}
+                                                {approveDialog.subscription?.user?.email || t('sub.list.approve.noEmail')}
                                             </Typography>
                                         </Box>
                                     </Stack>
                                 </Paper>
                                 <Grid container spacing={2}>
                                     <Grid item xs={6}>
-                                        <Typography variant="caption" color="text.secondary">Plan</Typography>
+                                        <Typography variant="caption" color="text.secondary">{t('sub.list.approve.plan')}</Typography>
                                         <Typography variant="body2" fontWeight={600}>{approveDialog.subscription?.rate_card?.name || '—'}</Typography>
                                     </Grid>
                                     <Grid item xs={6}>
-                                        <Typography variant="caption" color="text.secondary">Amount</Typography>
+                                        <Typography variant="caption" color="text.secondary">{t('sub.list.approve.amount')}</Typography>
                                         <Typography variant="body2" fontWeight={700} color={colors.sea || '#0f766e'}>
                                             {approveDialog.subscription?.amount || '—'}
                                         </Typography>
                                     </Grid>
                                     <Grid item xs={6}>
-                                        <Typography variant="caption" color="text.secondary">Payment Method</Typography>
+                                        <Typography variant="caption" color="text.secondary">{t('sub.list.approve.paymentMethod')}</Typography>
                                         <Typography variant="body2">{approveDialog.subscription?.payment_method || '—'}</Typography>
                                     </Grid>
                                     <Grid item xs={6}>
-                                        <Typography variant="caption" color="text.secondary">Reference</Typography>
+                                        <Typography variant="caption" color="text.secondary">{t('sub.list.approve.reference')}</Typography>
                                         <Typography variant="body2" fontFamily="monospace">{approveDialog.subscription?.payment_reference || '—'}</Typography>
                                     </Grid>
                                 </Grid>
@@ -815,13 +835,16 @@ const SubscriptionList = () => {
                         )}
                         {(approveDialog.status === 'confirming' || approveDialog.status === 'approving') && (
                             <Box sx={{ py: 3, textAlign: 'center' }}>
-                                <CircularProgress size={60} thickness={4} value={approveDialog.progress} variant="determinate" sx={{ color: '#10b981', mb: 2 }} />
+                                <CircularProgress size={60} thickness={4} value={approveDialog.progress}
+                                                  variant="determinate" sx={{ color: '#10b981', mb: 2 }} />
                                 <Typography variant="h5" fontWeight={800} color="#10b981">{approveDialog.progress}%</Typography>
                                 <LinearProgress variant="determinate" value={approveDialog.progress} sx={{
                                     height: 8, borderRadius: 4, my: 2, bgcolor: '#e5e7eb',
                                     '& .MuiLinearProgress-bar': { bgcolor: '#10b981', borderRadius: 4 },
                                 }} />
-                                <Typography variant="body2" color="text.secondary">{approveDialog.status || 'Processing…'}</Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    {approveDialog.status || t('sub.list.approve.processing')}
+                                </Typography>
                             </Box>
                         )}
                         {approveDialog.status === 'done' && (
@@ -832,48 +855,64 @@ const SubscriptionList = () => {
                                 }}>
                                     <VerifiedIcon sx={{ fontSize: 48, color: '#10b981' }} />
                                 </Box>
-                                <Typography variant="h6" fontWeight={800} color="#10b981">Subscription Approved!</Typography>
+                                <Typography variant="h6" fontWeight={800} color="#10b981">
+                                    {t('sub.list.approve.successTitle')}
+                                </Typography>
                                 <Typography variant="body2" color="text.secondary">
-                                    {approveDialog.subscription?.user?.name || 'User'} can now access all features.
+                                    {t('sub.list.approve.successMsg', {
+                                        name: approveDialog.subscription?.user?.name || 'User',
+                                    })}
                                 </Typography>
                             </Box>
                         )}
                         {approveDialog.status === 'error' && (
                             <Alert severity="error" sx={{ borderRadius: 2 }}>
-                                {approveDialog.error || 'An error occurred while approving the subscription.'}
+                                {approveDialog.error || t('sub.list.approve.errorDefault')}
                             </Alert>
                         )}
                     </DialogContent>
                     <DialogActions sx={{ px: 3, pb: 2.5 }}>
                         {approveDialog.status === 'idle' && (
                             <>
-                                <Button onClick={closeApproveDialog} disabled={approveDialog.loading} sx={{ fontWeight: 600, textTransform: 'none' }}>Cancel</Button>
-                                <Button onClick={handleApproveConfirm} variant="contained" color="success" disabled={approveDialog.loading}
-                                        startIcon={<ApproveIcon />} sx={{ borderRadius: 2, fontWeight: 700, textTransform: 'none', px: 3 }}>
-                                    Confirm Approve
+                                <Button onClick={closeApproveDialog} disabled={approveDialog.loading}
+                                        sx={{ fontWeight: 600, textTransform: 'none' }}>
+                                    {t('sub.common.cancel')}
+                                </Button>
+                                <Button onClick={handleApproveConfirm} variant="contained" color="success"
+                                        disabled={approveDialog.loading} startIcon={<ApproveIcon />}
+                                        sx={{ borderRadius: 2, fontWeight: 700, textTransform: 'none', px: 3 }}>
+                                    {t('sub.list.approve.confirmBtn')}
                                 </Button>
                             </>
                         )}
                         {approveDialog.status === 'done' && (
                             <Button onClick={closeApproveDialog} variant="contained" color="success"
-                                    sx={{ borderRadius: 2, fontWeight: 700, textTransform: 'none', px: 4 }}>Done</Button>
+                                    sx={{ borderRadius: 2, fontWeight: 700, textTransform: 'none', px: 4 }}>
+                                {t('sub.list.approve.doneBtn')}
+                            </Button>
                         )}
                         {approveDialog.status === 'error' && (
                             <>
-                                <Button onClick={closeApproveDialog} sx={{ fontWeight: 600, textTransform: 'none' }}>Cancel</Button>
-                                <Button onClick={handleApproveConfirm} variant="contained" color="success" startIcon={<RefreshIcon />}
-                                        sx={{ borderRadius: 2, fontWeight: 700, textTransform: 'none' }}>Retry</Button>
+                                <Button onClick={closeApproveDialog} sx={{ fontWeight: 600, textTransform: 'none' }}>
+                                    {t('sub.common.cancel')}
+                                </Button>
+                                <Button onClick={handleApproveConfirm} variant="contained" color="success"
+                                        startIcon={<RefreshIcon />}
+                                        sx={{ borderRadius: 2, fontWeight: 700, textTransform: 'none' }}>
+                                    {t('sub.list.approve.retryBtn')}
+                                </Button>
                             </>
                         )}
                     </DialogActions>
                 </Dialog>
 
                 {/* View Details Dialog */}
-                <Dialog open={viewDialog.open} onClose={() => setViewDialog({ open: false, subscription: null })}
+                <Dialog open={viewDialog.open}
+                        onClose={() => setViewDialog({ open: false, subscription: null })}
                         maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
                     <DialogTitle sx={{ fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Stack direction="row" spacing={1} alignItems="center">
-                            <InfoIcon color="primary" /> Subscription Details
+                            <InfoIcon color="primary" /> {t('sub.list.view.title')}
                         </Stack>
                         <IconButton size="small" onClick={() => setViewDialog({ open: false, subscription: null })}>
                             <CloseIcon />
@@ -883,64 +922,72 @@ const SubscriptionList = () => {
                         {viewDialog.subscription && (
                             <Grid container spacing={2} sx={{ mt: 0.5 }}>
                                 <Grid item xs={12}>
-                                    <Typography variant="caption" color="text.secondary">User</Typography>
+                                    <Typography variant="caption" color="text.secondary">{t('sub.list.view.user')}</Typography>
                                     <Typography variant="body1" fontWeight={600}>{viewDialog.subscription.user?.name || '—'}</Typography>
                                     <Typography variant="body2" color="text.secondary">{viewDialog.subscription.user?.email || ''}</Typography>
                                 </Grid>
                                 <Grid item xs={6}>
-                                    <Typography variant="caption" color="text.secondary">Plan</Typography>
+                                    <Typography variant="caption" color="text.secondary">{t('sub.list.view.plan')}</Typography>
                                     <Typography variant="body1" fontWeight={500}>{viewDialog.subscription.rate_card?.name || '—'}</Typography>
                                 </Grid>
                                 <Grid item xs={6}>
-                                    <Typography variant="caption" color="text.secondary">Amount</Typography>
+                                    <Typography variant="caption" color="text.secondary">{t('sub.list.view.amount')}</Typography>
                                     <Typography variant="body1" fontWeight={700} color={colors.sea || '#0f766e'}>
                                         {viewDialog.subscription.amount || '—'}
                                     </Typography>
                                 </Grid>
                                 <Grid item xs={6}>
-                                    <Typography variant="caption" color="text.secondary">Status</Typography>
+                                    <Typography variant="caption" color="text.secondary">{t('sub.list.view.status')}</Typography>
                                     <Box mt={0.5}>{getStatusChip(viewDialog.subscription.status, viewDialog.subscription.expiry_date)}</Box>
                                 </Grid>
                                 <Grid item xs={6}>
-                                    <Typography variant="caption" color="text.secondary">Payment Method</Typography>
+                                    <Typography variant="caption" color="text.secondary">{t('sub.list.view.paymentMethod')}</Typography>
                                     <Typography variant="body1">{viewDialog.subscription.payment_method || '—'}</Typography>
                                 </Grid>
                                 <Grid item xs={6}>
-                                    <Typography variant="caption" color="text.secondary">Reference</Typography>
+                                    <Typography variant="caption" color="text.secondary">{t('sub.list.view.reference')}</Typography>
                                     <Typography variant="body1" fontFamily="monospace">{viewDialog.subscription.payment_reference || '—'}</Typography>
                                 </Grid>
                                 <Grid item xs={6}>
-                                    <Typography variant="caption" color="text.secondary">Created</Typography>
+                                    <Typography variant="caption" color="text.secondary">{t('sub.list.view.created')}</Typography>
                                     <Typography variant="body1">{formatDate(viewDialog.subscription.created_at)}</Typography>
                                 </Grid>
                                 <Grid item xs={6}>
-                                    <Typography variant="caption" color="text.secondary">Start Date</Typography>
+                                    <Typography variant="caption" color="text.secondary">{t('sub.list.view.startDate')}</Typography>
                                     <Typography variant="body1">{formatDate(viewDialog.subscription.start_date)}</Typography>
                                 </Grid>
                                 <Grid item xs={6}>
-                                    <Typography variant="caption" color="text.secondary">Expiry Date</Typography>
+                                    <Typography variant="caption" color="text.secondary">{t('sub.list.view.expiryDate')}</Typography>
                                     <Typography variant="body1">{formatDate(viewDialog.subscription.expiry_date)}</Typography>
                                 </Grid>
                                 {viewDialog.subscription.admin_notes && (
                                     <Grid item xs={12}>
-                                        <Typography variant="caption" color="text.secondary">Admin Notes</Typography>
+                                        <Typography variant="caption" color="text.secondary">{t('sub.list.view.adminNotes')}</Typography>
                                         <Typography variant="body2" fontStyle="italic">{viewDialog.subscription.admin_notes}</Typography>
                                     </Grid>
                                 )}
                                 {viewDialog.subscription.invoice && (
                                     <Grid item xs={12}>
                                         <Divider sx={{ my: 1 }} />
-                                        <Typography variant="subtitle2" fontWeight={700} mb={1}>Invoice</Typography>
+                                        <Typography variant="subtitle2" fontWeight={700} mb={1}>
+                                            {t('sub.list.view.invoice')}
+                                        </Typography>
                                         <Stack direction="row" spacing={2} flexWrap="wrap">
-                                            <Typography variant="body2"><strong>Number:</strong> {viewDialog.subscription.invoice.number}</Typography>
-                                            <Typography variant="body2"><strong>Status:</strong> {viewDialog.subscription.invoice.status_label}</Typography>
-                                            <Typography variant="body2"><strong>Amount:</strong> {viewDialog.subscription.invoice.amount}</Typography>
+                                            <Typography variant="body2">
+                                                <strong>{t('sub.list.view.invoiceNumber')}:</strong> {viewDialog.subscription.invoice.number}
+                                            </Typography>
+                                            <Typography variant="body2">
+                                                <strong>{t('sub.list.view.invoiceStatus')}:</strong> {viewDialog.subscription.invoice.status_label}
+                                            </Typography>
+                                            <Typography variant="body2">
+                                                <strong>{t('sub.list.view.invoiceAmount')}:</strong> {viewDialog.subscription.invoice.amount}
+                                            </Typography>
                                         </Stack>
                                         {viewDialog.subscription.invoice.pdf_url && (
                                             <Button size="small" variant="outlined" startIcon={<DownloadIcon />}
                                                     onClick={() => handleViewInvoice(viewDialog.subscription)}
                                                     sx={{ mt: 1.5, borderRadius: 2, fontWeight: 600, textTransform: 'none' }}>
-                                                Download Invoice
+                                                {t('sub.list.action.downloadInvoice')}
                                             </Button>
                                         )}
                                     </Grid>
@@ -955,7 +1002,7 @@ const SubscriptionList = () => {
                             bgcolor: colors.sea || '#0f766e',
                             '&:hover': { bgcolor: colors.dark || '#0d5c56' },
                         }}>
-                            Close
+                            {t('sub.common.close')}
                         </Button>
                     </DialogActions>
                 </Dialog>

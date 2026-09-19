@@ -1,22 +1,13 @@
-// src/pages/privacy/PrivacyPolicyFormModal.js
+// src/pages/privacy-policy/components/PrivacyPolicyFormModal.js
 import React, { useState, useEffect } from 'react';
 import {
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    TextField,
-    Button,
-    Box,
-    CircularProgress,
-    IconButton,
-    useMediaQuery,
-    useTheme,
-    Typography,
-    Stack,
+    Dialog, DialogTitle, DialogContent, DialogActions, TextField, Button,
+    CircularProgress, IconButton, useMediaQuery, useTheme, Typography, Stack,
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
+import { useLanguage } from 'context/LanguageContext';
 import { showSnackbar } from 'utils/snackbar';
+import { tPrivacy } from '../privacylang';
 import appConfig from '../../../config';
 
 const colors = appConfig.app.colors;
@@ -30,6 +21,8 @@ export default function PrivacyPolicyFormModal({
                                                }) {
     const theme = useTheme();
     const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
+    const { language } = useLanguage();
+    const t = (key) => tPrivacy(language, key);
 
     const [loading, setLoading] = useState(false);
     const [form, setForm] = useState({ content: '' });
@@ -47,7 +40,7 @@ export default function PrivacyPolicyFormModal({
 
     const validate = () => {
         const newErrors = {};
-        if (!form.content.trim()) newErrors.content = 'Content is required';
+        if (!form.content.trim()) newErrors.content = t('privacy.modal.required');
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
@@ -60,14 +53,17 @@ export default function PrivacyPolicyFormModal({
         try {
             if (policyData) {
                 await updatePrivacyPolicy(policyData.id, { content: form.content });
-                showSnackbar({ type: 'success', message: 'Privacy policy updated successfully' });
+                showSnackbar({ type: 'success', message: t('privacy.modal.updated') });
             } else {
                 await createPrivacyPolicy({ content: form.content });
-                showSnackbar({ type: 'success', message: 'Privacy policy created successfully' });
+                showSnackbar({ type: 'success', message: t('privacy.modal.created') });
             }
             onClose(true);
         } catch (err) {
-            showSnackbar({ type: 'error', message: err.response?.data?.message || 'Operation failed' });
+            showSnackbar({
+                type: 'error',
+                message: err.response?.data?.message || t('privacy.modal.failed'),
+            });
         } finally {
             setLoading(false);
         }
@@ -103,14 +99,11 @@ export default function PrivacyPolicyFormModal({
                         color: 'text.primary',
                     }}
                 >
-                    {policyData ? 'Edit Privacy Policy' : 'Create Privacy Policy'}
+                    {policyData ? t('privacy.modal.editTitle') : t('privacy.modal.createTitle')}
                     <IconButton
                         onClick={() => onClose(false)}
                         size="small"
-                        sx={{
-                            color: 'text.secondary',
-                            '&:hover': { bgcolor: 'action.hover' },
-                        }}
+                        sx={{ color: 'text.secondary', '&:hover': { bgcolor: 'action.hover' } }}
                     >
                         <CloseIcon />
                     </IconButton>
@@ -119,13 +112,11 @@ export default function PrivacyPolicyFormModal({
                 <DialogContent sx={{ pt: 3, pb: 1 }}>
                     <Stack spacing={2.5}>
                         <Typography variant="body2" color="text.secondary">
-                            {policyData
-                                ? 'Update the privacy policy content below.'
-                                : 'Create new privacy policy content.'}
+                            {policyData ? t('privacy.modal.editDesc') : t('privacy.modal.createDesc')}
                         </Typography>
 
                         <TextField
-                            label="Content"
+                            label={t('privacy.modal.content')}
                             name="content"
                             value={form.content}
                             onChange={handleChange}
@@ -135,7 +126,7 @@ export default function PrivacyPolicyFormModal({
                             rows={14}
                             error={!!errors.content}
                             helperText={errors.content}
-                            placeholder="Enter privacy policy content..."
+                            placeholder={t('privacy.modal.placeholder')}
                             disabled={loading}
                             sx={{
                                 '& .MuiOutlinedInput-root': {
@@ -144,9 +135,7 @@ export default function PrivacyPolicyFormModal({
                                     fontSize: '1rem',
                                     lineHeight: 1.8,
                                     bgcolor: 'action.hover',
-                                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                                        borderColor: colors.sea,
-                                    },
+                                    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: colors.sea },
                                     '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
                                         borderColor: colors.sea,
                                         borderWidth: 2,
@@ -154,9 +143,7 @@ export default function PrivacyPolicyFormModal({
                                 },
                                 '& .MuiInputLabel-root': {
                                     color: 'text.secondary',
-                                    '&.Mui-focused': {
-                                        color: colors.sea,
-                                    },
+                                    '&.Mui-focused': { color: colors.sea },
                                 },
                             }}
                         />
@@ -174,7 +161,7 @@ export default function PrivacyPolicyFormModal({
                             '&:hover': { bgcolor: 'action.hover' },
                         }}
                     >
-                        Cancel
+                        {t('privacy.modal.cancel')}
                     </Button>
                     <Button
                         type="submit"
@@ -193,9 +180,9 @@ export default function PrivacyPolicyFormModal({
                         {loading ? (
                             <CircularProgress size={24} color="inherit" />
                         ) : policyData ? (
-                            'Update'
+                            t('privacy.modal.update')
                         ) : (
-                            'Create'
+                            t('privacy.modal.create')
                         )}
                     </Button>
                 </DialogActions>

@@ -1,23 +1,9 @@
 // src/components/monitoring/NotificationBell.jsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-    Badge,
-    IconButton,
-    Menu,
-    Typography,
-    Box,
-    Chip,
-    List,
-    ListItem,
-    ListItemAvatar,
-    Avatar,
-    CircularProgress,
-    Alert,
-    Button,
-    useTheme,
-    useMediaQuery,
-    Paper,
-    Divider,
+    Badge, IconButton, Menu, Typography, Box, Chip, List, ListItem,
+    ListItemAvatar, Avatar, CircularProgress, Alert, Button,
+    useTheme, useMediaQuery,
 } from '@mui/material';
 import {
     Notifications as NotificationsIcon,
@@ -25,13 +11,14 @@ import {
     Warning as WarningIcon,
     CheckCircle as CheckCircleIcon,
     Refresh as RefreshIcon,
-    Person as PersonIcon,
     Build as BuildIcon,
     Timer as TimerIcon,
     LocationOn as LocationOnIcon,
     Engineering as EngineeringIcon,
 } from '@mui/icons-material';
 import { monitoringService } from 'services/monitoring.service';
+import { useLanguage } from 'context/LanguageContext';
+import { tMon } from 'pages/monitoring/monitoringlang';
 import { formatDistanceToNow } from 'date-fns';
 
 const POLL_INTERVAL = 15000;
@@ -39,6 +26,10 @@ const POLL_INTERVAL = 15000;
 export const NotificationBell = ({ onNotificationClick }) => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
+    const { language } = useLanguage();
+    const t = (key, replacements) => tMon(language, key, replacements);
+
     const [anchorEl, setAnchorEl] = useState(null);
     const [notifications, setNotifications] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -55,91 +46,52 @@ export const NotificationBell = ({ onNotificationClick }) => {
             const response = await monitoringService.getNotifications();
             const data = response.data?.data || response.data || {};
             const notes = data.notifications || [];
-
-            const sorted = [...notes].sort((a, b) =>
-                new Date(b.created_at) - new Date(a.created_at)
-            );
-
+            const sorted = [...notes].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
             setNotifications(sorted);
-
-            // Count urgent (timeout) notifications
             const urgent = sorted.filter(n => n.is_timeout).length;
             setUnreadCount(urgent > 0 ? urgent : sorted.length);
-
             return sorted;
         } catch (err) {
             console.error('Error loading notifications:', err);
-            setError(err.response?.data?.message || 'Failed to load notifications');
+            setError(err.response?.data?.message || t('mon.bell.loadFailed'));
             return [];
         }
-    }, []);
+    }, [language]);
 
     useEffect(() => {
         loadNotifications();
-
         if (autoRefresh) {
             intervalRef.current = setInterval(loadNotifications, POLL_INTERVAL);
         }
-
         return () => {
-            if (intervalRef.current) {
-                clearInterval(intervalRef.current);
-            }
+            if (intervalRef.current) clearInterval(intervalRef.current);
         };
     }, [autoRefresh, loadNotifications]);
 
     const toggleAutoRefresh = () => {
         setAutoRefresh(prev => !prev);
-        if (!autoRefresh) {
-            loadNotifications();
-        }
+        if (!autoRefresh) loadNotifications();
     };
 
-    const handleClick = (event) => {
-        setAnchorEl(event.currentTarget);
-        setUnreadCount(0);
-    };
-
-    const handleClose = () => {
-        setAnchorEl(null);
-    };
+    const handleClick = (event) => { setAnchorEl(event.currentTarget); setUnreadCount(0); };
+    const handleClose = () => setAnchorEl(null);
 
     const handleNotificationClick = (notification) => {
         handleClose();
-        if (onNotificationClick) {
-            onNotificationClick(notification);
-        }
+        if (onNotificationClick) onNotificationClick(notification);
     };
 
-    const handleRefresh = () => {
-        loadNotifications();
-    };
+    const handleRefresh = () => loadNotifications();
 
     const formatTime = (dateStr) => {
-        try {
-            return formatDistanceToNow(new Date(dateStr), { addSuffix: true });
-        } catch {
-            return '';
-        }
-    };
-
-    const getNotificationIcon = (notification) => {
-        if (notification.is_timeout) {
-            return <WarningIcon sx={{ color: '#ef4444' }} />;
-        }
-        return <CheckCircleIcon sx={{ color: '#10b981' }} />;
-    };
-
-    const getNotificationColor = (notification) => {
-        if (notification.is_timeout) return '#fef2f2';
-        return '#f0fdf4';
+        try { return formatDistanceToNow(new Date(dateStr), { addSuffix: true }); } catch { return ''; }
     };
 
     const getStatusLabel = (notification) => {
         if (notification.is_timeout) {
-            return `⚠️ Waiting ${notification.minutes_elapsed} min`;
+            return t('mon.bell.waitingMin', { m: notification.minutes_elapsed });
         }
-        return `⏳ ${notification.minutes_elapsed} min ago`;
+        return t('mon.bell.minAgo', { m: notification.minutes_elapsed });
     };
 
     return (
@@ -147,22 +99,16 @@ export const NotificationBell = ({ onNotificationClick }) => {
             <IconButton
                 onClick={handleClick}
                 color="inherit"
-                aria-label="notifications"
+                aria-label={t('mon.bell.ariaLabel')}
                 sx={{
                     position: 'relative',
-                    '&:hover': {
-                        backgroundColor: 'rgba(255,255,255,0.15)',
-                    },
+                    '&:hover': { backgroundColor: 'rgba(255,255,255,0.15)' },
                 }}
             >
                 <Badge
                     badgeContent={unreadCount > 0 ? unreadCount : null}
-                    color="error"
-                    max={99}
-                    anchorOrigin={{
-                        vertical: 'top',
-                        horizontal: 'right',
-                    }}
+                    color="error" max={99}
+                    anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
                     sx={{
                         '& .MuiBadge-badge': {
                             animation: unreadCount > 0 ? 'pulse 2s infinite' : 'none',
@@ -170,26 +116,14 @@ export const NotificationBell = ({ onNotificationClick }) => {
                         },
                     }}
                 >
-                    {unreadCount > 0 ? (
-                        <NotificationsActiveIcon sx={{ color: '#fff' }} />
-                    ) : (
-                        <NotificationsIcon sx={{ color: '#fff' }} />
-                    )}
+                    {unreadCount > 0 ? <NotificationsActiveIcon sx={{ color: '#fff' }} /> : <NotificationsIcon sx={{ color: '#fff' }} />}
                 </Badge>
             </IconButton>
 
             <Menu
-                anchorEl={anchorEl}
-                open={open}
-                onClose={handleClose}
-                anchorOrigin={{
-                    vertical: 'bottom',
-                    horizontal: 'right',
-                }}
-                transformOrigin={{
-                    vertical: 'top',
-                    horizontal: 'right',
-                }}
+                anchorEl={anchorEl} open={open} onClose={handleClose}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
                 PaperProps={{
                     sx: {
                         width: { xs: '100vw', sm: 420 },
@@ -202,121 +136,76 @@ export const NotificationBell = ({ onNotificationClick }) => {
                 }}
             >
                 {/* Header */}
-                <Box
-                    sx={{
-                        p: 2.5,
-                        borderBottom: '1px solid #e5e7eb',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        bgcolor: '#fafafa',
-                    }}
-                >
+                <Box sx={{
+                    p: 2.5, borderBottom: '1px solid #e5e7eb',
+                    display: 'flex', justifyContent: 'space-between',
+                    alignItems: 'center', bgcolor: '#fafafa',
+                }}>
                     <Box display="flex" alignItems="center" gap={1.5}>
                         <NotificationsIcon sx={{ color: theme.palette.primary.main }} />
-                        <Typography variant="h6" fontWeight="bold">
-                            Notifications
-                        </Typography>
+                        <Typography variant="h6" fontWeight="bold">{t('mon.bell.title')}</Typography>
                         {notifications.length > 0 && (
-                            <Chip
-                                label={notifications.length}
-                                size="small"
-                                sx={{
-                                    bgcolor: theme.palette.primary.main,
-                                    color: 'white',
-                                    fontWeight: 'bold',
-                                    height: 20,
-                                    fontSize: '0.7rem',
-                                }}
-                            />
+                            <Chip label={notifications.length} size="small"
+                                  sx={{
+                                      bgcolor: theme.palette.primary.main, color: 'white',
+                                      fontWeight: 'bold', height: 20, fontSize: '0.7rem',
+                                  }} />
                         )}
                     </Box>
                     <Box display="flex" gap={0.5}>
-                        <IconButton
-                            size="small"
-                            onClick={handleRefresh}
-                            disabled={loading}
-                            sx={{
-                                '&:hover': { bgcolor: 'rgba(0,0,0,0.05)' },
-                            }}
-                        >
+                        <IconButton size="small" onClick={handleRefresh} disabled={loading}
+                                    sx={{ '&:hover': { bgcolor: 'rgba(0,0,0,0.05)' } }}>
                             <RefreshIcon fontSize="small" />
                         </IconButton>
                     </Box>
                 </Box>
 
                 {/* Status Bar */}
-                <Box
-                    sx={{
-                        px: 2.5,
-                        py: 1,
-                        borderBottom: '1px solid #e5e7eb',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        bgcolor: '#ffffff',
-                    }}
-                >
+                <Box sx={{
+                    px: 2.5, py: 1, borderBottom: '1px solid #e5e7eb',
+                    display: 'flex', justifyContent: 'space-between',
+                    alignItems: 'center', bgcolor: '#ffffff',
+                }}>
                     <Typography variant="caption" color="text.secondary" fontWeight="500">
-                        {loading ? 'Loading...' : `${notifications.length} pending request${notifications.length !== 1 ? 's' : ''} today`}
+                        {loading
+                            ? t('mon.bell.loading')
+                            : t('mon.bell.pendingRequests', {
+                                n: notifications.length,
+                                s: notifications.length !== 1 ? 's' : '',
+                            })}
                     </Typography>
                     <Button
-                        size="small"
-                        variant="text"
+                        size="small" variant="text"
                         color={autoRefresh ? 'success' : 'default'}
                         onClick={toggleAutoRefresh}
                         sx={{
-                            minWidth: 'auto',
-                            px: 1.5,
-                            py: 0.5,
-                            fontSize: '0.7rem',
-                            fontWeight: '600',
+                            minWidth: 'auto', px: 1.5, py: 0.5, fontSize: '0.7rem', fontWeight: '600',
                             textTransform: 'none',
                             color: autoRefresh ? '#16a34a' : '#6b7280',
-                            '&:hover': {
-                                bgcolor: 'transparent',
-                            },
+                            '&:hover': { bgcolor: 'transparent' },
                         }}
                     >
-                        {autoRefresh ? '🔄 Auto-refresh ON' : '⏸️ Auto-refresh OFF'}
+                        {autoRefresh ? t('mon.bell.autoRefreshOn') : t('mon.bell.autoRefreshOff')}
                     </Button>
                 </Box>
 
-                {/* Error */}
-                {error && (
-                    <Alert severity="error" sx={{ m: 2, borderRadius: 2 }}>
-                        {error}
-                    </Alert>
-                )}
+                {error && <Alert severity="error" sx={{ m: 2, borderRadius: 2 }}>{error}</Alert>}
 
-                {/* Content */}
                 {loading && notifications.length === 0 ? (
                     <Box display="flex" justifyContent="center" py={6}>
                         <CircularProgress size={36} />
                     </Box>
                 ) : notifications.length === 0 ? (
                     <Box textAlign="center" py={6}>
-                        <Box
-                            sx={{
-                                width: 64,
-                                height: 64,
-                                borderRadius: '50%',
-                                bgcolor: '#f3f4f6',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                mx: 'auto',
-                                mb: 2,
-                            }}
-                        >
+                        <Box sx={{
+                            width: 64, height: 64, borderRadius: '50%', bgcolor: '#f3f4f6',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            mx: 'auto', mb: 2,
+                        }}>
                             <NotificationsIcon sx={{ fontSize: 32, color: '#9ca3af' }} />
                         </Box>
-                        <Typography color="text.secondary" fontWeight="500">
-                            All caught up!
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                            No pending requests at the moment
-                        </Typography>
+                        <Typography color="text.secondary" fontWeight="500">{t('mon.bell.allCaughtUp')}</Typography>
+                        <Typography variant="caption" color="text.secondary">{t('mon.bell.noPending')}</Typography>
                     </Box>
                 ) : (
                     <Box sx={{ overflow: 'auto', maxHeight: { xs: 'calc(100vh - 220px)', sm: 420 } }}>
@@ -327,103 +216,64 @@ export const NotificationBell = ({ onNotificationClick }) => {
 
                                 return (
                                     <ListItem
-                                        key={index}
-                                        component="div"
+                                        key={index} component="div"
                                         onClick={() => handleNotificationClick(notification)}
                                         sx={{
-                                            px: 2.5,
-                                            py: 2,
-                                            cursor: 'pointer',
+                                            px: 2.5, py: 2, cursor: 'pointer',
                                             borderBottom: '1px solid #f3f4f6',
                                             backgroundColor: isUrgent ? '#fef2f2' : 'transparent',
                                             transition: 'all 0.2s ease',
-                                            '&:hover': {
-                                                backgroundColor: isUrgent ? '#fde8e8' : '#f8fafc',
-                                            },
-                                            '&:last-child': {
-                                                borderBottom: 'none',
-                                            },
+                                            '&:hover': { backgroundColor: isUrgent ? '#fde8e8' : '#f8fafc' },
+                                            '&:last-child': { borderBottom: 'none' },
                                             position: 'relative',
                                         }}
                                     >
-                                        {/* Urgent indicator bar */}
                                         {isUrgent && (
-                                            <Box
-                                                sx={{
-                                                    position: 'absolute',
-                                                    left: 0,
-                                                    top: 0,
-                                                    bottom: 0,
-                                                    width: 4,
-                                                    bgcolor: '#ef4444',
-                                                    borderRadius: '0 2px 2px 0',
-                                                    animation: 'pulseBar 1.5s infinite',
-                                                }}
-                                            />
+                                            <Box sx={{
+                                                position: 'absolute', left: 0, top: 0, bottom: 0,
+                                                width: 4, bgcolor: '#ef4444',
+                                                borderRadius: '0 2px 2px 0',
+                                                animation: 'pulseBar 1.5s infinite',
+                                            }} />
                                         )}
 
                                         <Box display="flex" alignItems="flex-start" gap={2} width="100%">
                                             <ListItemAvatar sx={{ minWidth: 40 }}>
-                                                <Avatar
-                                                    sx={{
-                                                        width: 40,
-                                                        height: 40,
-                                                        bgcolor: isUrgent ? '#fef2f2' : '#f0fdf4',
-                                                        color: isUrgent ? '#dc2626' : '#16a34a',
-                                                        border: isUrgent ? '2px solid #fca5a5' : '2px solid #86efac',
-                                                    }}
-                                                >
-                                                    {isUrgent ? (
-                                                        <WarningIcon sx={{ fontSize: 20 }} />
-                                                    ) : (
-                                                        <BuildIcon sx={{ fontSize: 20 }} />
-                                                    )}
+                                                <Avatar sx={{
+                                                    width: 40, height: 40,
+                                                    bgcolor: isUrgent ? '#fef2f2' : '#f0fdf4',
+                                                    color: isUrgent ? '#dc2626' : '#16a34a',
+                                                    border: isUrgent ? '2px solid #fca5a5' : '2px solid #86efac',
+                                                }}>
+                                                    {isUrgent ? <WarningIcon sx={{ fontSize: 20 }} /> : <BuildIcon sx={{ fontSize: 20 }} />}
                                                 </Avatar>
                                             </ListItemAvatar>
 
                                             <Box flex={1} minWidth={0}>
                                                 <Box display="flex" justifyContent="space-between" alignItems="flex-start" gap={1}>
                                                     <Box flex={1} minWidth={0}>
-                                                        <Typography
-                                                            variant="body2"
-                                                            fontWeight={isUrgent ? '700' : '600'}
-                                                            sx={{
-                                                                overflow: 'hidden',
-                                                                textOverflow: 'ellipsis',
-                                                                whiteSpace: 'nowrap',
-                                                                color: isUrgent ? '#991b1b' : '#111827',
-                                                            }}
-                                                        >
-                                                            {notification.customer_name || 'Customer'}
+                                                        <Typography variant="body2" fontWeight={isUrgent ? '700' : '600'}
+                                                                    sx={{
+                                                                        overflow: 'hidden', textOverflow: 'ellipsis',
+                                                                        whiteSpace: 'nowrap',
+                                                                        color: isUrgent ? '#991b1b' : '#111827',
+                                                                    }}>
+                                                            {notification.customer_name || t('mon.bell.customerFallback')}
                                                         </Typography>
-                                                        <Typography
-                                                            variant="caption"
-                                                            color="text.secondary"
-                                                            display="block"
-                                                            sx={{
-                                                                overflow: 'hidden',
-                                                                textOverflow: 'ellipsis',
-                                                                whiteSpace: 'nowrap',
-                                                            }}
-                                                        >
-                                                            {notification.service_name || 'Service Request'}
+                                                        <Typography variant="caption" color="text.secondary" display="block"
+                                                                    sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                            {notification.service_name || t('mon.bell.serviceFallback')}
                                                         </Typography>
                                                     </Box>
                                                     {isUrgent && (
                                                         <Chip
                                                             icon={<WarningIcon sx={{ fontSize: 12 }} />}
-                                                            label="URGENT"
+                                                            label={t('mon.bell.urgent')}
                                                             size="small"
                                                             sx={{
-                                                                height: 20,
-                                                                fontSize: '0.55rem',
-                                                                fontWeight: '700',
-                                                                bgcolor: '#ef4444',
-                                                                color: 'white',
-                                                                '& .MuiChip-icon': {
-                                                                    color: 'white',
-                                                                    fontSize: 12,
-                                                                },
+                                                                height: 20, fontSize: '0.55rem', fontWeight: '700',
+                                                                bgcolor: '#ef4444', color: 'white',
+                                                                '& .MuiChip-icon': { color: 'white', fontSize: 12 },
                                                                 flexShrink: 0,
                                                                 animation: 'pulseChip 1.5s infinite',
                                                             }}
@@ -431,22 +281,15 @@ export const NotificationBell = ({ onNotificationClick }) => {
                                                     )}
                                                 </Box>
 
-                                                {/* Technician Info */}
                                                 {hasTechnician && (
-                                                    <Box
-                                                        sx={{
-                                                            mt: 0.75,
-                                                            p: 1,
-                                                            bgcolor: isUrgent ? '#fef8f8' : '#f8fafc',
-                                                            borderRadius: 1.5,
-                                                            border: '1px solid',
-                                                            borderColor: isUrgent ? '#fecaca' : '#e5e7eb',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            gap: 1.5,
-                                                            flexWrap: 'wrap',
-                                                        }}
-                                                    >
+                                                    <Box sx={{
+                                                        mt: 0.75, p: 1,
+                                                        bgcolor: isUrgent ? '#fef8f8' : '#f8fafc',
+                                                        borderRadius: 1.5,
+                                                        border: '1px solid',
+                                                        borderColor: isUrgent ? '#fecaca' : '#e5e7eb',
+                                                        display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap',
+                                                    }}>
                                                         <Box display="flex" alignItems="center" gap={0.5}>
                                                             <EngineeringIcon sx={{ fontSize: 14, color: '#6b7280' }} />
                                                             <Typography variant="caption" fontWeight="600" color="text.primary">
@@ -462,37 +305,26 @@ export const NotificationBell = ({ onNotificationClick }) => {
                                                             </Box>
                                                         )}
                                                         {notification.technician.rating > 0 && (
-                                                            <Chip
-                                                                size="small"
-                                                                label={`⭐ ${notification.technician.rating.toFixed(1)}`}
-                                                                sx={{
-                                                                    height: 18,
-                                                                    fontSize: '0.55rem',
-                                                                    bgcolor: '#fef3c7',
-                                                                    color: '#92400e',
-                                                                    '& .MuiChip-label': {
-                                                                        px: 0.5,
-                                                                    },
-                                                                }}
-                                                            />
+                                                            <Chip size="small"
+                                                                  label={`⭐ ${notification.technician.rating.toFixed(1)}`}
+                                                                  sx={{
+                                                                      height: 18, fontSize: '0.55rem',
+                                                                      bgcolor: '#fef3c7', color: '#92400e',
+                                                                      '& .MuiChip-label': { px: 0.5 },
+                                                                  }} />
                                                         )}
                                                     </Box>
                                                 )}
 
-                                                {/* Time and Status */}
                                                 <Box display="flex" alignItems="center" gap={1.5} mt={1}>
                                                     <Chip
                                                         size="small"
                                                         label={getStatusLabel(notification)}
                                                         sx={{
-                                                            height: 22,
-                                                            fontSize: '0.6rem',
-                                                            fontWeight: '600',
+                                                            height: 22, fontSize: '0.6rem', fontWeight: '600',
                                                             bgcolor: isUrgent ? '#fee2e2' : '#d1fae5',
                                                             color: isUrgent ? '#991b1b' : '#065f46',
-                                                            '& .MuiChip-label': {
-                                                                px: 1,
-                                                            },
+                                                            '& .MuiChip-label': { px: 1 },
                                                         }}
                                                     />
                                                     <Box display="flex" alignItems="center" gap={0.5}>
@@ -512,21 +344,9 @@ export const NotificationBell = ({ onNotificationClick }) => {
                 )}
 
                 <style>{`
-                    @keyframes pulse {
-                        0% { transform: scale(1); }
-                        50% { transform: scale(1.15); }
-                        100% { transform: scale(1); }
-                    }
-                    @keyframes pulseBar {
-                        0% { opacity: 1; }
-                        50% { opacity: 0.5; }
-                        100% { opacity: 1; }
-                    }
-                    @keyframes pulseChip {
-                        0% { transform: scale(1); }
-                        50% { transform: scale(1.05); }
-                        100% { transform: scale(1); }
-                    }
+                    @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.15); } 100% { transform: scale(1); } }
+                    @keyframes pulseBar { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+                    @keyframes pulseChip { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
                 `}</style>
             </Menu>
         </>

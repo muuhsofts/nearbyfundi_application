@@ -1,110 +1,46 @@
 // src/pages/sms/SmsLogsList.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-    Box,
-    Paper,
-    Typography,
-    Button,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    TablePagination,
-    TableSortLabel,
-    TextField,
-    InputAdornment,
-    IconButton,
-    Menu,
-    MenuItem,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    CircularProgress,
-    Chip,
-    Card,
-    CardContent,
-    Grid,
-    Divider,
-    Alert,
-    Tooltip,
-    LinearProgress,
-    FormControl,
-    InputLabel,
-    Select,
-    useMediaQuery,
-    useTheme,
-    Stack,
-    Avatar,
+    Box, Paper, Typography, Button, Table, TableBody, TableCell, TableContainer,
+    TableHead, TableRow, TablePagination, TableSortLabel, TextField, InputAdornment,
+    IconButton, Menu, MenuItem, Dialog, DialogTitle, DialogContent, DialogActions,
+    CircularProgress, Chip, Card, CardContent, Grid, Divider, Alert, Tooltip,
+    LinearProgress, FormControl, InputLabel, Select, useMediaQuery, useTheme,
+    Stack, Avatar,
 } from '@mui/material';
 import {
-    Search as SearchIcon,
-    Refresh as RefreshIcon,
-    MoreVert as MoreVertIcon,
-    Delete as DeleteIcon,
-    Person as PersonIcon,
-    Phone as PhoneIcon,
-    CheckCircle as CheckCircleIcon,
-    Error as ErrorIcon,
-    Pending as PendingIcon,
-    Send as SendIcon,
-    Replay as ReplayIcon,
-    Clear as ClearIcon,
-    Visibility as VisibilityIcon,
-    VisibilityOff as VisibilityOffIcon,
-    Message as MessageIcon,
-    TrendingUp as TrendingUpIcon,
+    Search as SearchIcon, Refresh as RefreshIcon, MoreVert as MoreVertIcon,
+    Delete as DeleteIcon, Person as PersonIcon, Phone as PhoneIcon,
+    CheckCircle as CheckCircleIcon, Error as ErrorIcon, Pending as PendingIcon,
+    Send as SendIcon, Replay as ReplayIcon, Clear as ClearIcon,
+    Visibility as VisibilityIcon, VisibilityOff as VisibilityOffIcon,
+    Message as MessageIcon, TrendingUp as TrendingUpIcon,
 } from '@mui/icons-material';
 import { useSmsManagement } from 'hooks/useSms';
 import { usePermissions } from 'hooks/usePermissions';
+import { useLanguage } from 'context/LanguageContext';
 import { showSnackbar } from 'utils/snackbar';
+import { tSms } from './smslang';
 import appConfig from '../../config';
 import SendSmsDialog from './SendSmsDialog';
 import UserSelector from './UserSelector';
 
 const colors = appConfig.app.colors;
 
-// Strong, high-contrast status styles
-const statusStyles = {
-    sent: {
-        color: '#047857',
-        bg: '#d1fae5',
-        border: '#10b981',
-        label: 'Sent',
-        icon: <CheckCircleIcon sx={{ fontSize: 16 }} />,
-    },
-    failed: {
-        color: '#b91c1c',
-        bg: '#fee2e2',
-        border: '#ef4444',
-        label: 'Failed',
-        icon: <ErrorIcon sx={{ fontSize: 16 }} />,
-    },
-    pending: {
-        color: '#b45309',
-        bg: '#fef3c7',
-        border: '#f59e0b',
-        label: 'Pending',
-        icon: <PendingIcon sx={{ fontSize: 16 }} />,
-    },
-    queued: {
-        color: '#1d4ed8',
-        bg: '#dbeafe',
-        border: '#3b82f6',
-        label: 'Queued',
-        icon: <PendingIcon sx={{ fontSize: 16 }} />,
-    },
-};
+const getStatusStyles = (t) => ({
+    sent: { color: '#047857', bg: '#d1fae5', border: '#10b981', label: t('sms.status.sent'), icon: <CheckCircleIcon sx={{ fontSize: 16 }} /> },
+    failed: { color: '#b91c1c', bg: '#fee2e2', border: '#ef4444', label: t('sms.status.failed'), icon: <ErrorIcon sx={{ fontSize: 16 }} /> },
+    pending: { color: '#b45309', bg: '#fef3c7', border: '#f59e0b', label: t('sms.status.pending'), icon: <PendingIcon sx={{ fontSize: 16 }} /> },
+    queued: { color: '#1d4ed8', bg: '#dbeafe', border: '#3b82f6', label: t('sms.status.queued'), icon: <PendingIcon sx={{ fontSize: 16 }} /> },
+});
 
-const headCells = [
-    { id: 'user', label: 'User', disableSort: true },
-    { id: 'recipient', label: 'Recipient' },
-    { id: 'message', label: 'Message', disableSort: true },
-    { id: 'status', label: 'Status' },
-    { id: 'created_at', label: 'Sent At' },
-    { id: 'actions', label: 'Actions', disableSort: true },
+const getHeadCells = (t) => [
+    { id: 'user', label: t('sms.logs.col.user'), disableSort: true },
+    { id: 'recipient', label: t('sms.logs.col.recipient') },
+    { id: 'message', label: t('sms.logs.col.message'), disableSort: true },
+    { id: 'status', label: t('sms.logs.col.status') },
+    { id: 'created_at', label: t('sms.logs.col.sentAt') },
+    { id: 'actions', label: t('sms.logs.col.actions'), disableSort: true },
 ];
 
 const SmsLogsList = () => {
@@ -112,18 +48,15 @@ const SmsLogsList = () => {
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const showTableView = useMediaQuery(theme.breakpoints.up('md'));
 
+    const { language } = useLanguage();
+    const t = (key, replacements) => tSms(language, key, replacements);
+    const statusStyles = useMemo(() => getStatusStyles(t), [language]);
+    const headCells = useMemo(() => getHeadCells(t), [language]);
+
     const {
-        logs,
-        loading,
-        error,
-        pagination,
-        getSmsLogs,
-        getUserSmsLogs,
-        getSmsStats,
-        sendSms,
-        resendSms,
-        deleteSmsLog,
-        clearError,
+        logs, loading, error, pagination,
+        getSmsLogs, getUserSmsLogs, getSmsStats, sendSms, resendSms,
+        deleteSmsLog, clearError,
     } = useSmsManagement();
 
     const { can } = usePermissions();
@@ -144,12 +77,7 @@ const SmsLogsList = () => {
     const [userSelectorOpen, setUserSelectorOpen] = useState(false);
 
     const [smsStats, setSmsStats] = useState({
-        total: 0,
-        sent: 0,
-        failed: 0,
-        pending: 0,
-        success_rate: 0,
-        failed_percentage: 0,
+        total: 0, sent: 0, failed: 0, pending: 0, success_rate: 0, failed_percentage: 0,
     });
     const [loadingStats, setLoadingStats] = useState(false);
 
@@ -174,13 +102,10 @@ const SmsLogsList = () => {
             status: statusFilter !== 'all' ? statusFilter : undefined,
         };
         try {
-            if (selectedUserId) {
-                await getUserSmsLogs(selectedUserId, params);
-            } else {
-                await getSmsLogs(params);
-            }
+            if (selectedUserId) await getUserSmsLogs(selectedUserId, params);
+            else await getSmsLogs(params);
         } catch (err) {
-            showSnackbar({ type: 'error', message: 'Failed to load SMS logs' });
+            showSnackbar({ type: 'error', message: t('sms.logs.toast.loadFailed') });
         }
     };
 
@@ -205,26 +130,12 @@ const SmsLogsList = () => {
         sorted.sort((a, b) => {
             let aValue, bValue;
             switch (orderBy) {
-                case 'recipient':
-                    aValue = a.recipient || '';
-                    bValue = b.recipient || '';
-                    break;
-                case 'status':
-                    aValue = a.status || '';
-                    bValue = b.status || '';
-                    break;
-                case 'created_at':
-                    aValue = a.created_at || '';
-                    bValue = b.created_at || '';
-                    break;
-                default:
-                    aValue = a[orderBy] || '';
-                    bValue = b[orderBy] || '';
+                case 'recipient': aValue = a.recipient || ''; bValue = b.recipient || ''; break;
+                case 'status': aValue = a.status || ''; bValue = b.status || ''; break;
+                case 'created_at': aValue = a.created_at || ''; bValue = b.created_at || ''; break;
+                default: aValue = a[orderBy] || ''; bValue = b[orderBy] || '';
             }
-            if (typeof aValue === 'string') {
-                aValue = aValue.toLowerCase();
-                bValue = bValue.toLowerCase();
-            }
+            if (typeof aValue === 'string') { aValue = aValue.toLowerCase(); bValue = bValue.toLowerCase(); }
             if (aValue < bValue) return order === 'asc' ? -1 : 1;
             if (aValue > bValue) return order === 'asc' ? 1 : -1;
             return 0;
@@ -255,31 +166,31 @@ const SmsLogsList = () => {
 
         if (actionType === 'resend') {
             openConfirmDialog(
-                'Resend SMS',
-                `Are you sure you want to resend this SMS to ${selectedLog.recipient}?`,
+                t('sms.logs.confirm.resendTitle'),
+                t('sms.logs.confirm.resendMsg', { recipient: selectedLog.recipient }),
                 async () => {
                     try {
                         await resendSms(selectedLog.id);
-                        showSnackbar({ type: 'success', message: 'SMS resent successfully' });
+                        showSnackbar({ type: 'success', message: t('sms.logs.toast.resendSuccess') });
                         await loadLogs();
                         await loadStats();
                     } catch (err) {
-                        showSnackbar({ type: 'error', message: 'Failed to resend SMS' });
+                        showSnackbar({ type: 'error', message: t('sms.logs.toast.resendFailed') });
                     }
                 }
             );
         } else if (actionType === 'delete') {
             openConfirmDialog(
-                'Delete SMS Log',
-                'Are you sure you want to delete this SMS log?',
+                t('sms.logs.confirm.deleteTitle'),
+                t('sms.logs.confirm.deleteMsg'),
                 async () => {
                     try {
                         await deleteSmsLog(selectedLog.id);
-                        showSnackbar({ type: 'success', message: 'SMS log deleted successfully' });
+                        showSnackbar({ type: 'success', message: t('sms.logs.toast.deleteSuccess') });
                         await loadLogs();
                         await loadStats();
                     } catch (err) {
-                        showSnackbar({ type: 'error', message: 'Failed to delete SMS log' });
+                        showSnackbar({ type: 'error', message: t('sms.logs.toast.deleteFailed') });
                     }
                 }
             );
@@ -290,35 +201,23 @@ const SmsLogsList = () => {
         if (!confirmDialog.action) return;
         const action = confirmDialog.action;
         setConfirmDialog((prev) => ({ ...prev, open: false }));
-        try {
-            await action();
-        } catch (err) {
-            // already handled
-        }
+        try { await action(); } catch (err) { /* handled */ }
     };
 
     const formatDate = (dateStr) => {
         if (!dateStr) return '—';
         try {
             return new Date(dateStr).toLocaleString('en-US', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
+                year: 'numeric', month: 'short', day: 'numeric',
+                hour: '2-digit', minute: '2-digit',
             });
-        } catch {
-            return '—';
-        }
+        } catch { return '—'; }
     };
 
     const getStatusChip = (status) => {
         const s = statusStyles[status] || {
-            color: '#374151',
-            bg: '#f3f4f6',
-            border: '#9ca3af',
-            label: status || 'Unknown',
-            icon: null,
+            color: '#374151', bg: '#f3f4f6', border: '#9ca3af',
+            label: status || t('sms.common.unknown'), icon: null,
         };
         return (
             <Chip
@@ -326,11 +225,8 @@ const SmsLogsList = () => {
                 label={s.label}
                 size="small"
                 sx={{
-                    backgroundColor: s.bg,
-                    color: s.color,
-                    fontWeight: 700,
-                    border: `1.5px solid ${s.border}`,
-                    height: 28,
+                    backgroundColor: s.bg, color: s.color, fontWeight: 700,
+                    border: `1.5px solid ${s.border}`, height: 28,
                     '& .MuiChip-icon': { color: s.color },
                     '& .MuiChip-label': { px: 1 },
                 }}
@@ -352,20 +248,12 @@ const SmsLogsList = () => {
         if (log.user) {
             return (
                 <Stack direction="row" spacing={1.5} alignItems="center">
-                    <Avatar
-                        sx={{
-                            width: 36,
-                            height: 36,
-                            bgcolor: colors.sea || '#0f766e',
-                            fontSize: 14,
-                            fontWeight: 700,
-                        }}
-                    >
+                    <Avatar sx={{ width: 36, height: 36, bgcolor: colors.sea || '#0f766e', fontSize: 14, fontWeight: 700 }}>
                         {(log.user.name || 'U').charAt(0).toUpperCase()}
                     </Avatar>
                     <Box>
                         <Typography variant="body2" fontWeight={600} color="text.primary">
-                            {log.user.name || 'Unknown User'}
+                            {log.user.name || t('sms.common.unknownUser')}
                         </Typography>
                         {log.user.email && (
                             <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
@@ -382,7 +270,7 @@ const SmsLogsList = () => {
                     S
                 </Avatar>
                 <Typography variant="body2" fontWeight={600} color="text.secondary">
-                    System
+                    {t('sms.common.system')}
                 </Typography>
             </Stack>
         );
@@ -390,23 +278,11 @@ const SmsLogsList = () => {
 
     const totalCount = pagination?.total || logs?.length || 0;
 
-    // ── Permission / Error states ───────────────────────────────────────────
     if (!canView) {
         return (
             <Box p={3}>
-                <Paper
-                    elevation={0}
-                    sx={{
-                        p: 4,
-                        textAlign: 'center',
-                        borderRadius: 3,
-                        border: '1px solid',
-                        borderColor: 'divider',
-                    }}
-                >
-                    <Typography color="error" fontWeight={600}>
-                        You do not have permission to view SMS logs.
-                    </Typography>
+                <Paper elevation={0} sx={{ p: 4, textAlign: 'center', borderRadius: 3, border: '1px solid', borderColor: 'divider' }}>
+                    <Typography color="error" fontWeight={600}>{t('sms.logs.accessDenied')}</Typography>
                 </Paper>
             </Box>
         );
@@ -416,13 +292,8 @@ const SmsLogsList = () => {
         return (
             <Box p={3}>
                 <Alert
-                    severity="error"
-                    variant="filled"
-                    action={
-                        <Button color="inherit" size="small" onClick={() => { clearError(); loadLogs(); }}>
-                            Retry
-                        </Button>
-                    }
+                    severity="error" variant="filled"
+                    action={<Button color="inherit" size="small" onClick={() => { clearError(); loadLogs(); }}>{t('sms.common.retry')}</Button>}
                     sx={{ borderRadius: 2 }}
                 >
                     {error}
@@ -431,143 +302,104 @@ const SmsLogsList = () => {
         );
     }
 
-    // ── Main Render ────────────────────────────────────────────────────────
     return (
         <Box sx={{ width: '100%', p: { xs: 1.5, sm: 2.5 }, m: 0, bgcolor: 'background.default' }}>
-            {/* ── Stats Cards ─────────────────────────────────────────────── */}
+            {/* ── Stats Cards ─────────────────────────────────────── */}
             <Grid container spacing={2} sx={{ mb: 3 }}>
-                {/* Total */}
                 <Grid item xs={12} sm={6} md={3}>
-                    <Card
-                        elevation={0}
-                        sx={{
-                            borderRadius: 3,
-                            border: '1px solid',
-                            borderColor: 'divider',
-                            background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
-                            height: '100%',
-                        }}
-                    >
+                    <Card elevation={0} sx={{
+                        borderRadius: 3, border: '1px solid', borderColor: 'divider',
+                        background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)', height: '100%',
+                    }}>
                         <CardContent sx={{ p: 2.5 }}>
                             <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
                                 <Box>
                                     <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
-                                        Total Messages
+                                        {t('sms.logs.stats.total')}
                                     </Typography>
                                     <Typography variant="h3" fontWeight={800} color="#0369a1" sx={{ mt: 0.5, lineHeight: 1.1 }}>
                                         {loadingStats ? '—' : smsStats.total}
                                     </Typography>
                                     <Typography variant="caption" color="text.secondary" fontWeight={500}>
-                                        All time
+                                        {t('sms.logs.stats.totalCaption')}
                                     </Typography>
                                 </Box>
-                                <Avatar sx={{ bgcolor: '#0ea5e9', width: 44, height: 44 }}>
-                                    <MessageIcon />
-                                </Avatar>
+                                <Avatar sx={{ bgcolor: '#0ea5e9', width: 44, height: 44 }}><MessageIcon /></Avatar>
                             </Stack>
                         </CardContent>
                     </Card>
                 </Grid>
 
-                {/* Sent */}
                 <Grid item xs={12} sm={6} md={3}>
-                    <Card
-                        elevation={0}
-                        sx={{
-                            borderRadius: 3,
-                            border: '1px solid',
-                            borderColor: 'divider',
-                            background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)',
-                            height: '100%',
-                        }}
-                    >
+                    <Card elevation={0} sx={{
+                        borderRadius: 3, border: '1px solid', borderColor: 'divider',
+                        background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)', height: '100%',
+                    }}>
                         <CardContent sx={{ p: 2.5 }}>
                             <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
                                 <Box>
                                     <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
-                                        Sent Successfully
+                                        {t('sms.logs.stats.sent')}
                                     </Typography>
                                     <Typography variant="h3" fontWeight={800} color="#047857" sx={{ mt: 0.5, lineHeight: 1.1 }}>
                                         {loadingStats ? '—' : smsStats.sent}
                                     </Typography>
                                     <Typography variant="caption" color="text.secondary" fontWeight={500}>
-                                        {smsStats.success_rate || 0}% success rate
+                                        {t('sms.logs.stats.sentCaption', { n: smsStats.success_rate || 0 })}
                                     </Typography>
                                 </Box>
-                                <Avatar sx={{ bgcolor: '#10b981', width: 44, height: 44 }}>
-                                    <CheckCircleIcon />
-                                </Avatar>
+                                <Avatar sx={{ bgcolor: '#10b981', width: 44, height: 44 }}><CheckCircleIcon /></Avatar>
                             </Stack>
                         </CardContent>
                     </Card>
                 </Grid>
 
-                {/* Failed */}
                 <Grid item xs={12} sm={6} md={3}>
-                    <Card
-                        elevation={0}
-                        sx={{
-                            borderRadius: 3,
-                            border: '1px solid',
-                            borderColor: 'divider',
-                            background: 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)',
-                            height: '100%',
-                        }}
-                    >
+                    <Card elevation={0} sx={{
+                        borderRadius: 3, border: '1px solid', borderColor: 'divider',
+                        background: 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)', height: '100%',
+                    }}>
                         <CardContent sx={{ p: 2.5 }}>
                             <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
                                 <Box>
                                     <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
-                                        Failed
+                                        {t('sms.logs.stats.failed')}
                                     </Typography>
                                     <Typography variant="h3" fontWeight={800} color="#b91c1c" sx={{ mt: 0.5, lineHeight: 1.1 }}>
                                         {loadingStats ? '—' : smsStats.failed}
                                     </Typography>
                                     <Typography variant="caption" color="text.secondary" fontWeight={500}>
-                                        {smsStats.failed_percentage || 0}% of total
+                                        {t('sms.logs.stats.failedCaption', { n: smsStats.failed_percentage || 0 })}
                                     </Typography>
                                 </Box>
-                                <Avatar sx={{ bgcolor: '#ef4444', width: 44, height: 44 }}>
-                                    <ErrorIcon />
-                                </Avatar>
+                                <Avatar sx={{ bgcolor: '#ef4444', width: 44, height: 44 }}><ErrorIcon /></Avatar>
                             </Stack>
                         </CardContent>
                     </Card>
                 </Grid>
 
-                {/* Success Rate */}
                 <Grid item xs={12} sm={6} md={3}>
-                    <Card
-                        elevation={0}
-                        sx={{
-                            borderRadius: 3,
-                            border: '1px solid',
-                            borderColor: 'divider',
-                            background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
-                            height: '100%',
-                        }}
-                    >
+                    <Card elevation={0} sx={{
+                        borderRadius: 3, border: '1px solid', borderColor: 'divider',
+                        background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)', height: '100%',
+                    }}>
                         <CardContent sx={{ p: 2.5 }}>
                             <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={1}>
                                 <Box>
                                     <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
-                                        Success Rate
+                                        {t('sms.logs.stats.successRate')}
                                     </Typography>
                                     <Typography variant="h3" fontWeight={800} color="#15803d" sx={{ mt: 0.5, lineHeight: 1.1 }}>
                                         {loadingStats ? '—' : `${smsStats.success_rate || 0}%`}
                                     </Typography>
                                 </Box>
-                                <Avatar sx={{ bgcolor: '#22c55e', width: 44, height: 44 }}>
-                                    <TrendingUpIcon />
-                                </Avatar>
+                                <Avatar sx={{ bgcolor: '#22c55e', width: 44, height: 44 }}><TrendingUpIcon /></Avatar>
                             </Stack>
                             <LinearProgress
                                 variant="determinate"
                                 value={smsStats.success_rate || 0}
                                 sx={{
-                                    height: 8,
-                                    borderRadius: 4,
-                                    bgcolor: 'rgba(0,0,0,0.08)',
+                                    height: 8, borderRadius: 4, bgcolor: 'rgba(0,0,0,0.08)',
                                     '& .MuiLinearProgress-bar': {
                                         borderRadius: 4,
                                         bgcolor: (smsStats.success_rate || 0) >= 80 ? '#22c55e' : '#f59e0b',
@@ -579,121 +411,72 @@ const SmsLogsList = () => {
                 </Grid>
             </Grid>
 
-            {/* ── Main Panel ──────────────────────────────────────────────── */}
-            <Paper
-                elevation={0}
-                sx={{
-                    width: '100%',
-                    borderRadius: 3,
-                    overflow: 'hidden',
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    bgcolor: 'background.paper',
-                }}
-            >
-                {/* Header */}
-                <Box
-                    sx={{
-                        px: { xs: 2, sm: 3 },
-                        py: 2.5,
-                        borderBottom: '1px solid',
-                        borderColor: 'divider',
-                        bgcolor: 'background.paper',
-                    }}
-                >
-                    <Stack
-                        direction={{ xs: 'column', sm: 'row' }}
-                        justifyContent="space-between"
-                        alignItems={{ xs: 'stretch', sm: 'center' }}
-                        spacing={2}
-                        mb={2.5}
-                    >
+            {/* ── Main Panel ──────────────────────────────────────── */}
+            <Paper elevation={0} sx={{
+                width: '100%', borderRadius: 3, overflow: 'hidden',
+                border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper',
+            }}>
+                <Box sx={{ px: { xs: 2, sm: 3 }, py: 2.5, borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between"
+                           alignItems={{ xs: 'stretch', sm: 'center' }} spacing={2} mb={2.5}>
                         <Box>
                             <Typography variant="h5" fontWeight={800} color="text.primary">
-                                SMS Logs
+                                {t('sms.logs.title')}
                             </Typography>
                             <Typography variant="body2" color="text.secondary" fontWeight={500}>
-                                Track every message sent from the system
+                                {t('sms.logs.subtitle')}
                             </Typography>
                         </Box>
 
                         <Stack direction="row" spacing={1.5} justifyContent={{ xs: 'flex-end', sm: 'flex-start' }}>
                             {canSend && (
                                 <Button
-                                    variant="contained"
-                                    startIcon={<SendIcon />}
+                                    variant="contained" startIcon={<SendIcon />}
                                     onClick={() => setSendDialogOpen(true)}
                                     size={isMobile ? 'small' : 'medium'}
                                     sx={{
-                                        borderRadius: 2,
-                                        fontWeight: 700,
-                                        textTransform: 'none',
-                                        px: 2.5,
-                                        boxShadow: 'none',
+                                        borderRadius: 2, fontWeight: 700, textTransform: 'none', px: 2.5, boxShadow: 'none',
                                         bgcolor: colors.salat || '#10b981',
-                                        '&:hover': {
-                                            bgcolor: colors.dark || '#047857',
-                                            boxShadow: '0 4px 12px rgba(16,185,129,0.35)',
-                                        },
+                                        '&:hover': { bgcolor: colors.dark || '#047857', boxShadow: '0 4px 12px rgba(16,185,129,0.35)' },
                                     }}
                                 >
-                                    Send SMS
+                                    {t('sms.logs.sendSms')}
                                 </Button>
                             )}
                             <Button
-                                variant="outlined"
-                                startIcon={<RefreshIcon />}
+                                variant="outlined" startIcon={<RefreshIcon />}
                                 onClick={() => { loadLogs(); loadStats(); }}
                                 size={isMobile ? 'small' : 'medium'}
                                 sx={{
-                                    borderRadius: 2,
-                                    fontWeight: 600,
-                                    textTransform: 'none',
-                                    borderColor: 'divider',
-                                    color: 'text.primary',
-                                    '&:hover': {
-                                        borderColor: 'text.primary',
-                                        bgcolor: 'action.hover',
-                                    },
+                                    borderRadius: 2, fontWeight: 600, textTransform: 'none',
+                                    borderColor: 'divider', color: 'text.primary',
+                                    '&:hover': { borderColor: 'text.primary', bgcolor: 'action.hover' },
                                 }}
                             >
-                                Refresh
+                                {t('sms.logs.refresh')}
                             </Button>
                         </Stack>
                     </Stack>
 
                     {/* Filters */}
-                    <Stack
-                        direction={{ xs: 'column', sm: 'row' }}
-                        spacing={1.5}
-                        alignItems={{ xs: 'stretch', sm: 'center' }}
-                        flexWrap="wrap"
-                    >
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}
+                           alignItems={{ xs: 'stretch', sm: 'center' }} flexWrap="wrap">
                         <TextField
-                            placeholder="Search recipient, message…"
-                            size="small"
-                            value={search}
+                            placeholder={t('sms.logs.searchPlaceholder')}
+                            size="small" value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             InputProps={{
-                                startAdornment: (
-                                    <InputAdornment position="start">
-                                        <SearchIcon fontSize="small" color="action" />
-                                    </InputAdornment>
-                                ),
+                                startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" color="action" /></InputAdornment>,
                                 endAdornment: search ? (
                                     <InputAdornment position="end">
-                                        <IconButton size="small" onClick={() => setSearch('')}>
-                                            <ClearIcon fontSize="small" />
-                                        </IconButton>
+                                        <IconButton size="small" onClick={() => setSearch('')}><ClearIcon fontSize="small" /></IconButton>
                                     </InputAdornment>
                                 ) : null,
                             }}
                             sx={{
-                                minWidth: { xs: '100%', sm: 260 },
-                                flexGrow: { xs: 1, sm: 0 },
+                                minWidth: { xs: '100%', sm: 260 }, flexGrow: { xs: 1, sm: 0 },
                                 '& .MuiOutlinedInput-root': {
-                                    borderRadius: 2,
-                                    bgcolor: 'action.hover',
+                                    borderRadius: 2, bgcolor: 'action.hover',
                                     '& fieldset': { borderColor: 'transparent' },
                                     '&:hover fieldset': { borderColor: 'divider' },
                                     '&.Mui-focused fieldset': { borderColor: 'primary.main' },
@@ -702,23 +485,22 @@ const SmsLogsList = () => {
                         />
 
                         <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 150 } }}>
-                            <InputLabel>Status</InputLabel>
+                            <InputLabel>{t('sms.logs.col.status')}</InputLabel>
                             <Select
                                 value={statusFilter}
                                 onChange={(e) => setStatusFilter(e.target.value)}
-                                label="Status"
+                                label={t('sms.logs.col.status')}
                                 sx={{
-                                    borderRadius: 2,
-                                    bgcolor: 'action.hover',
+                                    borderRadius: 2, bgcolor: 'action.hover',
                                     '& .MuiOutlinedInput-notchedOutline': { borderColor: 'transparent' },
                                     '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' },
                                 }}
                             >
-                                <MenuItem value="all">All statuses</MenuItem>
-                                <MenuItem value="sent">Sent</MenuItem>
-                                <MenuItem value="pending">Pending</MenuItem>
-                                <MenuItem value="failed">Failed</MenuItem>
-                                <MenuItem value="queued">Queued</MenuItem>
+                                <MenuItem value="all">{t('sms.status.all')}</MenuItem>
+                                <MenuItem value="sent">{t('sms.status.sent')}</MenuItem>
+                                <MenuItem value="pending">{t('sms.status.pending')}</MenuItem>
+                                <MenuItem value="failed">{t('sms.status.failed')}</MenuItem>
+                                <MenuItem value="queued">{t('sms.status.queued')}</MenuItem>
                             </Select>
                         </FormControl>
 
@@ -728,9 +510,7 @@ const SmsLogsList = () => {
                             onClick={() => setUserSelectorOpen(true)}
                             size={isMobile ? 'small' : 'medium'}
                             sx={{
-                                borderRadius: 2,
-                                fontWeight: 600,
-                                textTransform: 'none',
+                                borderRadius: 2, fontWeight: 600, textTransform: 'none',
                                 borderColor: selectedUserId ? 'transparent' : 'divider',
                                 bgcolor: selectedUserId ? (colors.sea || '#0f766e') : 'transparent',
                                 color: selectedUserId ? '#fff' : 'text.primary',
@@ -740,16 +520,12 @@ const SmsLogsList = () => {
                                 },
                             }}
                         >
-                            {selectedUserId ? 'User filtered' : 'Filter by user'}
+                            {selectedUserId ? t('sms.logs.userFiltered') : t('sms.logs.filterByUser')}
                             {selectedUserId && (
                                 <IconButton
                                     size="small"
                                     sx={{ ml: 0.5, color: 'inherit', p: 0.25 }}
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedUserId(null);
-                                        setPage(0);
-                                    }}
+                                    onClick={(e) => { e.stopPropagation(); setSelectedUserId(null); setPage(0); }}
                                 >
                                     <ClearIcon fontSize="small" />
                                 </IconButton>
@@ -758,26 +534,19 @@ const SmsLogsList = () => {
                     </Stack>
                 </Box>
 
-                {/* ── Table (desktop) ─────────────────────────────────────── */}
+                {/* Table / Mobile Cards */}
                 {showTableView ? (
                     <TableContainer>
                         <Table sx={{ minWidth: 900 }}>
                             <TableHead>
-                                <TableRow
-                                    sx={{
-                                        bgcolor: 'action.hover',
-                                        '& th': {
-                                            fontWeight: 700,
-                                            fontSize: '0.8125rem',
-                                            color: 'text.secondary',
-                                            textTransform: 'uppercase',
-                                            letterSpacing: 0.6,
-                                            borderBottom: '1px solid',
-                                            borderColor: 'divider',
-                                            py: 1.75,
-                                        },
-                                    }}
-                                >
+                                <TableRow sx={{
+                                    bgcolor: 'action.hover',
+                                    '& th': {
+                                        fontWeight: 700, fontSize: '0.8125rem', color: 'text.secondary',
+                                        textTransform: 'uppercase', letterSpacing: 0.6,
+                                        borderBottom: '1px solid', borderColor: 'divider', py: 1.75,
+                                    },
+                                }}>
                                     {headCells.map((cell) => (
                                         <TableCell key={cell.id} sx={{ whiteSpace: 'nowrap' }}>
                                             {!cell.disableSort ? (
@@ -788,9 +557,7 @@ const SmsLogsList = () => {
                                                 >
                                                     {cell.label}
                                                 </TableSortLabel>
-                                            ) : (
-                                                cell.label
-                                            )}
+                                            ) : cell.label}
                                         </TableCell>
                                     ))}
                                 </TableRow>
@@ -807,22 +574,13 @@ const SmsLogsList = () => {
                                     <TableRow>
                                         <TableCell colSpan={headCells.length} align="center" sx={{ py: 8 }}>
                                             <Typography color="text.secondary" fontWeight={500}>
-                                                {selectedUserId
-                                                    ? 'No SMS logs found for this user'
-                                                    : 'No SMS logs found'}
+                                                {selectedUserId ? t('sms.logs.noFoundForUser') : t('sms.logs.noFound')}
                                             </Typography>
                                         </TableCell>
                                     </TableRow>
                                 ) : (
                                     sortedData.map((log) => (
-                                        <TableRow
-                                            key={log.id}
-                                            hover
-                                            sx={{
-                                                '&:last-child td': { borderBottom: 0 },
-                                                transition: 'background-color 0.15s',
-                                            }}
-                                        >
+                                        <TableRow key={log.id} hover sx={{ '&:last-child td': { borderBottom: 0 }, transition: 'background-color 0.15s' }}>
                                             <TableCell sx={{ py: 2 }}>{getUserDisplay(log)}</TableCell>
 
                                             <TableCell>
@@ -836,28 +594,12 @@ const SmsLogsList = () => {
 
                                             <TableCell>
                                                 <Stack direction="row" spacing={1} alignItems="flex-start">
-                                                    <Tooltip title={showMessage[log.id] ? 'Hide message' : 'Show full message'}>
-                                                        <IconButton
-                                                            size="small"
-                                                            onClick={() => toggleMessageVisibility(log.id)}
-                                                            sx={{ mt: -0.25 }}
-                                                        >
-                                                            {showMessage[log.id] ? (
-                                                                <VisibilityOffIcon fontSize="small" />
-                                                            ) : (
-                                                                <VisibilityIcon fontSize="small" />
-                                                            )}
+                                                    <Tooltip title={showMessage[log.id] ? t('sms.logs.action.hideMessage') : t('sms.logs.action.showMessage')}>
+                                                        <IconButton size="small" onClick={() => toggleMessageVisibility(log.id)} sx={{ mt: -0.25 }}>
+                                                            {showMessage[log.id] ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
                                                         </IconButton>
                                                     </Tooltip>
-                                                    <Typography
-                                                        variant="body2"
-                                                        sx={{
-                                                            maxWidth: 320,
-                                                            wordBreak: 'break-word',
-                                                            color: 'text.primary',
-                                                            lineHeight: 1.5,
-                                                        }}
-                                                    >
+                                                    <Typography variant="body2" sx={{ maxWidth: 320, wordBreak: 'break-word', color: 'text.primary', lineHeight: 1.5 }}>
                                                         {getMessagePreview(log.message, log.id)}
                                                     </Typography>
                                                 </Stack>
@@ -868,13 +610,7 @@ const SmsLogsList = () => {
                                                     {getStatusChip(log.status)}
                                                     {log.error_message && (
                                                         <Tooltip title={log.error_message}>
-                                                            <ErrorIcon
-                                                                sx={{
-                                                                    fontSize: 18,
-                                                                    color: '#ef4444',
-                                                                    cursor: 'help',
-                                                                }}
-                                                            />
+                                                            <ErrorIcon sx={{ fontSize: 18, color: '#ef4444', cursor: 'help' }} />
                                                         </Tooltip>
                                                     )}
                                                 </Stack>
@@ -890,10 +626,7 @@ const SmsLogsList = () => {
                                                 <IconButton
                                                     size="small"
                                                     onClick={(e) => handleMenuOpen(e, log)}
-                                                    sx={{
-                                                        color: 'text.secondary',
-                                                        '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
-                                                    }}
+                                                    sx={{ color: 'text.secondary', '&:hover': { bgcolor: 'action.hover', color: 'text.primary' } }}
                                                 >
                                                     <MoreVertIcon />
                                                 </IconButton>
@@ -905,49 +638,27 @@ const SmsLogsList = () => {
                         </Table>
                     </TableContainer>
                 ) : (
-                    /* ── Mobile cards ────────────────────────────────────── */
                     <Box sx={{ p: { xs: 2, sm: 2.5 } }}>
                         {loading ? (
                             <Box display="flex" justifyContent="center" py={6}>
                                 <CircularProgress size={36} thickness={4} />
                             </Box>
                         ) : sortedData.length === 0 ? (
-                            <Paper
-                                variant="outlined"
-                                sx={{
-                                    p: 5,
-                                    textAlign: 'center',
-                                    borderRadius: 3,
-                                    borderStyle: 'dashed',
-                                }}
-                            >
+                            <Paper variant="outlined" sx={{ p: 5, textAlign: 'center', borderRadius: 3, borderStyle: 'dashed' }}>
                                 <Typography color="text.secondary" fontWeight={500}>
-                                    {selectedUserId
-                                        ? 'No SMS logs found for this user'
-                                        : 'No SMS logs found'}
+                                    {selectedUserId ? t('sms.logs.noFoundForUser') : t('sms.logs.noFound')}
                                 </Typography>
                             </Paper>
                         ) : (
                             <Stack spacing={2}>
                                 {sortedData.map((log) => (
-                                    <Card
-                                        key={log.id}
-                                        elevation={0}
-                                        sx={{
-                                            borderRadius: 3,
-                                            border: '1px solid',
-                                            borderColor: 'divider',
-                                            overflow: 'hidden',
-                                        }}
-                                    >
+                                    <Card key={log.id} elevation={0} sx={{
+                                        borderRadius: 3, border: '1px solid', borderColor: 'divider', overflow: 'hidden',
+                                    }}>
                                         <CardContent sx={{ p: 2.25 }}>
                                             <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={1.5}>
                                                 {getUserDisplay(log)}
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={(e) => handleMenuOpen(e, log)}
-                                                    sx={{ color: 'text.secondary' }}
-                                                >
+                                                <IconButton size="small" onClick={(e) => handleMenuOpen(e, log)} sx={{ color: 'text.secondary' }}>
                                                     <MoreVertIcon fontSize="small" />
                                                 </IconButton>
                                             </Stack>
@@ -963,48 +674,29 @@ const SmsLogsList = () => {
                                                 <Button
                                                     size="small"
                                                     onClick={() => toggleMessageVisibility(log.id)}
-                                                    sx={{
-                                                        minWidth: 0,
-                                                        p: 0,
-                                                        mb: 0.5,
-                                                        fontWeight: 600,
-                                                        textTransform: 'none',
-                                                        color: colors.sea || '#0f766e',
-                                                    }}
+                                                    sx={{ minWidth: 0, p: 0, mb: 0.5, fontWeight: 600, textTransform: 'none', color: colors.sea || '#0f766e' }}
                                                 >
-                                                    {showMessage[log.id] ? 'Hide message' : 'Show message'}
+                                                    {showMessage[log.id] ? t('sms.logs.action.hide') : t('sms.logs.action.show')}
                                                 </Button>
-                                                <Typography
-                                                    variant="body2"
-                                                    sx={{ wordBreak: 'break-word', lineHeight: 1.5 }}
-                                                >
+                                                <Typography variant="body2" sx={{ wordBreak: 'break-word', lineHeight: 1.5 }}>
                                                     {getMessagePreview(log.message, log.id)}
                                                 </Typography>
                                             </Box>
 
                                             <Divider sx={{ my: 1.5 }} />
 
-                                            <Stack
-                                                direction="row"
-                                                justifyContent="space-between"
-                                                alignItems="center"
-                                                flexWrap="wrap"
-                                                gap={1}
-                                            >
+                                            <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
                                                 <Stack direction="row" spacing={1} alignItems="center">
                                                     {getStatusChip(log.status)}
                                                     {log.error_message && (
                                                         <Tooltip title={log.error_message}>
                                                             <Chip
-                                                                label="Error"
+                                                                label={t('sms.status.error')}
                                                                 size="small"
                                                                 icon={<ErrorIcon sx={{ fontSize: 14 }} />}
                                                                 sx={{
-                                                                    bgcolor: '#fee2e2',
-                                                                    color: '#b91c1c',
-                                                                    fontWeight: 700,
-                                                                    border: '1px solid #ef4444',
-                                                                    height: 26,
+                                                                    bgcolor: '#fee2e2', color: '#b91c1c',
+                                                                    fontWeight: 700, border: '1px solid #ef4444', height: 26,
                                                                 }}
                                                             />
                                                         </Tooltip>
@@ -1022,14 +714,7 @@ const SmsLogsList = () => {
                     </Box>
                 )}
 
-                {/* Pagination */}
-                <Box
-                    sx={{
-                        borderTop: '1px solid',
-                        borderColor: 'divider',
-                        bgcolor: 'action.hover',
-                    }}
-                >
+                <Box sx={{ borderTop: '1px solid', borderColor: 'divider', bgcolor: 'action.hover' }}>
                     <TablePagination
                         rowsPerPageOptions={[5, 10, 25, 50]}
                         component="div"
@@ -1037,15 +722,8 @@ const SmsLogsList = () => {
                         rowsPerPage={rowsPerPage}
                         page={page}
                         onPageChange={(e, newPage) => setPage(newPage)}
-                        onRowsPerPageChange={(e) => {
-                            setRowsPerPage(parseInt(e.target.value, 10));
-                            setPage(0);
-                        }}
-                        sx={{
-                            '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
-                                fontWeight: 500,
-                            },
-                        }}
+                        onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
+                        sx={{ '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': { fontWeight: 500 } }}
                     />
                 </Box>
             </Paper>
@@ -1057,21 +735,18 @@ const SmsLogsList = () => {
                 onClose={handleMenuClose}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                 transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-                PaperProps={{
-                    elevation: 8,
-                    sx: { borderRadius: 2, minWidth: 180, mt: 0.5 },
-                }}
+                PaperProps={{ elevation: 8, sx: { borderRadius: 2, minWidth: 180, mt: 0.5 } }}
             >
                 {canResend && selectedLog?.status === 'failed' && (
                     <MenuItem onClick={() => handleAction('resend')} sx={{ fontWeight: 500 }}>
                         <ReplayIcon sx={{ mr: 1.5, color: '#10b981', fontSize: 20 }} />
-                        Resend SMS
+                        {t('sms.logs.action.resend')}
                     </MenuItem>
                 )}
                 {canDelete && (
                     <MenuItem onClick={() => handleAction('delete')} sx={{ color: 'error.main', fontWeight: 500 }}>
                         <DeleteIcon sx={{ mr: 1.5, fontSize: 20 }} />
-                        Delete Log
+                        {t('sms.logs.action.delete')}
                     </MenuItem>
                 )}
             </Menu>
@@ -1083,12 +758,12 @@ const SmsLogsList = () => {
                 onSend={async (data) => {
                     try {
                         await sendSms(data);
-                        showSnackbar({ type: 'success', message: 'SMS sent successfully' });
+                        showSnackbar({ type: 'success', message: t('sms.logs.toast.sendSuccess') });
                         setSendDialogOpen(false);
                         await loadLogs();
                         await loadStats();
                     } catch (err) {
-                        showSnackbar({ type: 'error', message: 'Failed to send SMS' });
+                        showSnackbar({ type: 'error', message: t('sms.logs.toast.sendFailed') });
                     }
                 }}
             />
@@ -1108,8 +783,7 @@ const SmsLogsList = () => {
             <Dialog
                 open={confirmDialog.open}
                 onClose={() => setConfirmDialog((prev) => ({ ...prev, open: false }))}
-                fullWidth
-                maxWidth="xs"
+                fullWidth maxWidth="xs"
                 PaperProps={{ sx: { borderRadius: 3 } }}
             >
                 <DialogTitle sx={{ fontWeight: 700, pb: 1 }}>{confirmDialog.title}</DialogTitle>
@@ -1121,15 +795,14 @@ const SmsLogsList = () => {
                         onClick={() => setConfirmDialog((prev) => ({ ...prev, open: false }))}
                         sx={{ fontWeight: 600, textTransform: 'none' }}
                     >
-                        Cancel
+                        {t('sms.common.cancel')}
                     </Button>
                     <Button
                         onClick={handleConfirm}
-                        variant="contained"
-                        color="error"
+                        variant="contained" color="error"
                         sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 2 }}
                     >
-                        Confirm
+                        {t('sms.common.confirm')}
                     </Button>
                 </DialogActions>
             </Dialog>
