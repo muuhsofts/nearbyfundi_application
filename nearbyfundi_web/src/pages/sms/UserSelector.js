@@ -61,11 +61,14 @@ const UserSelector = ({ open, onClose, onSelect }) => {
             onClose={handleClose}
             maxWidth="sm"
             fullWidth
-            PaperProps={{ sx: { borderRadius: 2, backgroundColor: colors.light, maxHeight: '80vh' } }}
+            PaperProps={{ sx: { borderRadius: 2, bgcolor: 'background.paper', maxHeight: '80vh' } }} // ✅ Theme aware
         >
-            <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: colors.dark }}>
+            <DialogTitle sx={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                color: 'text.primary', // ✅ Theme aware
+            }}>
                 <Typography variant="h6">{t('sms.userSelector.title')}</Typography>
-                <IconButton onClick={handleClose} size="small" sx={{ color: colors.rain }}>
+                <IconButton onClick={handleClose} size="small" sx={{ color: 'text.secondary' }}>
                     <CloseIcon />
                 </IconButton>
             </DialogTitle>
@@ -79,13 +82,13 @@ const UserSelector = ({ open, onClose, onSelect }) => {
                     size="small"
                     sx={{
                         mb: 2,
-                        '& .MuiInputBase-root': { backgroundColor: colors.sky, borderRadius: 2 },
-                        '& .MuiOutlinedInput-notchedOutline': { borderColor: colors.middle },
+                        '& .MuiInputBase-root': { bgcolor: 'action.hover', borderRadius: 2 }, // ✅ Theme aware
+                        '& .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' }, // ✅ Theme aware
                     }}
                     InputProps={{
                         startAdornment: (
                             <InputAdornment position="start">
-                                <SearchIcon fontSize="small" sx={{ color: colors.rain }} />
+                                <SearchIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                             </InputAdornment>
                         ),
                     }}
@@ -97,7 +100,7 @@ const UserSelector = ({ open, onClose, onSelect }) => {
                     </Box>
                 ) : users.length === 0 ? (
                     <Box textAlign="center" py={3}>
-                        <Typography sx={{ color: colors.rain }}>
+                        <Typography sx={{ color: 'text.secondary' }}>
                             {t('sms.userSelector.noUsers')}
                         </Typography>
                     </Box>
@@ -113,14 +116,16 @@ const UserSelector = ({ open, onClose, onSelect }) => {
                                     borderRadius: 1,
                                     mb: 0.5,
                                     '&.Mui-selected': {
-                                        backgroundColor: colors.wave,
-                                        '&:hover': { backgroundColor: colors.wave },
+                                        backgroundColor: 'primary.50', // ✅ Theme aware
+                                        '&:hover': { backgroundColor: 'primary.50' },
                                     },
-                                    '&:hover': { backgroundColor: colors.sky },
+                                    '&:hover': { backgroundColor: 'action.hover' }, // ✅ Theme aware
                                 }}
                             >
                                 <ListItemAvatar>
-                                    <Avatar sx={{ bgcolor: selectedUser?.id === user.id ? colors.salat : colors.rain }}>
+                                    <Avatar sx={{
+                                        bgcolor: selectedUser?.id === user.id ? colors.salat : 'text.secondary',
+                                    }}>
                                         {user.name?.[0]?.toUpperCase() || <PersonIcon />}
                                     </Avatar>
                                 </ListItemAvatar>
@@ -142,12 +147,12 @@ const UserSelector = ({ open, onClose, onSelect }) => {
                                     secondary={
                                         <Box>
                                             {user.email && (
-                                                <Typography variant="body2" sx={{ color: colors.rain }}>
+                                                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                                                     {user.email}
                                                 </Typography>
                                             )}
                                             {user.phone && (
-                                                <Typography variant="body2" sx={{ color: colors.rain }}>
+                                                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                                                     {user.phone}
                                                 </Typography>
                                             )}
@@ -161,7 +166,7 @@ const UserSelector = ({ open, onClose, onSelect }) => {
             </DialogContent>
 
             <DialogActions sx={{ p: 2, pt: 0 }}>
-                <Button onClick={handleClose} sx={{ color: colors.rain }}>
+                <Button onClick={handleClose} sx={{ color: 'text.secondary' }}>
                     {t('sms.common.cancel')}
                 </Button>
                 <Button
@@ -171,7 +176,7 @@ const UserSelector = ({ open, onClose, onSelect }) => {
                     sx={{
                         backgroundColor: colors.salat,
                         '&:hover': { backgroundColor: colors.dark },
-                        '&.Mui-disabled': { backgroundColor: colors.middle },
+                        '&.Mui-disabled': { backgroundColor: 'action.disabledBackground' }, // ✅ Theme aware
                     }}
                 >
                     {t('sms.userSelector.selectButton')}

@@ -1,68 +1,44 @@
 // src/pages/categories/CategoriesList.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
-    Box,
-    Paper,
-    Typography,
-    Button,
-    TextField,
-    InputAdornment,
-    IconButton,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    TablePagination,
-    TableSortLabel,
-    CircularProgress,
-    Alert,
-    Chip,
-    Stack,
-    Card,
-    CardContent,
-    Grid,
-    useMediaQuery,
-    useTheme,
-    alpha,
+    Box, Paper, Typography, Button, TextField, InputAdornment, IconButton,
+    Dialog, DialogTitle, DialogContent, DialogActions, Table, TableBody,
+    TableCell, TableContainer, TableHead, TableRow, TablePagination,
+    TableSortLabel, CircularProgress, Alert, Chip, Stack, Card, CardContent,
+    Grid, useMediaQuery, useTheme, alpha,
 } from '@mui/material';
 import {
-    Add as AddIcon,
-    Search as SearchIcon,
-    Refresh as RefreshIcon,
-    Edit as EditIcon,
-    Delete as DeleteIcon,
-    Clear as ClearIcon,
-    Category as CategoryIcon,
-    Label as LabelIcon,
-    Description as DescriptionIcon,
+    Add as AddIcon, Search as SearchIcon, Refresh as RefreshIcon,
+    Edit as EditIcon, Delete as DeleteIcon, Clear as ClearIcon,
+    Category as CategoryIcon, Label as LabelIcon, Description as DescriptionIcon,
 } from '@mui/icons-material';
 import { serviceService } from 'services/service.service';
 import { usePermissions } from 'hooks/usePermissions';
+import { useLanguage } from 'context/LanguageContext';
 import { showSnackbar } from 'utils/snackbar';
+import { tCategory } from './categorieslang';
 import CategoryFormModal from './CategoryFormModal';
 import appConfig from '../../config';
 
 const colors = appConfig.app.colors;
 
-const headCells = [
-    { id: 'id', label: '#', disableSort: true },
-    { id: 'category_name', label: 'Category Name' },
-    { id: 'swahili_name', label: 'Swahili Name' },
-    { id: 'slug', label: 'Slug', disableSort: true },
-    { id: 'services_count', label: 'Services' },
-    { id: 'actions', label: 'Actions', disableSort: true },
+const getHeadCells = (t) => [
+    { id: 'id', label: t('category.list.col.id'), disableSort: true },
+    { id: 'category_name', label: t('category.list.col.name') },
+    { id: 'swahili_name', label: t('category.list.col.swahili') },
+    { id: 'slug', label: t('category.list.col.slug'), disableSort: true },
+    { id: 'services_count', label: t('category.list.col.services') },
+    { id: 'actions', label: t('category.list.col.actions'), disableSort: true },
 ];
 
 const CategoriesList = () => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const showTableView = useMediaQuery(theme.breakpoints.up('md'));
+
+    const { language } = useLanguage();
+    const t = (key, replacements) => tCategory(language, key, replacements);
+    const headCells = useMemo(() => getHeadCells(t), [language]);
 
     const { can } = usePermissions();
     const canView = can('service-categories.view');
@@ -86,10 +62,7 @@ const CategoriesList = () => {
     const [orderBy, setOrderBy] = useState('category_name');
 
     const [confirmDialog, setConfirmDialog] = useState({
-        open: false,
-        title: '',
-        message: '',
-        action: null,
+        open: false, title: '', message: '', action: null,
     });
 
     const loadCategories = async () => {
@@ -112,7 +85,7 @@ const CategoriesList = () => {
             }
         } catch (err) {
             console.error('Categories error:', err);
-            setError(err.message || 'Failed to load categories');
+            setError(err.message || t('category.list.loadFailed'));
         } finally {
             setLoading(false);
         }
@@ -143,19 +116,19 @@ const CategoriesList = () => {
     const handleDelete = async (id, name) => {
         setConfirmDialog({
             open: true,
-            title: 'Delete Category',
-            message: `Are you sure you want to delete "${name}"? This will not delete its associated services, but will remove the assignment.`,
+            title: t('category.delete.title'),
+            message: t('category.delete.message', { name }),
             action: async () => {
                 try {
                     await serviceService.deleteCategory(id);
-                    showSnackbar({ type: 'success', message: 'Category deleted successfully' });
+                    showSnackbar({ type: 'success', message: t('category.delete.success') });
                     loadCategories();
                 } catch (err) {
-                    const msg = err.response?.data?.message || 'Failed to delete category';
+                    const msg = err.response?.data?.message || t('category.delete.failed');
                     showSnackbar({ type: 'error', message: msg });
                 }
                 setConfirmDialog(prev => ({ ...prev, open: false }));
-            }
+            },
         });
     };
 
@@ -166,18 +139,13 @@ const CategoriesList = () => {
     if (!canView) {
         return (
             <Box p={3}>
-                <Paper
-                    elevation={0}
-                    sx={{
-                        p: 4,
-                        textAlign: 'center',
-                        borderRadius: 3,
-                        border: '1px solid',
-                        borderColor: 'divider',
-                    }}
-                >
+                <Paper elevation={0} sx={{
+                    p: 4, textAlign: 'center', borderRadius: 3,
+                    border: '1px solid', borderColor: 'divider',
+                    bgcolor: 'background.paper',
+                }}>
                     <Typography color="error" fontWeight={600}>
-                        You do not have permission to view categories.
+                        {t('category.accessDenied')}
                     </Typography>
                 </Paper>
             </Box>
@@ -191,7 +159,7 @@ const CategoriesList = () => {
                     severity="error"
                     action={
                         <Button color="inherit" size="small" onClick={() => { setError(null); loadCategories(); }}>
-                            Retry
+                            {t('category.common.retry')}
                         </Button>
                     }
                     sx={{ borderRadius: 2 }}
@@ -204,79 +172,47 @@ const CategoriesList = () => {
 
     return (
         <Box sx={{ width: '100%', p: { xs: 1.5, sm: 2.5 }, m: 0, bgcolor: 'background.default' }}>
-            <Paper
-                elevation={0}
-                sx={{
-                    width: '100%',
-                    borderRadius: 3,
-                    overflow: 'hidden',
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    bgcolor: 'background.paper',
-                }}
-            >
-                {/* ── HEADER ────────────────────────────────────────────── */}
-                <Box
-                    sx={{
-                        px: { xs: 2, sm: 3 },
-                        py: 2.5,
-                        borderBottom: '1px solid',
-                        borderColor: 'divider',
-                    }}
-                >
-                    <Stack
-                        direction={{ xs: 'column', sm: 'row' }}
-                        justifyContent="space-between"
-                        alignItems={{ xs: 'stretch', sm: 'center' }}
-                        spacing={2}
-                        mb={2.5}
-                    >
+            <Paper elevation={0} sx={{
+                width: '100%', borderRadius: 3, overflow: 'hidden',
+                border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper',
+            }}>
+                {/* HEADER */}
+                <Box sx={{ px: { xs: 2, sm: 3 }, py: 2.5, borderBottom: '1px solid', borderColor: 'divider' }}>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between"
+                           alignItems={{ xs: 'stretch', sm: 'center' }} spacing={2} mb={2.5}>
                         <Box>
                             <Typography variant="h5" fontWeight={800} color="text.primary">
-                                Service Categories
+                                {t('category.list.title')}
                             </Typography>
                             <Typography variant="body2" color="text.secondary" fontWeight={500}>
-                                Manage service categories and their translations
+                                {t('category.list.subtitle')}
                             </Typography>
                         </Box>
 
                         <Stack direction="row" spacing={1.5} alignItems="center" justifyContent={{ xs: 'space-between', sm: 'flex-end' }}>
                             {canCreate && (
                                 <Button
-                                    variant="contained"
-                                    startIcon={<AddIcon />}
+                                    variant="contained" startIcon={<AddIcon />}
                                     onClick={() => { setEditingCategory(null); setOpenModal(true); }}
                                     size={isMobile ? 'small' : 'medium'}
                                     sx={{
-                                        borderRadius: 2,
-                                        fontWeight: 700,
-                                        textTransform: 'none',
-                                        px: 2.5,
-                                        boxShadow: 'none',
+                                        borderRadius: 2, fontWeight: 700, textTransform: 'none', px: 2.5, boxShadow: 'none',
                                         bgcolor: colors.salat || '#10b981',
-                                        '&:hover': {
-                                            bgcolor: colors.dark || '#047857',
-                                            boxShadow: '0 4px 12px rgba(16,185,129,0.35)',
-                                        },
+                                        '&:hover': { bgcolor: colors.dark || '#047857', boxShadow: '0 4px 12px rgba(16,185,129,0.35)' },
                                     }}
                                 >
-                                    Add Category
+                                    {t('category.list.addCategory')}
                                 </Button>
                             )}
                         </Stack>
                     </Stack>
 
-                    {/* ── FILTERS ──────────────────────────────────────── */}
-                    <Stack
-                        direction={{ xs: 'column', sm: 'row' }}
-                        spacing={1.5}
-                        alignItems={{ xs: 'stretch', sm: 'center' }}
-                        flexWrap="wrap"
-                    >
+                    {/* FILTERS */}
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}
+                           alignItems={{ xs: 'stretch', sm: 'center' }} flexWrap="wrap">
                         <TextField
-                            placeholder="Search categories..."
-                            size="small"
-                            value={search}
+                            placeholder={t('category.list.searchPlaceholder')}
+                            size="small" value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             InputProps={{
                                 startAdornment: (
@@ -293,11 +229,9 @@ const CategoriesList = () => {
                                 ) : null,
                             }}
                             sx={{
-                                minWidth: { xs: '100%', sm: 260 },
-                                flexGrow: { xs: 1, sm: 0 },
+                                minWidth: { xs: '100%', sm: 260 }, flexGrow: { xs: 1, sm: 0 },
                                 '& .MuiOutlinedInput-root': {
-                                    borderRadius: 2,
-                                    bgcolor: 'action.hover',
+                                    borderRadius: 2, bgcolor: 'action.hover',
                                     '& fieldset': { borderColor: 'transparent' },
                                     '&:hover fieldset': { borderColor: 'divider' },
                                     '&.Mui-focused fieldset': { borderColor: 'primary.main' },
@@ -306,47 +240,34 @@ const CategoriesList = () => {
                         />
 
                         <Button
-                            variant="outlined"
-                            startIcon={<RefreshIcon />}
-                            onClick={loadCategories}
-                            disabled={loading}
+                            variant="outlined" startIcon={<RefreshIcon />}
+                            onClick={loadCategories} disabled={loading}
                             size={isMobile ? 'small' : 'medium'}
                             sx={{
-                                borderRadius: 2,
-                                fontWeight: 600,
-                                textTransform: 'none',
-                                borderColor: 'divider',
-                                color: 'text.primary',
-                                '&:hover': {
-                                    borderColor: 'text.primary',
-                                    bgcolor: 'action.hover',
-                                },
+                                borderRadius: 2, fontWeight: 600, textTransform: 'none',
+                                borderColor: 'divider', color: 'text.primary',
+                                '&:hover': { borderColor: 'text.primary', bgcolor: 'action.hover' },
                             }}
                         >
-                            Refresh
+                            {t('category.common.refresh')}
                         </Button>
                     </Stack>
                 </Box>
 
-                {/* ── SUMMARY CARDS ────────────────────────────────────── */}
+                {/* SUMMARY CARDS */}
                 <Box sx={{ px: { xs: 2, sm: 3 }, pt: 2.5, pb: 1 }}>
                     <Grid container spacing={2}>
                         {[
-                            { label: 'Total Categories', value: total, color: '#8b5cf6', bg: '#f3e8ff', icon: <CategoryIcon sx={{ fontSize: 18 }} /> },
-                            { label: 'With Services', value: categories.filter(c => c.services_count > 0).length, color: '#10b981', bg: '#ecfdf5', icon: <LabelIcon sx={{ fontSize: 18 }} /> },
-                            { label: 'Translated', value: categories.filter(c => c.swahili_name).length, color: '#3b82f6', bg: '#eff6ff', icon: <DescriptionIcon sx={{ fontSize: 18 }} /> },
+                            { label: t('category.list.stat.total'), value: total, color: '#8b5cf6', icon: <CategoryIcon sx={{ fontSize: 18 }} /> },
+                            { label: t('category.list.stat.withServices'), value: categories.filter(c => c.services_count > 0).length, color: '#10b981', icon: <LabelIcon sx={{ fontSize: 18 }} /> },
+                            { label: t('category.list.stat.translated'), value: categories.filter(c => c.swahili_name).length, color: '#3b82f6', icon: <DescriptionIcon sx={{ fontSize: 18 }} /> },
                         ].map((item, idx) => (
                             <Grid item xs={6} sm={4} key={idx}>
-                                <Card
-                                    elevation={0}
-                                    sx={{
-                                        borderRadius: 2,
-                                        border: '1px solid',
-                                        borderColor: 'divider',
-                                        backgroundColor: item.bg,
-                                        height: '100%',
-                                    }}
-                                >
+                                <Card elevation={0} sx={{
+                                    borderRadius: 2, border: '1px solid', borderColor: 'divider',
+                                    bgcolor: 'background.paper', // ✅ Theme aware
+                                    height: '100%',
+                                }}>
                                     <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
                                         <Box display="flex" alignItems="center" justifyContent="space-between">
                                             <Typography variant="caption" sx={{ color: item.color, fontWeight: 600 }}>
@@ -364,26 +285,19 @@ const CategoriesList = () => {
                     </Grid>
                 </Box>
 
-                {/* ── TABLE (DESKTOP) ───────────────────────────────────── */}
+                {/* TABLE */}
                 {showTableView ? (
                     <TableContainer>
                         <Table sx={{ minWidth: 700 }}>
                             <TableHead>
-                                <TableRow
-                                    sx={{
-                                        bgcolor: 'action.hover',
-                                        '& th': {
-                                            fontWeight: 700,
-                                            fontSize: '0.8125rem',
-                                            color: 'text.secondary',
-                                            textTransform: 'uppercase',
-                                            letterSpacing: 0.6,
-                                            borderBottom: '1px solid',
-                                            borderColor: 'divider',
-                                            py: 1.75,
-                                        },
-                                    }}
-                                >
+                                <TableRow sx={{
+                                    bgcolor: 'action.hover',
+                                    '& th': {
+                                        fontWeight: 700, fontSize: '0.8125rem', color: 'text.secondary',
+                                        textTransform: 'uppercase', letterSpacing: 0.6,
+                                        borderBottom: '1px solid', borderColor: 'divider', py: 1.75,
+                                    },
+                                }}>
                                     {headCells.map((cell) => (
                                         <TableCell key={cell.id} sx={{ whiteSpace: 'nowrap' }}>
                                             {!cell.disableSort ? (
@@ -394,9 +308,7 @@ const CategoriesList = () => {
                                                 >
                                                     {cell.label}
                                                 </TableSortLabel>
-                                            ) : (
-                                                cell.label
-                                            )}
+                                            ) : cell.label}
                                         </TableCell>
                                     ))}
                                 </TableRow>
@@ -413,7 +325,7 @@ const CategoriesList = () => {
                                     <TableRow>
                                         <TableCell colSpan={headCells.length} align="center" sx={{ py: 8 }}>
                                             <Typography color="text.secondary" fontWeight={500}>
-                                                {search ? 'No categories match your search' : 'No categories found'}
+                                                {search ? t('category.list.noMatch') : t('category.list.noFound')}
                                             </Typography>
                                         </TableCell>
                                     </TableRow>
@@ -421,14 +333,8 @@ const CategoriesList = () => {
                                     sortedCategories.map((cat, index) => {
                                         const rowNumber = page * rowsPerPage + index + 1;
                                         return (
-                                            <TableRow
-                                                key={cat.service_categoryID}
-                                                hover
-                                                sx={{
-                                                    '&:last-child td': { borderBottom: 0 },
-                                                    transition: 'background-color 0.15s',
-                                                }}
-                                            >
+                                            <TableRow key={cat.service_categoryID} hover
+                                                      sx={{ '&:last-child td': { borderBottom: 0 }, transition: 'background-color 0.15s' }}>
                                                 <TableCell>
                                                     <Typography variant="body2" fontWeight={500} color="text.secondary">
                                                         {rowNumber}
@@ -454,10 +360,8 @@ const CategoriesList = () => {
                                                         label={cat.slug || '-'}
                                                         size="small"
                                                         sx={{
-                                                            fontWeight: 600,
-                                                            bgcolor: 'action.hover',
-                                                            fontSize: '0.7rem',
-                                                            height: 24,
+                                                            fontWeight: 600, bgcolor: 'action.hover',
+                                                            fontSize: '0.7rem', height: 24,
                                                         }}
                                                     />
                                                 </TableCell>
@@ -468,8 +372,7 @@ const CategoriesList = () => {
                                                         sx={{
                                                             fontWeight: 700,
                                                             bgcolor: alpha(colors.sea, 0.08),
-                                                            color: colors.sea,
-                                                            minWidth: 36,
+                                                            color: colors.sea, minWidth: 36,
                                                         }}
                                                     />
                                                 </TableCell>
@@ -481,10 +384,7 @@ const CategoriesList = () => {
                                                                 onClick={() => { setEditingCategory(cat); setOpenModal(true); }}
                                                                 sx={{
                                                                     color: 'text.secondary',
-                                                                    '&:hover': {
-                                                                        color: colors.sea,
-                                                                        bgcolor: alpha(colors.sea, 0.08),
-                                                                    },
+                                                                    '&:hover': { color: colors.sea, bgcolor: alpha(colors.sea, 0.08) },
                                                                 }}
                                                             >
                                                                 <EditIcon fontSize="small" />
@@ -496,10 +396,7 @@ const CategoriesList = () => {
                                                                 onClick={() => handleDelete(cat.service_categoryID, cat.category_name)}
                                                                 sx={{
                                                                     color: 'text.secondary',
-                                                                    '&:hover': {
-                                                                        color: 'error.main',
-                                                                        bgcolor: alpha('#ef4444', 0.08),
-                                                                    },
+                                                                    '&:hover': { color: 'error.main', bgcolor: alpha('#ef4444', 0.08) },
                                                                 }}
                                                             >
                                                                 <DeleteIcon fontSize="small" />
@@ -515,40 +412,27 @@ const CategoriesList = () => {
                         </Table>
                     </TableContainer>
                 ) : (
-                    /* ── MOBILE CARDS ──────────────────────────────────── */
+                    /* MOBILE CARDS */
                     <Box sx={{ p: { xs: 2, sm: 2.5 } }}>
                         {loading ? (
                             <Box display="flex" justifyContent="center" py={6}>
                                 <CircularProgress size={36} thickness={4} />
                             </Box>
                         ) : sortedCategories.length === 0 ? (
-                            <Paper
-                                variant="outlined"
-                                sx={{
-                                    p: 5,
-                                    textAlign: 'center',
-                                    borderRadius: 3,
-                                    borderStyle: 'dashed',
-                                }}
-                            >
+                            <Paper variant="outlined" sx={{ p: 5, textAlign: 'center', borderRadius: 3, borderStyle: 'dashed', bgcolor: 'background.paper' }}>
                                 <CategoryIcon sx={{ fontSize: 56, color: 'text.disabled', mb: 2 }} />
                                 <Typography color="text.secondary" fontWeight={500}>
-                                    {search ? 'No categories match your search' : 'No categories found'}
+                                    {search ? t('category.list.noMatch') : t('category.list.noFound')}
                                 </Typography>
                             </Paper>
                         ) : (
                             <Stack spacing={2}>
                                 {sortedCategories.map((cat) => (
-                                    <Card
-                                        key={cat.service_categoryID}
-                                        elevation={0}
-                                        sx={{
-                                            borderRadius: 3,
-                                            border: '1px solid',
-                                            borderColor: 'divider',
-                                            overflow: 'hidden',
-                                        }}
-                                    >
+                                    <Card key={cat.service_categoryID} elevation={0} sx={{
+                                        borderRadius: 3, border: '1px solid', borderColor: 'divider',
+                                        bgcolor: 'background.paper', // ✅ Theme aware
+                                        overflow: 'hidden',
+                                    }}>
                                         <CardContent sx={{ p: 2.5 }}>
                                             <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={1.5}>
                                                 <Box>
@@ -563,20 +447,16 @@ const CategoriesList = () => {
                                                 </Box>
                                                 <Stack direction="row" spacing={0.5}>
                                                     {canEdit && (
-                                                        <IconButton
-                                                            size="small"
-                                                            onClick={() => { setEditingCategory(cat); setOpenModal(true); }}
-                                                            sx={{ color: 'text.secondary' }}
-                                                        >
+                                                        <IconButton size="small"
+                                                                    onClick={() => { setEditingCategory(cat); setOpenModal(true); }}
+                                                                    sx={{ color: 'text.secondary' }}>
                                                             <EditIcon fontSize="small" />
                                                         </IconButton>
                                                     )}
                                                     {canDelete && (
-                                                        <IconButton
-                                                            size="small"
-                                                            onClick={() => handleDelete(cat.service_categoryID, cat.category_name)}
-                                                            sx={{ color: 'text.secondary' }}
-                                                        >
+                                                        <IconButton size="small"
+                                                                    onClick={() => handleDelete(cat.service_categoryID, cat.category_name)}
+                                                                    sx={{ color: 'text.secondary' }}>
                                                             <DeleteIcon fontSize="small" />
                                                         </IconButton>
                                                     )}
@@ -591,17 +471,18 @@ const CategoriesList = () => {
 
                                             <Stack direction="row" spacing={1.5} alignItems="center">
                                                 <Chip
-                                                    label={`Slug: ${cat.slug || '-'}`}
+                                                    label={t('category.list.slugLabel', { slug: cat.slug || '-' })}
                                                     size="small"
                                                     sx={{
-                                                        fontWeight: 600,
-                                                        bgcolor: 'action.hover',
-                                                        fontSize: '0.7rem',
-                                                        height: 24,
+                                                        fontWeight: 600, bgcolor: 'action.hover',
+                                                        fontSize: '0.7rem', height: 24,
                                                     }}
                                                 />
                                                 <Chip
-                                                    label={`${cat.services_count || 0} service${cat.services_count !== 1 ? 's' : ''}`}
+                                                    label={t('category.list.servicesCount', {
+                                                        n: cat.services_count || 0,
+                                                        s: cat.services_count !== 1 ? 's' : '',
+                                                    })}
                                                     size="small"
                                                     sx={{
                                                         fontWeight: 700,
@@ -618,14 +499,8 @@ const CategoriesList = () => {
                     </Box>
                 )}
 
-                {/* ── PAGINATION ────────────────────────────────────────── */}
-                <Box
-                    sx={{
-                        borderTop: '1px solid',
-                        borderColor: 'divider',
-                        bgcolor: 'action.hover',
-                    }}
-                >
+                {/* PAGINATION */}
+                <Box sx={{ borderTop: '1px solid', borderColor: 'divider', bgcolor: 'action.hover' }}>
                     <TablePagination
                         rowsPerPageOptions={[5, 10, 25, 50]}
                         component="div"
@@ -646,24 +521,19 @@ const CategoriesList = () => {
                 </Box>
             </Paper>
 
-            {/* ─── CATEGORY FORM MODAL ──────────────────────────────────── */}
+            {/* CATEGORY FORM MODAL */}
             <CategoryFormModal
                 open={openModal}
                 onClose={() => { setOpenModal(false); setEditingCategory(null); loadCategories(); }}
                 category={editingCategory}
             />
 
-            {/* ─── CONFIRMATION DIALOG ─────────────────────────────────── */}
+            {/* CONFIRMATION DIALOG */}
             <Dialog
                 open={confirmDialog.open}
                 onClose={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
-                fullWidth
-                maxWidth="xs"
-                PaperProps={{
-                    sx: {
-                        borderRadius: 3,
-                    },
-                }}
+                fullWidth maxWidth="xs"
+                PaperProps={{ sx: { borderRadius: 3, bgcolor: 'background.paper' } }}
             >
                 <DialogTitle sx={{ fontWeight: 700, pb: 1, color: 'text.primary' }}>
                     {confirmDialog.title}
@@ -676,15 +546,14 @@ const CategoriesList = () => {
                         onClick={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
                         sx={{ fontWeight: 600, textTransform: 'none' }}
                     >
-                        Cancel
+                        {t('category.common.cancel')}
                     </Button>
                     <Button
                         onClick={handleConfirm}
-                        variant="contained"
-                        color="error"
+                        variant="contained" color="error"
                         sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 2 }}
                     >
-                        Delete
+                        {t('category.common.delete')}
                     </Button>
                 </DialogActions>
             </Dialog>

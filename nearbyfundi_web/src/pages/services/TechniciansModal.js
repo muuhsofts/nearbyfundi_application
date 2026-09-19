@@ -65,7 +65,11 @@ const TechniciansModal = ({ open, onClose, serviceId, serviceName }) => {
             onClose={onClose}
             maxWidth="sm" fullWidth
             PaperProps={{
-                sx: { borderRadius: 3, border: '1px solid', borderColor: 'divider' },
+                sx: {
+                    borderRadius: 3,
+                    border: '1px solid', borderColor: 'divider',
+                    bgcolor: 'background.paper', // ✅ Theme aware
+                },
             }}
         >
             <DialogTitle
@@ -134,7 +138,7 @@ const TechniciansModal = ({ open, onClose, serviceId, serviceName }) => {
                                         sx={{
                                             py: 2.5, px: 2.5,
                                             transition: 'background-color 0.15s',
-                                            '&:hover': { bgcolor: alpha(colors.sea, 0.03) },
+                                            '&:hover': { bgcolor: 'action.hover' }, // ✅ Theme aware
                                         }}
                                     >
                                         <ListItemAvatar>
@@ -163,9 +167,10 @@ const TechniciansModal = ({ open, onClose, serviceId, serviceName }) => {
                                                             size="small"
                                                             sx={{
                                                                 fontWeight: 600,
-                                                                bgcolor: '#d1fae5',
-                                                                color: '#047857',
-                                                                border: '1px solid #10b981',
+                                                                bgcolor: 'success.light', // ✅ Theme aware
+                                                                color: 'success.dark',
+                                                                border: '1px solid',
+                                                                borderColor: 'success.main',
                                                                 height: 22, fontSize: '0.65rem',
                                                             }}
                                                         />
@@ -209,13 +214,13 @@ const TechniciansModal = ({ open, onClose, serviceId, serviceName }) => {
                                                     </Box>
 
                                                     <Box display="flex" alignItems="center" gap={1}>
-                                                        <StarIcon sx={{ fontSize: 16, color: '#f59e0b' }} />
+                                                        <StarIcon sx={{ fontSize: 16, color: 'warning.main' }} />
                                                         <Rating
                                                             value={rating}
                                                             readOnly
                                                             precision={0.5}
                                                             size="small"
-                                                            sx={{ color: '#f59e0b' }}
+                                                            sx={{ color: 'warning.main' }}
                                                         />
                                                         <Typography variant="body2" fontWeight={600} color="text.primary">
                                                             ({rating.toFixed(1)})
@@ -231,7 +236,7 @@ const TechniciansModal = ({ open, onClose, serviceId, serviceName }) => {
                                             }
                                         />
                                     </ListItem>
-                                    {index < technicians.length - 1 && <Divider sx={{ mx: 2.5 }} />}
+                                    {index < technicians.length - 1 && <Divider sx={{ mx: 2.5, borderColor: 'divider' }} />}
                                 </React.Fragment>
                             );
                         })}

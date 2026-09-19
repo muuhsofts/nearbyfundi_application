@@ -1,29 +1,18 @@
-// src/pages/auth/ResetPassword.jsx
+// src/pages/reset_password/ResetPassword.js
 import { useState, useEffect, useRef } from 'react';
 import {
-    Container,
-    Paper,
-    TextField,
-    Button,
-    Typography,
-    Box,
-    IconButton,
-    InputAdornment,
-    CircularProgress,
-    useTheme,
-    alpha,
-    Grid,
-    Alert,
+    Container, Paper, TextField, Button, Typography, Box, IconButton,
+    InputAdornment, CircularProgress, useTheme, alpha, Grid, Alert,
 } from '@mui/material';
 import {
-    Visibility,
-    VisibilityOff,
-    Lock as LockIcon,
+    Visibility, VisibilityOff, Lock as LockIcon,
     ArrowBack as ArrowBackIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useLanguage } from 'context/LanguageContext';
 import { showSnackbar } from 'utils/snackbar';
 import { authService } from 'services/auth.service';
+import { tReset } from './resetlang';
 
 const logo = '/assets/logo.png';
 
@@ -31,6 +20,10 @@ export default function ResetPassword() {
     const theme = useTheme();
     const navigate = useNavigate();
     const location = useLocation();
+
+    // ✅ LANGUAGE
+    const { language } = useLanguage();
+    const t = (key, replacements) => tReset(language, key, replacements);
 
     // Get email from URL query parameter or state
     const queryParams = new URLSearchParams(location.search);
@@ -50,10 +43,10 @@ export default function ResetPassword() {
 
     useEffect(() => {
         if (!email) {
-            showSnackbar({ type: 'warning', message: 'Please request a password reset first' });
+            showSnackbar({ type: 'warning', message: t('reset.requestFirst') });
             navigate('/forgot-password', { replace: true });
         }
-    }, [email, navigate]);
+    }, [email, navigate, language]);
 
     useEffect(() => {
         if (inputRefs.current[0]) {
@@ -114,15 +107,15 @@ export default function ResetPassword() {
         const otpString = getOtpString();
 
         if (password !== confirmPassword) {
-            setError('Passwords do not match');
+            setError(t('reset.passwordsMismatch'));
             return;
         }
         if (otpString.length !== 6) {
-            setError('Please enter all 6 digits of OTP');
+            setError(t('reset.otpIncomplete'));
             return;
         }
         if (password.length < 8) {
-            setError('Password must be at least 8 characters');
+            setError(t('reset.passwordTooShort'));
             return;
         }
 
@@ -132,21 +125,19 @@ export default function ResetPassword() {
         try {
             const res = await authService.resetPassword(email, otpString, password, confirmPassword);
             if (res.data.success) {
-                showSnackbar({ type: 'success', message: 'Password reset successful! 🎉' });
+                showSnackbar({ type: 'success', message: t('reset.success') });
                 setTimeout(() => navigate('/login', { replace: true }), 2000);
             } else {
-                setError(res.data.message || 'Reset failed');
+                setError(res.data.message || t('reset.resetFailed'));
             }
         } catch (err) {
-            setError(err.response?.data?.message || 'Password reset failed');
+            setError(err.response?.data?.message || t('reset.failed'));
         } finally {
             setLoading(false);
         }
     };
 
-    if (!email) {
-        return null;
-    }
+    if (!email) return null;
 
     return (
         <Box
@@ -184,17 +175,22 @@ export default function ResetPassword() {
                                     sx={{ width: 50, height: 50, mx: 'auto', mb: 2 }}
                                 />
                                 <Typography variant="h4" fontWeight="800" gutterBottom sx={{ color: '#0f172a' }}>
-                                    Reset Password
+                                    {t('reset.title')}
                                 </Typography>
                                 <Typography variant="body2" sx={{ color: '#334155', fontWeight: 500 }}>
-                                    Enter the OTP sent to <strong style={{ color: '#006B5E', fontWeight: 700 }}>{email}</strong>
+                                    {t('reset.subtitle')}{' '}
+                                    <strong style={{ color: '#006B5E', fontWeight: 700 }}>{email}</strong>
                                 </Typography>
                             </Box>
 
                             <form onSubmit={handleSubmit}>
                                 <Box sx={{ mb: 3 }}>
-                                    <Typography variant="caption" display="block" sx={{ mb: 2, color: '#334155', fontWeight: 600, fontSize: '0.85rem' }}>
-                                        Enter 6-digit OTP
+                                    <Typography
+                                        variant="caption"
+                                        display="block"
+                                        sx={{ mb: 2, color: '#334155', fontWeight: 600, fontSize: '0.85rem' }}
+                                    >
+                                        {t('reset.otpLabel')}
                                     </Typography>
                                     <Box
                                         display="flex"
@@ -244,14 +240,18 @@ export default function ResetPassword() {
                                             />
                                         ))}
                                     </Box>
-                                    <Typography variant="caption" display="block" sx={{ mt: 1, textAlign: 'center', color: '#475569', fontWeight: 500 }}>
-                                        Check your email for the OTP code
+                                    <Typography
+                                        variant="caption"
+                                        display="block"
+                                        sx={{ mt: 1, textAlign: 'center', color: '#475569', fontWeight: 500 }}
+                                    >
+                                        {t('reset.otpHint')}
                                     </Typography>
                                 </Box>
 
                                 <TextField
                                     fullWidth
-                                    label="New Password"
+                                    label={t('reset.newPassword')}
                                     type={showPassword ? 'text' : 'password'}
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
@@ -289,18 +289,23 @@ export default function ResetPassword() {
                                         ),
                                         endAdornment: (
                                             <InputAdornment position="end">
-                                                <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" size="small" sx={{ color: '#006B5E' }}>
+                                                <IconButton
+                                                    onClick={() => setShowPassword(!showPassword)}
+                                                    edge="end"
+                                                    size="small"
+                                                    sx={{ color: '#006B5E' }}
+                                                >
                                                     {showPassword ? <VisibilityOff /> : <Visibility />}
                                                 </IconButton>
                                             </InputAdornment>
                                         ),
                                     }}
-                                    helperText="Minimum 8 characters"
+                                    helperText={t('reset.passwordHelper')}
                                 />
 
                                 <TextField
                                     fullWidth
-                                    label="Confirm Password"
+                                    label={t('reset.confirmPassword')}
                                     type={showConfirm ? 'text' : 'password'}
                                     value={confirmPassword}
                                     onChange={(e) => setConfirmPassword(e.target.value)}
@@ -334,7 +339,12 @@ export default function ResetPassword() {
                                         ),
                                         endAdornment: (
                                             <InputAdornment position="end">
-                                                <IconButton onClick={() => setShowConfirm(!showConfirm)} edge="end" size="small" sx={{ color: '#006B5E' }}>
+                                                <IconButton
+                                                    onClick={() => setShowConfirm(!showConfirm)}
+                                                    edge="end"
+                                                    size="small"
+                                                    sx={{ color: '#006B5E' }}
+                                                >
                                                     {showConfirm ? <VisibilityOff /> : <Visibility />}
                                                 </IconButton>
                                             </InputAdornment>
@@ -369,7 +379,7 @@ export default function ResetPassword() {
                                         },
                                     }}
                                 >
-                                    {loading ? <CircularProgress size={24} color="inherit" /> : 'Reset Password'}
+                                    {loading ? <CircularProgress size={24} color="inherit" /> : t('reset.submit')}
                                 </Button>
 
                                 <Button
@@ -379,7 +389,7 @@ export default function ResetPassword() {
                                     onClick={() => navigate('/forgot-password')}
                                     sx={{ mt: 2, textTransform: 'none', color: '#006B5E', fontWeight: 700 }}
                                 >
-                                    Back
+                                    {t('reset.back')}
                                 </Button>
                             </form>
                         </Paper>

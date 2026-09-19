@@ -247,14 +247,12 @@ const FaqList = () => {
                                 label: t('faq.total'),
                                 value: totalCount,
                                 color: '#3b82f6',
-                                bg: '#eff6ff',
                                 icon: <QuestionAnswerIcon sx={{ fontSize: 18 }} />,
                             },
                             {
                                 label: t('faq.withAnswers'),
                                 value: faqList.filter((f) => f.answer?.trim()).length,
                                 color: '#10b981',
-                                bg: '#ecfdf5',
                                 icon: <DescriptionIcon sx={{ fontSize: 18 }} />,
                             },
                             {
@@ -264,7 +262,6 @@ const FaqList = () => {
                                         ? new Date(faqList[0].updated_at).toLocaleDateString()
                                         : t('faq.never'),
                                 color: '#8b5cf6',
-                                bg: '#f3e8ff',
                                 icon: <SortIcon sx={{ fontSize: 18 }} />,
                             },
                         ].map((item, idx) => (
@@ -275,7 +272,7 @@ const FaqList = () => {
                                         borderRadius: 2,
                                         border: '1px solid',
                                         borderColor: 'divider',
-                                        backgroundColor: item.bg,
+                                        bgcolor: 'background.paper', // ✅ Theme aware
                                         height: '100%',
                                     }}
                                 >
@@ -427,7 +424,10 @@ const FaqList = () => {
                         ) : faqList.length === 0 ? (
                             <Paper
                                 variant="outlined"
-                                sx={{ p: 5, textAlign: 'center', borderRadius: 3, borderStyle: 'dashed' }}
+                                sx={{
+                                    p: 5, textAlign: 'center', borderRadius: 3, borderStyle: 'dashed',
+                                    bgcolor: 'background.paper', // ✅ Theme aware
+                                }}
                             >
                                 <QuestionAnswerIcon sx={{ fontSize: 56, color: 'text.disabled', mb: 2 }} />
                                 <Typography color="text.secondary" fontWeight={500}>
@@ -444,6 +444,7 @@ const FaqList = () => {
                                             borderRadius: 3,
                                             border: '1px solid',
                                             borderColor: 'divider',
+                                            bgcolor: 'background.paper', // ✅ Theme aware
                                             overflow: 'hidden',
                                         }}
                                     >
@@ -483,7 +484,7 @@ const FaqList = () => {
                                                 {faq.answer}
                                             </Typography>
 
-                                            <Divider sx={{ my: 1.5 }} />
+                                            <Divider sx={{ my: 1.5, borderColor: 'divider' }} />
 
                                             <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
                                                 <Typography variant="caption" color="text.secondary">
@@ -533,7 +534,7 @@ const FaqList = () => {
                 onClose={handleMenuClose}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                 transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-                PaperProps={{ elevation: 8, sx: { borderRadius: 2, minWidth: 180, mt: 0.5 } }}
+                PaperProps={{ elevation: 8, sx: { borderRadius: 2, minWidth: 180, mt: 0.5, bgcolor: 'background.paper' } }}
             >
                 {canEdit && (
                     <MenuItem onClick={handleEdit} sx={{ fontWeight: 500 }}>

@@ -137,6 +137,7 @@ export default function ServiceFormModal({ open, onClose, service }) {
                 sx: {
                     borderRadius: { xs: 0, sm: 3 },
                     border: '1px solid', borderColor: 'divider',
+                    bgcolor: 'background.paper', // ✅ Theme aware
                 },
             }}
         >

@@ -67,7 +67,6 @@ const PortfoliosList = () => {
         open: false, title: '', message: '', action: null,
     });
 
-    // ── EXISTING LOGIC: Load technicians ────────────────────────────────
     const loadTechnicians = async () => {
         setLoadingTechnicians(true);
         try {
@@ -87,7 +86,6 @@ const PortfoliosList = () => {
 
     useEffect(() => { loadTechnicians(); }, []);
 
-    // ── EXISTING LOGIC: Load portfolios ──────────────────────────────────
     const loadPortfolios = async () => {
         if (!canView) return;
         setLoading(true);
@@ -149,7 +147,6 @@ const PortfoliosList = () => {
 
     const refreshAll = () => { loadPortfolios(); };
 
-    // ── EXISTING LOGIC: View portfolio ───────────────────────────────────
     const handleViewPortfolio = async (portfolio) => {
         try {
             const response = await portfolioService.getPortfolio?.(portfolio.id);
@@ -167,7 +164,6 @@ const PortfoliosList = () => {
         setSelectedPortfolio(null);
     };
 
-    // ── EXISTING LOGIC: Delete portfolio ─────────────────────────────────
     const handleDeletePortfolio = async (id) => {
         try {
             await portfolioService.deletePortfolio(id);
@@ -182,7 +178,6 @@ const PortfoliosList = () => {
         }
     };
 
-    // ── EXISTING LOGIC: Confirm dialog ──────────────────────────────────
     const openConfirmDialog = (title, message, actionFn) => {
         setConfirmDialog({ open: true, title, message, action: actionFn });
     };
@@ -194,14 +189,12 @@ const PortfoliosList = () => {
         try { await action(); } catch (err) { console.error('Confirm action failed:', err); }
     };
 
-    // ── EXISTING LOGIC: Sorting ─────────────────────────────────────────
     const handleRequestSort = (property) => {
         const isAsc = orderBy === property && order === 'asc';
         setOrder(isAsc ? 'desc' : 'asc');
         setOrderBy(property);
     };
 
-    // ── Client-side sorting ─────────────────────────────────────────────
     const sortedPortfolios = useMemo(() => {
         const sorted = [...portfolios];
         sorted.sort((a, b) => {
@@ -218,7 +211,6 @@ const PortfoliosList = () => {
         return sorted;
     }, [portfolios, orderBy, order]);
 
-    // ── EXISTING HELPERS ─────────────────────────────────────────────────
     const getInitials = (name) => {
         if (!name) return '?';
         return name.split(' ').map(word => word[0]).join('').toUpperCase().substring(0, 2);
@@ -248,7 +240,6 @@ const PortfoliosList = () => {
         return text.substring(0, maxLength) + '...';
     };
 
-    // ── UI: Action menu handlers ────────────────────────────────────────
     const handleMenuOpen = (event, portfolio) => {
         setSelectedPortfolioForMenu(portfolio);
         setActionMenu(event.currentTarget);
@@ -277,29 +268,30 @@ const PortfoliosList = () => {
         }
     };
 
-    // ── Summary stats ──────────────────────────────────────────────────
     const totalPortfolios = pagination.total || 0;
     const uniqueTechnicians = new Set(portfolios.map(p => p.technician?.id).filter(Boolean)).size;
 
-    // ── Permission check ──────────────────────────────────────────────
     if (!canView) {
         return (
             <Box p={3}>
-                <Paper elevation={0} sx={{ p: 4, textAlign: 'center', borderRadius: 3, border: '1px solid', borderColor: 'divider' }}>
+                <Paper elevation={0} sx={{
+                    p: 4, textAlign: 'center', borderRadius: 3,
+                    border: '1px solid', borderColor: 'divider',
+                    bgcolor: 'background.paper',
+                }}>
                     <Typography color="error" fontWeight={600}>{t('portfolio.accessDenied')}</Typography>
                 </Paper>
             </Box>
         );
     }
 
-    // ── RENDER ──────────────────────────────────────────────────────────
     return (
         <Box sx={{ width: '100%', p: { xs: 1.5, sm: 2.5 }, m: 0, bgcolor: 'background.default' }}>
             <Paper elevation={0} sx={{
                 width: '100%', borderRadius: 3, overflow: 'hidden',
                 border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper',
             }}>
-                {/* ── HEADER ────────────────────────────────────────── */}
+                {/* HEADER */}
                 <Box sx={{ px: { xs: 2, sm: 3 }, py: 2.5, borderBottom: '1px solid', borderColor: 'divider' }}>
                     <Stack
                         direction={{ xs: 'column', sm: 'row' }}
@@ -332,7 +324,7 @@ const PortfoliosList = () => {
                         </Stack>
                     </Stack>
 
-                    {/* ── FILTERS ─────────────────────────────────── */}
+                    {/* FILTERS */}
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}
                            alignItems={{ xs: 'stretch', sm: 'center' }} flexWrap="wrap">
                         <TextField
@@ -388,19 +380,20 @@ const PortfoliosList = () => {
                     </Stack>
                 </Box>
 
-                {/* ── SUMMARY CARDS ────────────────────────────────── */}
+                {/* SUMMARY CARDS */}
                 <Box sx={{ px: { xs: 2, sm: 3 }, pt: 2.5, pb: 1 }}>
                     <Grid container spacing={2}>
                         {[
-                            { label: t('portfolio.stats.totalPortfolios'), value: totalPortfolios, color: '#8b5cf6', bg: '#f3e8ff', icon: <ImageIcon sx={{ fontSize: 18 }} /> },
-                            { label: t('portfolio.stats.technicians'), value: uniqueTechnicians, color: '#3b82f6', bg: '#eff6ff', icon: <PersonIcon sx={{ fontSize: 18 }} /> },
-                            { label: t('portfolio.stats.activeItems'), value: portfolios.filter(p => p.status !== 'archived').length, color: '#10b981', bg: '#ecfdf5', icon: <DescriptionIcon sx={{ fontSize: 18 }} /> },
-                            { label: t('portfolio.stats.recent'), value: portfolios.filter(p => p.created_at && new Date(p.created_at) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)).length, color: '#f59e0b', bg: '#fef3c7', icon: <CalendarIcon sx={{ fontSize: 18 }} /> },
+                            { label: t('portfolio.stats.totalPortfolios'), value: totalPortfolios, color: '#8b5cf6', icon: <ImageIcon sx={{ fontSize: 18 }} /> },
+                            { label: t('portfolio.stats.technicians'), value: uniqueTechnicians, color: '#3b82f6', icon: <PersonIcon sx={{ fontSize: 18 }} /> },
+                            { label: t('portfolio.stats.activeItems'), value: portfolios.filter(p => p.status !== 'archived').length, color: '#10b981', icon: <DescriptionIcon sx={{ fontSize: 18 }} /> },
+                            { label: t('portfolio.stats.recent'), value: portfolios.filter(p => p.created_at && new Date(p.created_at) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)).length, color: '#f59e0b', icon: <CalendarIcon sx={{ fontSize: 18 }} /> },
                         ].map((item, idx) => (
                             <Grid item xs={6} sm={3} key={idx}>
                                 <Card elevation={0} sx={{
                                     borderRadius: 2, border: '1px solid', borderColor: 'divider',
-                                    backgroundColor: item.bg, height: '100%',
+                                    bgcolor: 'background.paper', // ✅ Theme aware
+                                    height: '100%',
                                 }}>
                                     <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
                                         <Box display="flex" alignItems="center" justifyContent="space-between">
@@ -419,7 +412,7 @@ const PortfoliosList = () => {
                     </Grid>
                 </Box>
 
-                {/* ── TABLE (DESKTOP) ──────────────────────────────── */}
+                {/* TABLE */}
                 {showTableView ? (
                     <TableContainer>
                         <Table sx={{ minWidth: 900 }}>
@@ -468,7 +461,6 @@ const PortfoliosList = () => {
                                         const imageUrl = portfolio.image ? getImageUrl(portfolio.image) : null;
                                         return (
                                             <TableRow key={portfolio.id} hover sx={{ '&:last-child td': { borderBottom: 0 }, transition: 'background-color 0.15s' }}>
-                                                {/* Portfolio */}
                                                 <TableCell sx={{ py: 2 }}>
                                                     <Stack direction="row" spacing={1.5} alignItems="center">
                                                         {imageUrl ? (
@@ -503,7 +495,6 @@ const PortfoliosList = () => {
                                                     </Stack>
                                                 </TableCell>
 
-                                                {/* Technician */}
                                                 <TableCell>
                                                     <Stack direction="row" spacing={1} alignItems="center">
                                                         <Avatar
@@ -521,27 +512,24 @@ const PortfoliosList = () => {
                                                                 {portfolio.technician?.user?.name || portfolio.technician?.name || t('portfolio.common.emDash')}
                                                             </Typography>
                                                             {portfolio.technician?.verified && (
-                                                                <VerifiedIcon sx={{ fontSize: 12, color: '#10b981', display: 'block' }} />
+                                                                <VerifiedIcon sx={{ fontSize: 12, color: 'success.main', display: 'block' }} />
                                                             )}
                                                         </Box>
                                                     </Stack>
                                                 </TableCell>
 
-                                                {/* Description */}
                                                 <TableCell>
                                                     <Typography variant="body2" color="text.secondary">
                                                         {truncateText(portfolio.description || t('portfolio.common.noDescription'), 50)}
                                                     </Typography>
                                                 </TableCell>
 
-                                                {/* Created */}
                                                 <TableCell>
                                                     <Typography variant="body2" fontWeight={500} color="text.secondary">
                                                         {formatDate(portfolio.created_at)}
                                                     </Typography>
                                                 </TableCell>
 
-                                                {/* Actions */}
                                                 <TableCell align="center">
                                                     <IconButton
                                                         size="small"
@@ -562,14 +550,14 @@ const PortfoliosList = () => {
                         </Table>
                     </TableContainer>
                 ) : (
-                    /* ── MOBILE/TABLET CARDS ──────────────────────── */
+                    /* MOBILE CARDS */
                     <Box sx={{ p: { xs: 2, sm: 2.5 } }}>
                         {loading ? (
                             <Box display="flex" justifyContent="center" py={6}>
                                 <CircularProgress size={36} thickness={4} />
                             </Box>
                         ) : sortedPortfolios.length === 0 ? (
-                            <Paper variant="outlined" sx={{ p: 5, textAlign: 'center', borderRadius: 3, borderStyle: 'dashed' }}>
+                            <Paper variant="outlined" sx={{ p: 5, textAlign: 'center', borderRadius: 3, borderStyle: 'dashed', bgcolor: 'background.paper' }}>
                                 <Typography color="text.secondary" fontWeight={500}>
                                     {t('portfolio.table.noFound')}
                                 </Typography>
@@ -582,12 +570,12 @@ const PortfoliosList = () => {
                                         <Grid item xs={12} sm={6} key={portfolio.id}>
                                             <Card elevation={0} sx={{
                                                 borderRadius: 3, border: '1px solid', borderColor: 'divider',
+                                                bgcolor: 'background.paper', // ✅ Theme aware
                                                 overflow: 'hidden', height: '100%',
                                                 display: 'flex', flexDirection: 'column',
                                                 transition: 'box-shadow 0.2s',
                                                 '&:hover': { boxShadow: 2 },
                                             }}>
-                                                {/* Image Header */}
                                                 {imageUrl ? (
                                                     <Box sx={{
                                                         width: '100%', height: 160, overflow: 'hidden',
@@ -598,7 +586,7 @@ const PortfoliosList = () => {
                                                              onError={(e) => { e.target.style.display = 'none'; }} />
                                                         {portfolio.technician?.verified && (
                                                             <Box sx={{ position: 'absolute', top: 8, left: 8 }}>
-                                                                <VerifiedIcon sx={{ fontSize: 20, color: '#10b981' }} />
+                                                                <VerifiedIcon sx={{ fontSize: 20, color: 'success.main' }} />
                                                             </Box>
                                                         )}
                                                     </Box>
@@ -616,7 +604,7 @@ const PortfoliosList = () => {
                                                         </Typography>
                                                         {portfolio.technician?.verified && (
                                                             <Box sx={{ position: 'absolute', top: 8, left: 8 }}>
-                                                                <VerifiedIcon sx={{ fontSize: 20, color: '#10b981' }} />
+                                                                <VerifiedIcon sx={{ fontSize: 20, color: 'success.main' }} />
                                                             </Box>
                                                         )}
                                                     </Box>
@@ -674,9 +662,9 @@ const PortfoliosList = () => {
                                                                     label={portfolio.technician.rating.toFixed(1)}
                                                                     size="small"
                                                                     sx={{
-                                                                        fontWeight: 700, bgcolor: '#fef3c7', color: '#b45309',
-                                                                        border: '1px solid #fcd34d', height: 26,
-                                                                        '& .MuiChip-icon': { color: '#f59e0b' },
+                                                                        fontWeight: 700, bgcolor: 'warning.light', color: 'warning.dark',
+                                                                        border: '1px solid', borderColor: 'warning.main', height: 26,
+                                                                        '& .MuiChip-icon': { color: 'warning.main' },
                                                                     }}
                                                                 />
                                                             )}
@@ -707,7 +695,7 @@ const PortfoliosList = () => {
                     </Box>
                 )}
 
-                {/* ── PAGINATION ─────────────────────────────────── */}
+                {/* PAGINATION */}
                 <Box sx={{ borderTop: '1px solid', borderColor: 'divider', bgcolor: 'action.hover' }}>
                     <TablePagination
                         rowsPerPageOptions={[5, 10, 25, 50]}
@@ -729,14 +717,14 @@ const PortfoliosList = () => {
                 </Box>
             </Paper>
 
-            {/* ── ACTION MENU ─────────────────────────────────────── */}
+            {/* ACTION MENU */}
             <Menu
                 anchorEl={actionMenu}
                 open={Boolean(actionMenu)}
                 onClose={handleMenuClose}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                 transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-                PaperProps={{ elevation: 8, sx: { borderRadius: 2, minWidth: 180, mt: 0.5 } }}
+                PaperProps={{ elevation: 8, sx: { borderRadius: 2, minWidth: 180, mt: 0.5, bgcolor: 'background.paper' } }}
             >
                 <MenuItem onClick={() => handleAction('view')} sx={{ fontWeight: 500 }}>
                     <ViewIcon sx={{ mr: 1.5, fontSize: 20, color: colors.sea || '#0f766e' }} />
@@ -750,13 +738,13 @@ const PortfoliosList = () => {
                 )}
             </Menu>
 
-            {/* ── PORTFOLIO DETAIL DIALOG ─────────────────────────── */}
+            {/* PORTFOLIO DETAIL DIALOG */}
             <Dialog
                 open={openViewDialog}
                 onClose={handleCloseDialog}
                 maxWidth="md" fullWidth
                 PaperProps={{
-                    sx: { borderRadius: 3, border: '1px solid', borderColor: 'divider', maxHeight: '90vh' },
+                    sx: { borderRadius: 3, border: '1px solid', borderColor: 'divider', maxHeight: '90vh', bgcolor: 'background.paper' },
                 }}
             >
                 {selectedPortfolio && (
@@ -783,7 +771,7 @@ const PortfoliosList = () => {
                                                 {selectedPortfolio.technician?.user?.name || selectedPortfolio.technician?.name || t('portfolio.common.unknown')}
                                             </Typography>
                                             {selectedPortfolio.technician?.verified && (
-                                                <VerifiedIcon sx={{ fontSize: 14, color: '#10b981' }} />
+                                                <VerifiedIcon sx={{ fontSize: 14, color: 'success.main' }} />
                                             )}
                                         </Stack>
                                         {selectedPortfolio.technician?.area && (
@@ -856,7 +844,7 @@ const PortfoliosList = () => {
                                         )}
                                         {selectedPortfolio.technician?.rating > 0 && (
                                             <Box display="flex" alignItems="center" gap={0.5}>
-                                                <StarIcon sx={{ color: '#f59e0b', fontSize: 16 }} />
+                                                <StarIcon sx={{ color: 'warning.main', fontSize: 16 }} />
                                                 <Typography variant="body2" fontWeight={500}>
                                                     {selectedPortfolio.technician.rating.toFixed(1)}
                                                 </Typography>
@@ -903,12 +891,12 @@ const PortfoliosList = () => {
                 )}
             </Dialog>
 
-            {/* ── CONFIRMATION DIALOG ─────────────────────────────── */}
+            {/* CONFIRMATION DIALOG */}
             <Dialog
                 open={confirmDialog.open}
                 onClose={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
                 fullWidth maxWidth="xs"
-                PaperProps={{ sx: { borderRadius: 3 } }}
+                PaperProps={{ sx: { borderRadius: 3, bgcolor: 'background.paper' } }}
             >
                 <DialogTitle sx={{ fontWeight: 700, pb: 1 }}>{confirmDialog.title}</DialogTitle>
                 <DialogContent>

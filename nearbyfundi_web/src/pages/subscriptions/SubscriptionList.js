@@ -40,7 +40,6 @@ const SubscriptionList = () => {
     const canApprove = can('subscriptions.approve');
     const canView = can('subscriptions.view');
 
-    // ── Translated constants ────────────────────────────────────────────
     const headCells = useMemo(() => [
         { id: 'user', label: t('sub.list.col.user') },
         { id: 'plan', label: t('sub.list.col.plan') },
@@ -250,7 +249,6 @@ const SubscriptionList = () => {
         setOrderBy(property);
     };
 
-    // ── Export helpers ──────────────────────────────────────────────────
     const formatDate = (dateStr) => {
         if (!dateStr) return '—';
         try { return new Date(dateStr).toLocaleDateString(); } catch { return '—'; }
@@ -330,6 +328,7 @@ const SubscriptionList = () => {
                 <Paper elevation={0} sx={{
                     p: 4, textAlign: 'center', borderRadius: 3,
                     border: '1px solid', borderColor: 'divider',
+                    bgcolor: 'background.paper', // ✅ Theme aware
                 }}>
                     <Typography color="error" fontWeight={600}>{t('sub.list.accessDenied')}</Typography>
                 </Paper>
@@ -338,10 +337,10 @@ const SubscriptionList = () => {
     }
 
     const statCards = [
-        { title: t('sub.list.pending'), count: stats.pending_count || 0, color: '#b45309', bg: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)' },
-        { title: t('sub.list.active'), count: stats.active_count || 0, color: '#047857', bg: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)' },
-        { title: t('sub.list.expired'), count: stats.expired_count || 0, color: '#b91c1c', bg: 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)' },
-        { title: t('sub.list.cancelled'), count: stats.cancelled_count || 0, color: '#4b5563', bg: 'linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)' },
+        { title: t('sub.list.pending'), count: stats.pending_count || 0, color: '#b45309' },
+        { title: t('sub.list.active'), count: stats.active_count || 0, color: '#047857' },
+        { title: t('sub.list.expired'), count: stats.expired_count || 0, color: '#b91c1c' },
+        { title: t('sub.list.cancelled'), count: stats.cancelled_count || 0, color: '#4b5563' },
     ];
 
     const inputSx = {
@@ -374,7 +373,8 @@ const SubscriptionList = () => {
                         <Grid item xs={6} sm={3} key={i}>
                             <Card elevation={0} sx={{
                                 borderRadius: 3, border: '1px solid', borderColor: 'divider',
-                                background: card.bg, height: '100%',
+                                bgcolor: 'background.paper', // ✅ Theme aware
+                                height: '100%',
                             }}>
                                 <CardContent sx={{ p: 2.25 }}>
                                     <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
@@ -603,7 +603,7 @@ const SubscriptionList = () => {
                                         const expired = isExpired(sub);
                                         const actualStatus = expired && sub.status === 'active' ? 'expired' : sub.status;
                                         return (
-                                            <Card key={sub.id} elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider' }}>
+                                            <Card key={sub.id} elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
                                                 <CardContent sx={{ p: 2.25 }}>
                                                     <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={1.5}>
                                                         <Stack direction="row" spacing={1.5} alignItems="center">
@@ -692,7 +692,7 @@ const SubscriptionList = () => {
                     onClose={handleMenuClose}
                     anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                     transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-                    PaperProps={{ elevation: 8, sx: { borderRadius: 2, minWidth: 180, mt: 0.5 } }}
+                    PaperProps={{ elevation: 8, sx: { borderRadius: 2, minWidth: 180, mt: 0.5, bgcolor: 'background.paper' } }}
                 >
                     {selectedSub?.status === 'pending' && canApprove && (
                         <>
@@ -721,7 +721,7 @@ const SubscriptionList = () => {
                 {/* Reject Dialog */}
                 <Dialog open={rejectDialog.open}
                         onClose={() => setRejectDialog({ open: false, reason: '', subscriptionId: null })}
-                        PaperProps={{ sx: { borderRadius: 3 } }}>
+                        PaperProps={{ sx: { borderRadius: 3, bgcolor: 'background.paper' } }}>
                     <DialogTitle sx={{ fontWeight: 700, pb: 1 }}>
                         <Stack direction="row" spacing={1} alignItems="center">
                             <RejectIcon color="error" /> {t('sub.list.reject.title')}
@@ -757,7 +757,7 @@ const SubscriptionList = () => {
                     maxWidth="sm" fullWidth
                     PaperProps={{
                         sx: {
-                            borderRadius: 3, overflow: 'hidden',
+                            borderRadius: 3, overflow: 'hidden', bgcolor: 'background.paper',
                             border: approveDialog.status === 'done' ? '2px solid #10b981' :
                                 approveDialog.status === 'error' ? '2px solid #ef4444' : 'none',
                         },
@@ -766,8 +766,8 @@ const SubscriptionList = () => {
                     <DialogTitle sx={{ pb: 1 }}>
                         <Stack direction="row" spacing={1.5} alignItems="center">
                             <Avatar sx={{
-                                bgcolor: approveDialog.status === 'done' ? '#10b981' :
-                                    approveDialog.status === 'error' ? '#ef4444' : '#f59e0b',
+                                bgcolor: approveDialog.status === 'done' ? 'success.main' :
+                                    approveDialog.status === 'error' ? 'error.main' : 'warning.main',
                                 width: 44, height: 44,
                             }}>
                                 {approveDialog.status === 'done' ? <VerifiedIcon /> :
@@ -836,11 +836,11 @@ const SubscriptionList = () => {
                         {(approveDialog.status === 'confirming' || approveDialog.status === 'approving') && (
                             <Box sx={{ py: 3, textAlign: 'center' }}>
                                 <CircularProgress size={60} thickness={4} value={approveDialog.progress}
-                                                  variant="determinate" sx={{ color: '#10b981', mb: 2 }} />
-                                <Typography variant="h5" fontWeight={800} color="#10b981">{approveDialog.progress}%</Typography>
+                                                  variant="determinate" sx={{ color: 'success.main', mb: 2 }} />
+                                <Typography variant="h5" fontWeight={800} color="success.main">{approveDialog.progress}%</Typography>
                                 <LinearProgress variant="determinate" value={approveDialog.progress} sx={{
-                                    height: 8, borderRadius: 4, my: 2, bgcolor: '#e5e7eb',
-                                    '& .MuiLinearProgress-bar': { bgcolor: '#10b981', borderRadius: 4 },
+                                    height: 8, borderRadius: 4, my: 2, bgcolor: 'action.hover',
+                                    '& .MuiLinearProgress-bar': { bgcolor: 'success.main', borderRadius: 4 },
                                 }} />
                                 <Typography variant="body2" color="text.secondary">
                                     {approveDialog.status || t('sub.list.approve.processing')}
@@ -850,12 +850,12 @@ const SubscriptionList = () => {
                         {approveDialog.status === 'done' && (
                             <Box sx={{ py: 3, textAlign: 'center' }}>
                                 <Box sx={{
-                                    width: 80, height: 80, borderRadius: '50%', bgcolor: '#d1fae5',
+                                    width: 80, height: 80, borderRadius: '50%', bgcolor: 'success.light',
                                     display: 'flex', alignItems: 'center', justifyContent: 'center', mx: 'auto', mb: 2,
                                 }}>
-                                    <VerifiedIcon sx={{ fontSize: 48, color: '#10b981' }} />
+                                    <VerifiedIcon sx={{ fontSize: 48, color: 'success.main' }} />
                                 </Box>
-                                <Typography variant="h6" fontWeight={800} color="#10b981">
+                                <Typography variant="h6" fontWeight={800} color="success.main">
                                     {t('sub.list.approve.successTitle')}
                                 </Typography>
                                 <Typography variant="body2" color="text.secondary">
@@ -909,7 +909,7 @@ const SubscriptionList = () => {
                 {/* View Details Dialog */}
                 <Dialog open={viewDialog.open}
                         onClose={() => setViewDialog({ open: false, subscription: null })}
-                        maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+                        maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: 3, bgcolor: 'background.paper' } }}>
                     <DialogTitle sx={{ fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Stack direction="row" spacing={1} alignItems="center">
                             <InfoIcon color="primary" /> {t('sub.list.view.title')}

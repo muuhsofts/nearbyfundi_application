@@ -266,7 +266,7 @@ const SmsLogsList = () => {
         }
         return (
             <Stack direction="row" spacing={1.5} alignItems="center">
-                <Avatar sx={{ width: 36, height: 36, bgcolor: '#64748b', fontSize: 14, fontWeight: 700 }}>
+                <Avatar sx={{ width: 36, height: 36, bgcolor: 'text.disabled', fontSize: 14, fontWeight: 700 }}>
                     S
                 </Avatar>
                 <Typography variant="body2" fontWeight={600} color="text.secondary">
@@ -281,7 +281,11 @@ const SmsLogsList = () => {
     if (!canView) {
         return (
             <Box p={3}>
-                <Paper elevation={0} sx={{ p: 4, textAlign: 'center', borderRadius: 3, border: '1px solid', borderColor: 'divider' }}>
+                <Paper elevation={0} sx={{
+                    p: 4, textAlign: 'center', borderRadius: 3,
+                    border: '1px solid', borderColor: 'divider',
+                    bgcolor: 'background.paper', // ✅ Theme aware
+                }}>
                     <Typography color="error" fontWeight={600}>{t('sms.logs.accessDenied')}</Typography>
                 </Paper>
             </Box>
@@ -309,7 +313,8 @@ const SmsLogsList = () => {
                 <Grid item xs={12} sm={6} md={3}>
                     <Card elevation={0} sx={{
                         borderRadius: 3, border: '1px solid', borderColor: 'divider',
-                        background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)', height: '100%',
+                        bgcolor: 'background.paper', // ✅ Theme aware
+                        height: '100%',
                     }}>
                         <CardContent sx={{ p: 2.5 }}>
                             <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
@@ -317,14 +322,14 @@ const SmsLogsList = () => {
                                     <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
                                         {t('sms.logs.stats.total')}
                                     </Typography>
-                                    <Typography variant="h3" fontWeight={800} color="#0369a1" sx={{ mt: 0.5, lineHeight: 1.1 }}>
+                                    <Typography variant="h3" fontWeight={800} color="info.main" sx={{ mt: 0.5, lineHeight: 1.1 }}>
                                         {loadingStats ? '—' : smsStats.total}
                                     </Typography>
                                     <Typography variant="caption" color="text.secondary" fontWeight={500}>
                                         {t('sms.logs.stats.totalCaption')}
                                     </Typography>
                                 </Box>
-                                <Avatar sx={{ bgcolor: '#0ea5e9', width: 44, height: 44 }}><MessageIcon /></Avatar>
+                                <Avatar sx={{ bgcolor: 'info.main', width: 44, height: 44 }}><MessageIcon /></Avatar>
                             </Stack>
                         </CardContent>
                     </Card>
@@ -333,7 +338,8 @@ const SmsLogsList = () => {
                 <Grid item xs={12} sm={6} md={3}>
                     <Card elevation={0} sx={{
                         borderRadius: 3, border: '1px solid', borderColor: 'divider',
-                        background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)', height: '100%',
+                        bgcolor: 'background.paper', // ✅ Theme aware
+                        height: '100%',
                     }}>
                         <CardContent sx={{ p: 2.5 }}>
                             <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
@@ -341,14 +347,14 @@ const SmsLogsList = () => {
                                     <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
                                         {t('sms.logs.stats.sent')}
                                     </Typography>
-                                    <Typography variant="h3" fontWeight={800} color="#047857" sx={{ mt: 0.5, lineHeight: 1.1 }}>
+                                    <Typography variant="h3" fontWeight={800} color="success.main" sx={{ mt: 0.5, lineHeight: 1.1 }}>
                                         {loadingStats ? '—' : smsStats.sent}
                                     </Typography>
                                     <Typography variant="caption" color="text.secondary" fontWeight={500}>
                                         {t('sms.logs.stats.sentCaption', { n: smsStats.success_rate || 0 })}
                                     </Typography>
                                 </Box>
-                                <Avatar sx={{ bgcolor: '#10b981', width: 44, height: 44 }}><CheckCircleIcon /></Avatar>
+                                <Avatar sx={{ bgcolor: 'success.main', width: 44, height: 44 }}><CheckCircleIcon /></Avatar>
                             </Stack>
                         </CardContent>
                     </Card>
@@ -357,7 +363,8 @@ const SmsLogsList = () => {
                 <Grid item xs={12} sm={6} md={3}>
                     <Card elevation={0} sx={{
                         borderRadius: 3, border: '1px solid', borderColor: 'divider',
-                        background: 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)', height: '100%',
+                        bgcolor: 'background.paper', // ✅ Theme aware
+                        height: '100%',
                     }}>
                         <CardContent sx={{ p: 2.5 }}>
                             <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
@@ -365,14 +372,14 @@ const SmsLogsList = () => {
                                     <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
                                         {t('sms.logs.stats.failed')}
                                     </Typography>
-                                    <Typography variant="h3" fontWeight={800} color="#b91c1c" sx={{ mt: 0.5, lineHeight: 1.1 }}>
+                                    <Typography variant="h3" fontWeight={800} color="error.main" sx={{ mt: 0.5, lineHeight: 1.1 }}>
                                         {loadingStats ? '—' : smsStats.failed}
                                     </Typography>
                                     <Typography variant="caption" color="text.secondary" fontWeight={500}>
                                         {t('sms.logs.stats.failedCaption', { n: smsStats.failed_percentage || 0 })}
                                     </Typography>
                                 </Box>
-                                <Avatar sx={{ bgcolor: '#ef4444', width: 44, height: 44 }}><ErrorIcon /></Avatar>
+                                <Avatar sx={{ bgcolor: 'error.main', width: 44, height: 44 }}><ErrorIcon /></Avatar>
                             </Stack>
                         </CardContent>
                     </Card>
@@ -381,7 +388,8 @@ const SmsLogsList = () => {
                 <Grid item xs={12} sm={6} md={3}>
                     <Card elevation={0} sx={{
                         borderRadius: 3, border: '1px solid', borderColor: 'divider',
-                        background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)', height: '100%',
+                        bgcolor: 'background.paper', // ✅ Theme aware
+                        height: '100%',
                     }}>
                         <CardContent sx={{ p: 2.5 }}>
                             <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={1}>
@@ -389,20 +397,20 @@ const SmsLogsList = () => {
                                     <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
                                         {t('sms.logs.stats.successRate')}
                                     </Typography>
-                                    <Typography variant="h3" fontWeight={800} color="#15803d" sx={{ mt: 0.5, lineHeight: 1.1 }}>
+                                    <Typography variant="h3" fontWeight={800} color="success.dark" sx={{ mt: 0.5, lineHeight: 1.1 }}>
                                         {loadingStats ? '—' : `${smsStats.success_rate || 0}%`}
                                     </Typography>
                                 </Box>
-                                <Avatar sx={{ bgcolor: '#22c55e', width: 44, height: 44 }}><TrendingUpIcon /></Avatar>
+                                <Avatar sx={{ bgcolor: 'success.light', width: 44, height: 44, color: 'success.dark' }}><TrendingUpIcon /></Avatar>
                             </Stack>
                             <LinearProgress
                                 variant="determinate"
                                 value={smsStats.success_rate || 0}
                                 sx={{
-                                    height: 8, borderRadius: 4, bgcolor: 'rgba(0,0,0,0.08)',
+                                    height: 8, borderRadius: 4, bgcolor: 'action.hover',
                                     '& .MuiLinearProgress-bar': {
                                         borderRadius: 4,
-                                        bgcolor: (smsStats.success_rate || 0) >= 80 ? '#22c55e' : '#f59e0b',
+                                        bgcolor: (smsStats.success_rate || 0) >= 80 ? 'success.main' : 'warning.main',
                                     },
                                 }}
                             />
@@ -610,7 +618,7 @@ const SmsLogsList = () => {
                                                     {getStatusChip(log.status)}
                                                     {log.error_message && (
                                                         <Tooltip title={log.error_message}>
-                                                            <ErrorIcon sx={{ fontSize: 18, color: '#ef4444', cursor: 'help' }} />
+                                                            <ErrorIcon sx={{ fontSize: 18, color: 'error.main', cursor: 'help' }} />
                                                         </Tooltip>
                                                     )}
                                                 </Stack>
@@ -644,7 +652,7 @@ const SmsLogsList = () => {
                                 <CircularProgress size={36} thickness={4} />
                             </Box>
                         ) : sortedData.length === 0 ? (
-                            <Paper variant="outlined" sx={{ p: 5, textAlign: 'center', borderRadius: 3, borderStyle: 'dashed' }}>
+                            <Paper variant="outlined" sx={{ p: 5, textAlign: 'center', borderRadius: 3, borderStyle: 'dashed', bgcolor: 'background.paper' }}>
                                 <Typography color="text.secondary" fontWeight={500}>
                                     {selectedUserId ? t('sms.logs.noFoundForUser') : t('sms.logs.noFound')}
                                 </Typography>
@@ -653,7 +661,9 @@ const SmsLogsList = () => {
                             <Stack spacing={2}>
                                 {sortedData.map((log) => (
                                     <Card key={log.id} elevation={0} sx={{
-                                        borderRadius: 3, border: '1px solid', borderColor: 'divider', overflow: 'hidden',
+                                        borderRadius: 3, border: '1px solid', borderColor: 'divider',
+                                        bgcolor: 'background.paper', // ✅ Theme aware
+                                        overflow: 'hidden',
                                     }}>
                                         <CardContent sx={{ p: 2.25 }}>
                                             <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={1.5}>
@@ -695,8 +705,8 @@ const SmsLogsList = () => {
                                                                 size="small"
                                                                 icon={<ErrorIcon sx={{ fontSize: 14 }} />}
                                                                 sx={{
-                                                                    bgcolor: '#fee2e2', color: '#b91c1c',
-                                                                    fontWeight: 700, border: '1px solid #ef4444', height: 26,
+                                                                    bgcolor: 'error.light', color: 'error.dark',
+                                                                    fontWeight: 700, border: '1px solid', borderColor: 'error.main', height: 26,
                                                                 }}
                                                             />
                                                         </Tooltip>
@@ -735,11 +745,11 @@ const SmsLogsList = () => {
                 onClose={handleMenuClose}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                 transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-                PaperProps={{ elevation: 8, sx: { borderRadius: 2, minWidth: 180, mt: 0.5 } }}
+                PaperProps={{ elevation: 8, sx: { borderRadius: 2, minWidth: 180, mt: 0.5, bgcolor: 'background.paper' } }}
             >
                 {canResend && selectedLog?.status === 'failed' && (
                     <MenuItem onClick={() => handleAction('resend')} sx={{ fontWeight: 500 }}>
-                        <ReplayIcon sx={{ mr: 1.5, color: '#10b981', fontSize: 20 }} />
+                        <ReplayIcon sx={{ mr: 1.5, color: 'success.main', fontSize: 20 }} />
                         {t('sms.logs.action.resend')}
                     </MenuItem>
                 )}
@@ -784,7 +794,7 @@ const SmsLogsList = () => {
                 open={confirmDialog.open}
                 onClose={() => setConfirmDialog((prev) => ({ ...prev, open: false }))}
                 fullWidth maxWidth="xs"
-                PaperProps={{ sx: { borderRadius: 3 } }}
+                PaperProps={{ sx: { borderRadius: 3, bgcolor: 'background.paper' } }}
             >
                 <DialogTitle sx={{ fontWeight: 700, pb: 1 }}>{confirmDialog.title}</DialogTitle>
                 <DialogContent>

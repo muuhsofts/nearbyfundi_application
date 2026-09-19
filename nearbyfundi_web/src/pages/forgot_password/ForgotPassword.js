@@ -1,28 +1,25 @@
 // src/pages/auth/ForgotPassword.jsx
 import { useState } from 'react';
 import {
-    Container,
-    Paper,
-    TextField,
-    Button,
-    Typography,
-    Box,
-    CircularProgress,
-    useTheme,
-    alpha,
-    InputAdornment,
-    Grid,
+    Container, Paper, TextField, Button, Typography, Box,
+    CircularProgress, useTheme, alpha, InputAdornment, Grid,
 } from '@mui/material';
 import { Email as EmailIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import { useLanguage } from 'context/LanguageContext';
 import { showSnackbar } from 'utils/snackbar';
 import { authService } from 'services/auth.service';
+import { tAuth } from './forgotlang';
 
 const logo = '/assets/logo.png';
 
 export default function ForgotPassword() {
     const theme = useTheme();
     const navigate = useNavigate();
+
+    const { language } = useLanguage();
+    const t = (key, replacements) => tAuth(language, key, replacements);
+
     const [email, setEmail] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -30,7 +27,7 @@ export default function ForgotPassword() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!email) {
-            setError('Email is required');
+            setError(t('auth.common.emailRequired'));
             return;
         }
         setLoading(true);
@@ -38,14 +35,14 @@ export default function ForgotPassword() {
         try {
             const res = await authService.forgotPassword(email);
             if (res.data.success) {
-                showSnackbar({ type: 'success', message: 'OTP sent to your email! 📧' });
+                showSnackbar({ type: 'success', message: t('auth.forgot.otpSent') });
                 // ✅ Pass email to reset password page
                 navigate('/reset-password', { state: { email: email }, replace: true });
             } else {
-                setError(res.data.message || 'Failed to send OTP');
+                setError(res.data.message || t('auth.forgot.sendFailed'));
             }
         } catch (err) {
-            setError(err.response?.data?.message || 'Failed to send OTP');
+            setError(err.response?.data?.message || t('auth.forgot.sendFailed'));
         } finally {
             setLoading(false);
         }
@@ -87,17 +84,17 @@ export default function ForgotPassword() {
                                     sx={{ width: 50, height: 50, mx: 'auto', mb: 2 }}
                                 />
                                 <Typography variant="h4" fontWeight="800" gutterBottom sx={{ color: '#0f172a' }}>
-                                    Forgot Password?
+                                    {t('auth.forgot.title')}
                                 </Typography>
                                 <Typography variant="body2" sx={{ color: '#334155', fontWeight: 500 }}>
-                                    Enter your email to receive a password reset OTP
+                                    {t('auth.forgot.subtitle')}
                                 </Typography>
                             </Box>
 
                             <form onSubmit={handleSubmit}>
                                 <TextField
                                     fullWidth
-                                    label="Email Address"
+                                    label={t('auth.forgot.emailLabel')}
                                     type="email"
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
@@ -162,7 +159,7 @@ export default function ForgotPassword() {
                                         },
                                     }}
                                 >
-                                    {loading ? <CircularProgress size={24} color="inherit" /> : 'Send Reset OTP'}
+                                    {loading ? <CircularProgress size={24} color="inherit" /> : t('auth.forgot.submit')}
                                 </Button>
 
                                 <Button
@@ -172,7 +169,7 @@ export default function ForgotPassword() {
                                     onClick={() => navigate('/login')}
                                     sx={{ mt: 2, textTransform: 'none', color: '#006B5E', fontWeight: 700 }}
                                 >
-                                    Back to Login
+                                    {t('auth.forgot.backToLogin')}
                                 </Button>
                             </form>
                         </Paper>

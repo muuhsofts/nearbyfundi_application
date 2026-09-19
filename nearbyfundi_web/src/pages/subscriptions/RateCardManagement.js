@@ -93,13 +93,14 @@ const RateCardManagement = () => {
                 <Grid item xs={4}>
                     <Card elevation={0} sx={{
                         borderRadius: 3, border: '1px solid', borderColor: 'divider',
-                        background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)', height: '100%',
+                        bgcolor: 'background.paper', // ✅ Theme aware
+                        height: '100%',
                     }}>
                         <CardContent sx={{ p: 2.25 }}>
                             <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
                                 {t('sub.rc.totalCards')}
                             </Typography>
-                            <Typography variant="h4" fontWeight={800} color="#0369a1" sx={{ mt: 0.5, lineHeight: 1.1 }}>
+                            <Typography variant="h4" fontWeight={800} color="info.main" sx={{ mt: 0.5, lineHeight: 1.1 }}>
                                 {stats.total}
                             </Typography>
                         </CardContent>
@@ -108,13 +109,14 @@ const RateCardManagement = () => {
                 <Grid item xs={4}>
                     <Card elevation={0} sx={{
                         borderRadius: 3, border: '1px solid', borderColor: 'divider',
-                        background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)', height: '100%',
+                        bgcolor: 'background.paper', // ✅ Theme aware
+                        height: '100%',
                     }}>
                         <CardContent sx={{ p: 2.25 }}>
                             <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
                                 {t('sub.rc.active')}
                             </Typography>
-                            <Typography variant="h4" fontWeight={800} color="#047857" sx={{ mt: 0.5, lineHeight: 1.1 }}>
+                            <Typography variant="h4" fontWeight={800} color="success.main" sx={{ mt: 0.5, lineHeight: 1.1 }}>
                                 {stats.active}
                             </Typography>
                         </CardContent>
@@ -123,13 +125,14 @@ const RateCardManagement = () => {
                 <Grid item xs={4}>
                     <Card elevation={0} sx={{
                         borderRadius: 3, border: '1px solid', borderColor: 'divider',
-                        background: 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)', height: '100%',
+                        bgcolor: 'background.paper', // ✅ Theme aware
+                        height: '100%',
                     }}>
                         <CardContent sx={{ p: 2.25 }}>
                             <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
                                 {t('sub.rc.inactive')}
                             </Typography>
-                            <Typography variant="h4" fontWeight={800} color="#b91c1c" sx={{ mt: 0.5, lineHeight: 1.1 }}>
+                            <Typography variant="h4" fontWeight={800} color="error.main" sx={{ mt: 0.5, lineHeight: 1.1 }}>
                                 {stats.inactive}
                             </Typography>
                         </CardContent>
@@ -258,17 +261,17 @@ const RateCardManagement = () => {
                                                     <Chip icon={<ActiveIcon sx={{ fontSize: 16 }} />}
                                                           label={t('sub.common.active')} size="small"
                                                           sx={{
-                                                              fontWeight: 700, bgcolor: '#d1fae5', color: '#047857',
-                                                              border: '1.5px solid #10b981', height: 28,
-                                                              '& .MuiChip-icon': { color: '#047857' },
+                                                              fontWeight: 700, bgcolor: 'success.light', color: 'success.dark',
+                                                              border: '1.5px solid', borderColor: 'success.main', height: 28,
+                                                              '& .MuiChip-icon': { color: 'success.dark' },
                                                           }} />
                                                 ) : (
                                                     <Chip icon={<InactiveIcon sx={{ fontSize: 16 }} />}
                                                           label={t('sub.common.inactive')} size="small"
                                                           sx={{
-                                                              fontWeight: 700, bgcolor: '#f3f4f6', color: '#4b5563',
-                                                              border: '1.5px solid #9ca3af', height: 28,
-                                                              '& .MuiChip-icon': { color: '#4b5563' },
+                                                              fontWeight: 700, bgcolor: 'action.hover', color: 'text.secondary',
+                                                              border: '1.5px solid', borderColor: 'divider', height: 28,
+                                                              '& .MuiChip-icon': { color: 'text.secondary' },
                                                           }} />
                                                 )}
                                             </TableCell>
@@ -288,7 +291,7 @@ const RateCardManagement = () => {
                                                 <Tooltip title={t('sub.rc.deleteTooltip')}>
                                                     <IconButton size="small" color="error"
                                                                 onClick={() => openDeleteDialog(card.id, card.name)}
-                                                                sx={{ '&:hover': { bgcolor: 'error.lighter' } }}>
+                                                                sx={{ '&:hover': { bgcolor: 'error.light' } }}>
                                                         <DeleteIcon fontSize="small" />
                                                     </IconButton>
                                                 </Tooltip>
@@ -304,7 +307,7 @@ const RateCardManagement = () => {
 
             {/* Form Modal */}
             <Dialog open={openModal} onClose={closeModal} maxWidth="sm" fullWidth
-                    PaperProps={{ sx: { borderRadius: 3 } }}>
+                    PaperProps={{ sx: { borderRadius: 3, bgcolor: 'background.paper' } }}>
                 <DialogTitle sx={{
                     px: 3, pt: 2.5, pb: 1.5,
                     display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
@@ -382,23 +385,23 @@ const RateCardManagement = () => {
 
             {/* Delete Confirmation Dialog */}
             <Dialog open={deleteDialog.open} onClose={closeDeleteDialog} maxWidth="xs" fullWidth
-                    PaperProps={{ sx: { borderRadius: 3 } }}>
+                    PaperProps={{ sx: { borderRadius: 3, bgcolor: 'background.paper' } }}>
                 <DialogTitle sx={{
-                    bgcolor: '#fef2f2', color: '#991b1b',
+                    bgcolor: 'error.light', color: 'error.dark',
                     display: 'flex', alignItems: 'center', gap: 1.5, py: 2,
                 }}>
-                    <WarningIcon sx={{ color: '#ef4444' }} />
-                    <Typography variant="h6" fontWeight={700} color="#991b1b">
+                    <WarningIcon sx={{ color: 'error.main' }} />
+                    <Typography variant="h6" fontWeight={700} color="error.dark">
                         {t('sub.rc.delete.title')}
                     </Typography>
                 </DialogTitle>
                 <DialogContent sx={{ pt: 3 }}>
                     <Box sx={{ textAlign: 'center', py: 1 }}>
                         <Box sx={{
-                            width: 72, height: 72, borderRadius: '50%', bgcolor: '#fef2f2',
+                            width: 72, height: 72, borderRadius: '50%', bgcolor: 'error.light',
                             display: 'flex', alignItems: 'center', justifyContent: 'center', mx: 'auto', mb: 2,
                         }}>
-                            <DeleteIcon sx={{ fontSize: 36, color: '#ef4444' }} />
+                            <DeleteIcon sx={{ fontSize: 36, color: 'error.main' }} />
                         </Box>
                         <Typography variant="h6" fontWeight={700} gutterBottom>
                             {t('sub.common.areYouSure')}
@@ -407,14 +410,14 @@ const RateCardManagement = () => {
                             {t('sub.rc.delete.aboutTo')}
                         </Typography>
                         <Typography variant="body1" fontWeight={700} sx={{
-                            color: '#b91c1c', bgcolor: '#fee2e2', py: 1, px: 2, borderRadius: 2,
-                            display: 'inline-block', border: '1px solid #fecaca',
+                            color: 'error.dark', bgcolor: 'error.light', py: 1, px: 2, borderRadius: 2,
+                            display: 'inline-block', border: '1px solid', borderColor: 'error.main',
                         }}>
                             "{deleteDialog.cardName}"
                         </Typography>
                         <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
                             {t('sub.common.cannotUndo')}
-                            <Box component="span" sx={{ display: 'block', mt: 1, color: '#b91c1c', fontWeight: 600 }}>
+                            <Box component="span" sx={{ display: 'block', mt: 1, color: 'error.dark', fontWeight: 600 }}>
                                 ⚠️ {t('sub.rc.delete.warning')}
                             </Box>
                         </Typography>

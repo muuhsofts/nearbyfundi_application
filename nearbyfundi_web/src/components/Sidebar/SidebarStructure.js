@@ -20,8 +20,24 @@ import { identityT } from './components/Sidebar/sidebarTranslations';
 const addIf = (condition, item) => (condition ? [item] : []);
 
 /**
+ * Shared theme tokens — MUI palette keys for consistent dark mode support.
+ * Used by the sidebar renderer to apply theme-aware colors.
+ */
+const THEME_TOKENS = {
+  activeColor: 'primary.main',
+  hoverBg: 'action.hover',
+  activeBg: 'action.selected',
+  textColor: 'text.primary',
+  subTextColor: 'text.secondary',
+  borderColor: 'divider',
+  iconColor: 'text.secondary',
+  activeIconColor: 'primary.main',
+};
+
+/**
  * Production sidebar structure
  * Only contains items that exist in the real application.
+ * All items carry theme-aware color tokens for full dark mode compatibility.
  */
 export function getSidebarStructure(hasPermission, t = identityT) {
   const structure = [];
@@ -33,6 +49,7 @@ export function getSidebarStructure(hasPermission, t = identityT) {
       label: t('sidebar.dashboard'),
       link: '/app/dashboard',
       icon: <DashboardIcon />,
+      ...THEME_TOKENS,
     });
   }
 
@@ -41,18 +58,22 @@ export function getSidebarStructure(hasPermission, t = identityT) {
     ...addIf(hasPermission('about.view'), {
       label: t('sidebar.about'),
       link: '/app/about',
+      ...THEME_TOKENS,
     }),
     ...addIf(hasPermission('terms.view'), {
       label: t('sidebar.terms'),
       link: '/app/terms',
+      ...THEME_TOKENS,
     }),
     ...addIf(hasPermission('faqs.view'), {
       label: t('sidebar.faqs'),
       link: '/app/faqs',
+      ...THEME_TOKENS,
     }),
     ...addIf(hasPermission('privacy.view'), {
       label: t('sidebar.privacy'),
       link: '/app/privacy-policy',
+      ...THEME_TOKENS,
     }),
   ];
 
@@ -63,13 +84,14 @@ export function getSidebarStructure(hasPermission, t = identityT) {
       link: '#',
       icon: <AboutIcon />,
       children: staticChildren,
+      ...THEME_TOKENS,
     });
   }
 
   // ----- Services -----
   if (hasPermission('services.view')) {
     const servicesChildren = [
-      { label: t('sidebar.allServices'), link: '/app/services' },
+      { label: t('sidebar.allServices'), link: '/app/services', ...THEME_TOKENS },
     ];
 
     if (hasPermission('service-categories.view')) {
@@ -77,6 +99,7 @@ export function getSidebarStructure(hasPermission, t = identityT) {
         label: t('sidebar.categories'),
         link: '/app/services/categories',
         icon: <CategoryIcon />,
+        ...THEME_TOKENS,
       });
     }
 
@@ -86,6 +109,7 @@ export function getSidebarStructure(hasPermission, t = identityT) {
       link: '/app/services',
       icon: <ServicesIcon />,
       children: servicesChildren,
+      ...THEME_TOKENS,
     });
   }
 
@@ -97,8 +121,9 @@ export function getSidebarStructure(hasPermission, t = identityT) {
       link: '/app/technicians',
       icon: <TechniciansIcon />,
       children: [
-        { label: t('sidebar.allTechnicians'), link: '/app/technicians' },
+        { label: t('sidebar.allTechnicians'), link: '/app/technicians', ...THEME_TOKENS },
       ],
+      ...THEME_TOKENS,
     });
   }
 
@@ -109,6 +134,7 @@ export function getSidebarStructure(hasPermission, t = identityT) {
       label: t('sidebar.portfolios'),
       link: '/app/portfolios',
       icon: <PortfoliosIcon />,
+      ...THEME_TOKENS,
     });
   }
 
@@ -119,7 +145,8 @@ export function getSidebarStructure(hasPermission, t = identityT) {
       label: t('sidebar.posts'),
       link: '/app/posts',
       icon: <PostsIcon />,
-      children: [{ label: t('sidebar.allPosts'), link: '/app/posts' }],
+      children: [{ label: t('sidebar.allPosts'), link: '/app/posts', ...THEME_TOKENS }],
+      ...THEME_TOKENS,
     });
   }
 
@@ -130,7 +157,8 @@ export function getSidebarStructure(hasPermission, t = identityT) {
       label: t('sidebar.serviceRequests'),
       link: '/app/requests',
       icon: <RequestsIcon />,
-      children: [{ label: t('sidebar.allRequests'), link: '/app/requests' }],
+      children: [{ label: t('sidebar.allRequests'), link: '/app/requests', ...THEME_TOKENS }],
+      ...THEME_TOKENS,
     });
   }
 
@@ -141,7 +169,8 @@ export function getSidebarStructure(hasPermission, t = identityT) {
       label: t('sidebar.smsLogs'),
       link: '/app/sms-logs',
       icon: <SmsIcon />,
-      children: [{ label: t('sidebar.allSmsLogs'), link: '/app/sms-logs' }],
+      children: [{ label: t('sidebar.allSmsLogs'), link: '/app/sms-logs', ...THEME_TOKENS }],
+      ...THEME_TOKENS,
     });
   }
 
@@ -153,11 +182,12 @@ export function getSidebarStructure(hasPermission, t = identityT) {
       link: '/app/finance',
       icon: <FinanceIcon />,
       children: [
-        { label: t('sidebar.subscriptions'), link: '/app/finance/subscriptions' },
-        { label: t('sidebar.technicians'), link: '/app/finance/technicians' },
-        { label: t('sidebar.customers'), link: '/app/finance/customers' },
-        { label: t('sidebar.requests'), link: '/app/finance/requests' },
+        { label: t('sidebar.subscriptions'), link: '/app/finance/subscriptions', ...THEME_TOKENS },
+        { label: t('sidebar.technicians'), link: '/app/finance/technicians', ...THEME_TOKENS },
+        { label: t('sidebar.customers'), link: '/app/finance/customers', ...THEME_TOKENS },
+        { label: t('sidebar.requests'), link: '/app/finance/requests', ...THEME_TOKENS },
       ],
+      ...THEME_TOKENS,
     });
   }
 
@@ -169,8 +199,9 @@ export function getSidebarStructure(hasPermission, t = identityT) {
       link: '/app/monitoring',
       icon: <MonitoringIcon />,
       children: [
-        { label: t('sidebar.monitoringDashboard'), link: '/app/monitoring' },
+        { label: t('sidebar.monitoringDashboard'), link: '/app/monitoring', ...THEME_TOKENS },
       ],
+      ...THEME_TOKENS,
     });
   }
 
@@ -179,14 +210,17 @@ export function getSidebarStructure(hasPermission, t = identityT) {
     ...addIf(hasPermission('subscriptions.view'), {
       label: t('sidebar.allSubscriptions'),
       link: '/app/subscriptions',
+      ...THEME_TOKENS,
     }),
     ...addIf(hasPermission('subscriptions.manage'), {
       label: t('sidebar.rateCards'),
       link: '/app/rate-cards',
+      ...THEME_TOKENS,
     }),
     ...addIf(hasPermission('subscriptions.manage'), {
       label: t('sidebar.paymentMethods'),
       link: '/app/payment-methods',
+      ...THEME_TOKENS,
     }),
   ];
 
@@ -197,6 +231,7 @@ export function getSidebarStructure(hasPermission, t = identityT) {
       link: '#',
       icon: <SubscriptionsIcon />,
       children: subscriptionChildren,
+      ...THEME_TOKENS,
     });
   }
 
@@ -205,26 +240,32 @@ export function getSidebarStructure(hasPermission, t = identityT) {
     ...addIf(hasPermission('users.view'), {
       label: t('sidebar.users'),
       link: '/app/users',
+      ...THEME_TOKENS,
     }),
     ...addIf(hasPermission('roles.view'), {
       label: t('sidebar.roles'),
       link: '/app/roles',
+      ...THEME_TOKENS,
     }),
     ...addIf(hasPermission('permissions.view'), {
       label: t('sidebar.permissions'),
       link: '/app/permissions',
+      ...THEME_TOKENS,
     }),
     ...addIf(hasPermission('audit.view'), {
       label: t('sidebar.auditLogs'),
       link: '/app/audit',
+      ...THEME_TOKENS,
     }),
     ...addIf(hasPermission('otp.view'), {
       label: t('sidebar.otpManagement'),
       link: '/app/otp',
+      ...THEME_TOKENS,
     }),
     ...addIf(hasPermission('profile.view'), {
       label: t('sidebar.profile'),
       link: '/app/profile',
+      ...THEME_TOKENS,
     }),
   ];
 
@@ -235,6 +276,7 @@ export function getSidebarStructure(hasPermission, t = identityT) {
       link: '#',
       icon: <SettingsIcon />,
       children: settingsChildren,
+      ...THEME_TOKENS,
     });
   }
 

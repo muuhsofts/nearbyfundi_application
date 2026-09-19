@@ -203,9 +203,9 @@ const PrivacyPolicyPage = () => {
                                             textTransform: 'none',
                                             px: 2.5,
                                             boxShadow: 'none',
-                                            bgcolor: '#ef4444',
+                                            bgcolor: 'error.main',
                                             '&:hover': {
-                                                bgcolor: '#b91c1c',
+                                                bgcolor: 'error.dark',
                                                 boxShadow: '0 4px 12px rgba(239,68,68,0.35)',
                                             },
                                         }}
@@ -278,15 +278,13 @@ const PrivacyPolicyPage = () => {
                             {
                                 label: t('privacy.status'),
                                 value: policyData ? t('privacy.published') : t('privacy.notCreated'),
-                                color: policyData ? '#10b981' : '#f59e0b',
-                                bg: policyData ? '#ecfdf5' : '#fef3c7',
+                                color: policyData ? 'success.main' : 'warning.main',
                                 icon: <PrivacyTipIcon sx={{ fontSize: 18 }} />,
                             },
                             {
                                 label: t('privacy.wordCount'),
                                 value: policyData?.content?.split(/\s+/).filter(Boolean).length || 0,
-                                color: '#3b82f6',
-                                bg: '#eff6ff',
+                                color: 'info.main',
                                 icon: <DescriptionIcon sx={{ fontSize: 18 }} />,
                             },
                             {
@@ -294,8 +292,7 @@ const PrivacyPolicyPage = () => {
                                 value: policyData?.updated_at
                                     ? new Date(policyData.updated_at).toLocaleDateString()
                                     : t('privacy.never'),
-                                color: '#8b5cf6',
-                                bg: '#f3e8ff',
+                                color: 'secondary.main',
                                 icon: <HistoryIcon sx={{ fontSize: 18 }} />,
                             },
                         ].map((item, idx) => (
@@ -306,7 +303,7 @@ const PrivacyPolicyPage = () => {
                                         borderRadius: 2,
                                         border: '1px solid',
                                         borderColor: 'divider',
-                                        backgroundColor: item.bg,
+                                        bgcolor: 'background.paper', // ✅ Theme aware
                                         height: '100%',
                                     }}
                                 >
@@ -335,7 +332,7 @@ const PrivacyPolicyPage = () => {
                             borderColor: 'divider',
                             borderRadius: 2.5,
                             overflow: 'hidden',
-                            bgcolor: alpha(colors.sea, 0.02),
+                            bgcolor: 'action.hover', // ✅ Theme aware (replaces alpha(colors.sea, 0.02))
                         }}
                     >
                         <CardContent sx={{ p: 3 }}>

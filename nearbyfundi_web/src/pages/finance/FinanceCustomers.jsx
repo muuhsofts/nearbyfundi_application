@@ -1,8 +1,9 @@
+// src/pages/finance/FinanceCustomers.js
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     Box, Paper, Typography, Button, Grid, Card, CardContent, TextField, MenuItem,
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TablePagination,
-    Chip, CircularProgress, Tooltip, Stack,
+    Chip, CircularProgress, Tooltip, Stack, useTheme,
 } from '@mui/material';
 import { Refresh as RefreshIcon, Description as CsvIcon, TableChart as ExcelIcon } from '@mui/icons-material';
 import {
@@ -20,6 +21,7 @@ const colors = appConfig.app.colors;
 const STATUS_COLORS = { active: '#10b981', inactive: '#6b7280', pending: '#f59e0b', suspended: '#ef4444' };
 
 const FinanceCustomers = () => {
+    const theme = useTheme();
     const { can } = usePermissions();
     const canView = can('finance.view');
 
@@ -193,7 +195,17 @@ const FinanceCustomers = () => {
 
     return (
         <Box sx={{ width: '100%', maxWidth: '100%' }}>
-            <Paper elevation={0} sx={{ p: 2, mb: 3, borderRadius: 3, border: `1px solid ${colors.middle}` }}>
+            {/* ===================== FILTER BAR ===================== */}
+            <Paper
+                elevation={0}
+                sx={{
+                    p: 2,
+                    mb: 3,
+                    borderRadius: 3,
+                    border: `1px solid ${theme.palette.divider}`,
+                    bgcolor: 'background.paper'
+                }}
+            >
                 <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap alignItems="center">
                     <TextField select label={t('fin.filter.range')} size="small" value={range} onChange={(e) => setRange(e.target.value)} sx={{ minWidth: 140 }}>
                         <MenuItem value="week">{t('fin.filter.thisWeek')}</MenuItem>
@@ -227,15 +239,24 @@ const FinanceCustomers = () => {
                 </Stack>
             </Paper>
 
+            {/* ===================== KPI CARDS ===================== */}
             <Grid container spacing={2} sx={{ mb: 3 }}>
                 {[
-                    { label: t('fin.cust.stat.total'), value: totals.count || 0, color: '#3b82f6', bg: '#eff6ff' },
-                    { label: t('fin.cust.stat.active'), value: totals.active || 0, color: '#10b981', bg: '#ecfdf5' },
-                    { label: t('fin.cust.stat.pending'), value: totals.pending || 0, color: '#f59e0b', bg: '#fffbeb' },
-                    { label: t('fin.cust.stat.suspended'), value: totals.suspended || 0, color: '#ef4444', bg: '#fef2f2' },
+                    { label: t('fin.cust.stat.total'), value: totals.count || 0, color: '#3b82f6' },
+                    { label: t('fin.cust.stat.active'), value: totals.active || 0, color: '#10b981' },
+                    { label: t('fin.cust.stat.pending'), value: totals.pending || 0, color: '#f59e0b' },
+                    { label: t('fin.cust.stat.suspended'), value: totals.suspended || 0, color: '#ef4444' },
                 ].map((item, idx) => (
                     <Grid item xs={12} sm={6} md={3} key={idx}>
-                        <Card elevation={0} sx={{ borderRadius: 3, border: `1px solid ${colors.middle}`, backgroundColor: item.bg, height: '100%' }}>
+                        <Card
+                            elevation={0}
+                            sx={{
+                                borderRadius: 3,
+                                border: `1px solid ${theme.palette.divider}`,
+                                backgroundColor: 'background.paper', // Theme aware (removed hardcoded bg)
+                                height: '100%'
+                            }}
+                        >
                             <CardContent>
                                 <Typography variant="body2" sx={{ color: item.color, fontWeight: 600, mb: 0.5 }}>{item.label}</Typography>
                                 <Typography variant="h4" sx={{ color: item.color, fontWeight: 700 }}>{item.value}</Typography>
@@ -245,7 +266,18 @@ const FinanceCustomers = () => {
                 ))}
             </Grid>
 
-            <Paper elevation={0} sx={{ p: 3, mb: 3, borderRadius: 3, border: `1px solid ${colors.middle}`, height: 420 }}>
+            {/* ===================== DAILY HISTOGRAM ===================== */}
+            <Paper
+                elevation={0}
+                sx={{
+                    p: 3,
+                    mb: 3,
+                    borderRadius: 3,
+                    border: `1px solid ${theme.palette.divider}`,
+                    bgcolor: 'background.paper',
+                    height: 420
+                }}
+            >
                 <Typography variant="h6" fontWeight={600} mb={2}>
                     {range === 'week' || range === 'this_week' ? t('fin.cust.chart.dailyWeek') :
                         range === 'month' || range === 'this_month' ? t('fin.cust.chart.dailyMonth') :
@@ -260,7 +292,7 @@ const FinanceCustomers = () => {
                 ) : (
                     <ResponsiveContainer width="100%" height="90%">
                         <BarChart data={dailyHistogramData} margin={{ top: 10, right: 30, left: 0, bottom: 20 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.palette.divider} />
                             <XAxis
                                 dataKey={range === 'week' || range === 'this_week' ? 'dayName' : 'displayDate'}
                                 tick={{ fontSize: 12 }}
@@ -290,7 +322,18 @@ const FinanceCustomers = () => {
                 )}
             </Paper>
 
-            <Paper elevation={0} sx={{ p: 3, mb: 3, borderRadius: 3, border: `1px solid ${colors.middle}`, height: 420 }}>
+            {/* ===================== PIE CHART ===================== */}
+            <Paper
+                elevation={0}
+                sx={{
+                    p: 3,
+                    mb: 3,
+                    borderRadius: 3,
+                    border: `1px solid ${theme.palette.divider}`,
+                    bgcolor: 'background.paper',
+                    height: 420
+                }}
+            >
                 <Typography variant="h6" fontWeight={600} mb={2}>{t('fin.cust.chart.byStatus')}</Typography>
                 {loadingSummary ? (
                     <Box sx={{ height: '85%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CircularProgress /></Box>
@@ -309,14 +352,25 @@ const FinanceCustomers = () => {
                 )}
             </Paper>
 
-            <Paper elevation={0} sx={{ p: 3, mb: 3, borderRadius: 3, border: `1px solid ${colors.middle}`, height: 400 }}>
+            {/* ===================== TREND CHART ===================== */}
+            <Paper
+                elevation={0}
+                sx={{
+                    p: 3,
+                    mb: 3,
+                    borderRadius: 3,
+                    border: `1px solid ${theme.palette.divider}`,
+                    bgcolor: 'background.paper',
+                    height: 400
+                }}
+            >
                 <Typography variant="h6" fontWeight={600} mb={2}>{t('fin.cust.chart.trend')}</Typography>
                 {loadingTrends ? (
                     <Box sx={{ height: '85%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CircularProgress /></Box>
                 ) : (
                     <ResponsiveContainer width="100%" height="90%">
                         <BarChart data={trends.buckets || []} margin={{ top: 10, right: 30, left: 0, bottom: 5 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.palette.divider} />
                             <XAxis dataKey="label" tick={{ fontSize: 13 }} />
                             <YAxis tick={{ fontSize: 13 }} />
                             <ChartTooltip />
@@ -327,8 +381,17 @@ const FinanceCustomers = () => {
                 )}
             </Paper>
 
-            <Paper elevation={0} sx={{ borderRadius: 3, border: `1px solid ${colors.middle}`, overflow: 'hidden' }}>
-                <Box sx={{ p: 2.5, borderBottom: `1px solid ${colors.middle}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+            {/* ===================== TABLE ===================== */}
+            <Paper
+                elevation={0}
+                sx={{
+                    borderRadius: 3,
+                    border: `1px solid ${theme.palette.divider}`,
+                    bgcolor: 'background.paper',
+                    overflow: 'hidden'
+                }}
+            >
+                <Box sx={{ p: 2.5, borderBottom: `1px solid ${theme.palette.divider}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
                     <Typography variant="h6" fontWeight={600}>{t('fin.cust.table.title')}</Typography>
                     <TextField size="small" placeholder={t('fin.cust.table.searchPlaceholder')} value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} sx={{ minWidth: 240 }} />
                 </Box>
@@ -337,7 +400,7 @@ const FinanceCustomers = () => {
                 ) : (
                     <TableContainer>
                         <Table>
-                            <TableHead sx={{ backgroundColor: '#f8fafc' }}>
+                            <TableHead sx={{ backgroundColor: 'action.hover' }}>
                                 <TableRow>
                                     <TableCell sx={{ fontWeight: 700 }}>{t('fin.cust.table.col.name')}</TableCell>
                                     <TableCell sx={{ fontWeight: 700 }}>{t('fin.cust.table.col.email')}</TableCell>
@@ -372,6 +435,7 @@ const FinanceCustomers = () => {
                     onPageChange={(e, p) => setPage(p)}
                     onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
                     rowsPerPageOptions={[5, 10, 25, 50]}
+                    sx={{ borderTop: `1px solid ${theme.palette.divider}` }}
                 />
             </Paper>
         </Box>

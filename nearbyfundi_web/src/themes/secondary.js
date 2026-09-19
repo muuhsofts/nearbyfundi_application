@@ -1,16 +1,18 @@
+// src/themes/secondary.js
 import tinycolor from 'tinycolor2';
 
-const primary = '#EC4899';
-const secondary = '#4F46E5';
-const warning = '#F59E0B';
-const success = '#10B981';
-const info = '#8B5CF6';
+const primary = '#EC4899';       // Pink
+const secondary = '#0d7377';     // Teal
+const warning = '#F59E0B';       // Amber
+const success = '#10B981';       // Emerald
+const info = '#8B5CF6';          // Violet
 
 const lightenRate = 7.5;
 const darkenRate = 15;
 
 const secondaryTheme = {
   palette: {
+    mode: 'light',
     primary: {
       main: primary,
       light: tinycolor(primary).lighten(lightenRate).toHexString(),
@@ -21,30 +23,51 @@ const secondaryTheme = {
       main: secondary,
       light: tinycolor(secondary).lighten(lightenRate).toHexString(),
       dark: tinycolor(secondary).darken(darkenRate).toHexString(),
+      contrastText: '#fff',
     },
     warning: {
       main: warning,
       light: tinycolor(warning).lighten(lightenRate).toHexString(),
       dark: tinycolor(warning).darken(darkenRate).toHexString(),
+      contrastText: '#fff',
     },
     success: {
       main: success,
       light: tinycolor(success).lighten(lightenRate).toHexString(),
       dark: tinycolor(success).darken(darkenRate).toHexString(),
+      contrastText: '#fff',
     },
     info: {
       main: info,
       light: tinycolor(info).lighten(lightenRate).toHexString(),
       dark: tinycolor(info).darken(darkenRate).toHexString(),
+      contrastText: '#fff',
+    },
+    error: {
+      main: '#EF4444',
+      light: '#F87171',
+      dark: '#B91C1C',
+      contrastText: '#fff',
     },
     text: {
       primary: '#1A1A2E',
       secondary: '#4A4A6A',
+      disabled: '#8A8AA8',
       hint: '#8A8AA8',
     },
     background: {
       default: '#F8F9FF',
+      paper: '#FFFFFF',
       light: '#F0F1FF',
+    },
+    divider: 'rgba(0, 0, 0, 0.08)',
+    action: {
+      active: '#4A4A6A',
+      hover: 'rgba(236, 72, 153, 0.06)',
+      selected: 'rgba(236, 72, 153, 0.12)',
+      disabled: 'rgba(0, 0, 0, 0.3)',
+      disabledBackground: 'rgba(0, 0, 0, 0.08)',
+      focus: 'rgba(236, 72, 153, 0.16)',
     },
   },
   customShadows: {

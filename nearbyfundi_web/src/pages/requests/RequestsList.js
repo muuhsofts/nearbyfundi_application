@@ -193,7 +193,12 @@ const RequestsList = () => {
 
     if (!canView) {
         return (
-            <Paper sx={{ p: 3, textAlign: 'center' }}>
+            <Paper sx={{
+                p: 3, textAlign: 'center',
+                bgcolor: 'background.paper', // ✅ Theme aware
+                border: '1px solid', borderColor: 'divider',
+                borderRadius: 2,
+            }}>
                 <Typography color="error">{t('req.accessDenied')}</Typography>
             </Paper>
         );
@@ -212,8 +217,8 @@ const RequestsList = () => {
                 elevation={0}
                 sx={{
                     p: 2, mb: 3, borderRadius: 3,
-                    border: `1px solid ${colors.middle}`,
-                    backgroundColor: '#fff',
+                    border: '1px solid', borderColor: 'divider', // ✅ Theme aware
+                    bgcolor: 'background.paper', // ✅ Theme aware
                 }}
             >
                 <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap alignItems="center">
@@ -257,18 +262,18 @@ const RequestsList = () => {
             {/* Summary Cards */}
             <Grid container spacing={2} sx={{ mb: 3 }}>
                 {[
-                    { label: t('req.stats.total'), value: totalRequests, color: '#3b82f6', bg: '#eff6ff' },
-                    { label: t('req.stats.pending'), value: pendingCount, color: '#f59e0b', bg: '#fef3c7' },
-                    { label: t('req.stats.inProgress'), value: inProgressCount, color: '#8b5cf6', bg: '#f3e8ff' },
-                    { label: t('req.stats.completed'), value: completedCount, color: '#10b981', bg: '#ecfdf5' },
+                    { label: t('req.stats.total'), value: totalRequests, color: '#3b82f6' },
+                    { label: t('req.stats.pending'), value: pendingCount, color: '#f59e0b' },
+                    { label: t('req.stats.inProgress'), value: inProgressCount, color: '#8b5cf6' },
+                    { label: t('req.stats.completed'), value: completedCount, color: '#10b981' },
                 ].map((item, idx) => (
                     <Grid item xs={12} sm={6} md={3} key={idx}>
                         <Card
                             elevation={0}
                             sx={{
                                 borderRadius: 3,
-                                border: `1px solid ${colors.middle}`,
-                                backgroundColor: item.bg,
+                                border: '1px solid', borderColor: 'divider', // ✅ Theme aware
+                                bgcolor: 'background.paper', // ✅ Theme aware (removed hardcoded bg)
                                 height: '100%',
                             }}
                         >
@@ -290,14 +295,15 @@ const RequestsList = () => {
                 elevation={0}
                 sx={{
                     borderRadius: 3,
-                    border: `1px solid ${colors.middle}`,
+                    border: '1px solid', borderColor: 'divider', // ✅ Theme aware
+                    bgcolor: 'background.paper', // ✅ Theme aware
                     overflow: 'hidden',
                 }}
             >
                 <Box
                     sx={{
                         p: 2.5,
-                        borderBottom: `1px solid ${colors.middle}`,
+                        borderBottom: '1px solid', borderColor: 'divider', // ✅ Theme aware
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
@@ -322,7 +328,7 @@ const RequestsList = () => {
                     <>
                         <TableContainer>
                             <Table>
-                                <TableHead sx={{ backgroundColor: '#f8fafc' }}>
+                                <TableHead sx={{ backgroundColor: 'action.hover' }}>{/* ✅ Theme aware */}
                                     <TableRow>
                                         <TableCell sx={{ fontWeight: 700 }}>{t('req.table.col.customer')}</TableCell>
                                         <TableCell sx={{ fontWeight: 700 }}>{t('req.table.col.technician')}</TableCell>
@@ -392,7 +398,7 @@ const RequestsList = () => {
                                                     label={request.service?.name || '-'}
                                                     size="small"
                                                     variant="outlined"
-                                                    sx={{ borderColor: colors.middle }}
+                                                    sx={{ borderColor: 'divider' }} // ✅ Theme aware
                                                 />
                                             </TableCell>
                                             <TableCell>{getStatusChip(request.status)}</TableCell>
@@ -406,11 +412,11 @@ const RequestsList = () => {
                                                         onClick={() => handleViewRequest(request)}
                                                         sx={{
                                                             mr: 1,
-                                                            borderColor: colors.middle,
+                                                            borderColor: 'divider', // ✅ Theme aware
                                                             color: colors.sea,
                                                             '&:hover': {
                                                                 borderColor: colors.sea,
-                                                                backgroundColor: colors.wave,
+                                                                backgroundColor: 'primary.50', // ✅ Theme aware
                                                             },
                                                         }}
                                                     >
@@ -452,6 +458,7 @@ const RequestsList = () => {
                                 setPage(0);
                             }}
                             rowsPerPageOptions={[5, 10, 25, 50]}
+                            sx={{ borderTop: '1px solid', borderColor: 'divider' }} // ✅ Theme aware
                         />
                     </>
                 )}
@@ -466,17 +473,18 @@ const RequestsList = () => {
                 PaperProps={{
                     sx: {
                         borderRadius: 3,
-                        border: `1px solid ${colors.middle}`,
+                        border: '1px solid', borderColor: 'divider', // ✅ Theme aware
+                        bgcolor: 'background.paper', // ✅ Theme aware
                         maxHeight: '90vh',
                     },
                 }}
             >
                 {selectedRequest && (
                     <>
-                        <DialogTitle sx={{ pb: 1, borderBottom: `1px solid ${colors.middle}` }}>
+                        <DialogTitle sx={{ pb: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
                             <Box display="flex" justifyContent="space-between" alignItems="flex-start">
                                 <Box>
-                                    <Typography variant="h6" fontWeight={600} color={colors.dark}>
+                                    <Typography variant="h6" fontWeight={600} color="text.primary">{/* ✅ Theme aware */}
                                         {t('req.dialog.title')}
                                     </Typography>
                                     <Box display="flex" alignItems="center" gap={2} mt={1}>
@@ -491,7 +499,7 @@ const RequestsList = () => {
                                         </Typography>
                                     </Box>
                                 </Box>
-                                <IconButton onClick={handleCloseDialog} size="small" sx={{ color: colors.rain }}>
+                                <IconButton onClick={handleCloseDialog} size="small" sx={{ color: 'text.secondary' }}>{/* ✅ Theme aware */}
                                     <CloseIcon />
                                 </IconButton>
                             </Box>
@@ -500,7 +508,10 @@ const RequestsList = () => {
                         <DialogContent sx={{ p: 3 }}>
                             {/* Description Section */}
                             <Box mb={3}>
-                                <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ color: colors.dark, display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{
+                                    color: 'text.primary', // ✅ Theme aware
+                                    display: 'flex', alignItems: 'center', gap: 1,
+                                }}>
                                     <NotesIcon sx={{ fontSize: 18, color: colors.sea }} />
                                     {t('req.dialog.description')}
                                 </Typography>
@@ -508,8 +519,8 @@ const RequestsList = () => {
                                     variant="outlined"
                                     sx={{
                                         p: 2.5,
-                                        backgroundColor: '#f8fafc',
-                                        borderColor: colors.middle,
+                                        backgroundColor: 'action.hover', // ✅ Theme aware
+                                        borderColor: 'divider', // ✅ Theme aware
                                         borderRadius: 2,
                                     }}
                                 >
@@ -519,18 +530,18 @@ const RequestsList = () => {
                                 </Paper>
                             </Box>
 
-                            <Divider sx={{ mb: 3, borderColor: colors.middle }} />
+                            <Divider sx={{ mb: 3, borderColor: 'divider' }} />{/* ✅ Theme aware */}
 
                             {/* Customer & Technician Details */}
                             <Grid container spacing={3}>
                                 {/* Customer Details */}
                                 <Grid item xs={12} md={6}>
-                                    <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ color: colors.dark }}>
+                                    <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ color: 'text.primary' }}>
                                         {t('req.dialog.customerInfo')}
                                     </Typography>
                                     <Paper
                                         variant="outlined"
-                                        sx={{ p: 2.5, borderColor: colors.middle, borderRadius: 2 }}
+                                        sx={{ p: 2.5, borderColor: 'divider', borderRadius: 2 }} // ✅ Theme aware
                                     >
                                         <Stack spacing={1.5}>
                                             <Box display="flex" alignItems="center" gap={1.5}>
@@ -546,22 +557,22 @@ const RequestsList = () => {
                                                     </Typography>
                                                 </Box>
                                             </Box>
-                                            <Divider sx={{ borderColor: colors.middle }} />
+                                            <Divider sx={{ borderColor: 'divider' }} />
                                             <Box display="flex" alignItems="center" gap={1.5}>
-                                                <EmailIcon fontSize="small" sx={{ color: colors.rain, width: 20 }} />
+                                                <EmailIcon fontSize="small" sx={{ color: 'text.secondary', width: 20 }} />
                                                 <Typography variant="body2">
                                                     {selectedRequest.customer?.email || t('req.common.none')}
                                                 </Typography>
                                             </Box>
                                             <Box display="flex" alignItems="center" gap={1.5}>
-                                                <PhoneIcon fontSize="small" sx={{ color: colors.rain, width: 20 }} />
+                                                <PhoneIcon fontSize="small" sx={{ color: 'text.secondary', width: 20 }} />
                                                 <Typography variant="body2">
                                                     {selectedRequest.customer?.phone || t('req.common.none')}
                                                 </Typography>
                                             </Box>
                                             {selectedRequest.customer?.address && (
                                                 <Box display="flex" alignItems="center" gap={1.5}>
-                                                    <LocationIcon fontSize="small" sx={{ color: colors.rain, width: 20 }} />
+                                                    <LocationIcon fontSize="small" sx={{ color: 'text.secondary', width: 20 }} />
                                                     <Typography variant="body2">
                                                         {selectedRequest.customer?.address}
                                                     </Typography>
@@ -573,12 +584,12 @@ const RequestsList = () => {
 
                                 {/* Technician Details */}
                                 <Grid item xs={12} md={6}>
-                                    <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ color: colors.dark }}>
+                                    <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ color: 'text.primary' }}>
                                         {t('req.dialog.technicianInfo')}
                                     </Typography>
                                     <Paper
                                         variant="outlined"
-                                        sx={{ p: 2.5, borderColor: colors.middle, borderRadius: 2 }}
+                                        sx={{ p: 2.5, borderColor: 'divider', borderRadius: 2 }} // ✅ Theme aware
                                     >
                                         <Stack spacing={1.5}>
                                             <Box display="flex" alignItems="center" gap={1.5}>
@@ -597,16 +608,16 @@ const RequestsList = () => {
                                                     </Typography>
                                                 </Box>
                                             </Box>
-                                            <Divider sx={{ borderColor: colors.middle }} />
+                                            <Divider sx={{ borderColor: 'divider' }} />
                                             <Box display="flex" alignItems="center" gap={1.5}>
-                                                <BuildIcon fontSize="small" sx={{ color: colors.rain, width: 20 }} />
+                                                <BuildIcon fontSize="small" sx={{ color: 'text.secondary', width: 20 }} />
                                                 <Typography variant="body2">
                                                     {selectedRequest.service?.name || t('req.common.none')}
                                                 </Typography>
                                             </Box>
                                             {selectedRequest.technician?.area && (
                                                 <Box display="flex" alignItems="center" gap={1.5}>
-                                                    <LocationIcon fontSize="small" sx={{ color: colors.rain, width: 20 }} />
+                                                    <LocationIcon fontSize="small" sx={{ color: 'text.secondary', width: 20 }} />
                                                     <Typography variant="body2">
                                                         {selectedRequest.technician?.area}
                                                     </Typography>
@@ -614,7 +625,7 @@ const RequestsList = () => {
                                             )}
                                             {selectedRequest.technician?.phone && (
                                                 <Box display="flex" alignItems="center" gap={1.5}>
-                                                    <PhoneIcon fontSize="small" sx={{ color: colors.rain, width: 20 }} />
+                                                    <PhoneIcon fontSize="small" sx={{ color: 'text.secondary', width: 20 }} />
                                                     <Typography variant="body2">
                                                         {selectedRequest.technician?.phone}
                                                     </Typography>
@@ -628,9 +639,9 @@ const RequestsList = () => {
                             {/* Activity Logs */}
                             {selectedRequest.logs && selectedRequest.logs.length > 0 && (
                                 <>
-                                    <Divider sx={{ my: 3, borderColor: colors.middle }} />
+                                    <Divider sx={{ my: 3, borderColor: 'divider' }} />
                                     <Box>
-                                        <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ color: colors.dark }}>
+                                        <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ color: 'text.primary' }}>
                                             {t('req.dialog.activityLog')}
                                         </Typography>
                                         <Paper
@@ -639,9 +650,9 @@ const RequestsList = () => {
                                                 p: 2,
                                                 maxHeight: 200,
                                                 overflow: 'auto',
-                                                borderColor: colors.middle,
+                                                borderColor: 'divider', // ✅ Theme aware
                                                 borderRadius: 2,
-                                                backgroundColor: '#fafafa',
+                                                backgroundColor: 'action.hover', // ✅ Theme aware
                                             }}
                                         >
                                             <Stack spacing={1.5}>
@@ -655,8 +666,8 @@ const RequestsList = () => {
                                                         sx={{
                                                             p: 1,
                                                             borderRadius: 1,
-                                                            backgroundColor: '#fff',
-                                                            border: `1px solid ${colors.middle}`,
+                                                            backgroundColor: 'background.paper', // ✅ Theme aware
+                                                            border: '1px solid', borderColor: 'divider', // ✅ Theme aware
                                                         }}
                                                     >
                                                         <Typography variant="caption" color="text.secondary" sx={{ minWidth: 140, fontWeight: 500 }}>
@@ -666,7 +677,7 @@ const RequestsList = () => {
                                                             label={log.action}
                                                             size="small"
                                                             sx={{
-                                                                backgroundColor: colors.wave,
+                                                                backgroundColor: 'primary.50', // ✅ Theme aware
                                                                 color: colors.sea,
                                                                 fontWeight: 500,
                                                             }}
@@ -690,24 +701,24 @@ const RequestsList = () => {
                             {/* Additional Info - Schedule */}
                             {(selectedRequest.scheduled_date || selectedRequest.scheduled_time) && (
                                 <>
-                                    <Divider sx={{ my: 3, borderColor: colors.middle }} />
+                                    <Divider sx={{ my: 3, borderColor: 'divider' }} />
                                     <Box>
-                                        <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ color: colors.dark }}>
+                                        <Typography variant="subtitle2" fontWeight={600} gutterBottom sx={{ color: 'text.primary' }}>
                                             {t('req.dialog.scheduleInfo')}
                                         </Typography>
                                         <Paper
                                             variant="outlined"
                                             sx={{
                                                 p: 2.5,
-                                                borderColor: colors.middle,
+                                                borderColor: 'divider', // ✅ Theme aware
                                                 borderRadius: 2,
-                                                backgroundColor: '#f8fafc',
+                                                backgroundColor: 'action.hover', // ✅ Theme aware
                                             }}
                                         >
                                             <Stack spacing={1}>
                                                 {selectedRequest.scheduled_date && (
                                                     <Box display="flex" alignItems="center" gap={1.5}>
-                                                        <CalendarIcon fontSize="small" sx={{ color: colors.rain }} />
+                                                        <CalendarIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                                                         <Typography variant="body2">
                                                             <strong>{t('req.dialog.scheduleDate')}</strong> {formatDateFull(selectedRequest.scheduled_date)}
                                                         </Typography>
@@ -715,7 +726,7 @@ const RequestsList = () => {
                                                 )}
                                                 {selectedRequest.scheduled_time && (
                                                     <Box display="flex" alignItems="center" gap={1.5}>
-                                                        <CalendarIcon fontSize="small" sx={{ color: colors.rain }} />
+                                                        <CalendarIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                                                         <Typography variant="body2">
                                                             <strong>{t('req.dialog.scheduleTime')}</strong> {selectedRequest.scheduled_time}
                                                         </Typography>
@@ -728,7 +739,7 @@ const RequestsList = () => {
                             )}
                         </DialogContent>
 
-                        <DialogActions sx={{ p: 2.5, borderTop: `1px solid ${colors.middle}` }}>
+                        <DialogActions sx={{ p: 2.5, borderTop: '1px solid', borderColor: 'divider' }}>
                             <Button
                                 onClick={handleCloseDialog}
                                 variant="contained"
@@ -752,20 +763,20 @@ const RequestsList = () => {
                 fullWidth
                 maxWidth="xs"
                 PaperProps={{
-                    sx: { borderRadius: 3, border: `1px solid ${colors.middle}` },
+                    sx: { borderRadius: 3, border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' },
                 }}
             >
-                <DialogTitle sx={{ pb: 1, fontWeight: 600, color: colors.dark }}>
+                <DialogTitle sx={{ pb: 1, fontWeight: 600, color: 'text.primary' }}>{/* ✅ Theme aware */}
                     {confirmDialog.title}
                 </DialogTitle>
                 <DialogContent>
-                    <Typography sx={{ color: colors.black }}>{confirmDialog.message}</Typography>
+                    <Typography sx={{ color: 'text.primary' }}>{confirmDialog.message}</Typography>{/* ✅ Theme aware */}
                 </DialogContent>
                 <DialogActions sx={{ p: 2, pt: 0 }}>
                     <Button
                         onClick={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
                         variant="outlined"
-                        sx={{ borderColor: colors.middle, color: colors.rain }}
+                        sx={{ borderColor: 'divider', color: 'text.secondary' }} // ✅ Theme aware
                     >
                         {t('req.common.cancel')}
                     </Button>

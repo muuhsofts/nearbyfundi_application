@@ -181,6 +181,7 @@ export default function RoleList() {
                         borderRadius: 3,
                         border: '1px solid',
                         borderColor: 'divider',
+                        bgcolor: 'background.paper', // ✅ Theme aware
                     }}
                 >
                     <Typography color="error" fontWeight={600} variant="h6" gutterBottom>
@@ -479,6 +480,7 @@ export default function RoleList() {
                                             borderRadius: 3,
                                             border: '1px solid',
                                             borderColor: 'divider',
+                                            bgcolor: 'background.paper', // ✅ Theme aware
                                             overflow: 'hidden',
                                         }}
                                     >
@@ -581,7 +583,7 @@ export default function RoleList() {
                 transformOrigin={{ vertical: 'top', horizontal: 'right' }}
                 PaperProps={{
                     elevation: 8,
-                    sx: { borderRadius: 2, minWidth: 200, mt: 0.5 },
+                    sx: { borderRadius: 2, minWidth: 200, mt: 0.5, bgcolor: 'background.paper' },
                 }}
             >
                 {canEdit && (
@@ -615,7 +617,7 @@ export default function RoleList() {
                 onClose={() => setConfirmDialog((prev) => ({ ...prev, open: false }))}
                 fullWidth
                 maxWidth="xs"
-                PaperProps={{ sx: { borderRadius: 3 } }}
+                PaperProps={{ sx: { borderRadius: 3, bgcolor: 'background.paper' } }}
             >
                 <DialogTitle sx={{ fontWeight: 700, pb: 1 }}>{confirmDialog.title}</DialogTitle>
                 <DialogContent>

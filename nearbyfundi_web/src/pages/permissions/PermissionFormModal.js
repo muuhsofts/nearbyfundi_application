@@ -81,7 +81,7 @@ export default function PermissionFormModal({ open, onClose, permission }) {
             PaperProps={{
                 sx: {
                     borderRadius: { xs: 0, sm: 3 },
-                    bgcolor: 'background.paper',
+                    bgcolor: 'background.paper', // ✅ Theme aware
                 },
             }}
         >

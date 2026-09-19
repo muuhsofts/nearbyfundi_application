@@ -156,7 +156,11 @@ const ServicesList = () => {
     if (!canView) {
         return (
             <Box p={3}>
-                <Paper elevation={0} sx={{ p: 4, textAlign: 'center', borderRadius: 3, border: '1px solid', borderColor: 'divider' }}>
+                <Paper elevation={0} sx={{
+                    p: 4, textAlign: 'center', borderRadius: 3,
+                    border: '1px solid', borderColor: 'divider',
+                    bgcolor: 'background.paper',
+                }}>
                     <Typography color="error" fontWeight={600}>
                         {t('service.accessDenied')}
                     </Typography>
@@ -192,7 +196,7 @@ const ServicesList = () => {
                 width: '100%', borderRadius: 3, overflow: 'hidden',
                 border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper',
             }}>
-                {/* ── HEADER ─────────────────────────────────── */}
+                {/* HEADER */}
                 <Box sx={{ px: { xs: 2, sm: 3 }, py: 2.5, borderBottom: '1px solid', borderColor: 'divider' }}>
                     <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between"
                            alignItems={{ xs: 'stretch', sm: 'center' }} spacing={2} mb={2.5}>
@@ -223,7 +227,7 @@ const ServicesList = () => {
                         </Stack>
                     </Stack>
 
-                    {/* ── FILTERS ─────────────────────────────── */}
+                    {/* FILTERS */}
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}
                            alignItems={{ xs: 'stretch', sm: 'center' }} flexWrap="wrap">
                         <TextField
@@ -270,18 +274,19 @@ const ServicesList = () => {
                     </Stack>
                 </Box>
 
-                {/* ── SUMMARY CARDS ────────────────────────── */}
+                {/* SUMMARY CARDS */}
                 <Box sx={{ px: { xs: 2, sm: 3 }, pt: 2.5, pb: 1 }}>
                     <Grid container spacing={2}>
                         {[
-                            { label: t('service.list.stat.totalServices'), value: totalServices, color: '#3b82f6', bg: '#eff6ff', icon: <BuildIcon sx={{ fontSize: 18 }} /> },
-                            { label: t('service.list.stat.categories'), value: totalCategories, color: '#8b5cf6', bg: '#f3e8ff', icon: <CategoryIcon sx={{ fontSize: 18 }} /> },
-                            { label: t('service.list.stat.technicians'), value: new Set(groupedData.flatMap(cat => cat.services.flatMap(s => s.technicians?.map(tc => tc.id) || []))).size, color: '#10b981', bg: '#ecfdf5', icon: <PeopleIcon sx={{ fontSize: 18 }} /> },
+                            { label: t('service.list.stat.totalServices'), value: totalServices, color: '#3b82f6', icon: <BuildIcon sx={{ fontSize: 18 }} /> },
+                            { label: t('service.list.stat.categories'), value: totalCategories, color: '#8b5cf6', icon: <CategoryIcon sx={{ fontSize: 18 }} /> },
+                            { label: t('service.list.stat.technicians'), value: new Set(groupedData.flatMap(cat => cat.services.flatMap(s => s.technicians?.map(tc => tc.id) || []))).size, color: '#10b981', icon: <PeopleIcon sx={{ fontSize: 18 }} /> },
                         ].map((item, idx) => (
                             <Grid item xs={6} sm={4} key={idx}>
                                 <Card elevation={0} sx={{
                                     borderRadius: 2, border: '1px solid', borderColor: 'divider',
-                                    backgroundColor: item.bg, height: '100%',
+                                    bgcolor: 'background.paper', // ✅ Theme aware
+                                    height: '100%',
                                 }}>
                                     <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
                                         <Box display="flex" alignItems="center" justifyContent="space-between">
@@ -300,14 +305,14 @@ const ServicesList = () => {
                     </Grid>
                 </Box>
 
-                {/* ── SERVICES GRID ─────────────────────────── */}
+                {/* SERVICES GRID */}
                 <Box sx={{ p: { xs: 2, sm: 3 } }}>
                     {loading ? (
                         <Box display="flex" justifyContent="center" py={6}>
                             <CircularProgress size={36} thickness={4} />
                         </Box>
                     ) : filteredData.length === 0 ? (
-                        <Paper variant="outlined" sx={{ p: 5, textAlign: 'center', borderRadius: 3, borderStyle: 'dashed' }}>
+                        <Paper variant="outlined" sx={{ p: 5, textAlign: 'center', borderRadius: 3, borderStyle: 'dashed', bgcolor: 'background.paper' }}>
                             <BuildIcon sx={{ fontSize: 56, color: 'text.disabled', mb: 2 }} />
                             <Typography color="text.secondary" fontWeight={500}>
                                 {search ? t('service.list.noMatch') : t('service.list.noFound')}
@@ -329,7 +334,7 @@ const ServicesList = () => {
                                 sx={{
                                     mb: 3, p: { xs: 2, sm: 3 }, borderRadius: 2.5,
                                     border: '1px solid', borderColor: 'divider',
-                                    bgcolor: alpha(colors.sea, 0.02),
+                                    bgcolor: 'action.hover', // ✅ Theme aware (replaces alpha(colors.sea, 0.02))
                                 }}
                             >
                                 <Stack direction="row" justifyContent="space-between" alignItems="center"
@@ -357,6 +362,7 @@ const ServicesList = () => {
                                                 sx={{
                                                     height: '100%', borderRadius: 2.5,
                                                     border: '1px solid', borderColor: 'divider',
+                                                    bgcolor: 'background.paper', // ✅ Theme aware
                                                     transition: 'all 0.25s ease',
                                                     '&:hover': {
                                                         borderColor: colors.sea,
@@ -424,14 +430,14 @@ const ServicesList = () => {
                 </Box>
             </Paper>
 
-            {/* ─── ACTION MENU ─────────────────────────────── */}
+            {/* ACTION MENU */}
             <Menu
                 anchorEl={actionMenu}
                 open={Boolean(actionMenu)}
                 onClose={handleMenuClose}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                 transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-                PaperProps={{ elevation: 8, sx: { borderRadius: 2, minWidth: 180, mt: 0.5 } }}
+                PaperProps={{ elevation: 8, sx: { borderRadius: 2, minWidth: 180, mt: 0.5, bgcolor: 'background.paper' } }}
             >
                 {canEdit && (
                     <MenuItem onClick={() => handleEdit(selectedService)} sx={{ fontWeight: 500 }}>
@@ -457,7 +463,7 @@ const ServicesList = () => {
                 )}
             </Menu>
 
-            {/* ─── SERVICE FORM MODAL ──────────────────────── */}
+            {/* SERVICE FORM MODAL */}
             <ServiceFormModal
                 open={openModal}
                 onClose={() => {
@@ -468,7 +474,7 @@ const ServicesList = () => {
                 service={editingService}
             />
 
-            {/* ─── TECHNICIANS MODAL ───────────────────────── */}
+            {/* TECHNICIANS MODAL */}
             <TechniciansModal
                 open={techniciansModal.open}
                 onClose={() => setTechniciansModal({ open: false, serviceId: null, serviceName: '' })}
@@ -476,12 +482,12 @@ const ServicesList = () => {
                 serviceName={techniciansModal.serviceName}
             />
 
-            {/* ─── CONFIRMATION DIALOG ─────────────────────── */}
+            {/* CONFIRMATION DIALOG */}
             <Dialog
                 open={confirmDialog.open}
                 onClose={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
                 fullWidth maxWidth="xs"
-                PaperProps={{ sx: { borderRadius: 3 } }}
+                PaperProps={{ sx: { borderRadius: 3, bgcolor: 'background.paper' } }}
             >
                 <DialogTitle sx={{ fontWeight: 700, pb: 1, color: 'text.primary' }}>
                     {confirmDialog.title}

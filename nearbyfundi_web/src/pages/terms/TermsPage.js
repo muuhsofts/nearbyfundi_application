@@ -233,14 +233,12 @@ const TermsPage = () => {
                                 label: t('terms.status'),
                                 value: termsData ? t('terms.published') : t('terms.notCreated'),
                                 color: termsData ? '#10b981' : '#f59e0b',
-                                bg: termsData ? '#ecfdf5' : '#fef3c7',
                                 icon: <GavelIcon sx={{ fontSize: 18 }} />,
                             },
                             {
                                 label: t('terms.wordCount'),
                                 value: termsData?.content?.split(/\s+/).filter(Boolean).length || 0,
                                 color: '#3b82f6',
-                                bg: '#eff6ff',
                                 icon: <DescriptionIcon sx={{ fontSize: 18 }} />,
                             },
                             {
@@ -249,7 +247,6 @@ const TermsPage = () => {
                                     ? new Date(termsData.updated_at).toLocaleDateString()
                                     : t('terms.never'),
                                 color: '#8b5cf6',
-                                bg: '#f3e8ff',
                                 icon: <HistoryIcon sx={{ fontSize: 18 }} />,
                             },
                         ].map((item, idx) => (
@@ -260,7 +257,7 @@ const TermsPage = () => {
                                         borderRadius: 2,
                                         border: '1px solid',
                                         borderColor: 'divider',
-                                        backgroundColor: item.bg,
+                                        bgcolor: 'background.paper', // ✅ Theme aware
                                         height: '100%',
                                     }}
                                 >
@@ -289,7 +286,7 @@ const TermsPage = () => {
                             borderColor: 'divider',
                             borderRadius: 2.5,
                             overflow: 'hidden',
-                            bgcolor: alpha(colors.sea, 0.02),
+                            bgcolor: 'action.hover', // ✅ Theme aware (replaces alpha(colors.sea, 0.02))
                         }}
                     >
                         <CardContent sx={{ p: 3 }}>

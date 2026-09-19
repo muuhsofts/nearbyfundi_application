@@ -79,7 +79,6 @@ const PostsList = () => {
     });
     const [imageLoaded, setImageLoaded] = useState({});
 
-    // ── EXISTING LOGIC: Load technicians ────────────────────────────────
     const loadTechnicians = async () => {
         setLoadingTechnicians(true);
         try {
@@ -99,7 +98,6 @@ const PostsList = () => {
 
     useEffect(() => { loadTechnicians(); }, []);
 
-    // ── EXISTING LOGIC: Load posts ──────────────────────────────────────
     const loadPosts = async () => {
         if (!canView) return;
         setLoading(true);
@@ -144,7 +142,6 @@ const PostsList = () => {
 
     const refreshAll = () => { loadPosts(); };
 
-    // ── EXISTING LOGIC: View post ───────────────────────────────────────
     const handleViewPost = async (post) => {
         try {
             const response = await postService.getPost(post.id);
@@ -162,7 +159,6 @@ const PostsList = () => {
         setSelectedPost(null);
     };
 
-    // ── EXISTING LOGIC: Delete post ─────────────────────────────────────
     const handleDeletePost = async (id) => {
         try {
             await postService.deletePost(id);
@@ -177,7 +173,6 @@ const PostsList = () => {
         }
     };
 
-    // ── EXISTING LOGIC: Confirm dialog ──────────────────────────────────
     const openConfirmDialog = (title, message, actionFn) => {
         setConfirmDialog({ open: true, title, message, action: actionFn });
     };
@@ -189,14 +184,12 @@ const PostsList = () => {
         try { await action(); } catch (err) { console.error('Confirm action failed:', err); }
     };
 
-    // ── EXISTING LOGIC: Sorting ─────────────────────────────────────────
     const handleRequestSort = (property) => {
         const isAsc = orderBy === property && order === 'asc';
         setOrder(isAsc ? 'desc' : 'asc');
         setOrderBy(property);
     };
 
-    // ── Client-side sorting (UI only) ──────────────────────────────────
     const sortedPosts = useMemo(() => {
         const sorted = [...posts];
         sorted.sort((a, b) => {
@@ -216,7 +209,6 @@ const PostsList = () => {
         return sorted;
     }, [posts, orderBy, order]);
 
-    // ── EXISTING HELPERS ─────────────────────────────────────────────────
     const handleImageLoad = (id) => setImageLoaded(prev => ({ ...prev, [id]: true }));
 
     const getInitials = (name) => {
@@ -242,7 +234,6 @@ const PostsList = () => {
         try { return format(new Date(dateStr), 'MMM d, yyyy h:mm a'); } catch { return '-'; }
     };
 
-    // ── UI Helper: Status chip ──────────────────────────────────────────
     const getStatusChip = (status) => {
         const s = statusStyles[status] || statusStyles.published;
         return (
@@ -258,7 +249,6 @@ const PostsList = () => {
         );
     };
 
-    // ── UI: Action menu handlers ────────────────────────────────────────
     const handleMenuOpen = (event, post) => {
         setSelectedPostForMenu(post);
         setActionMenu(event.currentTarget);
@@ -287,31 +277,32 @@ const PostsList = () => {
         }
     };
 
-    // ── Summary stats ──────────────────────────────────────────────────
     const totalPosts = pagination.total || 0;
     const totalLikes = posts.reduce((acc, p) => acc + (p.likes_count || 0), 0);
     const totalComments = posts.reduce((acc, p) => acc + (p.comments_count || 0), 0);
     const uniqueTechnicians = new Set(posts.map(p => p.technician?.id).filter(Boolean)).size;
 
-    // ── Permission check ──────────────────────────────────────────────
     if (!canView) {
         return (
             <Box p={3}>
-                <Paper elevation={0} sx={{ p: 4, textAlign: 'center', borderRadius: 3, border: '1px solid', borderColor: 'divider' }}>
+                <Paper elevation={0} sx={{
+                    p: 4, textAlign: 'center', borderRadius: 3,
+                    border: '1px solid', borderColor: 'divider',
+                    bgcolor: 'background.paper',
+                }}>
                     <Typography color="error" fontWeight={600}>{t('post.accessDenied')}</Typography>
                 </Paper>
             </Box>
         );
     }
 
-    // ── RENDER ──────────────────────────────────────────────────────────
     return (
         <Box sx={{ width: '100%', p: { xs: 1.5, sm: 2.5 }, m: 0, bgcolor: 'background.default' }}>
             <Paper elevation={0} sx={{
                 width: '100%', borderRadius: 3, overflow: 'hidden',
                 border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper',
             }}>
-                {/* ── HEADER ────────────────────────────────────────── */}
+                {/* HEADER */}
                 <Box sx={{ px: { xs: 2, sm: 3 }, py: 2.5, borderBottom: '1px solid', borderColor: 'divider' }}>
                     <Stack
                         direction={{ xs: 'column', sm: 'row' }}
@@ -344,7 +335,7 @@ const PostsList = () => {
                         </Stack>
                     </Stack>
 
-                    {/* ── FILTERS ─────────────────────────────────── */}
+                    {/* FILTERS */}
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}
                            alignItems={{ xs: 'stretch', sm: 'center' }} flexWrap="wrap">
                         <TextField
@@ -400,19 +391,20 @@ const PostsList = () => {
                     </Stack>
                 </Box>
 
-                {/* ── SUMMARY CARDS ────────────────────────────────── */}
+                {/* SUMMARY CARDS */}
                 <Box sx={{ px: { xs: 2, sm: 3 }, pt: 2.5, pb: 1 }}>
                     <Grid container spacing={2}>
                         {[
-                            { label: t('post.stats.totalPosts'), value: totalPosts, color: '#3b82f6', bg: '#eff6ff', icon: <DescriptionIcon sx={{ fontSize: 18 }} /> },
-                            { label: t('post.stats.technicians'), value: uniqueTechnicians, color: '#8b5cf6', bg: '#f3e8ff', icon: <PersonIcon sx={{ fontSize: 18 }} /> },
-                            { label: t('post.stats.totalLikes'), value: totalLikes, color: '#ef4444', bg: '#fef2f2', icon: <FavoriteIcon sx={{ fontSize: 18 }} /> },
-                            { label: t('post.stats.totalComments'), value: totalComments, color: '#10b981', bg: '#ecfdf5', icon: <CommentIcon sx={{ fontSize: 18 }} /> },
+                            { label: t('post.stats.totalPosts'), value: totalPosts, color: '#3b82f6', icon: <DescriptionIcon sx={{ fontSize: 18 }} /> },
+                            { label: t('post.stats.technicians'), value: uniqueTechnicians, color: '#8b5cf6', icon: <PersonIcon sx={{ fontSize: 18 }} /> },
+                            { label: t('post.stats.totalLikes'), value: totalLikes, color: '#ef4444', icon: <FavoriteIcon sx={{ fontSize: 18 }} /> },
+                            { label: t('post.stats.totalComments'), value: totalComments, color: '#10b981', icon: <CommentIcon sx={{ fontSize: 18 }} /> },
                         ].map((item, idx) => (
                             <Grid item xs={6} sm={3} key={idx}>
                                 <Card elevation={0} sx={{
                                     borderRadius: 2, border: '1px solid', borderColor: 'divider',
-                                    backgroundColor: item.bg, height: '100%',
+                                    bgcolor: 'background.paper', // ✅ Theme aware
+                                    height: '100%',
                                 }}>
                                     <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
                                         <Box display="flex" alignItems="center" justifyContent="space-between">
@@ -431,7 +423,7 @@ const PostsList = () => {
                     </Grid>
                 </Box>
 
-                {/* ── TABLE (DESKTOP) ──────────────────────────────── */}
+                {/* TABLE */}
                 {showTableView ? (
                     <TableContainer>
                         <Table sx={{ minWidth: 900 }}>
@@ -480,7 +472,6 @@ const PostsList = () => {
                                         const imageUrl = post.image ? getImageUrl(post.image) : null;
                                         return (
                                             <TableRow key={post.id} hover sx={{ '&:last-child td': { borderBottom: 0 }, transition: 'background-color 0.15s' }}>
-                                                {/* Post */}
                                                 <TableCell sx={{ py: 2 }}>
                                                     <Stack direction="row" spacing={1.5} alignItems="center">
                                                         {imageUrl ? (
@@ -512,7 +503,6 @@ const PostsList = () => {
                                                     </Stack>
                                                 </TableCell>
 
-                                                {/* Technician */}
                                                 <TableCell>
                                                     <Stack direction="row" spacing={1} alignItems="center">
                                                         <Avatar
@@ -530,51 +520,46 @@ const PostsList = () => {
                                                                 {post.technician?.user?.name || post.technician?.name || t('post.common.emDash')}
                                                             </Typography>
                                                             {post.technician?.verified && (
-                                                                <VerifiedIcon sx={{ fontSize: 12, color: '#10b981', display: 'block' }} />
+                                                                <VerifiedIcon sx={{ fontSize: 12, color: 'success.main', display: 'block' }} />
                                                             )}
                                                         </Box>
                                                     </Stack>
                                                 </TableCell>
 
-                                                {/* Likes */}
                                                 <TableCell>
                                                     <Chip
                                                         icon={<FavoriteIcon sx={{ fontSize: 14 }} />}
                                                         label={post.likes_count || 0}
                                                         size="small"
                                                         sx={{
-                                                            fontWeight: 700, bgcolor: '#fef2f2', color: '#ef4444',
-                                                            border: '1px solid #fecaca', height: 28,
-                                                            '& .MuiChip-icon': { color: '#ef4444' },
+                                                            fontWeight: 700, bgcolor: 'error.light', color: 'error.main',
+                                                            border: '1px solid', borderColor: 'error.main', height: 28,
+                                                            '& .MuiChip-icon': { color: 'error.main' },
                                                         }}
                                                     />
                                                 </TableCell>
 
-                                                {/* Comments */}
                                                 <TableCell>
                                                     <Chip
                                                         icon={<CommentIcon sx={{ fontSize: 14 }} />}
                                                         label={post.comments_count || 0}
                                                         size="small"
                                                         sx={{
-                                                            fontWeight: 700, bgcolor: '#ecfdf5', color: '#10b981',
-                                                            border: '1px solid #a7f3d0', height: 28,
-                                                            '& .MuiChip-icon': { color: '#10b981' },
+                                                            fontWeight: 700, bgcolor: 'success.light', color: 'success.main',
+                                                            border: '1px solid', borderColor: 'success.main', height: 28,
+                                                            '& .MuiChip-icon': { color: 'success.main' },
                                                         }}
                                                     />
                                                 </TableCell>
 
-                                                {/* Status */}
                                                 <TableCell>{getStatusChip(post.status)}</TableCell>
 
-                                                {/* Created */}
                                                 <TableCell>
                                                     <Typography variant="body2" fontWeight={500} color="text.secondary">
                                                         {formatDate(post.created_at)}
                                                     </Typography>
                                                 </TableCell>
 
-                                                {/* Actions */}
                                                 <TableCell align="center">
                                                     <IconButton
                                                         size="small"
@@ -595,14 +580,14 @@ const PostsList = () => {
                         </Table>
                     </TableContainer>
                 ) : (
-                    /* ── MOBILE/TABLET CARDS ──────────────────────── */
+                    /* MOBILE CARDS */
                     <Box sx={{ p: { xs: 2, sm: 2.5 } }}>
                         {loading ? (
                             <Box display="flex" justifyContent="center" py={6}>
                                 <CircularProgress size={36} thickness={4} />
                             </Box>
                         ) : sortedPosts.length === 0 ? (
-                            <Paper variant="outlined" sx={{ p: 5, textAlign: 'center', borderRadius: 3, borderStyle: 'dashed' }}>
+                            <Paper variant="outlined" sx={{ p: 5, textAlign: 'center', borderRadius: 3, borderStyle: 'dashed', bgcolor: 'background.paper' }}>
                                 <Typography color="text.secondary" fontWeight={500}>
                                     {t('post.table.noFound')}
                                 </Typography>
@@ -615,6 +600,7 @@ const PostsList = () => {
                                         <Grid item xs={12} sm={6} lg={4} key={post.id}>
                                             <Card elevation={0} sx={{
                                                 borderRadius: 3, border: '1px solid', borderColor: 'divider',
+                                                bgcolor: 'background.paper', // ✅ Theme aware
                                                 overflow: 'hidden', height: '100%',
                                                 display: 'flex', flexDirection: 'column',
                                                 transition: 'box-shadow 0.2s',
@@ -680,7 +666,7 @@ const PostsList = () => {
                                                             {post.technician?.user?.name || post.technician?.name || t('post.common.emDash')}
                                                         </Typography>
                                                         {post.technician?.verified && (
-                                                            <VerifiedIcon sx={{ fontSize: 14, color: '#10b981' }} />
+                                                            <VerifiedIcon sx={{ fontSize: 14, color: 'success.main' }} />
                                                         )}
                                                     </Stack>
 
@@ -691,16 +677,16 @@ const PostsList = () => {
                                                             <Chip icon={<FavoriteIcon sx={{ fontSize: 14 }} />}
                                                                   label={post.likes_count || 0} size="small"
                                                                   sx={{
-                                                                      fontWeight: 700, bgcolor: '#fef2f2', color: '#ef4444',
-                                                                      border: '1px solid #fecaca', height: 26,
-                                                                      '& .MuiChip-icon': { color: '#ef4444' },
+                                                                      fontWeight: 700, bgcolor: 'error.light', color: 'error.main',
+                                                                      border: '1px solid', borderColor: 'error.main', height: 26,
+                                                                      '& .MuiChip-icon': { color: 'error.main' },
                                                                   }} />
                                                             <Chip icon={<CommentIcon sx={{ fontSize: 14 }} />}
                                                                   label={post.comments_count || 0} size="small"
                                                                   sx={{
-                                                                      fontWeight: 700, bgcolor: '#ecfdf5', color: '#10b981',
-                                                                      border: '1px solid #a7f3d0', height: 26,
-                                                                      '& .MuiChip-icon': { color: '#10b981' },
+                                                                      fontWeight: 700, bgcolor: 'success.light', color: 'success.main',
+                                                                      border: '1px solid', borderColor: 'success.main', height: 26,
+                                                                      '& .MuiChip-icon': { color: 'success.main' },
                                                                   }} />
                                                         </Stack>
                                                         <Typography variant="caption" color="text.secondary" fontWeight={500}>
@@ -729,7 +715,7 @@ const PostsList = () => {
                     </Box>
                 )}
 
-                {/* ── PAGINATION ─────────────────────────────────── */}
+                {/* PAGINATION */}
                 <Box sx={{ borderTop: '1px solid', borderColor: 'divider', bgcolor: 'action.hover' }}>
                     <TablePagination
                         rowsPerPageOptions={[5, 10, 25, 50]}
@@ -751,14 +737,14 @@ const PostsList = () => {
                 </Box>
             </Paper>
 
-            {/* ── ACTION MENU ─────────────────────────────────────── */}
+            {/* ACTION MENU */}
             <Menu
                 anchorEl={actionMenu}
                 open={Boolean(actionMenu)}
                 onClose={handleMenuClose}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                 transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-                PaperProps={{ elevation: 8, sx: { borderRadius: 2, minWidth: 180, mt: 0.5 } }}
+                PaperProps={{ elevation: 8, sx: { borderRadius: 2, minWidth: 180, mt: 0.5, bgcolor: 'background.paper' } }}
             >
                 <MenuItem onClick={() => handleAction('view')} sx={{ fontWeight: 500 }}>
                     <ViewIcon sx={{ mr: 1.5, fontSize: 20, color: colors.sea || '#0f766e' }} />
@@ -772,13 +758,13 @@ const PostsList = () => {
                 )}
             </Menu>
 
-            {/* ── POST DETAIL DIALOG ─────────────────────────────── */}
+            {/* POST DETAIL DIALOG */}
             <Dialog
                 open={openViewDialog}
                 onClose={handleCloseDialog}
                 maxWidth="md" fullWidth
                 PaperProps={{
-                    sx: { borderRadius: 3, border: '1px solid', borderColor: 'divider', maxHeight: '90vh' },
+                    sx: { borderRadius: 3, border: '1px solid', borderColor: 'divider', maxHeight: '90vh', bgcolor: 'background.paper' },
                 }}
             >
                 {selectedPost && (
@@ -805,7 +791,7 @@ const PostsList = () => {
                                                 {selectedPost.technician?.user?.name || selectedPost.technician?.name || t('post.common.unknown')}
                                             </Typography>
                                             {selectedPost.technician?.verified && (
-                                                <VerifiedIcon sx={{ fontSize: 14, color: '#10b981' }} />
+                                                <VerifiedIcon sx={{ fontSize: 14, color: 'success.main' }} />
                                             )}
                                         </Stack>
                                         <Typography variant="caption" color="text.secondary">
@@ -855,7 +841,7 @@ const PostsList = () => {
                                     </Typography>
                                     <Stack direction="row" spacing={3}>
                                         <Box display="flex" alignItems="center" gap={1}>
-                                            <FavoriteIcon sx={{ color: '#ef4444' }} />
+                                            <FavoriteIcon sx={{ color: 'error.main' }} />
                                             <Box>
                                                 <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1 }}>
                                                     {selectedPost.likes_count || 0}
@@ -889,7 +875,7 @@ const PostsList = () => {
                                         </Box>
                                         {selectedPost.technician?.rating > 0 && (
                                             <Box display="flex" alignItems="center" gap={0.5} mt={0.5}>
-                                                <StarIcon sx={{ color: '#f59e0b', fontSize: 16 }} />
+                                                <StarIcon sx={{ color: 'warning.main', fontSize: 16 }} />
                                                 <Typography variant="body2" fontWeight={500}>
                                                     {selectedPost.technician.rating.toFixed(1)}
                                                 </Typography>
@@ -961,12 +947,12 @@ const PostsList = () => {
                 )}
             </Dialog>
 
-            {/* ── CONFIRMATION DIALOG ─────────────────────────────── */}
+            {/* CONFIRMATION DIALOG */}
             <Dialog
                 open={confirmDialog.open}
                 onClose={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
                 fullWidth maxWidth="xs"
-                PaperProps={{ sx: { borderRadius: 3 } }}
+                PaperProps={{ sx: { borderRadius: 3, bgcolor: 'background.paper' } }}
             >
                 <DialogTitle sx={{ fontWeight: 700, pb: 1 }}>{confirmDialog.title}</DialogTitle>
                 <DialogContent>

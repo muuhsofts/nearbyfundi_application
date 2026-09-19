@@ -82,7 +82,7 @@ export default function RoleFormModal({ open, onClose, role }) {
             PaperProps={{
                 sx: {
                     borderRadius: { xs: 0, sm: 3 },
-                    bgcolor: 'background.paper',
+                    bgcolor: 'background.paper', // ✅ Theme aware
                 },
             }}
         >

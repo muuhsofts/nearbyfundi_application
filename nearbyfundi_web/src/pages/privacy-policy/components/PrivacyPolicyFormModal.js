@@ -81,6 +81,7 @@ export default function PrivacyPolicyFormModal({
                     borderRadius: { xs: 0, sm: 3 },
                     border: '1px solid',
                     borderColor: 'divider',
+                    bgcolor: 'background.paper', // ✅ Theme aware
                     margin: fullScreen ? 0 : 2,
                 },
             }}
@@ -134,7 +135,7 @@ export default function PrivacyPolicyFormModal({
                                     fontFamily: 'inherit',
                                     fontSize: '1rem',
                                     lineHeight: 1.8,
-                                    bgcolor: 'action.hover',
+                                    bgcolor: 'action.hover', // ✅ Theme aware
                                     '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: colors.sea },
                                     '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
                                         borderColor: colors.sea,

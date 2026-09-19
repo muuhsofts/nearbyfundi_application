@@ -115,18 +115,18 @@ const TechnicianDetails = () => {
                     label={t('tech.status.verified')}
                     icon={<VerifiedIcon sx={{ fontSize: 16 }} />}
                     sx={{
-                        fontWeight: 700, bgcolor: '#d1fae5', color: '#047857',
-                        border: '1.5px solid #10b981', height: 32,
-                        '& .MuiChip-icon': { color: '#047857' },
+                        fontWeight: 700, bgcolor: 'success.light', color: 'success.dark',
+                        border: '1.5px solid', borderColor: 'success.main', height: 32,
+                        '& .MuiChip-icon': { color: 'success.dark' },
                     }}
                 />
             );
         }
 
         const statusMap = {
-            approved: { label: t('tech.status.approved'), color: '#047857', bg: '#d1fae5', border: '#10b981' },
-            pending: { label: t('tech.status.pending'), color: '#b45309', bg: '#fef3c7', border: '#f59e0b' },
-            rejected: { label: t('tech.status.rejected'), color: '#b91c1c', bg: '#fee2e2', border: '#ef4444' },
+            approved: { label: t('tech.status.approved'), color: 'success.dark', bg: 'success.light', border: 'success.main' },
+            pending: { label: t('tech.status.pending'), color: 'warning.dark', bg: 'warning.light', border: 'warning.main' },
+            rejected: { label: t('tech.status.rejected'), color: 'error.dark', bg: 'error.light', border: 'error.main' },
         };
 
         const s = statusMap[status] || statusMap.pending;
@@ -135,7 +135,7 @@ const TechnicianDetails = () => {
                 label={s.label}
                 sx={{
                     fontWeight: 700, bgcolor: s.bg, color: s.color,
-                    border: `1.5px solid ${s.border}`, height: 32,
+                    border: `1.5px solid`, borderColor: s.border, height: 32,
                 }}
             />
         );
@@ -241,7 +241,7 @@ const TechnicianDetails = () => {
                 width: '100%', borderRadius: 3, overflow: 'hidden',
                 border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper',
             }}>
-                {/* ── HEADER ─────────────────────────────────────── */}
+                {/* HEADER */}
                 <Box sx={{
                     px: { xs: 2, sm: 3 }, py: 2.5,
                     borderBottom: '1px solid', borderColor: 'divider',
@@ -300,13 +300,13 @@ const TechnicianDetails = () => {
                     </Box>
                 )}
 
-                {/* ─── PROFILE HEADER ─────────────────────────── */}
+                {/* PROFILE HEADER */}
                 <Box sx={{
                     px: { xs: 2, sm: 3, md: 4 }, py: { xs: 2, sm: 3, md: 4 },
                     display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3,
                     alignItems: { xs: 'center', md: 'flex-start' },
                     borderBottom: '1px solid', borderColor: 'divider',
-                    background: alpha(colors.sea, 0.03),
+                    bgcolor: 'action.hover', // ✅ Theme aware (replaces alpha(colors.sea, 0.03))
                 }}>
                     <Box
                         sx={{
@@ -363,9 +363,10 @@ const TechnicianDetails = () => {
                                 size="small"
                                 sx={{
                                     fontWeight: 600,
-                                    bgcolor: technician.registration_completed ? '#d1fae5' : '#f3f4f6',
-                                    color: technician.registration_completed ? '#047857' : '#4b5563',
-                                    border: `1px solid ${technician.registration_completed ? '#10b981' : '#9ca3af'}`,
+                                    bgcolor: technician.registration_completed ? 'success.light' : 'action.hover',
+                                    color: technician.registration_completed ? 'success.dark' : 'text.secondary',
+                                    border: '1px solid',
+                                    borderColor: technician.registration_completed ? 'success.main' : 'divider',
                                 }}
                             />
                             <Chip
@@ -393,7 +394,7 @@ const TechnicianDetails = () => {
                         <Stack direction="row" spacing={2.5} flexWrap="wrap"
                                sx={{ mt: 1.5, justifyContent: { xs: 'center', md: 'flex-start' } }}>
                             <Box display="flex" alignItems="center" gap={0.5}>
-                                <StarIcon sx={{ fontSize: 20, color: '#f59e0b' }} />
+                                <StarIcon sx={{ fontSize: 20, color: 'warning.main' }} />
                                 <Typography variant="body2" fontWeight={700}>
                                     {technician.rating?.toFixed(1) || t('tech.common.na')}
                                 </Typography>
@@ -416,14 +417,14 @@ const TechnicianDetails = () => {
                     </Box>
                 </Box>
 
-                {/* ─── DETAILS CONTENT ─────────────────────────── */}
+                {/* DETAILS CONTENT */}
                 <Box sx={{ p: { xs: 2, sm: 3, md: 4 } }}>
                     <Grid container spacing={3}>
                         {/* Left Column */}
                         <Grid item xs={12} md={6}>
                             <Stack spacing={3}>
                                 {/* Bio */}
-                                <Card variant="outlined" sx={{ borderColor: 'divider' }}>
+                                <Card variant="outlined" sx={{ borderColor: 'divider', bgcolor: 'background.paper' }}>
                                     <CardContent>
                                         <Typography variant="subtitle1" fontWeight={700} color="text.primary" mb={1.5}>
                                             <PersonIcon sx={{ fontSize: 20, mr: 1, verticalAlign: 'middle', color: colors.sea }} />
@@ -436,7 +437,7 @@ const TechnicianDetails = () => {
                                 </Card>
 
                                 {/* Identification */}
-                                <Card variant="outlined" sx={{ borderColor: 'divider' }}>
+                                <Card variant="outlined" sx={{ borderColor: 'divider', bgcolor: 'background.paper' }}>
                                     <CardContent>
                                         <Typography variant="subtitle1" fontWeight={700} color="text.primary" mb={1.5}>
                                             <DocumentIcon sx={{ fontSize: 20, mr: 1, verticalAlign: 'middle', color: colors.sea }} />
@@ -492,7 +493,7 @@ const TechnicianDetails = () => {
                                 </Card>
 
                                 {/* Services */}
-                                <Card variant="outlined" sx={{ borderColor: 'divider' }}>
+                                <Card variant="outlined" sx={{ borderColor: 'divider', bgcolor: 'background.paper' }}>
                                     <CardContent>
                                         <Typography variant="subtitle1" fontWeight={700} color="text.primary" mb={1.5}>
                                             <WorkIcon sx={{ fontSize: 20, mr: 1, verticalAlign: 'middle', color: colors.sea }} />
@@ -533,7 +534,7 @@ const TechnicianDetails = () => {
                                 </Card>
 
                                 {/* Location */}
-                                <Card variant="outlined" sx={{ borderColor: 'divider' }}>
+                                <Card variant="outlined" sx={{ borderColor: 'divider', bgcolor: 'background.paper' }}>
                                     <CardContent>
                                         <Typography variant="subtitle1" fontWeight={700} color="text.primary" mb={1.5}>
                                             <LocationIcon sx={{ fontSize: 20, mr: 1, verticalAlign: 'middle', color: colors.sea }} />
@@ -575,7 +576,7 @@ const TechnicianDetails = () => {
                             <Stack spacing={3}>
                                 {/* Portfolio */}
                                 {technician.portfolios && technician.portfolios.length > 0 && (
-                                    <Card variant="outlined" sx={{ borderColor: 'divider' }}>
+                                    <Card variant="outlined" sx={{ borderColor: 'divider', bgcolor: 'background.paper' }}>
                                         <CardContent>
                                             <Typography variant="subtitle1" fontWeight={700} color="text.primary" mb={1.5}>
                                                 <ImageIcon sx={{ fontSize: 20, mr: 1, verticalAlign: 'middle', color: colors.sea }} />
@@ -630,7 +631,7 @@ const TechnicianDetails = () => {
                                 )}
 
                                 {/* Subscription */}
-                                <Card variant="outlined" sx={{ borderColor: 'divider' }}>
+                                <Card variant="outlined" sx={{ borderColor: 'divider', bgcolor: 'background.paper' }}>
                                     <CardContent>
                                         <Typography variant="subtitle1" fontWeight={700} color="text.primary" mb={1.5}>
                                             <SubscriptionsIcon sx={{ fontSize: 20, mr: 1, verticalAlign: 'middle', color: colors.sea }} />
@@ -722,12 +723,12 @@ const TechnicianDetails = () => {
                 </Box>
             </Paper>
 
-            {/* ─── APPROVAL CONFIRMATION DIALOG ─────────────── */}
+            {/* APPROVAL CONFIRMATION DIALOG */}
             <Dialog
                 open={approveDialogOpen}
                 onClose={closeApproveDialog}
                 maxWidth="sm" fullWidth
-                PaperProps={{ sx: { borderRadius: 3 } }}
+                PaperProps={{ sx: { borderRadius: 3, bgcolor: 'background.paper' } }}
             >
                 <DialogTitle sx={{ fontWeight: 700, color: 'text.primary' }}>
                     {t('tech.approve.title')}
@@ -755,7 +756,7 @@ const TechnicianDetails = () => {
                                 value={approveProgress}
                                 sx={{
                                     height: 8, borderRadius: 4, mt: 0.5,
-                                    bgcolor: alpha(colors.middle, 0.3),
+                                    bgcolor: 'action.hover',
                                     '& .MuiLinearProgress-bar': {
                                         bgcolor: colors.salat || '#10b981',
                                         borderRadius: 4,
@@ -784,7 +785,7 @@ const TechnicianDetails = () => {
                 </DialogActions>
             </Dialog>
 
-            {/* ─── IMAGE MODAL ─────────────────────────────── */}
+            {/* IMAGE MODAL */}
             <Dialog
                 open={imageModalOpen}
                 onClose={closeImageModal}

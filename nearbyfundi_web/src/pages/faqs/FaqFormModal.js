@@ -74,6 +74,22 @@ export default function FaqFormModal({ open, onClose, faq, createFaq, updateFaq 
         }
     };
 
+    const inputSx = {
+        '& .MuiOutlinedInput-root': {
+            borderRadius: 2,
+            bgcolor: 'action.hover',
+            '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: colors.sea },
+            '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                borderColor: colors.sea,
+                borderWidth: 2,
+            },
+        },
+        '& .MuiInputLabel-root': {
+            color: 'text.secondary',
+            '&.Mui-focused': { color: colors.sea },
+        },
+    };
+
     return (
         <Dialog
             open={open}
@@ -86,6 +102,7 @@ export default function FaqFormModal({ open, onClose, faq, createFaq, updateFaq 
                     borderRadius: { xs: 0, sm: 3 },
                     border: '1px solid',
                     borderColor: 'divider',
+                    bgcolor: 'background.paper', // ✅ Theme aware
                     margin: fullScreen ? 0 : 2,
                 },
             }}
@@ -133,21 +150,7 @@ export default function FaqFormModal({ open, onClose, faq, createFaq, updateFaq 
                             helperText={errors.question}
                             placeholder={t('faq.modal.questionPlaceholder')}
                             disabled={loading}
-                            sx={{
-                                '& .MuiOutlinedInput-root': {
-                                    borderRadius: 2,
-                                    bgcolor: 'action.hover',
-                                    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: colors.sea },
-                                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                                        borderColor: colors.sea,
-                                        borderWidth: 2,
-                                    },
-                                },
-                                '& .MuiInputLabel-root': {
-                                    color: 'text.secondary',
-                                    '&.Mui-focused': { color: colors.sea },
-                                },
-                            }}
+                            sx={inputSx}
                         />
 
                         <TextField
@@ -163,21 +166,7 @@ export default function FaqFormModal({ open, onClose, faq, createFaq, updateFaq 
                             helperText={errors.answer}
                             placeholder={t('faq.modal.answerPlaceholder')}
                             disabled={loading}
-                            sx={{
-                                '& .MuiOutlinedInput-root': {
-                                    borderRadius: 2,
-                                    bgcolor: 'action.hover',
-                                    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: colors.sea },
-                                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                                        borderColor: colors.sea,
-                                        borderWidth: 2,
-                                    },
-                                },
-                                '& .MuiInputLabel-root': {
-                                    color: 'text.secondary',
-                                    '&.Mui-focused': { color: colors.sea },
-                                },
-                            }}
+                            sx={inputSx}
                         />
 
                         <TextField
@@ -191,21 +180,7 @@ export default function FaqFormModal({ open, onClose, faq, createFaq, updateFaq 
                             helperText={errors.order || t('faq.modal.orderHelp')}
                             InputProps={{ inputProps: { min: 0 } }}
                             disabled={loading}
-                            sx={{
-                                '& .MuiOutlinedInput-root': {
-                                    borderRadius: 2,
-                                    bgcolor: 'action.hover',
-                                    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: colors.sea },
-                                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                                        borderColor: colors.sea,
-                                        borderWidth: 2,
-                                    },
-                                },
-                                '& .MuiInputLabel-root': {
-                                    color: 'text.secondary',
-                                    '&.Mui-focused': { color: colors.sea },
-                                },
-                            }}
+                            sx={inputSx}
                         />
                     </Stack>
                 </DialogContent>

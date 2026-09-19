@@ -10,8 +10,6 @@ import {
     Refresh as RefreshIcon,
     Description as CsvIcon,
     TableChart as ExcelIcon,
-    TrendingUp as TrendingUpIcon,
-    TrendingDown as TrendingDownIcon,
     People as PeopleIcon,
     Assignment as RequestIcon,
     CardMembership as SubIcon,
@@ -98,21 +96,7 @@ function RowPrimary({ title, subtitle }) {
     );
 }
 
-function GrowthPill({ value, t }) {
-    if (value === undefined || value === null) return null;
-    const isUp = value >= 0;
-    const Icon = isUp ? TrendingUpIcon : TrendingDownIcon;
-    const color = isUp ? '#10b981' : '#ef4444';
-    return (
-        <Stack direction="row" alignItems="center" spacing={0.5} sx={{ color, mt: 0.75 }}>
-            <Icon sx={{ fontSize: 15 }} />
-            <Typography variant="caption" fontWeight={700}>
-                {isUp ? '+' : ''}
-                {value}% {t('dashboard.vsLastPeriod')}
-            </Typography>
-        </Stack>
-    );
-}
+// ❌ GrowthPill component removed (no longer used)
 
 function buildDailyInsights(buckets = []) {
     if (!buckets.length) {
@@ -402,28 +386,28 @@ const Dashboard = () => {
                 key: 'customers',
                 label: t('dashboard.domain.customers'),
                 color: DOMAINS.customers.chartColor,
-                bg: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
+                bg: 'background.paper',
                 icon: PeopleIcon,
             },
             {
                 key: 'requests',
                 label: t('dashboard.domain.requests'),
                 color: DOMAINS.requests.chartColor,
-                bg: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)',
+                bg: 'background.paper',
                 icon: RequestIcon,
             },
             {
                 key: 'subscriptions',
                 label: t('dashboard.domain.subscriptions'),
                 color: DOMAINS.subscriptions.chartColor,
-                bg: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)',
+                bg: 'background.paper',
                 icon: SubIcon,
             },
             {
                 key: 'technicians',
                 label: t('dashboard.domain.technicians'),
                 color: DOMAINS.technicians.chartColor,
-                bg: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
+                bg: 'background.paper',
                 icon: TechIcon,
             },
         ],
@@ -447,7 +431,7 @@ const Dashboard = () => {
                 maxWidth: '100%',
                 px: { xs: 1.5, sm: 2, md: 3 },
                 py: { xs: 2, md: 3 },
-                bgcolor: '#f8fafc',
+                bgcolor: 'background.default',
                 minHeight: '100%',
             }}
         >
@@ -458,9 +442,9 @@ const Dashboard = () => {
                     p: { xs: 2, sm: 2.5 },
                     mb: 3,
                     borderRadius: 3,
-                    border: `1px solid ${colors.middle}`,
-                    bgcolor: '#fff',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                    border: `1px solid ${theme.palette.divider}`,
+                    bgcolor: 'background.paper',
+                    boxShadow: theme.palette.mode === 'dark' ? 'none' : '0 1px 3px rgba(0,0,0,0.04)',
                 }}
             >
                 <Stack
@@ -527,18 +511,18 @@ const Dashboard = () => {
 
                     <Stack direction="row" spacing={1.5} justifyContent={{ xs: 'flex-end', md: 'flex-start' }}>
                         <Tooltip title="Export all domains as one Excel workbook">
-              <span>
-                <Button
-                    size="small"
-                    variant="outlined"
-                    startIcon={<ExcelIcon />}
-                    onClick={() => handleExport('xlsx', 'all')}
-                    disabled={!!exportFmt}
-                    sx={{ borderRadius: 2 }}
-                >
-                  {t('dashboard.exportAll')}
-                </Button>
-              </span>
+                            <span>
+                                <Button
+                                    size="small"
+                                    variant="outlined"
+                                    startIcon={<ExcelIcon />}
+                                    onClick={() => handleExport('xlsx', 'all')}
+                                    disabled={!!exportFmt}
+                                    sx={{ borderRadius: 2 }}
+                                >
+                                    {t('dashboard.exportAll')}
+                                </Button>
+                            </span>
                         </Tooltip>
                         <Button
                             variant="contained"
@@ -561,8 +545,10 @@ const Dashboard = () => {
                         p: { xs: 2, sm: 2.5 },
                         mb: 3,
                         borderRadius: 3,
-                        border: `1px solid ${colors.middle}`,
-                        background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+                        border: `1px solid ${theme.palette.divider}`,
+                        background: theme.palette.mode === 'dark'
+                            ? theme.palette.background.paper
+                            : 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
                     }}
                 >
                     <Stack direction="row" alignItems="center" spacing={1} mb={2}>
@@ -599,10 +585,10 @@ const Dashboard = () => {
                                         sx={{
                                             p: 2,
                                             borderRadius: 2.5,
-                                            bgcolor: '#fff',
-                                            border: '1px solid #e2e8f0',
+                                            bgcolor: 'background.paper',
+                                            border: `1px solid ${theme.palette.divider}`,
                                             height: '100%',
-                                            boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                                            boxShadow: theme.palette.mode === 'dark' ? 'none' : '0 1px 2px rgba(0,0,0,0.03)',
                                         }}
                                     >
                                         <Stack direction="row" alignItems="center" spacing={0.75} mb={1}>
@@ -661,8 +647,8 @@ const Dashboard = () => {
                                 elevation={0}
                                 sx={{
                                     borderRadius: 3,
-                                    border: `1px solid ${colors.middle}`,
-                                    background: item.bg,
+                                    border: `1px solid ${theme.palette.divider}`,
+                                    background: 'background.paper',
                                     height: '100%',
                                     transition: 'all 0.22s ease',
                                     '&:hover': {
@@ -695,7 +681,7 @@ const Dashboard = () => {
                                                     >
                                                         {headline[item.key]?.count ?? 0}
                                                     </Typography>
-                                                    <GrowthPill value={headline[item.key]?.growth} t={t} />
+                                                    {/* ❌ GrowthPill removed here */}
                                                     {item.key === 'subscriptions' && (
                                                         <Typography
                                                             variant="caption"
@@ -723,7 +709,9 @@ const Dashboard = () => {
                                                 width: 44,
                                                 height: 44,
                                                 borderRadius: 2.5,
-                                                bgcolor: 'rgba(255,255,255,0.75)',
+                                                bgcolor: theme.palette.mode === 'dark'
+                                                    ? 'action.selected'
+                                                    : 'rgba(255,255,255,0.75)',
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
@@ -748,8 +736,8 @@ const Dashboard = () => {
                     p: { xs: 2, sm: 3 },
                     mb: 3,
                     borderRadius: 3,
-                    border: `1px solid ${colors.middle}`,
-                    bgcolor: '#fff',
+                    border: `1px solid ${theme.palette.divider}`,
+                    bgcolor: 'background.paper',
                     minHeight: { xs: 420, sm: 480 },
                 }}
             >
@@ -825,13 +813,13 @@ const Dashboard = () => {
                                     </linearGradient>
                                 ))}
                             </defs>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.palette.divider} />
                             <XAxis dataKey="label" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                             <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                             <ChartTooltip
                                 contentStyle={{
                                     borderRadius: 10,
-                                    border: '1px solid #e2e8f0',
+                                    border: `1px solid ${theme.palette.divider}`,
                                     boxShadow: '0 4px 14px rgba(0,0,0,0.08)',
                                 }}
                             />
@@ -886,13 +874,13 @@ const Dashboard = () => {
                             barCategoryGap="16%"
                             barGap={2}
                         >
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.palette.divider} />
                             <XAxis dataKey="label" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                             <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                             <ChartTooltip
                                 contentStyle={{
                                     borderRadius: 10,
-                                    border: '1px solid #e2e8f0',
+                                    border: `1px solid ${theme.palette.divider}`,
                                     boxShadow: '0 4px 14px rgba(0,0,0,0.08)',
                                 }}
                                 cursor={{ fill: 'rgba(0,0,0,0.04)' }}
@@ -936,10 +924,10 @@ const Dashboard = () => {
                 elevation={0}
                 sx={{
                     borderRadius: 3,
-                    border: `1px solid ${colors.middle}`,
+                    border: `1px solid ${theme.palette.divider}`,
                     mb: 3,
                     overflow: 'hidden',
-                    bgcolor: '#fff',
+                    bgcolor: 'background.paper',
                 }}
             >
                 <Tabs
@@ -949,7 +937,7 @@ const Dashboard = () => {
                     scrollButtons="auto"
                     allowScrollButtonsMobile
                     sx={{
-                        borderBottom: `1px solid ${colors.middle}`,
+                        borderBottom: `1px solid ${theme.palette.divider}`,
                         px: 1,
                         minHeight: 48,
                         '& .MuiTab-root': { fontWeight: 600, textTransform: 'none', minHeight: 48 },
@@ -968,8 +956,8 @@ const Dashboard = () => {
                         md={5}
                         sx={{
                             p: { xs: 2, sm: 3 },
-                            borderRight: { md: `1px solid ${colors.middle}` },
-                            borderBottom: { xs: `1px solid ${colors.middle}`, md: 'none' },
+                            borderRight: { md: `1px solid ${theme.palette.divider}` },
+                            borderBottom: { xs: `1px solid ${theme.palette.divider}`, md: 'none' },
                         }}
                     >
                         <Typography variant="h6" fontWeight={700} mb={2}>
@@ -1023,8 +1011,10 @@ const Dashboard = () => {
                                         sx={{
                                             p: 1.75,
                                             borderRadius: 2.5,
-                                            bgcolor: '#f8fafc',
-                                            border: `1px solid ${colors.middle}`,
+                                            bgcolor: theme.palette.mode === 'dark'
+                                                ? 'action.hover'
+                                                : '#f8fafc',
+                                            border: `1px solid ${theme.palette.divider}`,
                                             height: '100%',
                                         }}
                                     >
@@ -1049,32 +1039,32 @@ const Dashboard = () => {
 
                         <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap>
                             <Tooltip title={`Export ${domainConfig.label} as CSV`}>
-                <span>
-                  <Button
-                      size="small"
-                      variant="outlined"
-                      startIcon={<CsvIcon />}
-                      onClick={() => handleExport('csv')}
-                      disabled={!!exportFmt}
-                      sx={{ borderRadius: 2 }}
-                  >
-                    {t('dashboard.exportCsv')}
-                  </Button>
-                </span>
+                                <span>
+                                    <Button
+                                        size="small"
+                                        variant="outlined"
+                                        startIcon={<CsvIcon />}
+                                        onClick={() => handleExport('csv')}
+                                        disabled={!!exportFmt}
+                                        sx={{ borderRadius: 2 }}
+                                    >
+                                        {t('dashboard.exportCsv')}
+                                    </Button>
+                                </span>
                             </Tooltip>
                             <Tooltip title={`Export ${domainConfig.label} as Excel`}>
-                <span>
-                  <Button
-                      size="small"
-                      variant="outlined"
-                      startIcon={<ExcelIcon />}
-                      onClick={() => handleExport('xlsx')}
-                      disabled={!!exportFmt}
-                      sx={{ borderRadius: 2 }}
-                  >
-                    {t('dashboard.exportExcel')}
-                  </Button>
-                </span>
+                                <span>
+                                    <Button
+                                        size="small"
+                                        variant="outlined"
+                                        startIcon={<ExcelIcon />}
+                                        onClick={() => handleExport('xlsx')}
+                                        disabled={!!exportFmt}
+                                        sx={{ borderRadius: 2 }}
+                                    >
+                                        {t('dashboard.exportExcel')}
+                                    </Button>
+                                </span>
                             </Tooltip>
                         </Stack>
                     </Grid>
@@ -1086,15 +1076,15 @@ const Dashboard = () => {
                 elevation={0}
                 sx={{
                     borderRadius: 3,
-                    border: `1px solid ${colors.middle}`,
+                    border: `1px solid ${theme.palette.divider}`,
                     overflow: 'hidden',
-                    bgcolor: '#fff',
+                    bgcolor: 'background.paper',
                 }}
             >
                 <Box
                     sx={{
                         p: { xs: 2, sm: 2.5 },
-                        borderBottom: `1px solid ${colors.middle}`,
+                        borderBottom: `1px solid ${theme.palette.divider}`,
                         display: 'flex',
                         flexDirection: { xs: 'column', sm: 'row' },
                         justifyContent: 'space-between',
@@ -1148,7 +1138,7 @@ const Dashboard = () => {
                 ) : (
                     <TableContainer sx={{ maxWidth: '100%', overflowX: 'auto' }}>
                         <Table size={isMobile ? 'small' : 'medium'}>
-                            <TableHead sx={{ backgroundColor: '#f8fafc' }}>
+                            <TableHead sx={{ backgroundColor: 'action.hover' }}>
                                 <TableRow>
                                     {domainConfig.columns.map((col) => (
                                         <TableCell key={col} sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
@@ -1195,7 +1185,7 @@ const Dashboard = () => {
                         setPage(0);
                     }}
                     rowsPerPageOptions={[5, 10, 25, 50]}
-                    sx={{ borderTop: `1px solid ${colors.middle}` }}
+                    sx={{ borderTop: `1px solid ${theme.palette.divider}` }}
                 />
             </Paper>
         </Box>

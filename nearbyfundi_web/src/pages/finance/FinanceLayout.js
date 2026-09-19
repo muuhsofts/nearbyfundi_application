@@ -1,6 +1,6 @@
 // src/pages/finance/FinanceLayout.js
 import React, { useEffect, useMemo } from 'react';
-import { Box, Paper, Tabs, Tab } from '@mui/material';
+import { Box, Paper, Tabs, Tab, useTheme } from '@mui/material';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { useLanguage } from 'context/LanguageContext';
 import { tFin } from './financelang';
@@ -22,6 +22,7 @@ const getTabs = (t) => [
 ];
 
 const FinanceLayoutContent = () => {
+    const theme = useTheme();
     const location = useLocation();
     const navigate = useNavigate();
 
@@ -43,10 +44,10 @@ const FinanceLayoutContent = () => {
                 elevation={0}
                 sx={{
                     borderRadius: 3,
-                    border: `1px solid ${colors.middle}`,
+                    border: `1px solid ${theme.palette.divider}`, // Theme aware
                     mb: 3,
                     width: '100%',
-                    bgcolor: '#fff',
+                    bgcolor: 'background.paper', // Theme aware
                 }}
             >
                 <Tabs

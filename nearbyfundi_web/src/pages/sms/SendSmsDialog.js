@@ -114,14 +114,17 @@ const SendSmsDialog = ({ open, onClose, onSend }) => {
             onClose={onClose}
             maxWidth="sm"
             fullWidth
-            PaperProps={{ sx: { borderRadius: 2, backgroundColor: colors.light } }}
+            PaperProps={{ sx: { borderRadius: 2, bgcolor: 'background.paper' } }} // ✅ Theme aware
         >
-            <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: colors.dark }}>
+            <DialogTitle sx={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                color: 'text.primary', // ✅ Theme aware
+            }}>
                 <Box display="flex" alignItems="center" gap={1}>
                     <SendIcon sx={{ color: colors.salat }} />
                     <Typography variant="h6">{t('sms.send.title')}</Typography>
                 </Box>
-                <IconButton onClick={onClose} size="small" sx={{ color: colors.rain }}>
+                <IconButton onClick={onClose} size="small" sx={{ color: 'text.secondary' }}>
                     <CloseIcon />
                 </IconButton>
             </DialogTitle>
@@ -141,9 +144,9 @@ const SendSmsDialog = ({ open, onClose, onSend }) => {
                             }}
                             label={t('sms.send.selectUserOptional')}
                             sx={{
-                                backgroundColor: colors.sky,
+                                bgcolor: 'action.hover', // ✅ Theme aware
                                 borderRadius: 2,
-                                '& .MuiOutlinedInput-notchedOutline': { borderColor: colors.middle },
+                                '& .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' }, // ✅ Theme aware
                             }}
                         >
                             <MenuItem value="">{t('sms.common.none')}</MenuItem>
@@ -160,7 +163,7 @@ const SendSmsDialog = ({ open, onClose, onSend }) => {
                                 label={`${t('sms.send.selectedPrefix')} ${selectedUser.name} (${selectedUser.phone || selectedUser.email})`}
                                 onDelete={() => handleUserSelect(null)}
                                 size="small"
-                                sx={{ backgroundColor: colors.wave, color: colors.sea }}
+                                sx={{ bgcolor: 'primary.50', color: 'primary.main' }} // ✅ Theme aware
                             />
                         </Box>
                     )}
@@ -177,8 +180,8 @@ const SendSmsDialog = ({ open, onClose, onSend }) => {
                     size="small"
                     sx={{
                         mb: 2,
-                        '& .MuiInputBase-root': { backgroundColor: colors.sky, borderRadius: 2 },
-                        '& .MuiOutlinedInput-notchedOutline': { borderColor: colors.middle },
+                        '& .MuiInputBase-root': { bgcolor: 'action.hover', borderRadius: 2 }, // ✅ Theme aware
+                        '& .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' }, // ✅ Theme aware
                     }}
                 />
 
@@ -193,8 +196,8 @@ const SendSmsDialog = ({ open, onClose, onSend }) => {
                     onChange={(e) => setMessage(e.target.value)}
                     size="small"
                     sx={{
-                        '& .MuiInputBase-root': { backgroundColor: colors.sky, borderRadius: 2 },
-                        '& .MuiOutlinedInput-notchedOutline': { borderColor: colors.middle },
+                        '& .MuiInputBase-root': { bgcolor: 'action.hover', borderRadius: 2 }, // ✅ Theme aware
+                        '& .MuiOutlinedInput-notchedOutline': { borderColor: 'divider' }, // ✅ Theme aware
                     }}
                     InputProps={{
                         endAdornment: (
@@ -215,11 +218,11 @@ const SendSmsDialog = ({ open, onClose, onSend }) => {
                 <Button
                     onClick={handleClear}
                     variant="outlined"
-                    sx={{ borderColor: colors.middle, color: colors.rain }}
+                    sx={{ borderColor: 'divider', color: 'text.secondary' }} // ✅ Theme aware
                 >
                     {t('sms.common.clear')}
                 </Button>
-                <Button onClick={onClose} sx={{ color: colors.rain }}>
+                <Button onClick={onClose} sx={{ color: 'text.secondary' }}>{/* ✅ Theme aware */}
                     {t('sms.common.cancel')}
                 </Button>
                 <Button
@@ -230,7 +233,7 @@ const SendSmsDialog = ({ open, onClose, onSend }) => {
                     sx={{
                         backgroundColor: colors.salat,
                         '&:hover': { backgroundColor: colors.dark },
-                        '&.Mui-disabled': { backgroundColor: colors.middle },
+                        '&.Mui-disabled': { backgroundColor: 'action.disabledBackground' }, // ✅ Theme aware
                     }}
                 >
                     {loading ? t('sms.send.sending') : t('sms.send.sendButton')}

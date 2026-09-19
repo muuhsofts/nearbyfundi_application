@@ -1,59 +1,183 @@
-// src/pages/auth/Login.jsx
+// src/pages/login/Login.js
 import { useState, useEffect, useRef } from 'react';
 import {
     Box, Paper, TextField, Button, Typography, InputAdornment,
     CircularProgress, Checkbox, FormControlLabel, Link, alpha, Stack,
-    ToggleButton, ToggleButtonGroup, MenuItem, Select, FormControl,
+    ToggleButton, ToggleButtonGroup, MenuItem,
+    Autocomplete, Tooltip, IconButton, Popover,
 } from '@mui/material';
 import {
-    PersonOutline, LockOutlined, SmsOutlined,
-    EmailOutlined, PhoneOutlined, AlternateEmail
+    LockOutlined, SmsOutlined, EmailOutlined,
+    PhoneOutlined, AlternateEmail,
+    Palette as PaletteIcon,
+    Check as CheckIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from 'context/AuthContext';
+import { useLanguage } from 'context/LanguageContext';
 import { showSnackbar } from 'utils/snackbar';
+import { tLogin } from './loginlang';
+import { COUNTRY_CODES } from './countryCodes';
+import LanguageSwitcher from 'components/LanguageSwitcher/LanguageSwitcher';
+import { useThemeKey } from 'context/ThemeContext';
+
+/* -----------------------------------------------------------
+ *  Brand palette — DO NOT change outside this file
+ * ----------------------------------------------------------- */
+const BRAND = {
+    primary:   '#0d7377', // Deep Teal / Forest Green
+    secondary: '#1E4D4F', // Mint / Vibrant Green
+    success:   '#10B981', // Emerald
+    info:      '#8B5CF6', // Violet
+    warning:   '#F59E0B', // Amber
+};
 
 const logo = '/assets/logo.png';
 
-// Country codes for phone input
-const COUNTRY_CODES = [
-    { code: '+255', country: 'TZ', label: '🇹🇿 +255' },
-    { code: '+254', country: 'KE', label: '🇰🇪 +254' },
-    { code: '+256', country: 'UG', label: '🇺🇬 +256' },
-    { code: '+250', country: 'RW', label: '🇷🇼 +250' },
-    { code: '+257', country: 'BI', label: '🇧🇮 +257' },
-    { code: '+1', country: 'US', label: '🇺🇸 +1' },
-    { code: '+44', country: 'GB', label: '🇬🇧 +44' },
+/* -----------------------------------------------------------
+ *  Theme options — reuse brand colors
+ * ----------------------------------------------------------- */
+const THEME_OPTIONS = [
+    { key: 'default',   color: BRAND.primary,   label: 'Teal' },
+    { key: 'secondary', color: BRAND.info,      label: 'Violet' },
+    { key: 'success',   color: BRAND.success,   label: 'Green' },
+    { key: 'dark',      color: '#0F172A',       label: 'Dark' },
 ];
 
+/* -----------------------------------------------------------
+ *  Theme Switcher
+ * ----------------------------------------------------------- */
+function ThemeSwitcher() {
+    const [anchorEl, setAnchorEl] = useState(null);
+    const open = Boolean(anchorEl);
+
+    const { themeKey, setThemeKey } = useThemeKey();
+
+    const handleOpen = (e) => setAnchorEl(e.currentTarget);
+    const handleClose = () => setAnchorEl(null);
+
+    const handleSelect = (key) => {
+        setThemeKey(key);
+        handleClose();
+    };
+
+    return (
+        <>
+            <Tooltip title="Change theme">
+                <IconButton
+                    onClick={handleOpen}
+                    size="small"
+                    sx={{
+                        color: '#ffffff',
+                        p: 0.75,
+                        '&:hover': { bgcolor: 'rgba(255,255,255,0.15)' },
+                    }}
+                >
+                    <PaletteIcon fontSize="small" />
+                </IconButton>
+            </Tooltip>
+
+            <Popover
+                open={open}
+                anchorEl={anchorEl}
+                onClose={handleClose}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                PaperProps={{
+                    sx: {
+                        mt: 1,
+                        p: 1.25,
+                        borderRadius: 2,
+                        bgcolor: 'background.paper',
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+                    },
+                }}
+            >
+                <Typography
+                    variant="caption"
+                    fontWeight={700}
+                    sx={{
+                        display: 'block',
+                        mb: 1,
+                        color: 'text.secondary',
+                        textTransform: 'uppercase',
+                        letterSpacing: 0.5,
+                    }}
+                >
+                    Theme
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                    {THEME_OPTIONS.map((opt) => {
+                        const isActive = themeKey === opt.key;
+                        return (
+                            <Tooltip key={opt.key} title={opt.label}>
+                                <Box
+                                    onClick={() => handleSelect(opt.key)}
+                                    sx={{
+                                        width: 32,
+                                        height: 32,
+                                        borderRadius: '50%',
+                                        bgcolor: opt.color,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        border: '2px solid',
+                                        borderColor: isActive ? BRAND.primary : 'transparent',
+                                        boxShadow: isActive
+                                            ? `0 0 0 2px ${alpha(BRAND.primary, 0.35)}`
+                                            : '0 1px 3px rgba(0,0,0,0.15)',
+                                        transition: 'all 0.15s',
+                                        '&:hover': {
+                                            transform: 'scale(1.1)',
+                                            boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
+                                        },
+                                    }}
+                                >
+                                    {isActive && (
+                                        <CheckIcon sx={{ fontSize: 18, color: '#fff' }} />
+                                    )}
+                                </Box>
+                            </Tooltip>
+                        );
+                    })}
+                </Box>
+            </Popover>
+        </>
+    );
+}
+
+/* -----------------------------------------------------------
+ *  Login Page
+ * ----------------------------------------------------------- */
 export default function Login() {
     const navigate = useNavigate();
     const { login, requestWebOtp, verifyWebOtp, resendWebOtp, isAuthenticated } = useAuth();
 
-    // Login method toggle: 'email' or 'phone'
-    const [loginMethod, setLoginMethod] = useState('email');
+    const { language } = useLanguage();
+    const t = (key, replacements) => tLogin(language, key, replacements);
 
-    // Email login fields
+    const [loginMethod, setLoginMethod] = useState('email');
     const [email, setEmail] = useState('');
 
-    // Phone login fields
-    const [countryCode, setCountryCode] = useState('+255');
+    const [selectedCountry, setSelectedCountry] = useState(
+        COUNTRY_CODES.find(c => c.code === '+255' && c.name === 'Tanzania') || COUNTRY_CODES[0]
+    );
     const [phoneNumber, setPhoneNumber] = useState('');
 
-    // Shared fields
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [rememberMe, setRememberMe] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
-    // OTP step
     const [step, setStep] = useState('credentials');
     const [otp, setOtp] = useState('');
     const [otpMeta, setOtpMeta] = useState(null);
     const [resendCooldown, setResendCooldown] = useState(0);
 
-    // Refs for auto-focus
     const emailRef = useRef(null);
     const phoneRef = useRef(null);
     const passwordRef = useRef(null);
@@ -66,11 +190,10 @@ export default function Login() {
 
     useEffect(() => {
         if (resendCooldown <= 0) return;
-        const t = setInterval(() => setResendCooldown((c) => c - 1), 1000);
-        return () => clearInterval(t);
+        const interval = setInterval(() => setResendCooldown((c) => c - 1), 1000);
+        return () => clearInterval(interval);
     }, [resendCooldown]);
 
-    // Focus on appropriate field when login method changes
     useEffect(() => {
         if (loginMethod === 'email' && emailRef.current) {
             setTimeout(() => emailRef.current?.focus(), 100);
@@ -79,37 +202,29 @@ export default function Login() {
         }
     }, [loginMethod]);
 
-    // Get full identifier (email or phone with country code)
     const getIdentifier = () => {
-        if (loginMethod === 'email') {
-            return email;
-        } else {
-            return `${countryCode}${phoneNumber}`;
-        }
+        if (loginMethod === 'email') return email;
+        return `${selectedCountry?.code || ''}${phoneNumber}`;
     };
 
-    // Validate input based on method
     const isValidIdentifier = () => {
         if (loginMethod === 'email') {
             return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-        } else {
-            return phoneNumber.replace(/\D/g, '').length >= 7;
         }
+        return phoneNumber.replace(/\D/g, '').length >= 7;
     };
 
-    // ─── Step 1: Credentials ──────────────────────────────────
     const handleCredentialsSubmit = async (e) => {
         e.preventDefault();
-
         const identifier = getIdentifier();
 
         if (!identifier || !password) {
-            setError('Please fill in all fields');
+            setError(t('login.msg.fillAll'));
             return;
         }
 
         if (!isValidIdentifier()) {
-            setError(loginMethod === 'email' ? 'Please enter a valid email address' : 'Please enter a valid phone number');
+            setError(loginMethod === 'email' ? t('login.msg.invalidEmail') : t('login.msg.invalidPhone'));
             return;
         }
 
@@ -121,7 +236,12 @@ export default function Login() {
             setOtpMeta(data);
             setStep('otp');
             setResendCooldown(60);
-            showSnackbar({ type: 'success', message: `OTP sent to ${data.sent_to || 'your phone'}` });
+            showSnackbar({
+                type: 'success',
+                message: t('login.msg.otpSent', {
+                    target: data.sent_to || t('login.msg.otpSentFallback'),
+                }),
+            });
         } catch (err) {
             const msg = err?.response?.data?.message || err.message || '';
 
@@ -132,26 +252,25 @@ export default function Login() {
             ) {
                 try {
                     await login(identifier, password);
-                    showSnackbar({ type: 'success', message: 'Welcome back! 👋' });
+                    showSnackbar({ type: 'success', message: t('login.msg.welcome') });
                     navigate('/app/dashboard', { replace: true });
                 } catch (classicErr) {
-                    setError(classicErr.message || 'Invalid credentials');
-                    showSnackbar({ type: 'error', message: classicErr.message || 'Login failed' });
+                    setError(classicErr.message || t('login.msg.invalidCredentials'));
+                    showSnackbar({ type: 'error', message: classicErr.message || t('login.msg.loginFailed') });
                 }
             } else {
-                setError(msg || 'Invalid credentials');
-                showSnackbar({ type: 'error', message: msg || 'Login failed' });
+                setError(msg || t('login.msg.invalidCredentials'));
+                showSnackbar({ type: 'error', message: msg || t('login.msg.loginFailed') });
             }
         } finally {
             setLoading(false);
         }
     };
 
-    // ─── Step 2: Verify OTP ───────────────────────────────────
     const handleOtpSubmit = async (e) => {
         e.preventDefault();
         if (!otp || otp.length !== 6) {
-            setError('Please enter the 6-digit OTP');
+            setError(t('login.msg.enterOtp'));
             return;
         }
 
@@ -160,11 +279,11 @@ export default function Login() {
 
         try {
             await verifyWebOtp(otpMeta.email || getIdentifier(), otp);
-            showSnackbar({ type: 'success', message: 'Login successful!' });
+            showSnackbar({ type: 'success', message: t('login.msg.loginSuccess') });
             navigate('/app/dashboard', { replace: true });
         } catch (err) {
-            setError(err.message || 'Invalid or expired OTP');
-            showSnackbar({ type: 'error', message: err.message || 'OTP verification failed' });
+            setError(err.message || t('login.msg.otpInvalid'));
+            showSnackbar({ type: 'error', message: err.message || t('login.msg.otpFailed') });
         } finally {
             setLoading(false);
         }
@@ -177,9 +296,9 @@ export default function Login() {
             const data = await resendWebOtp(otpMeta.email || getIdentifier());
             setOtpMeta(data);
             setResendCooldown(60);
-            showSnackbar({ type: 'success', message: 'OTP resent successfully' });
+            showSnackbar({ type: 'success', message: t('login.msg.otpResent') });
         } catch (err) {
-            showSnackbar({ type: 'error', message: err.message || 'Failed to resend OTP' });
+            showSnackbar({ type: 'error', message: err.message || t('login.msg.otpResendFailed') });
         } finally {
             setLoading(false);
         }
@@ -192,7 +311,6 @@ export default function Login() {
         setOtpMeta(null);
     };
 
-    // Handle login method change
     const handleLoginMethodChange = (event, newMethod) => {
         if (newMethod !== null) {
             setLoginMethod(newMethod);
@@ -200,7 +318,6 @@ export default function Login() {
         }
     };
 
-    // ─── UI ───────────────────────────────────────────────────
     return (
         <Box
             sx={{
@@ -208,12 +325,38 @@ export default function Login() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                background: 'linear-gradient(135deg, #0d5c5f 0%, #0d7377 40%, #14919b 100%)',
+                background: (theme) => theme.palette.mode === 'dark'
+                    ? 'linear-gradient(135deg, #0F172A 0%, #1A1A2E 50%, #23232D 100%)'
+                    : `linear-gradient(135deg, ${BRAND.secondary} 0%, ${BRAND.primary} 40%, #14919b 100%)`,
                 p: { xs: 2, sm: 3 },
                 position: 'relative',
                 overflow: 'hidden',
             }}
         >
+            {/* Language + Theme Switcher */}
+            <Box
+                sx={{
+                    position: 'fixed',
+                    top: { xs: 12, sm: 20 },
+                    right: { xs: 12, sm: 20 },
+                    zIndex: 1000,
+                    bgcolor: 'rgba(255,255,255,0.15)',
+                    backdropFilter: 'blur(10px)',
+                    WebkitBackdropFilter: 'blur(10px)',
+                    borderRadius: 2,
+                    p: 0.5,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.5,
+                    border: '1px solid rgba(255,255,255,0.25)',
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+                }}
+            >
+                <LanguageSwitcher iconColor="#ffffff" showLabel size="medium" />
+                <Box sx={{ width: '1px', height: 24, bgcolor: 'rgba(255,255,255,0.25)', mx: 0.5 }} />
+                <ThemeSwitcher />
+            </Box>
+
             <Box
                 sx={{
                     display: 'flex',
@@ -229,30 +372,65 @@ export default function Login() {
                     <Box component="img" src="/assets/mockups/phone-mockup.png" alt="NearbyFundi" sx={{ width: '100%', borderRadius: 5, boxShadow: '0 30px 60px rgba(0,0,0,0.45)' }} />
                 </Box>
 
-                <Paper elevation={0} sx={{ width: '100%', maxWidth: 900, borderRadius: 4, overflow: 'hidden', display: 'flex', flexDirection: { xs: 'column', md: 'row' }, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.35)' }}>
+                <Paper elevation={0} sx={{
+                    width: '100%',
+                    maxWidth: 900,
+                    borderRadius: 4,
+                    overflow: 'hidden',
+                    display: 'flex',
+                    flexDirection: { xs: 'column', md: 'row' },
+                    boxShadow: '0 25px 50px -12px rgba(0,0,0,0.35)',
+                    bgcolor: 'background.paper',
+                }}>
                     {/* Left branding panel */}
-                    <Box sx={{ flex: { xs: 'none', md: '0 0 42%' }, background: 'linear-gradient(160deg, #0a5c5f 0%, #0d7377 50%, #14919b 100%)', color: '#fff', p: { xs: 4, md: 5 }, display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: { xs: 220, md: 540 }, position: 'relative', overflow: 'hidden' }}>
+                    <Box sx={{
+                        flex: { xs: 'none', md: '0 0 42%' },
+                        background: (theme) => theme.palette.mode === 'dark'
+                            ? `linear-gradient(160deg, ${BRAND.secondary} 0%, ${BRAND.primary} 100%)`
+                            : `linear-gradient(160deg, ${BRAND.secondary} 0%, ${BRAND.primary} 60%, #14919b 100%)`,
+                        color: '#fff',
+                        p: { xs: 4, md: 5 },
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'center',
+                        minHeight: { xs: 220, md: 540 },
+                        position: 'relative',
+                        overflow: 'hidden',
+                    }}>
                         <Box sx={{ position: 'absolute', top: -80, right: -60, width: 280, height: 280, borderRadius: '50%', bgcolor: alpha('#fff', 0.08) }} />
                         <Box sx={{ position: 'relative', zIndex: 1 }}>
                             <Box component="img" src={logo} alt="NearbyFundi" sx={{ width: 56, height: 56, mb: 3, filter: 'brightness(0) invert(1)' }} />
-                            <Typography variant="h3" fontWeight={800} sx={{ mb: 1, fontSize: { xs: '1.9rem', md: '2.5rem' } }}>WELCOME</Typography>
-                            <Typography variant="h6" fontWeight={700} sx={{ mb: 1.5 }}>NearbyFundi</Typography>
+                            <Typography variant="h3" fontWeight={800} sx={{ mb: 1, fontSize: { xs: '1.9rem', md: '2.5rem' } }}>
+                                {t('login.brand.welcome')}
+                            </Typography>
+                            <Typography variant="h6" fontWeight={700} sx={{ mb: 1.5 }}>
+                                {t('login.brand.name')}
+                            </Typography>
                             <Typography variant="body2" sx={{ color: '#f8fafc', maxWidth: 270, lineHeight: 1.7, display: { xs: 'none', sm: 'block' } }}>
-                                Find trusted technicians near you. Fast, reliable and verified local fundis at your fingertips.
+                                {t('login.brand.tagline')}
                             </Typography>
                         </Box>
                     </Box>
 
                     {/* Right form panel */}
-                    <Box sx={{ flex: 1, bgcolor: '#fff', p: { xs: 3.5, sm: 5 }, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    <Box sx={{
+                        flex: 1,
+                        bgcolor: 'background.paper',
+                        p: { xs: 3.5, sm: 5 },
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'center',
+                    }}>
                         {step === 'credentials' ? (
                             <>
-                                <Typography variant="h4" fontWeight={800} sx={{ color: '#0f172a', mb: 0.5 }}>Sign in</Typography>
-                                <Typography variant="body2" sx={{ color: '#334155', fontWeight: 500, mb: 3 }}>
-                                    Sign in to find trusted technicians near you
+                                <Typography variant="h4" fontWeight={800} sx={{ color: 'text.primary', mb: 0.5 }}>
+                                    {t('login.title')}
+                                </Typography>
+                                <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, mb: 3 }}>
+                                    {t('login.subtitle')}
                                 </Typography>
 
-                                {/* Login Method Toggle - Horizontal */}
+                                {/* Email / Phone toggle — spaced apart, brand colors */}
                                 <ToggleButtonGroup
                                     value={loginMethod}
                                     exclusive
@@ -261,46 +439,59 @@ export default function Login() {
                                     sx={{
                                         mb: 3,
                                         width: '100%',
+                                        display: 'flex',
+                                        gap: 1.5, // ✅ Space between buttons
+                                        '& .MuiToggleButtonGroup-grouped': {
+                                            border: '2px solid !important',
+                                            borderColor: `${alpha(BRAND.primary, 0.25)} !important`,
+                                            borderRadius: '10px !important',
+                                            mx: 0,
+                                            '&:not(:first-of-type)': { ml: 0 },
+                                        },
                                         '& .MuiToggleButton-root': {
                                             flex: 1,
                                             py: 1.2,
-                                            borderRadius: 2,
-                                            border: '2px solid #e2e8f0',
+                                            borderRadius: 2.5,
+                                            border: '2px solid',
+                                            borderColor: alpha(BRAND.primary, 0.25),
+                                            color: 'text.primary',
+                                            bgcolor: 'transparent',
                                             textTransform: 'none',
                                             fontWeight: 600,
+                                            transition: 'all 0.15s',
                                             '&.Mui-selected': {
-                                                backgroundColor: '#0d5c5f',
+                                                backgroundColor: BRAND.primary,       // ✅ Brand teal
                                                 color: '#fff',
-                                                borderColor: '#0d5c5f',
+                                                borderColor: BRAND.primary,
                                                 '&:hover': {
-                                                    backgroundColor: '#0a4a4d',
-                                                }
+                                                    backgroundColor: BRAND.secondary, // ✅ Darker teal on hover
+                                                },
                                             },
                                             '&:hover': {
-                                                backgroundColor: alpha('#0d5c5f', 0.05),
-                                            }
-                                        }
+                                                backgroundColor: alpha(BRAND.primary, 0.06),
+                                                borderColor: BRAND.primary,
+                                            },
+                                        },
                                     }}
                                 >
                                     <ToggleButton value="email" aria-label="email login">
                                         <EmailOutlined sx={{ mr: 1, fontSize: 20 }} />
-                                        Email
+                                        {t('login.toggle.email')}
                                     </ToggleButton>
                                     <ToggleButton value="phone" aria-label="phone login">
                                         <PhoneOutlined sx={{ mr: 1, fontSize: 20 }} />
-                                        Phone
+                                        {t('login.toggle.phone')}
                                     </ToggleButton>
                                 </ToggleButtonGroup>
 
                                 <form onSubmit={handleCredentialsSubmit}>
                                     <Stack spacing={2.5}>
-                                        {/* Dynamic Input Field */}
                                         {loginMethod === 'email' ? (
                                             <TextField
                                                 fullWidth
                                                 ref={emailRef}
-                                                placeholder="Enter your email address"
-                                                label="Email Address"
+                                                placeholder={t('login.field.emailPlaceholder')}
+                                                label={t('login.field.emailLabel')}
                                                 type="email"
                                                 value={email}
                                                 onChange={(e) => setEmail(e.target.value)}
@@ -309,46 +500,107 @@ export default function Login() {
                                                 sx={{
                                                     '& .MuiOutlinedInput-root': {
                                                         borderRadius: 2,
-                                                        bgcolor: '#f8fafc',
-                                                        '&:hover': {
-                                                            bgcolor: '#f1f5f9',
-                                                        }
-                                                    }
+                                                        bgcolor: 'action.hover',
+                                                        '&:hover': { bgcolor: 'action.selected' },
+                                                        '&.Mui-focused fieldset': {
+                                                            borderColor: BRAND.primary,
+                                                            borderWidth: 2,
+                                                        },
+                                                    },
+                                                    '& .MuiInputLabel-root.Mui-focused': {
+                                                        color: BRAND.primary,
+                                                    },
                                                 }}
                                                 InputProps={{
                                                     startAdornment: (
                                                         <InputAdornment position="start">
-                                                            <AlternateEmail sx={{ color: '#475569' }} />
+                                                            <AlternateEmail sx={{ color: 'text.secondary' }} />
                                                         </InputAdornment>
                                                     ),
                                                 }}
                                             />
                                         ) : (
-                                            <Box sx={{ display: 'flex', gap: 1 }}>
-                                                <FormControl sx={{ minWidth: 120 }}>
-                                                    <Select
-                                                        value={countryCode}
-                                                        onChange={(e) => setCountryCode(e.target.value)}
-                                                        sx={{
+                                            <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
+                                                <Autocomplete
+                                                    value={selectedCountry}
+                                                    onChange={(e, newValue) => {
+                                                        if (newValue) setSelectedCountry(newValue);
+                                                    }}
+                                                    options={COUNTRY_CODES}
+                                                    getOptionLabel={(option) => `${option.flag} ${option.code}`}
+                                                    isOptionEqualToValue={(option, value) =>
+                                                        option.code === value.code && option.name === value.name
+                                                    }
+                                                    disableClearable
+                                                    autoHighlight
+                                                    sx={{
+                                                        width: 150,
+                                                        minWidth: 150,
+                                                        flexShrink: 0,
+                                                        '& .MuiOutlinedInput-root': {
                                                             borderRadius: 2,
-                                                            bgcolor: '#f8fafc',
-                                                            '& .MuiSelect-select': {
-                                                                py: 1.7,
-                                                            }
-                                                        }}
-                                                    >
-                                                        {COUNTRY_CODES.map((country) => (
-                                                            <MenuItem key={country.code} value={country.code}>
-                                                                {country.label}
-                                                            </MenuItem>
-                                                        ))}
-                                                    </Select>
-                                                </FormControl>
+                                                            bgcolor: 'action.hover',
+                                                            paddingRight: '24px !important',
+                                                            '&:hover': { bgcolor: 'action.selected' },
+                                                            '&.Mui-focused fieldset': {
+                                                                borderColor: BRAND.primary,
+                                                                borderWidth: 2,
+                                                            },
+                                                        },
+                                                        '& .MuiAutocomplete-input': {
+                                                            fontWeight: 600,
+                                                            fontSize: '0.95rem',
+                                                            minWidth: '0 !important',
+                                                        },
+                                                    }}
+                                                    renderInput={(params) => (
+                                                        <TextField
+                                                            {...params}
+                                                            placeholder="+255"
+                                                            inputProps={{
+                                                                ...params.inputProps,
+                                                                style: {
+                                                                    fontSize: '0.95rem',
+                                                                    fontWeight: 600,
+                                                                    letterSpacing: 0.3,
+                                                                },
+                                                            }}
+                                                        />
+                                                    )}
+                                                    renderOption={(props, option) => (
+                                                        <MenuItem
+                                                            {...props}
+                                                            key={`${option.name}-${option.code}`}
+                                                            sx={{
+                                                                gap: 1.5,
+                                                                py: 1,
+                                                                fontSize: '0.9rem',
+                                                                '&.Mui-focused, &:hover': {
+                                                                    bgcolor: alpha(BRAND.primary, 0.08),
+                                                                },
+                                                            }}
+                                                        >
+                                                            <span style={{ fontSize: '1.3rem', lineHeight: 1 }}>{option.flag}</span>
+                                                            <Box sx={{ flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2 }}>
+                                                                <Typography variant="body2" sx={{ fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                    {option.name}
+                                                                </Typography>
+                                                                <Typography variant="body2" sx={{ fontWeight: 700, fontFamily: 'monospace', flexShrink: 0, color: BRAND.primary }}>
+                                                                    {option.code}
+                                                                </Typography>
+                                                            </Box>
+                                                        </MenuItem>
+                                                    )}
+                                                    noOptionsText={t('login.field.noCountry') || 'No country found'}
+                                                    ListboxProps={{
+                                                        sx: { maxHeight: 320, '& .MuiMenuItem-root': { minHeight: 44 } },
+                                                    }}
+                                                />
                                                 <TextField
                                                     fullWidth
                                                     ref={phoneRef}
-                                                    placeholder="Enter phone number"
-                                                    label="Phone Number"
+                                                    placeholder={t('login.field.phonePlaceholder')}
+                                                    label={t('login.field.phoneLabel')}
                                                     type="tel"
                                                     value={phoneNumber}
                                                     onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ''))}
@@ -357,16 +609,21 @@ export default function Login() {
                                                     sx={{
                                                         '& .MuiOutlinedInput-root': {
                                                             borderRadius: 2,
-                                                            bgcolor: '#f8fafc',
-                                                            '&:hover': {
-                                                                bgcolor: '#f1f5f9',
-                                                            }
-                                                        }
+                                                            bgcolor: 'action.hover',
+                                                            '&:hover': { bgcolor: 'action.selected' },
+                                                            '&.Mui-focused fieldset': {
+                                                                borderColor: BRAND.primary,
+                                                                borderWidth: 2,
+                                                            },
+                                                        },
+                                                        '& .MuiInputLabel-root.Mui-focused': {
+                                                            color: BRAND.primary,
+                                                        },
                                                     }}
                                                     InputProps={{
                                                         startAdornment: (
                                                             <InputAdornment position="start">
-                                                                <PhoneOutlined sx={{ color: '#475569' }} />
+                                                                <PhoneOutlined sx={{ color: 'text.secondary' }} />
                                                             </InputAdornment>
                                                         ),
                                                     }}
@@ -377,8 +634,8 @@ export default function Login() {
                                         <TextField
                                             fullWidth
                                             ref={passwordRef}
-                                            placeholder="Enter your password"
-                                            label="Password"
+                                            placeholder={t('login.field.passwordPlaceholder')}
+                                            label={t('login.field.passwordLabel')}
                                             type={showPassword ? 'text' : 'password'}
                                             value={password}
                                             onChange={(e) => setPassword(e.target.value)}
@@ -386,16 +643,21 @@ export default function Login() {
                                             sx={{
                                                 '& .MuiOutlinedInput-root': {
                                                     borderRadius: 2,
-                                                    bgcolor: '#f8fafc',
-                                                    '&:hover': {
-                                                        bgcolor: '#f1f5f9',
-                                                    }
-                                                }
+                                                    bgcolor: 'action.hover',
+                                                    '&:hover': { bgcolor: 'action.selected' },
+                                                    '&.Mui-focused fieldset': {
+                                                        borderColor: BRAND.primary,
+                                                        borderWidth: 2,
+                                                    },
+                                                },
+                                                '& .MuiInputLabel-root.Mui-focused': {
+                                                    color: BRAND.primary,
+                                                },
                                             }}
                                             InputProps={{
                                                 startAdornment: (
                                                     <InputAdornment position="start">
-                                                        <LockOutlined sx={{ color: '#475569' }} />
+                                                        <LockOutlined sx={{ color: 'text.secondary' }} />
                                                     </InputAdornment>
                                                 ),
                                                 endAdornment: (
@@ -405,12 +667,15 @@ export default function Login() {
                                                             onClick={() => setShowPassword(!showPassword)}
                                                             sx={{
                                                                 textTransform: 'none',
-                                                                color: '#0d7377',
+                                                                color: BRAND.primary, // ✅ Brand teal
                                                                 fontWeight: 700,
                                                                 minWidth: 'auto',
+                                                                '&:hover': {
+                                                                    bgcolor: alpha(BRAND.primary, 0.08),
+                                                                },
                                                             }}
                                                         >
-                                                            {showPassword ? 'Hide' : 'Show'}
+                                                            {showPassword ? t('login.password.hide') : t('login.password.show')}
                                                         </Button>
                                                     </InputAdornment>
                                                 ),
@@ -431,15 +696,13 @@ export default function Login() {
                                                         onChange={(e) => setRememberMe(e.target.checked)}
                                                         size="small"
                                                         sx={{
-                                                            '&.Mui-checked': {
-                                                                color: '#0d7377'
-                                                            }
+                                                            '&.Mui-checked': { color: BRAND.primary }, // ✅ Brand teal
                                                         }}
                                                     />
                                                 }
                                                 label={
-                                                    <Typography variant="body2" sx={{ color: '#334155', fontWeight: 500 }}>
-                                                        Remember me
+                                                    <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
+                                                        {t('login.remember')}
                                                     </Typography>
                                                 }
                                             />
@@ -449,12 +712,12 @@ export default function Login() {
                                                 underline="hover"
                                                 onClick={() => navigate('/forgot-password')}
                                                 sx={{
-                                                    color: '#0d7377',
+                                                    color: BRAND.primary, // ✅ Brand teal
                                                     fontWeight: 600,
                                                     fontSize: '0.875rem',
                                                 }}
                                             >
-                                                Forgot Password?
+                                                {t('login.forgot')}
                                             </Link>
                                         </Box>
 
@@ -467,38 +730,39 @@ export default function Login() {
                                                 borderRadius: 2,
                                                 textTransform: 'none',
                                                 fontWeight: 700,
-                                                bgcolor: '#0d5c5f',
+                                                bgcolor: BRAND.primary,         // ✅ Brand teal
                                                 color: '#fff',
-                                                '&:hover': {
-                                                    bgcolor: '#0a4a4d'
+                                                '&:hover': { bgcolor: BRAND.secondary }, // ✅ Darker teal on hover
+                                                '&.Mui-disabled': {
+                                                    bgcolor: alpha(BRAND.primary, 0.5),
+                                                    color: '#fff',
                                                 },
-                                                '&:disabled': {
-                                                    bgcolor: alpha('#0d5c5f', 0.6),
-                                                }
                                             }}
                                         >
-                                            {loading ? <CircularProgress size={24} color="inherit" /> : 'Sign in'}
+                                            {loading ? <CircularProgress size={24} color="inherit" /> : t('login.submit')}
                                         </Button>
                                     </Stack>
                                 </form>
                             </>
                         ) : (
-                            // ─── OTP Step ──────────────────────────────────────
                             <>
-                                <Typography variant="h4" fontWeight={800} sx={{ color: '#0f172a', mb: 0.5 }}>Enter OTP</Typography>
-                                <Typography variant="body2" sx={{ color: '#334155', fontWeight: 500, mb: 1 }}>
-                                    We sent a 6-digit code to <strong>{otpMeta?.sent_to || 'your phone'}</strong>
+                                <Typography variant="h4" fontWeight={800} sx={{ color: 'text.primary', mb: 0.5 }}>
+                                    {t('login.otp.title')}
                                 </Typography>
-                                <Typography variant="caption" sx={{ color: '#64748b', mb: 3, display: 'block' }}>
-                                    Code expires in {otpMeta?.expires_in || 5} minutes
+                                <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, mb: 1 }}>
+                                    {t('login.otp.subtitlePrefix')}{' '}
+                                    <strong>{otpMeta?.sent_to || t('login.otp.fallbackSentTo')}</strong>
+                                </Typography>
+                                <Typography variant="caption" sx={{ color: 'text.secondary', mb: 3, display: 'block' }}>
+                                    {t('login.otp.expiresIn', { min: otpMeta?.expires_in || 5 })}
                                 </Typography>
 
                                 <form onSubmit={handleOtpSubmit}>
                                     <Stack spacing={2.5}>
                                         <TextField
                                             fullWidth
-                                            placeholder="Enter 6-digit OTP"
-                                            label="Verification Code"
+                                            placeholder={t('login.otp.fieldPlaceholder')}
+                                            label={t('login.otp.fieldLabel')}
                                             value={otp}
                                             onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                                             required
@@ -507,21 +771,26 @@ export default function Login() {
                                                 maxLength: 6,
                                                 inputMode: 'numeric',
                                                 pattern: '[0-9]*',
-                                                style: { letterSpacing: 8, fontSize: '1.4rem', fontWeight: 700 }
+                                                style: { letterSpacing: 8, fontSize: '1.4rem', fontWeight: 700 },
                                             }}
                                             sx={{
                                                 '& .MuiOutlinedInput-root': {
                                                     borderRadius: 2,
-                                                    bgcolor: '#f8fafc',
-                                                    '&:hover': {
-                                                        bgcolor: '#f1f5f9',
-                                                    }
-                                                }
+                                                    bgcolor: 'action.hover',
+                                                    '&:hover': { bgcolor: 'action.selected' },
+                                                    '&.Mui-focused fieldset': {
+                                                        borderColor: BRAND.primary,
+                                                        borderWidth: 2,
+                                                    },
+                                                },
+                                                '& .MuiInputLabel-root.Mui-focused': {
+                                                    color: BRAND.primary,
+                                                },
                                             }}
                                             InputProps={{
                                                 startAdornment: (
                                                     <InputAdornment position="start">
-                                                        <SmsOutlined sx={{ color: '#475569' }} />
+                                                        <SmsOutlined sx={{ color: 'text.secondary' }} />
                                                     </InputAdornment>
                                                 ),
                                             }}
@@ -542,48 +811,41 @@ export default function Login() {
                                                 borderRadius: 2,
                                                 textTransform: 'none',
                                                 fontWeight: 700,
-                                                bgcolor: '#0d5c5f',
+                                                bgcolor: BRAND.primary,
                                                 color: '#fff',
-                                                '&:hover': {
-                                                    bgcolor: '#0a4a4d'
+                                                '&:hover': { bgcolor: BRAND.secondary },
+                                                '&.Mui-disabled': {
+                                                    bgcolor: alpha(BRAND.primary, 0.5),
+                                                    color: '#fff',
                                                 },
-                                                '&:disabled': {
-                                                    bgcolor: alpha('#0d5c5f', 0.6),
-                                                }
                                             }}
                                         >
-                                            {loading ? <CircularProgress size={24} color="inherit" /> : 'Verify & Login'}
+                                            {loading ? <CircularProgress size={24} color="inherit" /> : t('login.otp.submit')}
                                         </Button>
 
                                         <Box display="flex" justifyContent="space-between" alignItems="center">
                                             <Button
                                                 onClick={goBackToCredentials}
-                                                sx={{
-                                                    textTransform: 'none',
-                                                    color: '#64748b',
-                                                    '&:hover': {
-                                                        bgcolor: alpha('#64748b', 0.05),
-                                                    }
-                                                }}
+                                                sx={{ textTransform: 'none', color: 'text.secondary' }}
                                             >
-                                                ← Back to login
+                                                {t('login.otp.back')}
                                             </Button>
                                             <Button
                                                 onClick={handleResendOtp}
                                                 disabled={resendCooldown > 0 || loading}
                                                 sx={{
                                                     textTransform: 'none',
-                                                    color: '#0d7377',
+                                                    color: BRAND.primary, // ✅ Brand teal
                                                     fontWeight: 600,
                                                     '&:hover': {
-                                                        bgcolor: alpha('#0d7377', 0.05),
+                                                        bgcolor: alpha(BRAND.primary, 0.08),
                                                     },
-                                                    '&:disabled': {
-                                                        color: '#94a3b8',
-                                                    }
+                                                    '&:disabled': { color: 'text.disabled' },
                                                 }}
                                             >
-                                                {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend OTP'}
+                                                {resendCooldown > 0
+                                                    ? t('login.otp.resendIn', { s: resendCooldown })
+                                                    : t('login.otp.resend')}
                                             </Button>
                                         </Box>
                                     </Stack>
@@ -591,21 +853,18 @@ export default function Login() {
                             </>
                         )}
 
-                        <Typography variant="body2" align="center" sx={{ mt: 4, color: '#334155' }}>
-                            Don't have an account?{' '}
+                        <Typography variant="body2" align="center" sx={{ mt: 4, color: 'text.secondary' }}>
+                            {t('login.footer.noAccount')}{' '}
                             <Link
                                 component="button"
                                 underline="hover"
                                 onClick={() => navigate('')}
                                 sx={{
-                                    color: '#0d7377',
+                                    color: BRAND.primary, // ✅ Brand teal
                                     fontWeight: 700,
-                                    '&:hover': {
-                                        color: '#0a4a4d',
-                                    }
                                 }}
                             >
-                                Sign Up
+                                {t('login.footer.signUp')}
                             </Link>
                         </Typography>
                     </Box>

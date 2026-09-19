@@ -205,6 +205,7 @@ export default function AuditList() {
                         borderRadius: 3,
                         border: '1px solid',
                         borderColor: 'divider',
+                        bgcolor: 'background.paper',
                     }}
                 >
                     <Typography color="error" fontWeight={600} variant="h6" gutterBottom>
@@ -256,43 +257,79 @@ export default function AuditList() {
                     stats && (
                         <Grid container spacing={2} sx={{ mb: 3 }}>
                             <Grid item xs={6} sm={6} md={3}>
-                                <Card elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)', height: '100%' }}>
+                                <Card
+                                    elevation={0}
+                                    sx={{
+                                        borderRadius: 3,
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                        bgcolor: 'background.paper', // ✅ Theme aware
+                                        height: '100%'
+                                    }}
+                                >
                                     <CardContent sx={{ p: 2.25 }}>
                                         <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
                                             {t('audit.stats.total')}
                                         </Typography>
-                                        <Typography variant="h4" fontWeight={800} color="#0369a1" sx={{ mt: 0.5, lineHeight: 1.1 }}>
+                                        <Typography variant="h4" fontWeight={800} color="info.main" sx={{ mt: 0.5, lineHeight: 1.1 }}>
                                             {stats.total ?? 0}
                                         </Typography>
                                     </CardContent>
                                 </Card>
                             </Grid>
                             <Grid item xs={6} sm={6} md={3}>
-                                <Card elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)', height: '100%' }}>
+                                <Card
+                                    elevation={0}
+                                    sx={{
+                                        borderRadius: 3,
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                        bgcolor: 'background.paper', // ✅ Theme aware
+                                        height: '100%'
+                                    }}
+                                >
                                     <CardContent sx={{ p: 2.25 }}>
                                         <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
                                             {t('audit.stats.today')}
                                         </Typography>
-                                        <Typography variant="h4" fontWeight={800} color="#047857" sx={{ mt: 0.5, lineHeight: 1.1 }}>
+                                        <Typography variant="h4" fontWeight={800} color="success.main" sx={{ mt: 0.5, lineHeight: 1.1 }}>
                                             {stats.today ?? 0}
                                         </Typography>
                                     </CardContent>
                                 </Card>
                             </Grid>
                             <Grid item xs={6} sm={6} md={3}>
-                                <Card elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)', height: '100%' }}>
+                                <Card
+                                    elevation={0}
+                                    sx={{
+                                        borderRadius: 3,
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                        bgcolor: 'background.paper', // ✅ Theme aware
+                                        height: '100%'
+                                    }}
+                                >
                                     <CardContent sx={{ p: 2.25 }}>
                                         <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
                                             {t('audit.stats.thisWeek')}
                                         </Typography>
-                                        <Typography variant="h4" fontWeight={800} color="#b45309" sx={{ mt: 0.5, lineHeight: 1.1 }}>
+                                        <Typography variant="h4" fontWeight={800} color="warning.main" sx={{ mt: 0.5, lineHeight: 1.1 }}>
                                             {stats.this_week ?? 0}
                                         </Typography>
                                     </CardContent>
                                 </Card>
                             </Grid>
                             <Grid item xs={6} sm={6} md={3}>
-                                <Card elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', background: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)', height: '100%' }}>
+                                <Card
+                                    elevation={0}
+                                    sx={{
+                                        borderRadius: 3,
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                        bgcolor: 'background.paper', // ✅ Theme aware
+                                        height: '100%'
+                                    }}
+                                >
                                     <CardContent sx={{ p: 2.25 }}>
                                         <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
                                             {t('audit.stats.topUsers')}
@@ -318,7 +355,17 @@ export default function AuditList() {
                 )}
 
                 {/* Main Panel */}
-                <Paper elevation={0} sx={{ width: '100%', borderRadius: 3, overflow: 'hidden', border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
+                <Paper
+                    elevation={0}
+                    sx={{
+                        width: '100%',
+                        borderRadius: 3,
+                        overflow: 'hidden',
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        bgcolor: 'background.paper'
+                    }}
+                >
                     {/* Header + Filters */}
                     <Box sx={{ px: { xs: 2, sm: 3 }, py: 2.5, borderBottom: '1px solid', borderColor: 'divider' }}>
                         <Box mb={2.5}>
@@ -627,7 +674,7 @@ export default function AuditList() {
                                             <Card
                                                 key={`${audit.created_at}-${idx}`}
                                                 elevation={0}
-                                                sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}
+                                                sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', overflow: 'hidden' }}
                                             >
                                                 <CardContent sx={{ p: 2.25 }}>
                                                     <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={1.5}>

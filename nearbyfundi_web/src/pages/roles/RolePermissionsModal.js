@@ -111,7 +111,7 @@ export default function RolePermissionsModal({ open, onClose, role }) {
             PaperProps={{
                 sx: {
                     borderRadius: { xs: 0, sm: 3 },
-                    bgcolor: 'background.paper',
+                    bgcolor: 'background.paper', // ✅ Theme aware
                 },
             }}
         >
@@ -207,6 +207,7 @@ export default function RolePermissionsModal({ open, onClose, role }) {
                                             borderColor: 'divider',
                                             borderRadius: '12px !important',
                                             overflow: 'hidden',
+                                            bgcolor: 'background.paper', // ✅ Theme aware
                                             '&:before': { display: 'none' },
                                         }}
                                     >

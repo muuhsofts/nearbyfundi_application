@@ -133,17 +133,18 @@ const TechniciansList = () => {
                     size="small"
                     icon={<VerifiedIcon sx={{ fontSize: 14 }} />}
                     sx={{
-                        fontWeight: 700, bgcolor: '#d1fae5', color: '#047857',
-                        border: '1.5px solid #10b981', height: 28,
+                        fontWeight: 700, bgcolor: 'success.light', color: 'success.dark',
+                        border: '1.5px solid', borderColor: 'success.main', height: 28,
+                        '& .MuiChip-icon': { color: 'success.dark' },
                     }}
                 />
             );
         }
 
         const statusMap = {
-            approved: { label: t('tech.status.approved'), color: '#047857', bg: '#d1fae5', border: '#10b981' },
-            pending: { label: t('tech.status.pending'), color: '#b45309', bg: '#fef3c7', border: '#f59e0b' },
-            rejected: { label: t('tech.status.rejected'), color: '#b91c1c', bg: '#fee2e2', border: '#ef4444' },
+            approved: { label: t('tech.status.approved'), color: 'success.dark', bg: 'success.light', border: 'success.main' },
+            pending: { label: t('tech.status.pending'), color: 'warning.dark', bg: 'warning.light', border: 'warning.main' },
+            rejected: { label: t('tech.status.rejected'), color: 'error.dark', bg: 'error.light', border: 'error.main' },
         };
 
         const s = statusMap[status] || statusMap.pending;
@@ -153,7 +154,7 @@ const TechniciansList = () => {
                 size="small"
                 sx={{
                     fontWeight: 700, bgcolor: s.bg, color: s.color,
-                    border: `1.5px solid ${s.border}`, height: 28,
+                    border: `1.5px solid ${theme.palette[s.border.split('.')[0]]?.[s.border.split('.')[1]] || s.border}`, height: 28,
                 }}
             />
         );
@@ -162,7 +163,11 @@ const TechniciansList = () => {
     if (!canViewAll) {
         return (
             <Box p={3}>
-                <Paper elevation={0} sx={{ p: 4, textAlign: 'center', borderRadius: 3, border: '1px solid', borderColor: 'divider' }}>
+                <Paper elevation={0} sx={{
+                    p: 4, textAlign: 'center', borderRadius: 3,
+                    border: '1px solid', borderColor: 'divider',
+                    bgcolor: 'background.paper',
+                }}>
                     <Typography color="error" fontWeight={600}>
                         {t('tech.list.accessDenied')}
                     </Typography>
@@ -199,7 +204,7 @@ const TechniciansList = () => {
                 width: '100%', borderRadius: 3, overflow: 'hidden',
                 border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper',
             }}>
-                {/* ── HEADER ───────────────────────────────────── */}
+                {/* HEADER */}
                 <Box sx={{ px: { xs: 2, sm: 3 }, py: 2.5, borderBottom: '1px solid', borderColor: 'divider' }}>
                     <Stack
                         direction={{ xs: 'column', sm: 'row' }}
@@ -232,7 +237,7 @@ const TechniciansList = () => {
                         </Stack>
                     </Stack>
 
-                    {/* ── FILTERS ─────────────────────────────────── */}
+                    {/* FILTERS */}
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}
                            alignItems={{ xs: 'stretch', sm: 'center' }} flexWrap="wrap">
                         <TextField
@@ -281,19 +286,20 @@ const TechniciansList = () => {
                     </Stack>
                 </Box>
 
-                {/* ── SUMMARY CARDS ─────────────────────────────── */}
+                {/* SUMMARY CARDS */}
                 <Box sx={{ px: { xs: 2, sm: 3 }, pt: 2.5, pb: 1 }}>
                     <Grid container spacing={2}>
                         {[
-                            { label: t('tech.list.stat.total'), value: totalCount, color: '#3b82f6', bg: '#eff6ff', icon: <PeopleIcon sx={{ fontSize: 18 }} /> },
-                            { label: t('tech.list.stat.verified'), value: currentData.filter(tc => tc.verified && tc.verification_status === 'approved').length, color: '#10b981', bg: '#ecfdf5', icon: <VerifiedIcon sx={{ fontSize: 18 }} /> },
-                            { label: t('tech.list.stat.pending'), value: currentData.filter(tc => tc.verification_status === 'pending' && !tc.verified).length, color: '#f59e0b', bg: '#fef3c7', icon: <PersonIcon sx={{ fontSize: 18 }} /> },
-                            { label: t('tech.list.stat.services'), value: new Set(currentData.flatMap(tc => tc.services?.map(s => s.id) || [])).size, color: '#8b5cf6', bg: '#f3e8ff', icon: <WorkIcon sx={{ fontSize: 18 }} /> },
+                            { label: t('tech.list.stat.total'), value: totalCount, color: '#3b82f6', icon: <PeopleIcon sx={{ fontSize: 18 }} /> },
+                            { label: t('tech.list.stat.verified'), value: currentData.filter(tc => tc.verified && tc.verification_status === 'approved').length, color: '#10b981', icon: <VerifiedIcon sx={{ fontSize: 18 }} /> },
+                            { label: t('tech.list.stat.pending'), value: currentData.filter(tc => tc.verification_status === 'pending' && !tc.verified).length, color: '#f59e0b', icon: <PersonIcon sx={{ fontSize: 18 }} /> },
+                            { label: t('tech.list.stat.services'), value: new Set(currentData.flatMap(tc => tc.services?.map(s => s.id) || [])).size, color: '#8b5cf6', icon: <WorkIcon sx={{ fontSize: 18 }} /> },
                         ].map((item, idx) => (
                             <Grid item xs={6} sm={3} key={idx}>
                                 <Card elevation={0} sx={{
                                     borderRadius: 2, border: '1px solid', borderColor: 'divider',
-                                    backgroundColor: item.bg, height: '100%',
+                                    bgcolor: 'background.paper', // ✅ Theme aware
+                                    height: '100%',
                                 }}>
                                     <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
                                         <Box display="flex" alignItems="center" justifyContent="space-between">
@@ -312,7 +318,7 @@ const TechniciansList = () => {
                     </Grid>
                 </Box>
 
-                {/* ── TABLE (DESKTOP) ──────────────────────────── */}
+                {/* TABLE */}
                 {showTableView ? (
                     <TableContainer>
                         <Table sx={{ minWidth: 800 }}>
@@ -384,7 +390,7 @@ const TechniciansList = () => {
                                                                 {technician.user?.name || t('tech.common.unknown')}
                                                             </Typography>
                                                             {technician.verified && technician.verification_status === 'approved' && (
-                                                                <VerifiedIcon sx={{ fontSize: 14, color: '#10b981' }} />
+                                                                <VerifiedIcon sx={{ fontSize: 14, color: 'success.main' }} />
                                                             )}
                                                         </Stack>
                                                         <Typography variant="caption" color="text.secondary">
@@ -437,7 +443,7 @@ const TechniciansList = () => {
                                                 {technician.rating !== undefined && technician.rating !== null ? (
                                                     <Box>
                                                         <Box display="flex" alignItems="center" gap={0.5}>
-                                                            <StarIcon sx={{ fontSize: 16, color: '#f59e0b' }} />
+                                                            <StarIcon sx={{ fontSize: 16, color: 'warning.main' }} />
                                                             <Typography variant="body2" fontWeight={700} color="text.primary">
                                                                 {technician.rating.toFixed(1)}
                                                             </Typography>
@@ -465,14 +471,14 @@ const TechniciansList = () => {
                         </Table>
                     </TableContainer>
                 ) : (
-                    /* ── MOBILE CARDS ─────────────────────────── */
+                    /* MOBILE CARDS */
                     <Box sx={{ p: { xs: 2, sm: 2.5 } }}>
                         {loading ? (
                             <Box display="flex" justifyContent="center" py={6}>
                                 <CircularProgress size={36} thickness={4} />
                             </Box>
                         ) : sortedData.length === 0 ? (
-                            <Paper variant="outlined" sx={{ p: 5, textAlign: 'center', borderRadius: 3, borderStyle: 'dashed' }}>
+                            <Paper variant="outlined" sx={{ p: 5, textAlign: 'center', borderRadius: 3, borderStyle: 'dashed', bgcolor: 'background.paper' }}>
                                 <Typography color="text.secondary" fontWeight={500}>
                                     {t('tech.list.noFound')}
                                 </Typography>
@@ -486,6 +492,7 @@ const TechniciansList = () => {
                                         sx={{
                                             borderRadius: 3,
                                             border: '1px solid', borderColor: 'divider',
+                                            bgcolor: 'background.paper', // ✅ Theme aware
                                             overflow: 'hidden', cursor: 'pointer',
                                             transition: 'box-shadow 0.2s',
                                             '&:hover': { boxShadow: 2 },
@@ -510,7 +517,7 @@ const TechniciansList = () => {
                                                             {technician.user?.name || t('tech.common.unknown')}
                                                         </Typography>
                                                         {technician.verified && technician.verification_status === 'approved' && (
-                                                            <VerifiedIcon sx={{ fontSize: 16, color: '#10b981' }} />
+                                                            <VerifiedIcon sx={{ fontSize: 16, color: 'success.main' }} />
                                                         )}
                                                     </Stack>
                                                     <Typography variant="caption" color="text.secondary">
@@ -534,7 +541,7 @@ const TechniciansList = () => {
                                                 <Grid item xs={6}>
                                                     {technician.rating !== undefined && technician.rating !== null && (
                                                         <Box display="flex" alignItems="center" gap={0.5}>
-                                                            <StarIcon sx={{ fontSize: 16, color: '#f59e0b' }} />
+                                                            <StarIcon sx={{ fontSize: 16, color: 'warning.main' }} />
                                                             <Typography variant="body2" fontWeight={700}>
                                                                 {technician.rating.toFixed(1)}
                                                             </Typography>
@@ -569,7 +576,7 @@ const TechniciansList = () => {
                     </Box>
                 )}
 
-                {/* ── PAGINATION ──────────────────────────────── */}
+                {/* PAGINATION */}
                 <Box sx={{ borderTop: '1px solid', borderColor: 'divider', bgcolor: 'action.hover' }}>
                     <TablePagination
                         rowsPerPageOptions={[5, 10, 25, 50]}

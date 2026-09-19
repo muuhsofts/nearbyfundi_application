@@ -196,6 +196,7 @@ export default function OtpList() {
                         borderRadius: 3,
                         border: '1px solid',
                         borderColor: 'divider',
+                        bgcolor: 'background.paper',
                     }}
                 >
                     <Typography color="error" fontWeight={600} variant="h6" gutterBottom>
@@ -248,7 +249,7 @@ export default function OtpList() {
                                     borderRadius: 3,
                                     border: '1px solid',
                                     borderColor: 'divider',
-                                    background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
+                                    bgcolor: 'background.paper', // ✅ Theme aware
                                     height: '100%',
                                 }}
                             >
@@ -256,7 +257,7 @@ export default function OtpList() {
                                     <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
                                         {t('otp.stats.total')}
                                     </Typography>
-                                    <Typography variant="h4" fontWeight={800} color="#0369a1" sx={{ mt: 0.5, lineHeight: 1.1 }}>
+                                    <Typography variant="h4" fontWeight={800} color="info.main" sx={{ mt: 0.5, lineHeight: 1.1 }}>
                                         {stats.total ?? 0}
                                     </Typography>
                                 </CardContent>
@@ -269,7 +270,7 @@ export default function OtpList() {
                                     borderRadius: 3,
                                     border: '1px solid',
                                     borderColor: 'divider',
-                                    background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)',
+                                    bgcolor: 'background.paper', // ✅ Theme aware
                                     height: '100%',
                                 }}
                             >
@@ -277,7 +278,7 @@ export default function OtpList() {
                                     <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
                                         {t('otp.stats.used')}
                                     </Typography>
-                                    <Typography variant="h4" fontWeight={800} color="#047857" sx={{ mt: 0.5, lineHeight: 1.1 }}>
+                                    <Typography variant="h4" fontWeight={800} color="success.main" sx={{ mt: 0.5, lineHeight: 1.1 }}>
                                         {stats.used ?? 0}
                                     </Typography>
                                 </CardContent>
@@ -290,7 +291,7 @@ export default function OtpList() {
                                     borderRadius: 3,
                                     border: '1px solid',
                                     borderColor: 'divider',
-                                    background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+                                    bgcolor: 'background.paper', // ✅ Theme aware
                                     height: '100%',
                                 }}
                             >
@@ -298,7 +299,7 @@ export default function OtpList() {
                                     <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
                                         {t('otp.stats.unused')}
                                     </Typography>
-                                    <Typography variant="h4" fontWeight={800} color="#b45309" sx={{ mt: 0.5, lineHeight: 1.1 }}>
+                                    <Typography variant="h4" fontWeight={800} color="warning.main" sx={{ mt: 0.5, lineHeight: 1.1 }}>
                                         {stats.unused ?? 0}
                                     </Typography>
                                 </CardContent>
@@ -311,7 +312,7 @@ export default function OtpList() {
                                     borderRadius: 3,
                                     border: '1px solid',
                                     borderColor: 'divider',
-                                    background: 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)',
+                                    bgcolor: 'background.paper', // ✅ Theme aware
                                     height: '100%',
                                 }}
                             >
@@ -319,7 +320,7 @@ export default function OtpList() {
                                     <Typography variant="overline" fontWeight={700} color="text.secondary" letterSpacing={1}>
                                         {t('otp.stats.expired')}
                                     </Typography>
-                                    <Typography variant="h4" fontWeight={800} color="#b91c1c" sx={{ mt: 0.5, lineHeight: 1.1 }}>
+                                    <Typography variant="h4" fontWeight={800} color="error.main" sx={{ mt: 0.5, lineHeight: 1.1 }}>
                                         {stats.expired ?? 0}
                                     </Typography>
                                 </CardContent>
@@ -332,7 +333,7 @@ export default function OtpList() {
                                     borderRadius: 3,
                                     border: '1px solid',
                                     borderColor: 'divider',
-                                    background: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)',
+                                    bgcolor: 'background.paper', // ✅ Theme aware
                                     height: '100%',
                                 }}
                             >
@@ -398,9 +399,10 @@ export default function OtpList() {
                                             fontWeight: 700,
                                             textTransform: 'none',
                                             boxShadow: 'none',
-                                            bgcolor: '#f59e0b',
+                                            bgcolor: 'warning.main',
+                                            color: 'warning.contrastText',
                                             '&:hover': {
-                                                bgcolor: '#d97706',
+                                                bgcolor: 'warning.dark',
                                                 boxShadow: '0 4px 12px rgba(245,158,11,0.35)',
                                             },
                                         }}
@@ -673,11 +675,12 @@ export default function OtpList() {
                                                                 size="small"
                                                                 sx={{
                                                                     fontWeight: 700,
-                                                                    bgcolor: '#d1fae5',
-                                                                    color: '#047857',
-                                                                    border: '1.5px solid #10b981',
+                                                                    bgcolor: 'success.light',
+                                                                    color: 'success.dark',
+                                                                    border: '1.5px solid',
+                                                                    borderColor: 'success.main',
                                                                     height: 26,
-                                                                    '& .MuiChip-icon': { color: '#047857' },
+                                                                    '& .MuiChip-icon': { color: 'success.dark' },
                                                                 }}
                                                             />
                                                         ) : (
@@ -687,11 +690,12 @@ export default function OtpList() {
                                                                 size="small"
                                                                 sx={{
                                                                     fontWeight: 700,
-                                                                    bgcolor: '#f3f4f6',
-                                                                    color: '#4b5563',
-                                                                    border: '1.5px solid #9ca3af',
+                                                                    bgcolor: 'action.hover',
+                                                                    color: 'text.secondary',
+                                                                    border: '1.5px solid',
+                                                                    borderColor: 'divider',
                                                                     height: 26,
-                                                                    '& .MuiChip-icon': { color: '#4b5563' },
+                                                                    '& .MuiChip-icon': { color: 'text.secondary' },
                                                                 }}
                                                             />
                                                         )}
@@ -755,6 +759,7 @@ export default function OtpList() {
                                                     borderRadius: 3,
                                                     border: '1px solid',
                                                     borderColor: 'divider',
+                                                    bgcolor: 'background.paper',
                                                     overflow: 'hidden',
                                                 }}
                                             >
@@ -778,9 +783,10 @@ export default function OtpList() {
                                                                 size="small"
                                                                 sx={{
                                                                     fontWeight: 700,
-                                                                    bgcolor: '#d1fae5',
-                                                                    color: '#047857',
-                                                                    border: '1.5px solid #10b981',
+                                                                    bgcolor: 'success.light',
+                                                                    color: 'success.dark',
+                                                                    border: '1.5px solid',
+                                                                    borderColor: 'success.main',
                                                                     height: 26,
                                                                 }}
                                                             />
@@ -791,9 +797,10 @@ export default function OtpList() {
                                                                 size="small"
                                                                 sx={{
                                                                     fontWeight: 700,
-                                                                    bgcolor: '#f3f4f6',
-                                                                    color: '#4b5563',
-                                                                    border: '1.5px solid #9ca3af',
+                                                                    bgcolor: 'action.hover',
+                                                                    color: 'text.secondary',
+                                                                    border: '1.5px solid',
+                                                                    borderColor: 'divider',
                                                                     height: 26,
                                                                 }}
                                                             />
