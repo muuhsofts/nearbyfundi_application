@@ -1,4 +1,3 @@
-// src/pages/profile/Profile.jsx
 import { useState } from 'react';
 import {
   Grid,
@@ -10,6 +9,8 @@ import {
   Chip,
   IconButton,
   InputAdornment,
+  Box,
+  Stack,
 } from '@mui/material';
 import {
   Facebook as FacebookIcon,
@@ -22,13 +23,17 @@ import {
 
 import useStyles from './styles';
 import Widget from '../../components/Widget/Widget';
-import {authService} from "services/auth.service";
-import {showSnackbar} from "utils/snackbar";
-import {useAuth} from "context/AuthContext";
+import { authService } from 'services/auth.service';
+import { showSnackbar } from 'utils/snackbar';
+import { useAuth } from 'context/AuthContext';
+import { useLanguage } from 'context/LanguageContext';
+import { tProfile } from './profilelang';
 
 export default function Profile() {
   const classes = useStyles();
   const { user, updateUser, roles } = useAuth();
+  const { language } = useLanguage();
+  const t = (key) => tProfile(language, key);
 
   const [editMode, setEditMode] = useState(false);
   const [profileForm, setProfileForm] = useState({
@@ -47,7 +52,8 @@ export default function Profile() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const roleDisplayName = user?.role?.display_name || (roles.length > 0 ? roles[0] : 'User');
+  const roleDisplayName =
+      user?.role?.display_name || (roles.length > 0 ? roles[0] : 'User');
 
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
@@ -56,13 +62,16 @@ export default function Profile() {
       const res = await authService.updateProfile(profileForm);
       if (res.data.success) {
         updateUser(res.data.data.user);
-        showSnackbar({ type: 'success', message: 'Profile updated' });
+        showSnackbar({ type: 'success', message: t('profile.updateSuccess') });
         setEditMode(false);
       } else {
-        showSnackbar({ type: 'error', message: res.data.message });
+        showSnackbar({ type: 'error', message: res.data.message || t('profile.updateFailed') });
       }
     } catch (err) {
-      showSnackbar({ type: 'error', message: err.response?.data?.message || 'Update failed' });
+      showSnackbar({
+        type: 'error',
+        message: err.response?.data?.message || t('profile.updateFailed'),
+      });
     } finally {
       setProfileLoading(false);
     }
@@ -71,7 +80,7 @@ export default function Profile() {
   const handlePasswordChange = async (e) => {
     e.preventDefault();
     if (passForm.password !== passForm.password_confirmation) {
-      showSnackbar({ type: 'error', message: 'New passwords do not match' });
+      showSnackbar({ type: 'error', message: t('profile.password.mismatch') });
       return;
     }
     setPassLoading(true);
@@ -82,98 +91,152 @@ export default function Profile() {
           passForm.password_confirmation
       );
       if (res.data.success) {
-        showSnackbar({ type: 'success', message: 'Password changed successfully' });
-        setPassForm({ current_password: '', password: '', password_confirmation: '' });
+        showSnackbar({ type: 'success', message: t('profile.password.success') });
+        setPassForm({
+          current_password: '',
+          password: '',
+          password_confirmation: '',
+        });
       } else {
-        showSnackbar({ type: 'error', message: res.data.message });
+        showSnackbar({
+          type: 'error',
+          message: res.data.message || t('profile.password.failed'),
+        });
       }
     } catch (err) {
-      showSnackbar({ type: 'error', message: err.response?.data?.message || 'Password change failed' });
+      showSnackbar({
+        type: 'error',
+        message: err.response?.data?.message || t('profile.password.failed'),
+      });
     } finally {
       setPassLoading(false);
     }
   };
 
   return (
-      <Grid container spacing={3} sx={{ width: '100%', margin: 0, padding: 2 }}>
-        {/* Left column – Profile card (full width on mobile, half on desktop) */}
+      <Grid container spacing={3} sx={{ width: '100%', m: 0, p: 2 }}>
+        {/* Left – Profile Card */}
         <Grid size={{ xs: 12, md: 6 }}>
           <Widget sx={{ height: '100%' }}>
             <Grid container spacing={2}>
-              <Grid size={{ xs: 12, sm: 4 }} style={{ display: 'flex', justifyContent: 'center' }}>
-                <div className={classes.visualProfile}>
-                  <div className={classes.profileImage}>
+              <Grid
+                  size={{ xs: 12, sm: 4 }}
+                  sx={{ display: 'flex', justifyContent: 'center' }}
+              >
+                <Box className={classes.visualProfile}>
+                  <Box className={classes.profileImage}>
                     <Avatar sx={{ width: 120, height: 120 }} src={user?.avatar || ''}>
                       {user?.name?.charAt(0) || 'U'}
                     </Avatar>
-                  </div>
-                  <Chip className={classes.chipMargin} color="secondary" label={roleDisplayName} />
-                </div>
+                  </Box>
+                  <Chip
+                      className={classes.chipMargin}
+                      color="secondary"
+                      label={roleDisplayName}
+                  />
+                </Box>
               </Grid>
+
               <Grid size={{ xs: 12, sm: 8 }}>
-                <div className={classes.profileDescription}>
+                <Box className={classes.profileDescription}>
                   {editMode ? (
                       <form onSubmit={handleProfileUpdate}>
                         <TextField
                             fullWidth
                             margin="normal"
-                            label="Full Name"
+                            label={t('profile.fullName')}
                             value={profileForm.name}
-                            onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
+                            onChange={(e) =>
+                                setProfileForm({ ...profileForm, name: e.target.value })
+                            }
                             required
                         />
                         <TextField
                             fullWidth
                             margin="normal"
-                            label="Phone"
+                            label={t('profile.phone')}
                             value={profileForm.phone}
-                            onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
+                            onChange={(e) =>
+                                setProfileForm({ ...profileForm, phone: e.target.value })
+                            }
                         />
-                        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-                          <Button type="submit" variant="contained" color="primary" disabled={profileLoading}>
-                            {profileLoading ? <CircularProgress size={24} /> : 'Save'}
+                        <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+                          <Button
+                              type="submit"
+                              variant="contained"
+                              color="primary"
+                              disabled={profileLoading}
+                          >
+                            {profileLoading ? (
+                                <CircularProgress size={24} />
+                            ) : (
+                                t('profile.save')
+                            )}
                           </Button>
-                          <Button variant="outlined" onClick={() => setEditMode(false)}>Cancel</Button>
-                        </div>
+                          <Button variant="outlined" onClick={() => setEditMode(false)}>
+                            {t('profile.cancel')}
+                          </Button>
+                        </Stack>
                       </form>
                   ) : (
                       <>
-                        <Typography variant="h4" className={classes.profileTitle}>{user?.name}</Typography>
-                        <Typography variant="subtitle1" className={classes.profileSubtitle}>{roleDisplayName}</Typography>
-                        <a className={classes.profileExternalRes} href={`mailto:${user?.email}`}>{user?.email}</a>
-                        <div className={classes.socials}>
+                        <Typography variant="h4" className={classes.profileTitle}>
+                          {user?.name}
+                        </Typography>
+                        <Typography
+                            variant="subtitle1"
+                            className={classes.profileSubtitle}
+                        >
+                          {roleDisplayName}
+                        </Typography>
+                        <a
+                            className={classes.profileExternalRes}
+                            href={`mailto:${user?.email}`}
+                        >
+                          {user?.email}
+                        </a>
+                        <Box className={classes.socials}>
                           <a href="#"><FacebookIcon fontSize="small" /></a>
                           <a href="#"><TwitterIcon fontSize="small" /></a>
                           <a href="#"><LinkedInIcon fontSize="small" /></a>
                           <a href="#"><InstagramIcon fontSize="small" /></a>
-                        </div>
-                        <Button variant="outlined" color="primary" onClick={() => setEditMode(true)}>
-                          Edit Profile
+                        </Box>
+                        <Button
+                            variant="outlined"
+                            color="primary"
+                            onClick={() => setEditMode(true)}
+                        >
+                          {t('profile.edit')}
                         </Button>
                       </>
                   )}
-                </div>
+                </Box>
               </Grid>
             </Grid>
           </Widget>
         </Grid>
 
-        {/* Right column – Change Password card */}
+        {/* Right – Change Password */}
         <Grid size={{ xs: 12, md: 6 }}>
-          <Widget title="Change Password" sx={{ height: '100%' }}>
+          <Widget title={t('profile.password.title')} sx={{ height: '100%' }}>
             <form onSubmit={handlePasswordChange}>
               <TextField
                   fullWidth
                   margin="normal"
                   type={showCurrentPassword ? 'text' : 'password'}
-                  label="Current Password"
+                  label={t('profile.password.current')}
                   value={passForm.current_password}
-                  onChange={(e) => setPassForm({ ...passForm, current_password: e.target.value })}
+                  onChange={(e) =>
+                      setPassForm({ ...passForm, current_password: e.target.value })
+                  }
                   required
                   InputProps={{
                     endAdornment: (
                         <InputAdornment position="end">
-                          <IconButton onClick={() => setShowCurrentPassword(!showCurrentPassword)} edge="end">
+                          <IconButton
+                              onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                              edge="end"
+                          >
                             {showCurrentPassword ? <VisibilityOff /> : <Visibility />}
                           </IconButton>
                         </InputAdornment>
@@ -184,14 +247,19 @@ export default function Profile() {
                   fullWidth
                   margin="normal"
                   type={showNewPassword ? 'text' : 'password'}
-                  label="New Password"
+                  label={t('profile.password.new')}
                   value={passForm.password}
-                  onChange={(e) => setPassForm({ ...passForm, password: e.target.value })}
+                  onChange={(e) =>
+                      setPassForm({ ...passForm, password: e.target.value })
+                  }
                   required
                   InputProps={{
                     endAdornment: (
                         <InputAdornment position="end">
-                          <IconButton onClick={() => setShowNewPassword(!showNewPassword)} edge="end">
+                          <IconButton
+                              onClick={() => setShowNewPassword(!showNewPassword)}
+                              edge="end"
+                          >
                             {showNewPassword ? <VisibilityOff /> : <Visibility />}
                           </IconButton>
                         </InputAdornment>
@@ -202,22 +270,40 @@ export default function Profile() {
                   fullWidth
                   margin="normal"
                   type={showConfirmPassword ? 'text' : 'password'}
-                  label="Confirm Password"
+                  label={t('profile.password.confirm')}
                   value={passForm.password_confirmation}
-                  onChange={(e) => setPassForm({ ...passForm, password_confirmation: e.target.value })}
+                  onChange={(e) =>
+                      setPassForm({
+                        ...passForm,
+                        password_confirmation: e.target.value,
+                      })
+                  }
                   required
                   InputProps={{
                     endAdornment: (
                         <InputAdornment position="end">
-                          <IconButton onClick={() => setShowConfirmPassword(!showConfirmPassword)} edge="end">
+                          <IconButton
+                              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                              edge="end"
+                          >
                             {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
                           </IconButton>
                         </InputAdornment>
                     ),
                   }}
               />
-              <Button type="submit" variant="contained" color="primary" disabled={passLoading} sx={{ mt: 2 }}>
-                {passLoading ? <CircularProgress size={24} /> : 'Change Password'}
+              <Button
+                  type="submit"
+                  variant="contained"
+                  color="primary"
+                  disabled={passLoading}
+                  sx={{ mt: 2 }}
+              >
+                {passLoading ? (
+                    <CircularProgress size={24} />
+                ) : (
+                    t('profile.password.change')
+                )}
               </Button>
             </form>
           </Widget>

@@ -1,11 +1,10 @@
-// src/themes/secondary.js
 import tinycolor from 'tinycolor2';
 
-const primary = '#EC4899';       // Pink
-const secondary = '#0d7377';     // Teal
-const warning = '#F59E0B';       // Amber
-const success = '#10B981';       // Emerald
-const info = '#8B5CF6';          // Violet
+const primary = '#EC4899';
+const secondary = '#075E54';
+const warning = '#F5A623';
+const success = '#21AE8C';
+const info = '#00A896';
 
 const lightenRate = 7.5;
 const darkenRate = 15;
@@ -50,19 +49,19 @@ const secondaryTheme = {
       contrastText: '#fff',
     },
     text: {
-      primary: '#1A1A2E',
-      secondary: '#4A4A6A',
-      disabled: '#8A8AA8',
-      hint: '#8A8AA8',
+      primary: '#13191D',
+      secondary: '#6B7A8A',
+      disabled: '#9AA5B1',
+      hint: '#6B7A8A',
     },
     background: {
-      default: '#F8F9FF',
+      default: '#F8F9FA',
       paper: '#FFFFFF',
-      light: '#F0F1FF',
+      light: '#F0F2F5',
     },
-    divider: 'rgba(0, 0, 0, 0.08)',
+    divider: '#E8ECF0',
     action: {
-      active: '#4A4A6A',
+      active: '#6B7A8A',
       hover: 'rgba(236, 72, 153, 0.06)',
       selected: 'rgba(236, 72, 153, 0.12)',
       disabled: 'rgba(0, 0, 0, 0.3)',
@@ -71,9 +70,7 @@ const secondaryTheme = {
     },
   },
   customShadows: {
-    widget: '0px 3px 11px 0px #E8EAFC, 0 3px 3px -2px #B2B2B21A, 0 1px 8px 0 #9A9A9A1A',
-    widgetDark: '0px 3px 18px 0px #4558A3B3, 0 3px 3px -2px #B2B2B21A, 0 1px 8px 0 #9A9A9A1A',
-    widgetWide: '0px 12px 33px 0px #E8EAFC, 0 3px 3px -2px #B2B2B21A, 0 1px 8px 0 #9A9A9A1A',
+    widget: '0px 2px 8px rgba(0, 0, 0, 0.04)',
   },
 };
 

@@ -1,4 +1,3 @@
-// src/themes/index.js
 import { createTheme } from '@mui/material/styles';
 
 import defaultTheme from './default';
@@ -7,7 +6,7 @@ import successTheme from './success';
 import darkTheme from './dark';
 
 /* -----------------------------------------------------------
- *  Shared typography tokens
+ *  Shared typography
  * ----------------------------------------------------------- */
 const typography = {
   fontFamily: [
@@ -30,13 +29,16 @@ const typography = {
 };
 
 /* -----------------------------------------------------------
- *  Shared component overrides (MUI v5 styleOverrides)
+ *  Shared component overrides (Light)
  * ----------------------------------------------------------- */
 const baseComponents = {
   MuiCssBaseline: {
     styleOverrides: {
       '*::-webkit-scrollbar': { width: '0.4em', height: '0.4em' },
-      '*::-webkit-scrollbar-thumb': { backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: 4 },
+      '*::-webkit-scrollbar-thumb': {
+        backgroundColor: 'rgba(0,0,0,0.15)',
+        borderRadius: 4,
+      },
       '*::-webkit-scrollbar-track': { backgroundColor: 'transparent' },
       body: { margin: 0, padding: 0 },
     },
@@ -45,8 +47,8 @@ const baseComponents = {
     styleOverrides: {
       root: {
         borderRadius: 12,
-        boxShadow:
-            '0px 3px 11px 0px #E8EAFC, 0 3px 3px -2px #B2B2B21A, 0 1px 8px 0 #9A9A9A1A',
+        boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.04)',
+        border: '1px solid #E8ECF0',
       },
     },
   },
@@ -63,8 +65,8 @@ const baseComponents = {
   MuiMenu: {
     styleOverrides: {
       paper: {
-        boxShadow:
-            '0px 3px 11px 0px #E8EAFC, 0 3px 3px -2px #B2B2B21A, 0 1px 8px 0 #9A9A9A1A',
+        boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.06)',
+        border: '1px solid #E8ECF0',
       },
     },
   },
@@ -76,7 +78,7 @@ const baseComponents = {
   MuiTableCell: {
     styleOverrides: {
       root: {
-        borderBottom: '1px solid rgba(224, 224, 224, .5)',
+        borderBottom: '1px solid #E8ECF0',
         padding: '14px 24px',
       },
       head: { fontSize: '0.95rem', fontWeight: 700 },
@@ -103,15 +105,15 @@ const darkComponents = {
     styleOverrides: {
       '*::-webkit-scrollbar': { width: '0.4em', height: '0.4em' },
       '*::-webkit-scrollbar-thumb': {
-        backgroundColor: '#12121A',
+        backgroundColor: '#2A2A3A',
         borderRadius: 4,
       },
       '*::-webkit-scrollbar-track': { backgroundColor: 'transparent' },
       body: {
         margin: 0,
         padding: 0,
-        backgroundColor: '#0F172A',
-        color: '#F1F1F9',
+        backgroundColor: '#0A0A0F',
+        color: '#F0F0F5',
       },
     },
   },
@@ -119,52 +121,53 @@ const darkComponents = {
     styleOverrides: {
       root: {
         backgroundImage: 'none',
-        backgroundColor: '#1A1A2E',
-        boxShadow:
-            '0px 1px 8px rgba(0, 0, 0, 0.103475), 0px 3px 3px rgba(0, 0, 0, 0.0988309), 0px 3px 4px rgba(0, 0, 0, 0.10301)',
+        backgroundColor: '#1A1A24',
+        boxShadow: 'none',
+        border: '1px solid #2A2A3A',
       },
     },
   },
   MuiAppBar: {
     styleOverrides: {
       root: {
-        backgroundColor: '#1A1A2E',
+        backgroundColor: '#1A1A24',
         backgroundImage: 'none',
         boxShadow: 'none',
+        borderBottom: '1px solid #2A2A3A',
       },
     },
   },
   MuiCard: {
     styleOverrides: {
       root: {
-        backgroundColor: '#1A1A2E',
+        backgroundColor: '#1A1A24',
         backgroundImage: 'none',
-        boxShadow:
-            '0px 1px 8px rgba(0, 0, 0, 0.103475), 0px 3px 3px rgba(0, 0, 0, 0.0988309), 0px 3px 4px rgba(0, 0, 0, 0.10301)',
+        boxShadow: 'none',
+        border: '1px solid #2A2A3A',
       },
     },
   },
   MuiTableCell: {
     styleOverrides: {
-      root: { borderBottom: '1px solid rgba(255, 255, 255, 0.08)' },
-      head: { color: '#B8B8D0', fontWeight: 700 },
-      body: { color: '#F1F1F9' },
+      root: { borderBottom: '1px solid #2A2A3A' },
+      head: { color: '#9A9AAF', fontWeight: 700 },
+      body: { color: '#F0F0F5' },
     },
   },
   MuiTableSortLabel: {
     styleOverrides: {
       root: {
-        color: '#B8B8D0',
-        '&.Mui-active': { color: '#F1F1F9' },
-        '&:hover': { color: '#F1F1F9' },
+        color: '#9A9AAF',
+        '&.Mui-active': { color: '#F0F0F5' },
+        '&:hover': { color: '#F0F0F5' },
       },
-      icon: { color: '#B8B8D0 !important' },
+      icon: { color: '#9A9AAF !important' },
     },
   },
   MuiTablePagination: {
     styleOverrides: {
-      toolbar: { color: '#B8B8D0' },
-      selectIcon: { color: '#B8B8D0' },
+      toolbar: { color: '#9A9AAF' },
+      selectIcon: { color: '#9A9AAF' },
     },
   },
   MuiCheckbox: {
@@ -174,7 +177,7 @@ const darkComponents = {
   },
   MuiDivider: {
     styleOverrides: {
-      root: { borderColor: 'rgba(255, 255, 255, 0.08)' },
+      root: { borderColor: '#2A2A3A' },
     },
   },
 };
@@ -192,7 +195,6 @@ const buildTheme = (themeConfig, isDark = false) =>
       components: {
         ...baseComponents,
         ...(isDark ? darkComponents : {}),
-        // Merge MuiCssBaseline styleOverrides (base + dark)
         MuiCssBaseline: {
           styleOverrides: {
             ...(baseComponents.MuiCssBaseline?.styleOverrides || {}),
@@ -202,7 +204,7 @@ const buildTheme = (themeConfig, isDark = false) =>
           },
         },
       },
-      shape: { borderRadius: 8 },
+      shape: { borderRadius: 12 },
     });
 
 /* -----------------------------------------------------------

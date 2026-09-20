@@ -1,79 +1,75 @@
-// src/themes/default.js
 import tinycolor from 'tinycolor2';
 
-// Brand palette
-const primary = '#0d7377';       // Deep Teal / Forest Green
-const secondary = '#1E4D4F';     // Mint / Vibrant Green
-const success = '#10B981';       // Emerald
-const info = '#8B5CF6';          // Violet
-const warning = '#F59E0B';       // Amber
+const primary = '#075E54';
+const secondary = '#F5A623';
+const success = '#21AE8C';
+const accent = '#00A896';
 
 const lightenRate = 7.5;
 const darkenRate = 15;
 
 const defaultTheme = {
   palette: {
-    mode: 'light', // ✅ Explicit
+    mode: 'light',
     primary: {
       main: primary,
-      light: tinycolor(primary).lighten(lightenRate).toHexString(),
-      dark: tinycolor(primary).darken(darkenRate).toHexString(),
-      contrastText: '#fff',
+      light: '#0A8A6D',
+      dark: '#054A44',
+      contrastText: '#FFFFFF',
     },
     secondary: {
       main: secondary,
       light: tinycolor(secondary).lighten(lightenRate).toHexString(),
       dark: tinycolor(secondary).darken(darkenRate).toHexString(),
-      contrastText: '#fff',
-    },
-    warning: {
-      main: warning,
-      light: tinycolor(warning).lighten(lightenRate).toHexString(),
-      dark: tinycolor(warning).darken(darkenRate).toHexString(),
-      contrastText: '#fff',
+      contrastText: '#FFFFFF',
     },
     success: {
       main: success,
       light: tinycolor(success).lighten(lightenRate).toHexString(),
       dark: tinycolor(success).darken(darkenRate).toHexString(),
-      contrastText: '#fff',
+      contrastText: '#FFFFFF',
     },
     info: {
-      main: info,
-      light: tinycolor(info).lighten(lightenRate).toHexString(),
-      dark: tinycolor(info).darken(darkenRate).toHexString(),
-      contrastText: '#fff',
+      main: accent,
+      light: tinycolor(accent).lighten(lightenRate).toHexString(),
+      dark: tinycolor(accent).darken(darkenRate).toHexString(),
+      contrastText: '#FFFFFF',
+    },
+    warning: {
+      main: secondary,
+      light: tinycolor(secondary).lighten(lightenRate).toHexString(),
+      dark: tinycolor(secondary).darken(darkenRate).toHexString(),
+      contrastText: '#FFFFFF',
     },
     error: {
       main: '#EF4444',
       light: '#F87171',
       dark: '#B91C1C',
-      contrastText: '#fff',
+      contrastText: '#FFFFFF',
     },
     text: {
-      primary: '#1A1A2E',
-      secondary: '#4A4A6A',
-      disabled: '#8A8AA8',
-      hint: '#8A8AA8',
+      primary: '#13191D',
+      secondary: '#6B7A8A',
+      disabled: '#9AA5B1',
+      hint: '#6B7A8A',
     },
     background: {
-      default: '#F8F9FF',
+      default: '#F8F9FA',
       paper: '#FFFFFF',
-      light: '#F0F1FF',
+      light: '#F0F2F5',
     },
-    divider: 'rgba(0, 0, 0, 0.08)',
+    divider: '#E8ECF0',
     action: {
-      active: '#4A4A6A',
-      hover: 'rgba(13, 115, 119, 0.06)',
-      selected: 'rgba(13, 115, 119, 0.12)',
+      active: '#6B7A8A',
+      hover: 'rgba(7, 94, 84, 0.06)',
+      selected: 'rgba(7, 94, 84, 0.12)',
       disabled: 'rgba(0, 0, 0, 0.3)',
       disabledBackground: 'rgba(0, 0, 0, 0.08)',
-      focus: 'rgba(13, 115, 119, 0.16)',
+      focus: 'rgba(7, 94, 84, 0.16)',
     },
   },
   customShadows: {
-    widget:
-        '0px 12px 33px 0px #E8EAFC, 0 3px 3px -2px #B2B2B21A, 0 1px 8px 0 #9A9A9A1A',
+    widget: '0px 2px 8px rgba(0, 0, 0, 0.04)',
   },
 };
 
