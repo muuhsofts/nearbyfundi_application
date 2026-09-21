@@ -1,3 +1,5 @@
+// lib/services/technician_heartbeat_service.dart
+
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
@@ -20,7 +22,8 @@ class TechnicianHeartbeatService {
           (_) => _sendHeartbeat(),
     );
 
-    _sendHeartbeat(); // send immediately
+    // Send immediately so customer sees location right away
+    _sendHeartbeat();
     debugPrint('📍 Heartbeat STARTED');
   }
 
@@ -47,7 +50,9 @@ class TechnicianHeartbeatService {
           latitude: position.latitude,
           longitude: position.longitude,
         );
-        debugPrint('📡 Heartbeat → ${position.latitude}, ${position.longitude}');
+        debugPrint(
+          '📡 Heartbeat → ${position.latitude}, ${position.longitude}',
+        );
       }
     } catch (e) {
       debugPrint('❌ Heartbeat error: $e');
@@ -56,7 +61,7 @@ class TechnicianHeartbeatService {
 
   Future<Position?> _getCurrentLocation() async {
     try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) return null;
 
       LocationPermission permission = await Geolocator.checkPermission();
@@ -70,7 +75,7 @@ class TechnicianHeartbeatService {
       return await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.best,
-          distanceFilter: 10,
+          distanceFilter: 10, // only update if moved ≥ 10 meters
         ),
       );
     } catch (_) {

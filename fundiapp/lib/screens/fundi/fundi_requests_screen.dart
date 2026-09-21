@@ -9,6 +9,7 @@ import '../../providers/request_provider.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../l10n/app_localizations.dart';
+import '../../services/location_sharing_service.dar.dart';
 import '../chat/chat_screen.dart';
 import '../../config/app_routes.dart';
 import '../../config/app_theme.dart';
@@ -220,6 +221,9 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
     if (confirmed == true) {
       final provider = context.read<RequestProvider>();
       final success = await provider.completeRequest(requestId);
+
+      // Stop live location sharing
+      LocationSharingService.stopSharing();
 
       if (context.mounted) {
         _showSnack(
@@ -439,9 +443,7 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
       }) {
     final effectiveBg = forceFixed ? Colors.white : bgColor;
     final effectiveText = forceFixed ? Colors.black87 : textColor;
-    final borderColor = forceFixed
-        ? Colors.grey.shade300
-        : textColor.withOpacity(0.22);
+    final borderColor = forceFixed ? Colors.grey.shade300 : textColor.withOpacity(0.22);
 
     return Expanded(
       child: Container(
@@ -779,6 +781,9 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
               final provider = context.read<RequestProvider>();
               final success = await provider.rejectRequest(request.id);
 
+              // Stop any previous sharing
+              LocationSharingService.stopSharing();
+
               if (context.mounted) {
                 _showSnack(
                   context,
@@ -830,6 +835,7 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
         ),
         const SizedBox(height: 10),
 
+        // ─── I'M ON THE WAY ──────────────────────────────────────────────
         if (request.isAccepted)
           SizedBox(
             width: double.infinity,
@@ -840,6 +846,11 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
               onPressed: () async {
                 final provider = context.read<RequestProvider>();
                 final success = await provider.markOnTheWay(request.id);
+
+                if (success) {
+                  // Start continuous live location sharing
+                  LocationSharingService.startSharing();
+                }
 
                 if (context.mounted) {
                   _showSnack(
@@ -854,6 +865,7 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
             ),
           ),
 
+        // ─── I HAVE ARRIVED ──────────────────────────────────────────────
         if (request.isOnTheWay)
           SizedBox(
             width: double.infinity,
@@ -864,6 +876,10 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
               onPressed: () async {
                 final provider = context.read<RequestProvider>();
                 final success = await provider.markArrived(request.id);
+
+                // Keep sharing until job is completed
+                // (you can stop here if you prefer)
+                // LocationSharingService.stopSharing();
 
                 if (context.mounted) {
                   _showSnack(
@@ -880,6 +896,7 @@ class _FundiRequestsScreenState extends State<FundiRequestsScreen> {
 
         if (request.isAccepted || request.isOnTheWay) const SizedBox(height: 10),
 
+        // ─── MARK COMPLETE ───────────────────────────────────────────────
         SizedBox(
           width: double.infinity,
           child: _PrimaryButton(
