@@ -36,6 +36,7 @@ export const MonitoringProvider = ({ children }) => {
         }
     }, []);
 
+
     const loadRequests = useCallback(async (page = 1) => {
         setLoading(true);
         setError(null);
@@ -51,6 +52,7 @@ export const MonitoringProvider = ({ children }) => {
         }
     }, [filters]);
 
+
     const updateRequestStatus = useCallback(async (id, status, notes) => {
         try {
             const response = await api.patch(`/v4/monitoring/requests/${id}/status`, { status, notes });
@@ -62,6 +64,7 @@ export const MonitoringProvider = ({ children }) => {
         }
     }, [loadRequests]);
 
+
     const callTechnician = useCallback(async (technicianId, requestId) => {
         try {
             const response = await api.post(`/v4/monitoring/technicians/${technicianId}/call`, { request_id: requestId });
@@ -71,6 +74,7 @@ export const MonitoringProvider = ({ children }) => {
             throw err;
         }
     }, []);
+
 
     const fetchNotifications = useCallback(async () => {
         try {
@@ -82,6 +86,7 @@ export const MonitoringProvider = ({ children }) => {
             return { notifications: [] };
         }
     }, []);
+
 
     const value = {
         dashboard,

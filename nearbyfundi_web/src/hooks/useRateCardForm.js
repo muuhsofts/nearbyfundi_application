@@ -84,6 +84,7 @@ export const useRateCardForm = () => {
         setForm(prev => ({ ...prev, [field]: value }));
     }, []);
 
+
     const handleSave = useCallback(async () => {
         try {
             if (editing) {
@@ -100,6 +101,7 @@ export const useRateCardForm = () => {
             showSnackbar({ type: 'error', message: err.message || 'Operation failed' });
         }
     }, [editing, form, closeModal, getRateCards]);
+
 
     const handleDelete = useCallback(async (id) => {
         if (!window.confirm('Delete this rate card?')) return;

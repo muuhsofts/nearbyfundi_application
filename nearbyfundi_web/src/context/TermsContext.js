@@ -10,7 +10,7 @@ const adapter = {
                 const data = response.data.data;
                 return { data: data ? [data] : [] };
             }
-            return { data: [] };
+            return { data: [ ] };
         } catch (error) {
             console.error('Terms API error:', error);
             throw error;
