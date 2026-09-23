@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../../config/app_theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/chat_conversation.dart';
 import '../../models/chat_message.dart';
@@ -40,7 +41,6 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
-
     _loadMessages();
     _markConversationAsRead();
     _subscribeToUser();
@@ -51,31 +51,21 @@ class _ChatScreenState extends State<ChatScreen> {
     _textController.dispose();
     _scrollController.dispose();
     _focusNode.dispose();
-
     _unsubscribeFromUser();
-
     super.dispose();
   }
-
-  // ============================================================
-  // LOAD MESSAGES
-  // ============================================================
 
   Future<void> _loadMessages() async {
     try {
       final provider = context.read<ChatProvider>();
-
       await provider.getMessages(
         conversationId: widget.conversation.id,
         limit: 50,
         offset: 0,
       );
-
       if (!mounted) return;
-
       _currentOffset = 50;
       _hasMoreMessages = true;
-
       _scrollToBottom();
     } catch (e) {
       debugPrint('Error loading messages: $e');
@@ -83,53 +73,30 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _loadMoreMessages() async {
-    if (_isLoadingMore || !_hasMoreMessages) {
-      return;
-    }
+    if (_isLoadingMore || !_hasMoreMessages) return;
+    if (!mounted) return;
 
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _isLoadingMore = true;
-    });
+    setState(() => _isLoadingMore = true);
 
     try {
       final provider = context.read<ChatProvider>();
-
       final messages = await provider.getMessages(
         conversationId: widget.conversation.id,
         limit: 50,
         offset: _currentOffset,
       );
-
-      if (messages.length < 50) {
-        _hasMoreMessages = false;
-      }
-
+      if (messages.length < 50) _hasMoreMessages = false;
       _currentOffset += messages.length;
     } catch (e) {
       debugPrint('Error loading more messages: $e');
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoadingMore = false;
-        });
-      }
+      if (mounted) setState(() => _isLoadingMore = false);
     }
   }
 
-  // ============================================================
-  // SCROLL
-  // ============================================================
-
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) {
-        return;
-      }
-
+      if (!_scrollController.hasClients) return;
       _scrollController.animateTo(
         _scrollController.position.maxScrollExtent,
         duration: const Duration(milliseconds: 300),
@@ -137,10 +104,6 @@ class _ChatScreenState extends State<ChatScreen> {
       );
     });
   }
-
-  // ============================================================
-  // READ STATUS
-  // ============================================================
 
   Future<void> _markConversationAsRead() async {
     try {
@@ -151,10 +114,6 @@ class _ChatScreenState extends State<ChatScreen> {
       debugPrint('Error marking conversation as read: $e');
     }
   }
-
-  // ============================================================
-  // USER SUBSCRIPTION
-  // ============================================================
 
   void _subscribeToUser() {
     context.read<ChatProvider>().subscribeToUser(
@@ -168,24 +127,12 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  // ============================================================
-  // SEND TEXT MESSAGE
-  // ============================================================
-
   Future<void> _sendMessage() async {
     final text = _textController.text.trim();
-
-    if (text.isEmpty || _isSending) {
-      return;
-    }
+    if (text.isEmpty || _isSending) return;
 
     _textController.clear();
-
-    if (mounted) {
-      setState(() {
-        _isSending = true;
-      });
-    }
+    if (mounted) setState(() => _isSending = true);
 
     try {
       await context.read<ChatProvider>().sendMessage(
@@ -193,33 +140,20 @@ class _ChatScreenState extends State<ChatScreen> {
         content: text,
         messageType: 'text',
       );
-
       _scrollToBottom();
     } catch (e) {
-      if (!mounted) {
-        return;
-      }
-
+      if (!mounted) return;
       final l10n = AppLocalizations.of(context)!;
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('${l10n.failedToSend}: $e'),
-          backgroundColor: Colors.red,
+          backgroundColor: AppTheme.error,
         ),
       );
     } finally {
-      if (mounted) {
-        setState(() {
-          _isSending = false;
-        });
-      }
+      if (mounted) setState(() => _isSending = false);
     }
   }
-
-  // ============================================================
-  // TYPING STATUS
-  // ============================================================
 
   Future<void> _sendTypingStatus(bool typing) async {
     try {
@@ -232,114 +166,55 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  // ============================================================
-  // IMAGE PICKER
-  // ============================================================
-
   Future<void> _pickImage() async {
-    if (_isSending) {
-      return;
-    }
-
+    if (_isSending) return;
     try {
       final picker = ImagePicker();
-
       final image = await picker.pickImage(
         source: ImageSource.gallery,
         imageQuality: 80,
       );
-
-      if (image == null) {
-        return;
-      }
-
-      await _sendFile(
-        File(image.path),
-        'image',
-        '📷 Image',
-      );
+      if (image == null) return;
+      await _sendFile(File(image.path), 'image', '📷 Image');
     } catch (e) {
-      if (!mounted) {
-        return;
-      }
-
+      if (!mounted) return;
       final l10n = AppLocalizations.of(context)!;
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('${l10n.failedToSendFile}: $e'),
-          backgroundColor: Colors.red,
+          backgroundColor: AppTheme.error,
         ),
       );
     }
   }
 
-  // ============================================================
-  // FILE PICKER
-  // ============================================================
-
   Future<void> _pickFile() async {
-    if (_isSending) {
-      return;
-    }
-
+    if (_isSending) return;
     try {
       final result = await FilePicker.platform.pickFiles(
         allowMultiple: false,
         type: FileType.any,
       );
-
-      if (result == null || result.files.isEmpty) {
-        return;
-      }
-
+      if (result == null || result.files.isEmpty) return;
       final selectedFile = result.files.first;
-
-      if (selectedFile.path == null || selectedFile.path!.isEmpty) {
-        return;
-      }
-
+      if (selectedFile.path == null || selectedFile.path!.isEmpty) return;
       final file = File(selectedFile.path!);
-
-      await _sendFile(
-        file,
-        'file',
-        '📎 ${selectedFile.name}',
-      );
+      await _sendFile(file, 'file', '📎 ${selectedFile.name}');
     } catch (e) {
-      if (!mounted) {
-        return;
-      }
-
+      if (!mounted) return;
       final l10n = AppLocalizations.of(context)!;
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('${l10n.failedToSendFile}: $e'),
-          backgroundColor: Colors.red,
+          backgroundColor: AppTheme.error,
         ),
       );
     }
   }
 
-  // ============================================================
-  // SEND FILE
-  // ============================================================
-
-  Future<void> _sendFile(
-      File file,
-      String type,
-      String content,
-      ) async {
-    if (_isSending) {
-      return;
-    }
-
-    if (mounted) {
-      setState(() {
-        _isSending = true;
-      });
-    }
+  Future<void> _sendFile(File file, String type, String content) async {
+    if (_isSending) return;
+    if (mounted) setState(() => _isSending = true);
 
     try {
       await context.read<ChatProvider>().sendMessage(
@@ -348,46 +223,27 @@ class _ChatScreenState extends State<ChatScreen> {
         messageType: type,
         content: content,
       );
-
       _scrollToBottom();
     } catch (e) {
-      if (!mounted) {
-        return;
-      }
-
+      if (!mounted) return;
       final l10n = AppLocalizations.of(context)!;
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('${l10n.failedToSendFile}: $e'),
-          backgroundColor: Colors.red,
+          backgroundColor: AppTheme.error,
         ),
       );
     } finally {
-      if (mounted) {
-        setState(() {
-          _isSending = false;
-        });
-      }
+      if (mounted) setState(() => _isSending = false);
     }
   }
 
-  // ============================================================
-  // MESSAGE OPTIONS
-  // ============================================================
-
-  void _showMessageOptions(
-      BuildContext context,
-      ChatMessage message,
-      ) {
+  void _showMessageOptions(BuildContext context, ChatMessage message) {
     final l10n = AppLocalizations.of(context)!;
-
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(20),
-        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (sheetContext) {
         return SafeArea(
@@ -396,50 +252,32 @@ class _ChatScreenState extends State<ChatScreen> {
               if (message.content != null &&
                   message.content!.trim().isNotEmpty)
                 ListTile(
-                  leading: const Icon(
-                    Icons.content_copy_outlined,
-                  ),
+                  leading: const Icon(Icons.content_copy_outlined),
                   title: Text(l10n.copy),
                   onTap: () async {
                     Navigator.pop(sheetContext);
-
                     await Clipboard.setData(
-                      ClipboardData(
-                        text: message.content!,
-                      ),
+                      ClipboardData(text: message.content!),
                     );
-
-                    if (!mounted) {
-                      return;
-                    }
-
+                    if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(l10n.messageCopied),
-                        backgroundColor: Colors.green,
+                        backgroundColor: AppTheme.success,
                       ),
                     );
                   },
                 ),
-
               ListTile(
-                leading: const Icon(
-                  Icons.delete_outline,
-                  color: Colors.red,
-                ),
+                leading: const Icon(Icons.delete_outline,
+                    color: AppTheme.error),
                 title: Text(
                   l10n.delete,
-                  style: const TextStyle(
-                    color: Colors.red,
-                  ),
+                  style: const TextStyle(color: AppTheme.error),
                 ),
                 onTap: () {
                   Navigator.pop(sheetContext);
-
-                  _confirmDeleteMessage(
-                    context,
-                    message,
-                  );
+                  _confirmDeleteMessage(context, message);
                 },
               ),
             ],
@@ -449,66 +287,44 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  // ============================================================
-  // DELETE MESSAGE CONFIRMATION
-  // ============================================================
-
-  void _confirmDeleteMessage(
-      BuildContext context,
-      ChatMessage message,
-      ) {
+  void _confirmDeleteMessage(BuildContext context, ChatMessage message) {
     final l10n = AppLocalizations.of(context)!;
-
     showDialog<void>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
           title: Text(l10n.deleteMessage),
-          content: Text(
-            l10n.areYouSureDeleteMessage,
-          ),
+          content: Text(l10n.areYouSureDeleteMessage),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.pop(dialogContext);
-              },
+              onPressed: () => Navigator.pop(dialogContext),
               child: Text(l10n.cancel),
             ),
             TextButton(
               onPressed: () async {
                 Navigator.pop(dialogContext);
-
                 try {
                   await context
                       .read<ChatProvider>()
                       .deleteMessage(message.id);
-
-                  if (!mounted) {
-                    return;
-                  }
-
+                  if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(l10n.messageDeleted),
-                      backgroundColor: Colors.green,
+                      backgroundColor: AppTheme.success,
                     ),
                   );
                 } catch (e) {
-                  if (!mounted) {
-                    return;
-                  }
-
+                  if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text('$e'),
-                      backgroundColor: Colors.red,
+                      backgroundColor: AppTheme.error,
                     ),
                   );
                 }
               },
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.red,
-              ),
+              style: TextButton.styleFrom(foregroundColor: AppTheme.error),
               child: Text(l10n.delete),
             ),
           ],
@@ -516,10 +332,6 @@ class _ChatScreenState extends State<ChatScreen> {
       },
     );
   }
-
-  // ============================================================
-  // BUILD
-  // ============================================================
 
   @override
   Widget build(BuildContext context) {
@@ -536,8 +348,7 @@ class _ChatScreenState extends State<ChatScreen> {
               backgroundColor: Colors.white.withOpacity(0.15),
               child: Text(
                 widget.conversation.otherParty.name.isNotEmpty
-                    ? widget.conversation.otherParty.name[0]
-                    .toUpperCase()
+                    ? widget.conversation.otherParty.name[0].toUpperCase()
                     : '?',
                 style: const TextStyle(
                   color: Colors.white,
@@ -562,36 +373,27 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   ),
                   Consumer<ChatProvider>(
-                    builder: (
-                        context,
-                        provider,
-                        child,
-                        ) {
+                    builder: (context, provider, child) {
                       if (provider.isTyping) {
                         return Text(
                           l10n.typing,
                           style: const TextStyle(
                             fontSize: 11,
-                            color: Colors.greenAccent,
+                            color: AppTheme.secondary,
                             fontWeight: FontWeight.w500,
                           ),
                         );
                       }
-
-                      if (widget
-                          .conversation
-                          .otherParty
-                          .isOnline) {
+                      if (widget.conversation.otherParty.isOnline) {
                         return Text(
                           l10n.online,
                           style: const TextStyle(
                             fontSize: 11,
-                            color: Colors.greenAccent,
+                            color: AppTheme.secondary,
                             fontWeight: FontWeight.w500,
                           ),
                         );
                       }
-
                       return const SizedBox.shrink();
                     },
                   ),
@@ -600,29 +402,19 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ],
         ),
-        backgroundColor: theme.primaryColor,
+        backgroundColor: AppTheme.primary,
         foregroundColor: Colors.white,
         elevation: 0,
       ),
 
       body: Column(
         children: [
-          // ======================================================
-          // MESSAGES
-          // ======================================================
-
           Expanded(
             child: Consumer<ChatProvider>(
-              builder: (
-                  context,
-                  provider,
-                  child,
-                  ) {
+              builder: (context, provider, child) {
                 if (provider.isLoading &&
                     provider.currentMessages.isEmpty) {
-                  return const Center(
-                    child: CircularProgressIndicator(),
-                  );
+                  return const Center(child: CircularProgressIndicator());
                 }
 
                 if (provider.currentMessages.isEmpty) {
@@ -630,21 +422,19 @@ class _ChatScreenState extends State<ChatScreen> {
                     child: Padding(
                       padding: const EdgeInsets.all(24),
                       child: Column(
-                        mainAxisAlignment:
-                        MainAxisAlignment.center,
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Container(
                             width: 90,
                             height: 90,
                             decoration: BoxDecoration(
-                              color: theme.primaryColor
-                                  .withOpacity(0.08),
+                              color: AppTheme.primary.withOpacity(0.08),
                               shape: BoxShape.circle,
                             ),
-                            child: Icon(
+                            child: const Icon(
                               Icons.chat_bubble_outline,
                               size: 48,
-                              color: theme.primaryColor,
+                              color: AppTheme.primary,
                             ),
                           ),
                           const SizedBox(height: 20),
@@ -654,7 +444,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
-                              color: Colors.grey.shade700,
+                              color: theme.colorScheme.onSurface,
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -663,7 +453,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 14,
-                              color: Colors.grey.shade500,
+                              color: theme.hintColor,
                             ),
                           ),
                         ],
@@ -672,15 +462,13 @@ class _ChatScreenState extends State<ChatScreen> {
                   );
                 }
 
-                return NotificationListener<
-                    ScrollNotification>(
+                return NotificationListener<ScrollNotification>(
                   onNotification: (notification) {
                     if (notification.metrics.pixels <= 0 &&
                         !_isLoadingMore &&
                         _hasMoreMessages) {
                       _loadMoreMessages();
                     }
-
                     return false;
                   },
                   child: ListView.builder(
@@ -690,47 +478,34 @@ class _ChatScreenState extends State<ChatScreen> {
                       vertical: 8,
                       horizontal: 8,
                     ),
-                    itemCount:
-                    provider.currentMessages.length +
+                    itemCount: provider.currentMessages.length +
                         (_isLoadingMore ? 1 : 0),
                     itemBuilder: (context, index) {
                       if (_isLoadingMore &&
-                          index ==
-                              provider.currentMessages.length) {
+                          index == provider.currentMessages.length) {
                         return const Padding(
                           padding: EdgeInsets.all(16),
                           child: Center(
                             child: SizedBox(
                               width: 24,
                               height: 24,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                              ),
+                              child: CircularProgressIndicator(strokeWidth: 2),
                             ),
                           ),
                         );
                       }
 
                       final message = provider.currentMessages[
-                      provider.currentMessages.length -
-                          1 -
-                          index];
+                      provider.currentMessages.length - 1 - index];
 
                       final isCurrentUser =
-                          message.senderId ==
-                              provider.currentUser?.id;
+                          message.senderId == provider.currentUser?.id;
 
-                      // IMPORTANT:
-                      // No onReaction parameter here.
-                      // Your current MessageBubble does not define it.
                       return MessageBubble(
                         message: message,
                         isCurrentUser: isCurrentUser,
                         onLongPress: () {
-                          _showMessageOptions(
-                            context,
-                            message,
-                          );
+                          _showMessageOptions(context, message);
                         },
                       );
                     },
@@ -740,33 +515,15 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
 
-          // ======================================================
-          // TYPING INDICATOR
-          // ======================================================
-
           Consumer<ChatProvider>(
-            builder: (
-                context,
-                provider,
-                child,
-                ) {
-              if (!provider.isTyping) {
-                return const SizedBox.shrink();
-              }
-
+            builder: (context, provider, child) {
+              if (!provider.isTyping) return const SizedBox.shrink();
               return const Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 4,
-                ),
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 child: TypingIndicator(),
               );
             },
           ),
-
-          // ======================================================
-          // MESSAGE INPUT
-          // ======================================================
 
           _buildMessageInput(context),
         ],
@@ -774,31 +531,17 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  // ============================================================
-  // MESSAGE INPUT
-  // ============================================================
-
-  Widget _buildMessageInput(
-      BuildContext context,
-      ) {
+  Widget _buildMessageInput(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
-
-    final screenWidth =
-        MediaQuery.of(context).size.width;
-
+    final screenWidth = MediaQuery.of(context).size.width;
     final isTablet = screenWidth > 600;
-
-    final hasText =
-        _textController.text.trim().isNotEmpty;
+    final hasText = _textController.text.trim().isNotEmpty;
 
     return SafeArea(
       top: false,
       child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 8,
-          vertical: 6,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
           color: theme.colorScheme.surface,
           boxShadow: [
@@ -812,43 +555,25 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            // --------------------------------------------------
-            // IMAGE
-            // --------------------------------------------------
-
             IconButton(
               tooltip: 'Photo',
               icon: Icon(
                 Icons.photo_outlined,
-                color: _isSending
-                    ? Colors.grey
-                    : theme.primaryColor,
+                color: _isSending ? theme.hintColor : AppTheme.primary,
                 size: isTablet ? 28 : 24,
               ),
-              onPressed:
-              _isSending ? null : _pickImage,
+              onPressed: _isSending ? null : _pickImage,
             ),
-
-            // --------------------------------------------------
-            // FILE
-            // --------------------------------------------------
 
             IconButton(
               tooltip: 'Attach file',
               icon: Icon(
                 Icons.attach_file,
-                color: _isSending
-                    ? Colors.grey
-                    : theme.primaryColor,
+                color: _isSending ? theme.hintColor : AppTheme.primary,
                 size: isTablet ? 28 : 24,
               ),
-              onPressed:
-              _isSending ? null : _pickFile,
+              onPressed: _isSending ? null : _pickFile,
             ),
-
-            // --------------------------------------------------
-            // TEXT FIELD
-            // --------------------------------------------------
 
             Expanded(
               child: TextField(
@@ -856,32 +581,23 @@ class _ChatScreenState extends State<ChatScreen> {
                 focusNode: _focusNode,
                 maxLines: 5,
                 minLines: 1,
-                textCapitalization:
-                TextCapitalization.sentences,
+                textCapitalization: TextCapitalization.sentences,
                 onChanged: (text) {
                   setState(() {});
-
-                  _sendTypingStatus(
-                    text.trim().isNotEmpty,
-                  );
+                  _sendTypingStatus(text.trim().isNotEmpty);
                 },
                 decoration: InputDecoration(
                   hintText: l10n.typeAMessage,
-                  hintStyle:
-                  theme.textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey.shade500,
+                  hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.hintColor,
                   ),
                   border: OutlineInputBorder(
-                    borderRadius:
-                    BorderRadius.circular(24),
+                    borderRadius: BorderRadius.circular(24),
                     borderSide: BorderSide.none,
                   ),
-                  fillColor: theme
-                      .colorScheme
-                      .surfaceContainerHighest,
+                  fillColor: theme.colorScheme.surfaceContainerHighest,
                   filled: true,
-                  contentPadding:
-                  const EdgeInsets.symmetric(
+                  contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 10,
                   ),
@@ -891,14 +607,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
             const SizedBox(width: 4),
 
-            // --------------------------------------------------
-            // SEND
-            // --------------------------------------------------
-
             Material(
               color: hasText && !_isSending
-                  ? theme.primaryColor
-                  : Colors.grey.shade300,
+                  ? AppTheme.primary
+                  : theme.dividerColor,
               shape: const CircleBorder(),
               child: IconButton(
                 tooltip: 'Send',
@@ -906,24 +618,13 @@ class _ChatScreenState extends State<ChatScreen> {
                     ? const SizedBox(
                   width: 22,
                   height: 22,
-                  child:
-                  CircularProgressIndicator(
+                  child: CircularProgressIndicator(
                     strokeWidth: 2.5,
-                    valueColor:
-                    AlwaysStoppedAnimation<
-                        Color>(
-                      Colors.white,
-                    ),
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                   ),
                 )
-                    : const Icon(
-                  Icons.send_rounded,
-                  color: Colors.white,
-                ),
-                onPressed:
-                hasText && !_isSending
-                    ? _sendMessage
-                    : null,
+                    : const Icon(Icons.send_rounded, color: Colors.white),
+                onPressed: hasText && !_isSending ? _sendMessage : null,
               ),
             ),
           ],

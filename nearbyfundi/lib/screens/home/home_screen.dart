@@ -1,3 +1,4 @@
+// home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -26,12 +27,10 @@ class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() =>
-      _HomeScreenState();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState
-    extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> {
   // ================================================================
   // CURRENT TAB
   // ================================================================
@@ -55,7 +54,6 @@ class _HomeScreenState
   // ================================================================
 
   static const double _tabletBreakpoint = 700;
-
   static const double _desktopBreakpoint = 1100;
 
   // ================================================================
@@ -74,23 +72,14 @@ class _HomeScreenState
       ProfileScreen(),
     ];
 
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
 
-      final settings =
-      context.read<SettingsProvider>();
-
+      final settings = context.read<SettingsProvider>();
       _currentLocale = settings.locale;
 
-      context
-          .read<ServiceProvider>()
-          .fetchServices(
-        locale: _currentLocale,
-      );
-
+      context.read<ServiceProvider>().fetchServices(locale: _currentLocale);
       _loadNotifications();
-
       _initializeChat();
     });
   }
@@ -100,14 +89,9 @@ class _HomeScreenState
   // ================================================================
 
   void _initializeChat() {
-    final authProvider =
-    context.read<AuthProvider>();
-
-    final chatProvider =
-    context.read<ChatProvider>();
-
+    final authProvider = context.read<AuthProvider>();
+    final chatProvider = context.read<ChatProvider>();
     final user = authProvider.user;
-
     final token = authProvider.token;
 
     if (user != null && token != null) {
@@ -130,13 +114,9 @@ class _HomeScreenState
 
   Future<void> _loadNotifications() async {
     try {
-      await context
-          .read<NotificationProvider>()
-          .loadNotifications();
+      await context.read<NotificationProvider>().loadNotifications();
     } catch (e) {
-      debugPrint(
-        'Notification loading error: $e',
-      );
+      debugPrint('Notification loading error: $e');
     }
   }
 
@@ -145,176 +125,102 @@ class _HomeScreenState
   // ================================================================
 
   Future<void> _refreshCurrentScreen() async {
-    final l10n =
-    AppLocalizations.of(context)!;
+    final l10n = AppLocalizations.of(context)!;
 
     try {
       switch (_currentIndex) {
         case 0:
-          await context
-              .read<TechnicianProvider>()
-              .refreshLastSearch();
+          await context.read<TechnicianProvider>().refreshLastSearch();
           break;
-
         case 1:
-          await context
-              .read<PostProvider>()
-              .fetchPosts(
-            refresh: true,
-          );
+          await context.read<PostProvider>().fetchPosts(refresh: true);
           break;
-
         case 2:
-          await context
-              .read<RequestProvider>()
-              .loadMyRequests();
+          await context.read<RequestProvider>().loadMyRequests();
           break;
-
         case 3:
-          await context
-              .read<ChatProvider>()
-              .refreshConversations();
+          await context.read<ChatProvider>().refreshConversations();
           break;
-
         case 4:
-          await context
-              .read<AuthProvider>()
-              .loadUser();
+          await context.read<AuthProvider>().loadUser();
           break;
       }
 
-      await context
-          .read<NotificationProvider>()
-          .loadNotifications();
+      await context.read<NotificationProvider>().loadNotifications();
 
-      final settings =
-      context.read<SettingsProvider>();
-
-      if (_currentLocale !=
-          settings.locale) {
-        _currentLocale =
-            settings.locale;
-
+      final settings = context.read<SettingsProvider>();
+      if (_currentLocale != settings.locale) {
+        _currentLocale = settings.locale;
         await context
             .read<ServiceProvider>()
-            .fetchServices(
-          locale: _currentLocale,
-        );
+            .fetchServices(locale: _currentLocale);
       }
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
             children: [
-              const Icon(
-                Icons.check_circle_rounded,
-                color: Colors.white,
-                size: 20,
-              ),
+              const Icon(Icons.check_circle_rounded,
+                  color: Colors.white, size: 20),
               const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  l10n.refreshed,
-                ),
-              ),
+              Expanded(child: Text(l10n.refreshed)),
             ],
           ),
-          behavior:
-          SnackBarBehavior.floating,
-          duration:
-          const Duration(seconds: 1),
-          backgroundColor:
-          AppTheme.primaryColor,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 1),
+          backgroundColor: AppTheme.success,
           shape:
-          RoundedRectangleBorder(
-            borderRadius:
-            BorderRadius.circular(12),
-          ),
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
     } catch (e) {
-      debugPrint(
-        'Refresh error: $e',
-      );
-
+      debugPrint('Refresh error: $e');
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
             children: [
-              const Icon(
-                Icons.error_outline_rounded,
-                color: Colors.white,
-              ),
+              const Icon(Icons.error_outline_rounded, color: Colors.white),
               const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  l10n.refreshFailed,
-                ),
-              ),
+              Expanded(child: Text(l10n.refreshFailed)),
             ],
           ),
-          behavior:
-          SnackBarBehavior.floating,
-          backgroundColor:
-          Theme.of(context)
-              .colorScheme
-              .error,
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppTheme.error,
           shape:
-          RoundedRectangleBorder(
-            borderRadius:
-            BorderRadius.circular(12),
-          ),
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
     }
   }
 
   // ================================================================
-  // PARTNERSHIPS
+  // MINI APPS
   // ================================================================
 
-  void _showPartnershipsComingSoon() {
-    final theme =
-    Theme.of(context);
-
-    ScaffoldMessenger.of(context)
-        .showSnackBar(
+  void _showMiniAppsComingSoon() {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Row(
+        content: const Row(
           children: [
-            const Icon(
-              Icons.handshake_rounded,
-              color: Colors.white,
-            ),
-            const SizedBox(width: 12),
-            const Expanded(
+            Icon(Icons.widgets_rounded, color: Colors.white),
+            SizedBox(width: 12),
+            Expanded(
               child: Text(
-                'Partnerships Coming Soon! 🚀',
-                style: TextStyle(
-                  fontWeight:
-                  FontWeight.w600,
-                ),
+                'Mini Apps Coming Soon! 🚀',
+                style: TextStyle(fontWeight: FontWeight.w600),
               ),
             ),
           ],
         ),
-        backgroundColor:
-        theme.primaryColor,
-        behavior:
-        SnackBarBehavior.floating,
-        shape:
-        RoundedRectangleBorder(
-          borderRadius:
-          BorderRadius.circular(14),
-        ),
-        duration:
-        const Duration(seconds: 2),
+        backgroundColor: theme.primaryColor,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -323,282 +229,146 @@ class _HomeScreenState
   // NOTIFICATIONS
   // ================================================================
 
-  void _showNotifications(
-      BuildContext context) {
-    final theme =
-    Theme.of(context);
-
-    final l10n =
-    AppLocalizations.of(context)!;
+  void _showNotifications(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor:
-      Colors.transparent,
+      backgroundColor: Colors.transparent,
       builder: (ctx) {
         return DraggableScrollableSheet(
           initialChildSize: 0.78,
           minChildSize: 0.50,
           maxChildSize: 0.96,
           expand: false,
-          builder: (
-              sheetContext,
-              scrollController,
-              ) {
+          builder: (sheetContext, scrollController) {
             return Container(
               decoration: BoxDecoration(
-                color:
-                theme.colorScheme.surface,
+                color: theme.colorScheme.surface,
                 borderRadius:
-                const BorderRadius
-                    .vertical(
-                  top: Radius.circular(28),
-                ),
+                const BorderRadius.vertical(top: Radius.circular(28)),
               ),
               child: Column(
                 children: [
-                  const SizedBox(
-                    height: 10,
-                  ),
-
+                  const SizedBox(height: 10),
                   // HANDLE
                   Container(
                     width: 42,
                     height: 4,
-                    decoration:
-                    BoxDecoration(
-                      color: theme
-                          .colorScheme
-                          .onSurface
-                          .withOpacity(
-                        0.18,
-                      ),
-                      borderRadius:
-                      BorderRadius.circular(
-                        20,
-                      ),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.onSurface.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(20),
                     ),
                   ),
-
                   // HEADER
                   Padding(
-                    padding:
-                    const EdgeInsets
-                        .fromLTRB(
-                      20,
-                      18,
-                      12,
-                      12,
-                    ),
-                    child: Consumer<
-                        NotificationProvider>(
-                      builder: (
-                          context,
-                          provider,
-                          child,
-                          ) {
-                        final unread =
-                            provider.unreadCount;
-
+                    padding: const EdgeInsets.fromLTRB(20, 18, 12, 12),
+                    child: Consumer<NotificationProvider>(
+                      builder: (context, provider, child) {
+                        final unread = provider.unreadCount;
                         return Row(
                           children: [
                             Container(
                               width: 46,
                               height: 46,
-                              decoration:
-                              BoxDecoration(
-                                color: theme
-                                    .primaryColor
-                                    .withOpacity(
-                                  0.10,
-                                ),
-                                shape:
-                                BoxShape
-                                    .circle,
+                              decoration: BoxDecoration(
+                                color:
+                                theme.primaryColor.withOpacity(0.10),
+                                shape: BoxShape.circle,
                               ),
                               child: Icon(
-                                Icons
-                                    .notifications_rounded,
-                                color:
-                                theme
-                                    .primaryColor,
+                                Icons.notifications_rounded,
+                                color: theme.primaryColor,
                               ),
                             ),
-
-                            const SizedBox(
-                              width: 12,
-                            ),
-
+                            const SizedBox(width: 12),
                             Expanded(
-                              child:
-                              Column(
+                              child: Column(
                                 crossAxisAlignment:
-                                CrossAxisAlignment
-                                    .start,
+                                CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    l10n
-                                        .notifications,
-                                    style:
-                                    theme
-                                        .textTheme
-                                        .titleLarge
+                                    l10n.notifications,
+                                    style: theme.textTheme.titleLarge
                                         ?.copyWith(
-                                      fontWeight:
-                                      FontWeight
-                                          .w700,
+                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
                                   Text(
-                                    unread >
-                                        0
+                                    unread > 0
                                         ? '$unread unread notification${unread == 1 ? '' : 's'}'
                                         : 'You are all caught up',
-                                    style:
-                                    theme
-                                        .textTheme
-                                        .bodySmall
+                                    style: theme.textTheme.bodySmall
                                         ?.copyWith(
-                                      color:
-                                      unread >
-                                          0
-                                          ? theme
-                                          .primaryColor
-                                          : Colors
-                                          .grey,
+                                      color: unread > 0
+                                          ? theme.primaryColor
+                                          : theme.hintColor,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-
                             if (unread > 0)
                               TextButton(
-                                onPressed:
-                                    () async {
-                                  await provider
-                                      .markAllAsRead();
+                                onPressed: () async {
+                                  await provider.markAllAsRead();
                                 },
-                                child:
-                                Text(
-                                  l10n
-                                      .markAllAsRead,
-                                ),
+                                child: Text(l10n.markAllAsRead),
                               ),
                           ],
                         );
                       },
                     ),
                   ),
-
                   Divider(
                     height: 1,
-                    color: theme
-                        .dividerColor
-                        .withOpacity(
-                      0.4,
-                    ),
+                    color: theme.dividerColor.withOpacity(0.4),
                   ),
-
                   // LIST
                   Expanded(
-                    child: Consumer<
-                        NotificationProvider>(
-                      builder: (
-                          context,
-                          provider,
-                          child,
-                          ) {
-                        if (provider
-                            .isLoading) {
+                    child: Consumer<NotificationProvider>(
+                      builder: (context, provider, child) {
+                        if (provider.isLoading) {
                           return Center(
-                            child:
-                            CircularProgressIndicator(
-                              color: theme
-                                  .primaryColor,
-                            ),
+                            child: CircularProgressIndicator(
+                                color: theme.primaryColor),
                           );
                         }
-
-                        if (provider
-                            .notifications
-                            .isEmpty) {
+                        if (provider.notifications.isEmpty) {
                           return _EmptyNotifications(
                             theme: theme,
-                            title: l10n
-                                .noNotificationsYet,
+                            title: l10n.noNotificationsYet,
                           );
                         }
-
                         return RefreshIndicator(
-                          color: theme
-                              .primaryColor,
-                          onRefresh: provider
-                              .loadNotifications,
-                          child:
-                          ListView.builder(
-                            controller:
-                            scrollController,
+                          color: theme.primaryColor,
+                          onRefresh: provider.loadNotifications,
+                          child: ListView.builder(
+                            controller: scrollController,
                             padding:
-                            const EdgeInsets
-                                .fromLTRB(
-                              16,
-                              14,
-                              16,
-                              30,
-                            ),
-                            itemCount: provider
-                                .notifications
-                                .length,
-                            itemBuilder:
-                                (
-                                context,
-                                index,
-                                ) {
+                            const EdgeInsets.fromLTRB(16, 14, 16, 30),
+                            itemCount: provider.notifications.length,
+                            itemBuilder: (context, index) {
                               final notification =
-                              provider
-                                  .notifications[
-                              index
-                              ];
-
+                              provider.notifications[index];
                               return Padding(
                                 padding:
-                                const EdgeInsets
-                                    .only(
-                                  bottom: 10,
-                                ),
-                                child:
-                                _NotificationTile(
-                                  notification:
-                                  notification,
-                                  locale:
-                                  _currentLocale,
-                                  onTap:
-                                      () async {
-                                    final id =
-                                    notification[
-                                    'id'];
-
-                                    if (id !=
-                                        null) {
+                                const EdgeInsets.only(bottom: 10),
+                                child: _NotificationTile(
+                                  notification: notification,
+                                  locale: _currentLocale,
+                                  onTap: () async {
+                                    final id = notification['id'];
+                                    if (id != null) {
                                       await provider
-                                          .markAsRead(
-                                        id.toString(),
-                                      );
+                                          .markAsRead(id.toString());
                                     }
-
-                                    if (!mounted) {
-                                      return;
-                                    }
-
-                                    Navigator.pop(
-                                      ctx,
-                                    );
-
+                                    if (!mounted) return;
+                                    Navigator.pop(ctx);
                                     _handleNotificationNavigation(
-                                      notification,
-                                    );
+                                        notification);
                                   },
                                 ),
                               );
@@ -621,18 +391,11 @@ class _HomeScreenState
   // NOTIFICATION NAVIGATION
   // ================================================================
 
-  void _handleNotificationNavigation(
-      Map<String, dynamic> notification,
-      ) {
-    final type =
-        notification['type']
-            ?.toString() ??
-            '';
+  void _handleNotificationNavigation(Map<String, dynamic> notification) {
+    final type = notification['type']?.toString() ?? '';
 
     if (type == 'chat_message') {
-      setState(() {
-        _currentIndex = 3;
-      });
+      setState(() => _currentIndex = 3);
       return;
     }
 
@@ -641,182 +404,141 @@ class _HomeScreenState
         type == 'request_rejected' ||
         type == 'request_in_progress' ||
         type == 'request_completed') {
-      setState(() {
-        _currentIndex = 2;
-      });
+      setState(() => _currentIndex = 2);
     }
   }
 
   // ================================================================
   // LEFT DRAWER
   // ================================================================
+  // GROUP 1: Brand header (logo + "OG ONE GROUP" + close)
+  // GROUP 2: MORE → Mini Apps (Coming Soon)
+  // ================================================================
 
-  Widget _buildDrawer(
-      BuildContext context,
-      ThemeData theme,
-      ) {
+  Widget _buildDrawer(BuildContext context, ThemeData theme) {
+    final isDark = theme.brightness == Brightness.dark;
+
     return Drawer(
-      backgroundColor:
-      theme.colorScheme.surface,
+      backgroundColor: theme.colorScheme.surface,
       width: 320,
-      shape:
-      const RoundedRectangleBorder(
-        borderRadius:
-        BorderRadius.only(
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.only(
           topRight: Radius.circular(28),
-          bottomRight:
-          Radius.circular(28),
+          bottomRight: Radius.circular(28),
         ),
       ),
       child: SafeArea(
         child: Column(
           children: [
+            // ==========================================================
+            // GROUP 1 — BRAND HEADER (logo + OG ONE GROUP + close)
+            // ==========================================================
             Container(
-              margin:
-              const EdgeInsets.all(14),
-              padding:
-              const EdgeInsets.all(20),
-              decoration:
-              const BoxDecoration(
-                gradient:
-                LinearGradient(
-                  colors: [
-                    AppTheme.primaryColor,
-                    AppTheme.primaryDark,
-                  ],
-                  begin:
-                  Alignment.topLeft,
+              margin: const EdgeInsets.all(14),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppTheme.primary, AppTheme.primaryDark],
+                  begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius:
-                BorderRadius.all(
-                  Radius.circular(22),
-                ),
+                borderRadius: const BorderRadius.all(Radius.circular(22)),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primary
+                        .withOpacity(isDark ? 0.5 : 0.25),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
               ),
-              child: Column(
-                crossAxisAlignment:
-                CrossAxisAlignment
-                    .start,
+              child: Row(
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 52,
-                        height: 52,
-                        decoration:
-                        BoxDecoration(
-                          color: Colors.white
-                              .withOpacity(
-                            0.15,
-                          ),
-                          borderRadius:
-                          BorderRadius
-                              .circular(
-                            16,
-                          ),
-                        ),
-                        child:
-                        const Icon(
-                          Icons
-                              .handyman_rounded,
-                          color:
-                          Colors.white,
-                          size: 28,
-                        ),
-                      ),
-
-                      const Spacer(),
-
-                      IconButton(
-                        onPressed: () {
-                          Navigator.pop(
-                              context);
-                        },
-                        icon:
-                        const Icon(
-                          Icons
-                              .close_rounded,
-                          color:
-                          Colors.white,
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(
-                    height: 18,
-                  ),
-
-                  Text(
-                    'NearbyFundi',
-                    style:
-                    GoogleFonts.nunito(
-                      color:
-                      Colors.white,
-                      fontSize: 22,
-                      fontWeight:
-                      FontWeight.w800,
+                  // Logo
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    padding: const EdgeInsets.all(10),
+                    child: Image.asset(
+                      'assets/images/nearbyfundi-logo.png',
+                      fit: BoxFit.contain,
                     ),
                   ),
 
-                  const SizedBox(
-                    height: 4,
+                  const SizedBox(width: 12),
+
+                  // Text on the right of the logo
+                  Expanded(
+                    child: Text(
+                      'OG ONE GROUP',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.nunito(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
                   ),
 
-                  Text(
-                    'Find trusted technicians near you',
-                    style:
-                    GoogleFonts.nunito(
-                      color: Colors.white
-                          .withOpacity(
-                        0.78,
-                      ),
-                      fontSize: 13,
-                    ),
+                  // Close button
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded,
+                        color: Colors.white),
                   ),
                 ],
               ),
             ),
 
+            // ==========================================================
+            // GROUP 2 — MORE → MINI APPS
+            // ==========================================================
             Expanded(
               child: ListView(
-                padding:
-                const EdgeInsets
-                    .symmetric(
-                  horizontal: 12,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
                 children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
+                    child: Text(
+                      'MORE',
+                      style: GoogleFonts.nunito(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.2,
+                        color:
+                        theme.colorScheme.onSurface.withOpacity(0.45),
+                      ),
+                    ),
+                  ),
                   _DrawerItem(
-                    icon: Icons
-                        .handshake_rounded,
-                    title:
-                    'Partnerships',
-                    color:
-                    theme.primaryColor,
+                    icon: Icons.widgets_rounded,
+                    title: 'Mini Apps',
+                    subtitle: 'Coming Soon',
+                    color: theme.primaryColor,
                     onTap: () {
-                      Navigator.pop(
-                          context);
-
-                      _showPartnershipsComingSoon();
+                      Navigator.pop(context);
+                      _showMiniAppsComingSoon();
                     },
                   ),
                 ],
               ),
             ),
 
+            // ==========================================================
+            // FOOTER
+            // ==========================================================
             Padding(
-              padding:
-              const EdgeInsets.all(
-                18,
-              ),
+              padding: const EdgeInsets.all(18),
               child: Text(
-                'NearbyFundi',
-                style: theme
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(
-                  color:
-                  Colors.grey.shade500,
+                '© NearbyFundi',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.hintColor,
                 ),
               ),
             ),
@@ -830,74 +552,36 @@ class _HomeScreenState
   // NAVIGATION DESTINATIONS
   // ================================================================
 
-  List<NavigationRailDestination>
-  _railDestinations(
+  List<NavigationRailDestination> _railDestinations(
       AppLocalizations l10n,
       ChatProvider chatProvider,
       ) {
     return [
       NavigationRailDestination(
-        icon: const Icon(
-          Icons.home_outlined,
-        ),
-        selectedIcon: const Icon(
-          Icons.home_rounded,
-        ),
-        label: Text(
-          l10n.nearby,
-        ),
+        icon: const Icon(Icons.home_outlined),
+        selectedIcon: const Icon(Icons.home_rounded),
+        label: Text(l10n.nearby),
       ),
-
       NavigationRailDestination(
-        icon: const Icon(
-          Icons.article_outlined,
-        ),
-        selectedIcon: const Icon(
-          Icons.article_rounded,
-        ),
-        label: Text(
-          l10n.blog,
-        ),
+        icon: const Icon(Icons.article_outlined),
+        selectedIcon: const Icon(Icons.article_rounded),
+        label: Text(l10n.blog),
       ),
-
       NavigationRailDestination(
-        icon: const Icon(
-          Icons.list_alt_outlined,
-        ),
-        selectedIcon: const Icon(
-          Icons.list_alt_rounded,
-        ),
-        label: Text(
-          l10n.requests,
-        ),
+        icon: const Icon(Icons.list_alt_outlined),
+        selectedIcon: const Icon(Icons.list_alt_rounded),
+        label: Text(l10n.requests),
       ),
-
       NavigationRailDestination(
-        icon: _ChatIcon(
-          unread:
-          chatProvider.totalUnread,
-          active: false,
-        ),
-        selectedIcon: _ChatIcon(
-          unread:
-          chatProvider.totalUnread,
-          active: true,
-        ),
-        label: Text(
-          l10n.chat,
-        ),
+        icon: _ChatIcon(unread: chatProvider.totalUnread, active: false),
+        selectedIcon:
+        _ChatIcon(unread: chatProvider.totalUnread, active: true),
+        label: Text(l10n.chat),
       ),
-
       NavigationRailDestination(
-        icon: const Icon(
-          Icons.person_outline,
-        ),
-        selectedIcon: const Icon(
-          Icons.person_rounded,
-        ),
-        label: Text(
-          l10n.profile,
-        ),
+        icon: const Icon(Icons.person_outline),
+        selectedIcon: const Icon(Icons.person_rounded),
+        label: Text(l10n.profile),
       ),
     ];
   }
@@ -913,44 +597,21 @@ class _HomeScreenState
       ) {
     return Container(
       decoration: BoxDecoration(
-        color: theme
-            .colorScheme
-            .surface,
+        color: theme.colorScheme.surface,
         border: Border(
-          right: BorderSide(
-            color: theme.dividerColor
-                .withOpacity(0.35),
-          ),
+          right: BorderSide(color: theme.dividerColor.withOpacity(0.35)),
         ),
       ),
       child: NavigationRail(
-        selectedIndex:
-        _currentIndex,
-
-        onDestinationSelected:
-            (index) {
-          if (_currentIndex ==
-              index) {
-            return;
-          }
-
-          setState(() {
-            _currentIndex = index;
-          });
+        selectedIndex: _currentIndex,
+        onDestinationSelected: (index) {
+          if (_currentIndex == index) return;
+          setState(() => _currentIndex = index);
         },
-
-        labelType:
-        NavigationRailLabelType.all,
-
+        labelType: NavigationRailLabelType.all,
         minWidth: 82,
-
         groupAlignment: -0.75,
-
-        destinations:
-        _railDestinations(
-          l10n,
-          chatProvider,
-        ),
+        destinations: _railDestinations(l10n, chatProvider),
       ),
     );
   }
@@ -965,158 +626,79 @@ class _HomeScreenState
       bool largeScreen,
       ) {
     return AppBar(
-      backgroundColor:
-      AppTheme.primaryColor,
-      foregroundColor:
-      Colors.white,
+      backgroundColor: AppTheme.primary,
+      foregroundColor: Colors.white,
       elevation: 0,
       scrolledUnderElevation: 0,
-
-      automaticallyImplyLeading:
-      !largeScreen,
-
-      iconTheme:
-      const IconThemeData(
-        color: Colors.white,
-      ),
-
-      titleSpacing: largeScreen
-          ? 20
-          : 8,
-
+      automaticallyImplyLeading: !largeScreen,
+      iconTheme: const IconThemeData(color: Colors.white),
+      titleSpacing: largeScreen ? 20 : 8,
       title: Row(
-        mainAxisSize:
-        MainAxisSize.min,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: largeScreen
-                ? 40
-                : 38,
-            height: largeScreen
-                ? 40
-                : 38,
-            decoration:
-            BoxDecoration(
-              color: Colors.white
-                  .withOpacity(0.14),
-              borderRadius:
-              BorderRadius.circular(
-                11,
-              ),
+            width: largeScreen ? 40 : 38,
+            height: largeScreen ? 40 : 38,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.14),
+              borderRadius: BorderRadius.circular(11),
             ),
-            child:
-            const Icon(
-              Icons
-                  .handyman_rounded,
-              color:
-              Colors.white,
-              size: 22,
-            ),
+            child: const Icon(Icons.handyman_rounded,
+                color: Colors.white, size: 22),
           ),
-
-          const SizedBox(
-            width: 10,
-          ),
-
+          const SizedBox(width: 10),
           Flexible(
             child: Text(
               l10n.appTitle,
               maxLines: 1,
-              overflow:
-              TextOverflow.ellipsis,
-              style:
-              GoogleFonts.nunito(
-                fontSize:
-                largeScreen
-                    ? 20
-                    : 19,
-                fontWeight:
-                FontWeight.w800,
-                color:
-                Colors.white,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.nunito(
+                fontSize: largeScreen ? 20 : 19,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
               ),
             ),
           ),
         ],
       ),
-
       actions: [
         // REFRESH
         IconButton(
-          onPressed:
-          _refreshCurrentScreen,
+          onPressed: _refreshCurrentScreen,
           tooltip: l10n.refresh,
-          icon:
-          const Icon(
-            Icons.refresh_rounded,
-            size: 24,
-          ),
+          icon: const Icon(Icons.refresh_rounded, size: 24),
         ),
-
         // NOTIFICATIONS
-        Consumer<
-            NotificationProvider>(
-          builder: (
-              context,
-              provider,
-              child,
-              ) {
-            final unread =
-                provider.unreadCount;
-
+        Consumer<NotificationProvider>(
+          builder: (context, provider, child) {
+            final unread = provider.unreadCount;
             return IconButton(
-              onPressed: () =>
-                  _showNotifications(
-                    context,
-                  ),
-              tooltip:
-              l10n.notifications,
+              onPressed: () => _showNotifications(context),
+              tooltip: l10n.notifications,
               icon: Stack(
-                clipBehavior:
-                Clip.none,
+                clipBehavior: Clip.none,
                 children: [
-                  const Icon(
-                    Icons
-                        .notifications_outlined,
-                    size: 26,
-                  ),
-
+                  const Icon(Icons.notifications_outlined, size: 26),
                   if (unread > 0)
                     Positioned(
                       right: -5,
                       top: -5,
-                      child:
-                      Container(
-                        constraints:
-                        const BoxConstraints(
-                          minWidth: 18,
-                          minHeight: 18,
-                        ),
+                      child: Container(
+                        constraints: const BoxConstraints(
+                            minWidth: 18, minHeight: 18),
                         padding:
-                        const EdgeInsets
-                            .symmetric(
-                          horizontal: 4,
+                        const EdgeInsets.symmetric(horizontal: 4),
+                        decoration: const BoxDecoration(
+                          color: AppTheme.error,
+                          shape: BoxShape.circle,
                         ),
-                        decoration:
-                        const BoxDecoration(
-                          color: Colors.red,
-                          shape:
-                          BoxShape.circle,
-                        ),
-                        alignment:
-                        Alignment.center,
+                        alignment: Alignment.center,
                         child: Text(
-                          unread > 9
-                              ? '9+'
-                              : '$unread',
-                          style:
-                          const TextStyle(
-                            color: Colors
-                                .white,
+                          unread > 9 ? '9+' : '$unread',
+                          style: const TextStyle(
+                            color: Colors.white,
                             fontSize: 9,
-                            fontWeight:
-                            FontWeight
-                                .w800,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
                       ),
@@ -1126,10 +708,7 @@ class _HomeScreenState
             );
           },
         ),
-
-        const SizedBox(
-          width: 4,
-        ),
+        const SizedBox(width: 4),
       ],
     );
   }
@@ -1139,162 +718,61 @@ class _HomeScreenState
   // ================================================================
 
   @override
-  Widget build(
-      BuildContext context,
-      ) {
-    final l10n =
-    AppLocalizations.of(context)!;
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final settings = context.watch<SettingsProvider>();
 
-    final theme =
-    Theme.of(context);
-
-    final isDark =
-        theme.brightness ==
-            Brightness.dark;
-
-    final settings =
-    context.watch<
-        SettingsProvider>();
-
-    // ==============================================================
     // LANGUAGE CHANGE
-    // ==============================================================
-
-    if (_currentLocale !=
-        settings.locale) {
-      _currentLocale =
-          settings.locale;
-
-      WidgetsBinding.instance
-          .addPostFrameCallback(
-            (_) {
-          if (!mounted) return;
-
-          context
-              .read<ServiceProvider>()
-              .fetchServices(
-            locale:
-            _currentLocale,
-          );
-        },
-      );
+    if (_currentLocale != settings.locale) {
+      _currentLocale = settings.locale;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        context
+            .read<ServiceProvider>()
+            .fetchServices(locale: _currentLocale);
+      });
     }
 
     return LayoutBuilder(
-      builder: (
-          context,
-          constraints,
-          ) {
-        final width =
-            constraints.maxWidth;
-
-        final largeScreen =
-            width >=
-                _tabletBreakpoint;
-
-        final veryLarge =
-            width >=
-                _desktopBreakpoint;
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final largeScreen = width >= _tabletBreakpoint;
+        final veryLarge = width >= _desktopBreakpoint;
 
         return Scaffold(
-          // ========================================================
-          // LEFT DRAWER ONLY
-          // ========================================================
-
-          drawer: largeScreen
-              ? null
-              : _buildDrawer(
-            context,
-            theme,
-          ),
-
-          // ========================================================
-          // NO RIGHT DRAWER
-          // ========================================================
-
-          // endDrawer intentionally removed.
-
-          // ========================================================
-          // APP BAR
-          // ========================================================
-
-          appBar:
-          _buildAppBar(
-            theme,
-            l10n,
-            largeScreen,
-          ),
-
-          // ========================================================
-          // BODY
-          // ========================================================
-
+          drawer: largeScreen ? null : _buildDrawer(context, theme),
+          appBar: _buildAppBar(theme, l10n, largeScreen),
           body: Row(
             children: [
-              // ====================================================
-              // LARGE SCREEN NAVIGATION
-              // ====================================================
-
               if (largeScreen)
                 Consumer<ChatProvider>(
-                  builder: (
-                      context,
-                      chatProvider,
-                      child,
-                      ) {
+                  builder: (context, chatProvider, child) {
                     return _buildLargeNavigation(
-                      theme,
-                      l10n,
-                      chatProvider,
-                    );
+                        theme, l10n, chatProvider);
                   },
                 ),
-
-              // ====================================================
-              // CONTENT
-              // ====================================================
-
               Expanded(
                 child: Center(
                   child: ConstrainedBox(
-                    constraints:
-                    BoxConstraints(
-                      maxWidth:
-                      veryLarge
-                          ? 1400
-                          : double.infinity,
+                    constraints: BoxConstraints(
+                      maxWidth: veryLarge ? 1400 : double.infinity,
                     ),
-                    child:
-                    RefreshIndicator(
-                      onRefresh:
-                      _refreshCurrentScreen,
-                      color:
-                      theme.primaryColor,
-                      backgroundColor:
-                      theme
-                          .colorScheme
-                          .surface,
-                      child: _screens[
-                      _currentIndex],
+                    child: RefreshIndicator(
+                      onRefresh: _refreshCurrentScreen,
+                      color: theme.primaryColor,
+                      backgroundColor: theme.colorScheme.surface,
+                      child: _screens[_currentIndex],
                     ),
                   ),
                 ),
               ),
             ],
           ),
-
-          // ========================================================
-          // MOBILE BOTTOM NAVIGATION
-          // ========================================================
-
-          bottomNavigationBar:
-          largeScreen
+          bottomNavigationBar: largeScreen
               ? null
-              : _buildBottomNavigation(
-            theme,
-            l10n,
-            isDark,
-          ),
+              : _buildBottomNavigation(theme, l10n, isDark),
         );
       },
     );
@@ -1311,157 +789,70 @@ class _HomeScreenState
       ) {
     return Container(
       decoration: BoxDecoration(
-        color:
-        theme.colorScheme.surface,
+        color: theme.colorScheme.surface,
         border: Border(
           top: BorderSide(
-            color: isDark
-                ? Colors.grey.shade800
-                : Colors.grey.shade200,
+            color: theme.dividerColor.withOpacity(0.35),
             width: 0.6,
           ),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black
-                .withOpacity(
-              isDark
-                  ? 0.25
-                  : 0.07,
-            ),
+            color: Colors.black.withOpacity(isDark ? 0.25 : 0.07),
             blurRadius: 15,
-            offset:
-            const Offset(0, -4),
+            offset: const Offset(0, -4),
           ),
         ],
       ),
       child: SafeArea(
         top: false,
         child: Consumer<ChatProvider>(
-          builder: (
-              context,
-              chatProvider,
-              child,
-              ) {
+          builder: (context, chatProvider, child) {
             return BottomNavigationBar(
-              currentIndex:
-              _currentIndex,
-
+              currentIndex: _currentIndex,
               onTap: (index) {
-                if (_currentIndex ==
-                    index) {
-                  return;
-                }
-
-                setState(() {
-                  _currentIndex =
-                      index;
-                });
+                if (_currentIndex == index) return;
+                setState(() => _currentIndex = index);
               },
-
-              type:
-              BottomNavigationBarType
-                  .fixed,
-
-              backgroundColor:
-              theme.colorScheme
-                  .surface,
-
+              type: BottomNavigationBarType.fixed,
+              backgroundColor: theme.colorScheme.surface,
               elevation: 0,
-
-              selectedItemColor:
-              theme.primaryColor,
-
+              selectedItemColor: theme.primaryColor,
               unselectedItemColor:
-              isDark
-                  ? Colors.grey.shade500
-                  : Colors.grey.shade600,
-
+              isDark ? Colors.grey.shade500 : Colors.grey.shade600,
               selectedFontSize: 11,
-
               unselectedFontSize: 11,
-
               selectedLabelStyle:
-              GoogleFonts.nunito(
-                fontWeight:
-                FontWeight.w700,
-              ),
-
+              GoogleFonts.nunito(fontWeight: FontWeight.w700),
               unselectedLabelStyle:
-              GoogleFonts.nunito(
-                fontWeight:
-                FontWeight.w500,
-              ),
-
+              GoogleFonts.nunito(fontWeight: FontWeight.w500),
               items: [
                 BottomNavigationBarItem(
-                  icon:
-                  const Icon(
-                    Icons.home_outlined,
-                  ),
-                  activeIcon:
-                  const Icon(
-                    Icons.home_rounded,
-                  ),
-                  label:
-                  l10n.nearby,
+                  icon: const Icon(Icons.home_outlined),
+                  activeIcon: const Icon(Icons.home_rounded),
+                  label: l10n.nearby,
                 ),
-
                 BottomNavigationBarItem(
-                  icon:
-                  const Icon(
-                    Icons.article_outlined,
-                  ),
-                  activeIcon:
-                  const Icon(
-                    Icons.article_rounded,
-                  ),
-                  label:
-                  l10n.blog,
+                  icon: const Icon(Icons.article_outlined),
+                  activeIcon: const Icon(Icons.article_rounded),
+                  label: l10n.blog,
                 ),
-
                 BottomNavigationBarItem(
-                  icon:
-                  const Icon(
-                    Icons.list_alt_outlined,
-                  ),
-                  activeIcon:
-                  const Icon(
-                    Icons.list_alt_rounded,
-                  ),
-                  label:
-                  l10n.requests,
+                  icon: const Icon(Icons.list_alt_outlined),
+                  activeIcon: const Icon(Icons.list_alt_rounded),
+                  label: l10n.requests,
                 ),
-
                 BottomNavigationBarItem(
                   icon: _ChatIcon(
-                    unread:
-                    chatProvider
-                        .totalUnread,
-                    active: false,
-                  ),
-                  activeIcon:
-                  _ChatIcon(
-                    unread:
-                    chatProvider
-                        .totalUnread,
-                    active: true,
-                  ),
-                  label:
-                  l10n.chat,
+                      unread: chatProvider.totalUnread, active: false),
+                  activeIcon: _ChatIcon(
+                      unread: chatProvider.totalUnread, active: true),
+                  label: l10n.chat,
                 ),
-
                 BottomNavigationBarItem(
-                  icon:
-                  const Icon(
-                    Icons.person_outline,
-                  ),
-                  activeIcon:
-                  const Icon(
-                    Icons.person_rounded,
-                  ),
-                  label:
-                  l10n.profile,
+                  icon: const Icon(Icons.person_outline),
+                  activeIcon: const Icon(Icons.person_rounded),
+                  label: l10n.profile,
                 ),
               ],
             );
@@ -1476,79 +867,60 @@ class _HomeScreenState
 // DRAWER ITEM
 // ==================================================================
 
-class _DrawerItem
-    extends StatelessWidget {
+class _DrawerItem extends StatelessWidget {
   final IconData icon;
   final String title;
+  final String? subtitle;
   final Color color;
   final VoidCallback onTap;
 
   const _DrawerItem({
     required this.icon,
     required this.title,
+    this.subtitle,
     required this.color,
     required this.onTap,
   });
 
   @override
-  Widget build(
-      BuildContext context,
-      ) {
-    final theme =
-    Theme.of(context);
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
 
     return Container(
-      margin:
-      const EdgeInsets.symmetric(
-        vertical: 3,
-      ),
+      margin: const EdgeInsets.symmetric(vertical: 3),
       child: ListTile(
         onTap: onTap,
         shape:
-        RoundedRectangleBorder(
-          borderRadius:
-          BorderRadius.circular(
-            14,
-          ),
-        ),
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         contentPadding:
-        const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 2,
-        ),
+        const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
         leading: Container(
           width: 42,
           height: 42,
-          decoration:
-          BoxDecoration(
-            color:
-            color.withOpacity(
-              0.09,
-            ),
-            borderRadius:
-            BorderRadius.circular(
-              12,
-            ),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.09),
+            borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(
-            icon,
-            color: color,
-            size: 21,
-          ),
+          child: Icon(icon, color: color, size: 21),
         ),
         title: Text(
           title,
-          style:
-          theme.textTheme.bodyLarge
-              ?.copyWith(
-            fontWeight:
-            FontWeight.w600,
-          ),
+          style: theme.textTheme.bodyLarge
+              ?.copyWith(fontWeight: FontWeight.w600),
         ),
+        subtitle: subtitle != null
+            ? Text(
+          subtitle!,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: AppTheme.secondary,
+            fontWeight: FontWeight.w700,
+            fontSize: 11,
+          ),
+        )
+            : null,
         trailing: Icon(
           Icons.chevron_right_rounded,
-          color:
-          Colors.grey.shade500,
+          color: theme.hintColor,
         ),
       ),
     );
@@ -1559,66 +931,41 @@ class _DrawerItem
 // CHAT ICON
 // ==================================================================
 
-class _ChatIcon
-    extends StatelessWidget {
+class _ChatIcon extends StatelessWidget {
   final int unread;
   final bool active;
 
-  const _ChatIcon({
-    required this.unread,
-    required this.active,
-  });
+  const _ChatIcon({required this.unread, required this.active});
 
   @override
-  Widget build(
-      BuildContext context,
-      ) {
+  Widget build(BuildContext context) {
     return Stack(
-      clipBehavior:
-      Clip.none,
+      clipBehavior: Clip.none,
       children: [
         Icon(
           active
-              ? Icons
-              .chat_bubble_rounded
-              : Icons
-              .chat_bubble_outline_rounded,
+              ? Icons.chat_bubble_rounded
+              : Icons.chat_bubble_outline_rounded,
         ),
-
         if (unread > 0)
           Positioned(
             right: -8,
             top: -7,
             child: Container(
               constraints:
-              const BoxConstraints(
-                minWidth: 15,
-                minHeight: 15,
+              const BoxConstraints(minWidth: 15, minHeight: 15),
+              padding: const EdgeInsets.symmetric(horizontal: 3),
+              decoration: const BoxDecoration(
+                color: AppTheme.error,
+                shape: BoxShape.circle,
               ),
-              padding:
-              const EdgeInsets
-                  .symmetric(
-                horizontal: 3,
-              ),
-              decoration:
-              const BoxDecoration(
-                color: Colors.red,
-                shape:
-                BoxShape.circle,
-              ),
-              alignment:
-              Alignment.center,
+              alignment: Alignment.center,
               child: Text(
-                unread > 9
-                    ? '9+'
-                    : '$unread',
-                style:
-                const TextStyle(
-                  color:
-                  Colors.white,
+                unread > 9 ? '9+' : '$unread',
+                style: const TextStyle(
+                  color: Colors.white,
                   fontSize: 8,
-                  fontWeight:
-                  FontWeight.w800,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ),
@@ -1632,83 +979,46 @@ class _ChatIcon
 // EMPTY NOTIFICATIONS
 // ==================================================================
 
-class _EmptyNotifications
-    extends StatelessWidget {
+class _EmptyNotifications extends StatelessWidget {
   final ThemeData theme;
   final String title;
 
-  const _EmptyNotifications({
-    required this.theme,
-    required this.title,
-  });
+  const _EmptyNotifications({required this.theme, required this.title});
 
   @override
-  Widget build(
-      BuildContext context,
-      ) {
+  Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding:
-        const EdgeInsets.all(
-          32,
-        ),
+        padding: const EdgeInsets.all(32),
         child: Column(
-          mainAxisAlignment:
-          MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
               width: 90,
               height: 90,
-              decoration:
-              BoxDecoration(
-                color: theme
-                    .primaryColor
-                    .withOpacity(
-                  0.08,
-                ),
-                shape:
-                BoxShape.circle,
+              decoration: BoxDecoration(
+                color: theme.primaryColor.withOpacity(0.08),
+                shape: BoxShape.circle,
               ),
               child: Icon(
-                Icons
-                    .notifications_none_rounded,
+                Icons.notifications_none_rounded,
                 size: 46,
-                color:
-                theme.primaryColor,
+                color: theme.primaryColor,
               ),
             ),
-
-            const SizedBox(
-              height: 20,
-            ),
-
+            const SizedBox(height: 20),
             Text(
               title,
-              textAlign:
-              TextAlign.center,
-              style: theme
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(
-                fontWeight:
-                FontWeight.w700,
-              ),
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w700),
             ),
-
-            const SizedBox(
-              height: 8,
-            ),
-
+            const SizedBox(height: 8),
             Text(
               'We will notify you when there is something new.',
-              textAlign:
-              TextAlign.center,
-              style: theme
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(
-                color:
-                Colors.grey.shade600,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.hintColor,
                 height: 1.4,
               ),
             ),
@@ -1723,13 +1033,9 @@ class _EmptyNotifications
 // NOTIFICATION TILE
 // ==================================================================
 
-class _NotificationTile
-    extends StatelessWidget {
-  final Map<String, dynamic>
-  notification;
-
+class _NotificationTile extends StatelessWidget {
+  final Map<String, dynamic> notification;
   final VoidCallback onTap;
-
   final String locale;
 
   const _NotificationTile({
@@ -1738,556 +1044,261 @@ class _NotificationTile
     required this.locale,
   });
 
-  // ================================================================
-  // TYPE LABEL
-  // ================================================================
-
-  String _getTypeLabel(
-      String? type,
-      ) {
+  String _getTypeLabel(String? type) {
     switch (type) {
       case 'chat_message':
         return 'Chat';
-
       case 'new_request':
         return 'New Request';
-
       case 'request_accepted':
         return 'Request Accepted';
-
       case 'request_rejected':
         return 'Request Rejected';
-
       case 'request_in_progress':
         return 'In Progress';
-
       case 'request_completed':
         return 'Completed';
-
       default:
         return 'Notification';
     }
   }
 
-  // ================================================================
-  // ICON
-  // ================================================================
-
-  IconData _getIcon(
-      String? type,
-      ) {
+  IconData _getIcon(String? type) {
     switch (type) {
       case 'chat_message':
-        return Icons
-            .chat_bubble_outline_rounded;
-
+        return Icons.chat_bubble_outline_rounded;
       case 'new_request':
-        return Icons
-            .request_page_outlined;
-
+        return Icons.request_page_outlined;
       case 'request_accepted':
-        return Icons
-            .check_circle_outline_rounded;
-
+        return Icons.check_circle_outline_rounded;
       case 'request_rejected':
         return Icons.cancel_outlined;
-
       case 'request_in_progress':
-        return Icons
-            .hourglass_top_rounded;
-
+        return Icons.hourglass_top_rounded;
       case 'request_completed':
         return Icons.task_alt_rounded;
-
       default:
-        return Icons
-            .notifications_outlined;
+        return Icons.notifications_outlined;
     }
   }
 
-  // ================================================================
-  // ICON COLOR
-  // ================================================================
-
-  Color _getIconColor(
-      String? type,
-      ThemeData theme,
-      ) {
+  Color _getIconColor(String? type, ThemeData theme) {
     switch (type) {
       case 'request_accepted':
       case 'request_completed':
-        return Colors.green.shade600;
-
+        return AppTheme.success;
       case 'request_rejected':
-        return Colors.red.shade600;
-
+        return AppTheme.error;
       case 'request_in_progress':
-        return Colors.orange.shade700;
-
+        return AppTheme.warning;
       case 'chat_message':
-        return Colors.blue.shade600;
-
+        return AppTheme.accent;
       case 'new_request':
         return theme.primaryColor;
-
       default:
         return theme.primaryColor;
     }
   }
 
-  // ================================================================
-  // DATE TIME
-  // ================================================================
-
-  String _formatCreatedAt(
-      dynamic value,
-      ) {
-    if (value == null ||
-        value.toString().trim().isEmpty) {
-      return '';
-    }
-
+  String _formatCreatedAt(dynamic value) {
+    if (value == null || value.toString().trim().isEmpty) return '';
     try {
-      DateTime dateTime =
-      DateTime.parse(
-        value.toString(),
-      );
+      DateTime dateTime = DateTime.parse(value.toString());
+      if (dateTime.isUtc) dateTime = dateTime.toLocal();
 
-      if (dateTime.isUtc) {
-        dateTime =
-            dateTime.toLocal();
-      }
-
-      final day = dateTime.day
-          .toString()
-          .padLeft(2, '0');
-
-      final month = dateTime.month
-          .toString()
-          .padLeft(2, '0');
-
-      final year =
-      dateTime.year.toString();
-
-      final hour12 =
-      dateTime.hour % 12 == 0
-          ? 12
-          : dateTime.hour % 12;
-
-      final hour = hour12
-          .toString()
-          .padLeft(2, '0');
-
-      final minute =
-      dateTime.minute
-          .toString()
-          .padLeft(2, '0');
-
-      final period =
-      dateTime.hour >= 12
-          ? 'PM'
-          : 'AM';
+      final day = dateTime.day.toString().padLeft(2, '0');
+      final month = dateTime.month.toString().padLeft(2, '0');
+      final year = dateTime.year.toString();
+      final hour12 = dateTime.hour % 12 == 0 ? 12 : dateTime.hour % 12;
+      final hour = hour12.toString().padLeft(2, '0');
+      final minute = dateTime.minute.toString().padLeft(2, '0');
+      final period = dateTime.hour >= 12 ? 'PM' : 'AM';
 
       return '$day/$month/$year • $hour:$minute $period';
     } catch (e) {
-      debugPrint(
-        'Invalid notification created_at: $value',
-      );
-
+      debugPrint('Invalid notification created_at: $value');
       return value.toString();
     }
   }
 
-  // ================================================================
-  // RELATIVE TIME
-  // ================================================================
-
-  String _getRelativeTime(
-      dynamic value,
-      ) {
-    if (value == null) {
-      return '';
-    }
-
+  String _getRelativeTime(dynamic value) {
+    if (value == null) return '';
     try {
-      DateTime dateTime =
-      DateTime.parse(
-        value.toString(),
-      );
-
-      if (dateTime.isUtc) {
-        dateTime =
-            dateTime.toLocal();
-      }
+      DateTime dateTime = DateTime.parse(value.toString());
+      if (dateTime.isUtc) dateTime = dateTime.toLocal();
 
       final now = DateTime.now();
+      final difference = now.difference(dateTime);
 
-      final difference =
-      now.difference(dateTime);
-
-      if (difference.inSeconds < 30) {
-        return 'Just now';
-      }
-
+      if (difference.inSeconds < 30) return 'Just now';
       if (difference.inMinutes < 60) {
         return '${difference.inMinutes} min ago';
       }
-
       if (difference.inHours < 24) {
         return '${difference.inHours} hr ago';
       }
-
-      if (difference.inDays == 1) {
-        return 'Yesterday';
-      }
-
+      if (difference.inDays == 1) return 'Yesterday';
       if (difference.inDays < 7) {
         return '${difference.inDays} days ago';
       }
-
-      return _formatCreatedAt(
-        value,
-      );
+      return _formatCreatedAt(value);
     } catch (_) {
       return '';
     }
   }
 
-  // ================================================================
-  // BUILD
-  // ================================================================
-
   @override
-  Widget build(
-      BuildContext context,
-      ) {
-    final theme =
-    Theme.of(context);
-
-    final isReadValue =
-    notification['is_read'];
-
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isReadValue = notification['is_read'];
     final isRead =
-        isReadValue == true ||
-            isReadValue == 1 ||
-            isReadValue == '1';
+        isReadValue == true || isReadValue == 1 || isReadValue == '1';
 
-    final title =
-        notification['title']
-            ?.toString() ??
-            'Notification';
+    final title = notification['title']?.toString() ?? 'Notification';
+    final body = notification['body']?.toString() ?? '';
+    final type = notification['type']?.toString() ?? '';
+    final createdAt = notification['created_at'];
 
-    final body =
-        notification['body']
-            ?.toString() ??
-            '';
-
-    final type =
-        notification['type']
-            ?.toString() ??
-            '';
-
-    final createdAt =
-    notification['created_at'];
-
-    final exactDate =
-    _formatCreatedAt(
-      createdAt,
-    );
-
-    final relativeTime =
-    _getRelativeTime(
-      createdAt,
-    );
-
-    final iconColor =
-    _getIconColor(
-      type,
-      theme,
-    );
+    final exactDate = _formatCreatedAt(createdAt);
+    final relativeTime = _getRelativeTime(createdAt);
+    final iconColor = _getIconColor(type, theme);
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius:
-        BorderRadius.circular(
-          16,
-        ),
+        borderRadius: BorderRadius.circular(16),
         child: AnimatedContainer(
-          duration:
-          const Duration(
-            milliseconds: 200,
-          ),
-          padding:
-          const EdgeInsets.all(
-            13,
-          ),
-          decoration:
-          BoxDecoration(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.all(13),
+          decoration: BoxDecoration(
             color: isRead
-                ? theme
-                .colorScheme
-                .surface
-                : theme.primaryColor
-                .withOpacity(
-              0.055,
-            ),
-            borderRadius:
-            BorderRadius.circular(
-              16,
-            ),
+                ? theme.colorScheme.surface
+                : theme.primaryColor.withOpacity(0.055),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: isRead
-                  ? theme
-                  .dividerColor
-                  .withOpacity(
-                0.30,
-              )
-                  : theme
-                  .primaryColor
-                  .withOpacity(
-                0.16,
-              ),
+                  ? theme.dividerColor.withOpacity(0.30)
+                  : theme.primaryColor.withOpacity(0.16),
             ),
           ),
           child: Row(
-            crossAxisAlignment:
-            CrossAxisAlignment
-                .start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ICON
               Container(
                 width: 46,
                 height: 46,
-                decoration:
-                BoxDecoration(
-                  color: iconColor
-                      .withOpacity(
-                    0.10,
-                  ),
-                  borderRadius:
-                  BorderRadius
-                      .circular(
-                    14,
-                  ),
+                decoration: BoxDecoration(
+                  color: iconColor.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(
-                  _getIcon(type),
-                  color: iconColor,
-                  size: 22,
-                ),
+                child: Icon(_getIcon(type), color: iconColor, size: 22),
               ),
-
-              const SizedBox(
-                width: 12,
-              ),
-
-              // CONTENT
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                  CrossAxisAlignment
-                      .start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
-                      crossAxisAlignment:
-                      CrossAxisAlignment
-                          .start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
                           child: Text(
                             title,
                             maxLines: 2,
-                            overflow:
-                            TextOverflow
-                                .ellipsis,
-                            style:
-                            GoogleFonts
-                                .nunito(
-                              fontSize:
-                              14.5,
-                              height:
-                              1.25,
-                              fontWeight:
-                              isRead
-                                  ? FontWeight
-                                  .w500
-                                  : FontWeight
-                                  .w700,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.nunito(
+                              fontSize: 14.5,
+                              height: 1.25,
+                              fontWeight: isRead
+                                  ? FontWeight.w500
+                                  : FontWeight.w700,
                             ),
                           ),
                         ),
-
                         if (!isRead)
                           Container(
                             width: 8,
                             height: 8,
                             margin:
-                            const EdgeInsets
-                                .only(
-                              left: 8,
-                              top: 5,
-                            ),
-                            decoration:
-                            BoxDecoration(
-                              color: theme
-                                  .primaryColor,
-                              shape:
-                              BoxShape
-                                  .circle,
+                            const EdgeInsets.only(left: 8, top: 5),
+                            decoration: BoxDecoration(
+                              color: theme.primaryColor,
+                              shape: BoxShape.circle,
                             ),
                           ),
                       ],
                     ),
-
                     if (body.isNotEmpty) ...[
-                      const SizedBox(
-                        height: 5,
-                      ),
+                      const SizedBox(height: 5),
                       Text(
                         body,
                         maxLines: 2,
-                        overflow:
-                        TextOverflow
-                            .ellipsis,
-                        style: theme
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
                           height: 1.35,
-                          color: theme
-                              .textTheme
-                              .bodySmall
-                              ?.color
-                              ?.withOpacity(
-                            0.72,
-                          ),
+                          color: theme.textTheme.bodySmall?.color
+                              ?.withOpacity(0.72),
                         ),
                       ),
                     ],
-
-                    const SizedBox(
-                      height: 8,
-                    ),
-
+                    const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
                       runSpacing: 5,
-                      crossAxisAlignment:
-                      WrapCrossAlignment
-                          .center,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         if (type.isNotEmpty)
                           Container(
-                            padding:
-                            const EdgeInsets
-                                .symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration:
-                            BoxDecoration(
-                              color:
-                              iconColor
-                                  .withOpacity(
-                                0.08,
-                              ),
-                              borderRadius:
-                              BorderRadius
-                                  .circular(
-                                7,
-                              ),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: iconColor.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(7),
                             ),
                             child: Text(
-                              _getTypeLabel(
-                                type,
-                              ),
-                              style:
-                              GoogleFonts
-                                  .nunito(
-                                color:
-                                iconColor,
-                                fontSize:
-                                10,
-                                fontWeight:
-                                FontWeight
-                                    .w700,
+                              _getTypeLabel(type),
+                              style: GoogleFonts.nunito(
+                                color: iconColor,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
-
-                        if (relativeTime
-                            .isNotEmpty)
+                        if (relativeTime.isNotEmpty)
                           Row(
-                            mainAxisSize:
-                            MainAxisSize
-                                .min,
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(
-                                Icons
-                                    .access_time_rounded,
-                                size: 13,
-                                color: Colors
-                                    .grey
-                                    .shade500,
-                              ),
-                              const SizedBox(
-                                width: 4,
-                              ),
+                              Icon(Icons.access_time_rounded,
+                                  size: 13, color: theme.hintColor),
+                              const SizedBox(width: 4),
                               Text(
                                 relativeTime,
-                                style:
-                                GoogleFonts
-                                    .nunito(
-                                  color: Colors
-                                      .grey
-                                      .shade600,
-                                  fontSize:
-                                  10.5,
-                                  fontWeight:
-                                  FontWeight
-                                      .w500,
+                                style: GoogleFonts.nunito(
+                                  color: theme.hintColor,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
                             ],
                           ),
                       ],
                     ),
-
-                    if (exactDate
-                        .isNotEmpty) ...[
-                      const SizedBox(
-                        height: 5,
-                      ),
+                    if (exactDate.isNotEmpty) ...[
+                      const SizedBox(height: 5),
                       Row(
                         children: [
-                          Icon(
-                            Icons
-                                .calendar_today_outlined,
-                            size: 11,
-                            color: Colors
-                                .grey
-                                .shade500,
-                          ),
-                          const SizedBox(
-                            width: 4,
-                          ),
+                          Icon(Icons.calendar_today_outlined,
+                              size: 11, color: theme.hintColor),
+                          const SizedBox(width: 4),
                           Flexible(
                             child: Text(
                               exactDate,
                               maxLines: 1,
-                              overflow:
-                              TextOverflow
-                                  .ellipsis,
-                              style:
-                              GoogleFonts
-                                  .nunito(
-                                color: Colors
-                                    .grey
-                                    .shade500,
-                                fontSize:
-                                9.5,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.nunito(
+                                color: theme.hintColor,
+                                fontSize: 9.5,
                               ),
                             ),
                           ),

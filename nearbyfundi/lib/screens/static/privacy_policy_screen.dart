@@ -1,6 +1,8 @@
 // screens/profile/privacy_policy_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '../../config/app_theme.dart';
 import '../../providers/static_page_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../l10n/app_localizations.dart';
@@ -36,25 +38,38 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          l10n.privacyPolicy ?? 'Privacy Policy',
-          style: TextStyle(color: theme.colorScheme.onPrimary),
+          l10n.privacyPolicy,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         elevation: 0,
-        backgroundColor: theme.primaryColor,
-        foregroundColor: theme.colorScheme.onPrimary,
+        backgroundColor: AppTheme.primary,
+        foregroundColor: Colors.white,
+        iconTheme: const IconThemeData(color: Colors.white),
+        leading: IconButton(
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: Colors.white,
+          ),
+          onPressed: () => Navigator.pop(context),
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh_rounded),
+            icon: const Icon(Icons.refresh_rounded, color: Colors.white),
             onPressed: _refresh,
-            tooltip: l10n.refresh ?? 'Refresh',
+            tooltip: l10n.refresh,
           ),
         ],
       ),
       body: RefreshIndicator(
         onRefresh: _refresh,
-        color: theme.primaryColor,
+        color: AppTheme.primary,
         child: provider.isLoading
-            ? const Center(child: CircularProgressIndicator())
+            ? const Center(
+          child: CircularProgressIndicator(color: AppTheme.primary),
+        )
             : provider.error != null
             ? Center(
           child: Column(
@@ -77,9 +92,9 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
               ElevatedButton.icon(
                 onPressed: _refresh,
                 icon: const Icon(Icons.refresh_rounded),
-                label: Text(l10n.retry ?? 'Retry'),
+                label: Text(l10n.retry),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: theme.primaryColor,
+                  backgroundColor: AppTheme.primary,
                   foregroundColor: Colors.white,
                 ),
               ),

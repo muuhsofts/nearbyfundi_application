@@ -1,12 +1,14 @@
 // screens/profile/settings_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../providers/auth_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/service_provider.dart';
 import '../../config/app_config.dart';
 import '../../config/app_routes.dart';
+import '../../config/app_theme.dart';
 import '../../widgets/confirmation_dialog.dart';
 import '../../l10n/app_localizations.dart';
 
@@ -24,9 +26,25 @@ class SettingsScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(l10n.settings, style: TextStyle(color: theme.colorScheme.onPrimary)),
-        backgroundColor: theme.primaryColor,
-        foregroundColor: theme.colorScheme.onPrimary,
+        title: Text(
+          l10n.settings,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        backgroundColor: AppTheme.primary,
+        foregroundColor: Colors.white,
+        iconTheme: const IconThemeData(color: Colors.white),
+        leading: IconButton(
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: Colors.white,
+          ),
+          onPressed: () => Navigator.pop(context),
+        ),
+        elevation: 0,
+        scrolledUnderElevation: 0,
       ),
       body: Container(
         color: theme.scaffoldBackgroundColor,
@@ -35,11 +53,17 @@ class SettingsScreen extends StatelessWidget {
           children: [
             // ─── Push Notifications ──────────────────────────────────────
             SwitchListTile(
-              title: Text(l10n.pushNotifications, style: theme.textTheme.titleMedium),
-              subtitle: Text(l10n.receiveAlerts, style: theme.textTheme.bodySmall),
+              title: Text(
+                l10n.pushNotifications,
+                style: theme.textTheme.titleMedium,
+              ),
+              subtitle: Text(
+                l10n.receiveAlerts,
+                style: theme.textTheme.bodySmall,
+              ),
               value: settings.notificationsEnabled,
               onChanged: (val) => settings.updateNotificationStatus(val),
-              activeColor: theme.primaryColor,
+              activeColor: AppTheme.primary,
             ),
             const Divider(),
 
@@ -71,38 +95,59 @@ class SettingsScreen extends StatelessWidget {
             ListTile(
               title: Text(l10n.aboutUs, style: theme.textTheme.titleMedium),
               onTap: () => Navigator.pushNamed(context, AppRoutes.about),
-              trailing: Icon(Icons.arrow_forward_ios, size: 16, color: theme.hintColor),
+              trailing: Icon(
+                Icons.arrow_forward_ios,
+                size: 16,
+                color: theme.hintColor,
+              ),
             ),
 
             // ─── FAQ ─────────────────────────────────────────────────────
             ListTile(
               title: Text(l10n.faq, style: theme.textTheme.titleMedium),
               onTap: () => Navigator.pushNamed(context, AppRoutes.faq),
-              trailing: Icon(Icons.arrow_forward_ios, size: 16, color: theme.hintColor),
+              trailing: Icon(
+                Icons.arrow_forward_ios,
+                size: 16,
+                color: theme.hintColor,
+              ),
             ),
 
             // ─── Terms ──────────────────────────────────────────────────
             ListTile(
               title: Text(l10n.terms, style: theme.textTheme.titleMedium),
               onTap: () => Navigator.pushNamed(context, AppRoutes.terms),
-              trailing: Icon(Icons.arrow_forward_ios, size: 16, color: theme.hintColor),
+              trailing: Icon(
+                Icons.arrow_forward_ios,
+                size: 16,
+                color: theme.hintColor,
+              ),
             ),
 
             // ─── Privacy Policy ──────────────────────────────────────────
             ListTile(
               title: Text(
-                l10n.privacyPolicy, // ✅ now localized
+                l10n.privacyPolicy,
                 style: theme.textTheme.titleMedium,
               ),
-              onTap: () => Navigator.pushNamed(context, AppRoutes.privacyPolicy),
-              trailing: Icon(Icons.arrow_forward_ios, size: 16, color: theme.hintColor),
+              onTap: () =>
+                  Navigator.pushNamed(context, AppRoutes.privacyPolicy),
+              trailing: Icon(
+                Icons.arrow_forward_ios,
+                size: 16,
+                color: theme.hintColor,
+              ),
             ),
 
             // ─── Contact Us ─────────────────────────────────────────────
             ListTile(
               title: Text(l10n.contactUs, style: theme.textTheme.titleMedium),
               onTap: () => Navigator.pushNamed(context, AppRoutes.contactUs),
-              trailing: Icon(Icons.arrow_forward_ios, size: 16, color: theme.hintColor),
+              trailing: Icon(
+                Icons.arrow_forward_ios,
+                size: 16,
+                color: theme.hintColor,
+              ),
             ),
             const Divider(),
 
@@ -111,14 +156,14 @@ class SettingsScreen extends StatelessWidget {
               title: Text(
                 l10n.deleteAccount,
                 style: theme.textTheme.titleMedium?.copyWith(
-                  color: theme.colorScheme.error,
+                  color: AppTheme.error,
                 ),
               ),
               onTap: () => _confirmLogout(context, auth, l10n, theme),
-              trailing: Icon(
+              trailing: const Icon(
                 Icons.arrow_forward_ios,
                 size: 16,
-                color: theme.colorScheme.error,
+                color: AppTheme.error,
               ),
             ),
             const SizedBox(height: 20),
@@ -160,7 +205,7 @@ class SettingsScreen extends StatelessWidget {
   }
 }
 
-// ─── Language Toggle Widgets (unchanged) ──────────────────────────────
+// ─── Language Toggle Widgets ──────────────────────────────────────────
 class _LanguageToggle extends StatelessWidget {
   final String currentLocale;
   final ValueChanged<String?> onChanged;
@@ -232,6 +277,8 @@ class _LanguageOption extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final activeColor = isDark ? AppTheme.secondary : AppTheme.primary;
 
     return GestureDetector(
       onTap: onTap,
@@ -239,11 +286,11 @@ class _LanguageOption extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
           color: isSelected
-              ? theme.primaryColor.withOpacity(0.1)
+              ? activeColor.withOpacity(0.1)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isSelected ? theme.primaryColor : Colors.transparent,
+            color: isSelected ? activeColor : Colors.transparent,
             width: 1.5,
           ),
         ),
@@ -253,7 +300,7 @@ class _LanguageOption extends StatelessWidget {
             if (isSelected)
               Icon(
                 Icons.check_circle_rounded,
-                color: theme.primaryColor,
+                color: activeColor,
                 size: 16,
               ),
             if (isSelected) const SizedBox(width: 6),
@@ -262,7 +309,7 @@ class _LanguageOption extends StatelessWidget {
               style: theme.textTheme.bodyMedium?.copyWith(
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                 color: isSelected
-                    ? theme.primaryColor
+                    ? activeColor
                     : theme.colorScheme.onSurface.withOpacity(0.6),
               ),
             ),
@@ -273,7 +320,7 @@ class _LanguageOption extends StatelessWidget {
   }
 }
 
-// ─── Theme Toggle Widgets (unchanged) ──────────────────────────────────
+// ─── Theme Toggle Widgets ──────────────────────────────────────────────
 class _ThemeToggle extends StatelessWidget {
   final ThemeMode currentThemeMode;
   final ValueChanged<ThemeMode?> onChanged;
@@ -351,6 +398,8 @@ class _ThemeOption extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final activeColor = isDark ? AppTheme.secondary : AppTheme.primary;
 
     return GestureDetector(
       onTap: onTap,
@@ -358,11 +407,11 @@ class _ThemeOption extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
           color: isSelected
-              ? theme.primaryColor.withOpacity(0.1)
+              ? activeColor.withOpacity(0.1)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isSelected ? theme.primaryColor : Colors.transparent,
+            color: isSelected ? activeColor : Colors.transparent,
             width: 1.5,
           ),
         ),
@@ -372,7 +421,7 @@ class _ThemeOption extends StatelessWidget {
             if (isSelected)
               Icon(
                 Icons.check_circle_rounded,
-                color: theme.primaryColor,
+                color: activeColor,
                 size: 16,
               ),
             if (isSelected) const SizedBox(width: 6),
@@ -381,7 +430,7 @@ class _ThemeOption extends StatelessWidget {
               style: theme.textTheme.bodyMedium?.copyWith(
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                 color: isSelected
-                    ? theme.primaryColor
+                    ? activeColor
                     : theme.colorScheme.onSurface.withOpacity(0.6),
               ),
             ),

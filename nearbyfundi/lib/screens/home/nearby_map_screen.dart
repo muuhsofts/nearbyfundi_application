@@ -104,7 +104,8 @@ class _NearbyMapScreenState extends State<NearbyMapScreen> {
           final geometry = route['geometry']['coordinates'] as List;
 
           final points = geometry
-              .map<LatLng>((coord) => LatLng(coord[1].toDouble(), coord[0].toDouble()))
+              .map<LatLng>(
+                  (coord) => LatLng(coord[1].toDouble(), coord[0].toDouble()))
               .toList();
 
           final distanceMeters = (route['distance'] as num).toDouble();
@@ -216,13 +217,13 @@ class _NearbyMapScreenState extends State<NearbyMapScreen> {
           height: size,
           errorBuilder: (_, __, ___) => Icon(
             Icons.build_rounded,
-            color: Colors.grey.shade600,
+            color: AppTheme.greyText,
             size: iconSize,
           ),
         )
             : Icon(
           Icons.build_rounded,
-          color: Colors.grey.shade600,
+          color: AppTheme.greyText,
           size: iconSize,
         ),
       ),
@@ -382,19 +383,18 @@ class _NearbyMapScreenState extends State<NearbyMapScreen> {
       ) {
     return Column(
       children: [
-        // Top info bar
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           color: AppTheme.primary.withOpacity(0.08),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.location_on, size: 15, color: AppTheme.primary),
+              const Icon(Icons.location_on, size: 15, color: AppTheme.primary),
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
                   '${techPoints.length} technician${techPoints.length > 1 ? 's' : ''} on map',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontWeight: FontWeight.w500,
                     color: AppTheme.primary,
                     fontSize: 12,
@@ -432,7 +432,6 @@ class _NearbyMapScreenState extends State<NearbyMapScreen> {
                     userAgentPackageName: 'com.example.nearbyfundi',
                   ),
 
-                  // Bolder routes
                   if (searchPoint != null)
                     PolylineLayer(
                       polylines: techPoints.expand((tech) {
@@ -442,7 +441,7 @@ class _NearbyMapScreenState extends State<NearbyMapScreen> {
                             [searchPoint, LatLng(tech.latitude!, tech.longitude!)];
 
                         final color = isSelected
-                            ? AppTheme.primary
+                            ? AppTheme.accent
                             : AppTheme.primary.withOpacity(0.55);
                         final width = isSelected ? 8.0 : 5.5;
 
@@ -511,7 +510,6 @@ class _NearbyMapScreenState extends State<NearbyMapScreen> {
                 ],
               ),
 
-              // Zoom controls
               Positioned(
                 right: 14,
                 bottom: 20,
@@ -552,7 +550,7 @@ class _NearbyMapScreenState extends State<NearbyMapScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.location_pin, color: Colors.red.shade800, size: isSmall ? 48 : 62),
+          Icon(Icons.location_pin, color: AppTheme.error, size: isSmall ? 48 : 62),
           const SizedBox(height: 2),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -622,7 +620,7 @@ class _NearbyMapScreenState extends State<NearbyMapScreen> {
               children: [
                 Icon(
                   Icons.location_pin,
-                  color: isSelected ? Colors.amber : Colors.red.shade700,
+                  color: isSelected ? AppTheme.secondary : AppTheme.error,
                   size: pinSize,
                 ),
                 Padding(
@@ -667,10 +665,10 @@ class _NearbyMapScreenState extends State<NearbyMapScreen> {
                 margin: const EdgeInsets.only(top: 1),
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                 decoration: BoxDecoration(
-                  color: isSelected ? Colors.amber : Colors.white,
+                  color: isSelected ? AppTheme.secondary : Colors.white,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: isSelected ? Colors.amber : AppTheme.primary,
+                    color: isSelected ? AppTheme.secondary : AppTheme.primary,
                     width: 1.2,
                   ),
                   boxShadow: [
@@ -691,7 +689,7 @@ class _NearbyMapScreenState extends State<NearbyMapScreen> {
                         style: TextStyle(
                           fontSize: badgeFontSize,
                           fontWeight: FontWeight.bold,
-                          color: isSelected ? Colors.black : AppTheme.primary,
+                          color: isSelected ? AppTheme.primary : AppTheme.primary,
                         ),
                       ),
                       if (durationMin != null) ...[
@@ -700,15 +698,14 @@ class _NearbyMapScreenState extends State<NearbyMapScreen> {
                           '•',
                           style: TextStyle(
                             fontSize: badgeFontSize,
-                            color: (isSelected ? Colors.black : AppTheme.primary)
-                                .withOpacity(0.5),
+                            color: AppTheme.primary.withOpacity(0.5),
                           ),
                         ),
                         const SizedBox(width: 1.5),
                         Icon(
                           Icons.access_time_rounded,
                           size: badgeFontSize + 0.8,
-                          color: isSelected ? Colors.black : AppTheme.primary,
+                          color: AppTheme.primary,
                         ),
                         const SizedBox(width: 1),
                         Text(
@@ -716,7 +713,7 @@ class _NearbyMapScreenState extends State<NearbyMapScreen> {
                           style: TextStyle(
                             fontSize: badgeFontSize - 0.3,
                             fontWeight: FontWeight.bold,
-                            color: isSelected ? Colors.black : AppTheme.primary,
+                            color: AppTheme.primary,
                           ),
                         ),
                       ],
@@ -761,10 +758,12 @@ class _NearbyMapScreenState extends State<NearbyMapScreen> {
           alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
           decoration: BoxDecoration(
-            color: isSelected ? Colors.amber : theme.colorScheme.surface,
+            color: isSelected ? AppTheme.secondary : theme.colorScheme.surface,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: isSelected ? Colors.amber : AppTheme.primary.withOpacity(0.45),
+              color: isSelected
+                  ? AppTheme.secondary
+                  : AppTheme.primary.withOpacity(0.45),
               width: 1.2,
             ),
             boxShadow: [
@@ -785,7 +784,7 @@ class _NearbyMapScreenState extends State<NearbyMapScreen> {
                   style: TextStyle(
                     fontSize: badgeFontSize,
                     fontWeight: FontWeight.bold,
-                    color: isSelected ? Colors.black : AppTheme.primary,
+                    color: AppTheme.primary,
                   ),
                 ),
                 if (duration != null) ...[
@@ -794,15 +793,14 @@ class _NearbyMapScreenState extends State<NearbyMapScreen> {
                     '•',
                     style: TextStyle(
                       fontSize: badgeFontSize,
-                      color: (isSelected ? Colors.black : AppTheme.primary)
-                          .withOpacity(0.5),
+                      color: AppTheme.primary.withOpacity(0.5),
                     ),
                   ),
                   const SizedBox(width: 1.5),
                   Icon(
                     Icons.access_time_rounded,
                     size: badgeFontSize + 0.8,
-                    color: isSelected ? Colors.black : AppTheme.primary,
+                    color: AppTheme.primary,
                   ),
                   const SizedBox(width: 1),
                   Text(
@@ -810,7 +808,7 @@ class _NearbyMapScreenState extends State<NearbyMapScreen> {
                     style: TextStyle(
                       fontSize: badgeFontSize - 0.3,
                       fontWeight: FontWeight.bold,
-                      color: isSelected ? Colors.black : AppTheme.primary,
+                      color: AppTheme.primary,
                     ),
                   ),
                 ],
@@ -858,7 +856,7 @@ class _NearbyMapScreenState extends State<NearbyMapScreen> {
                     width: 36,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
+                      color: theme.dividerColor,
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
@@ -871,7 +869,8 @@ class _NearbyMapScreenState extends State<NearbyMapScreen> {
               const SizedBox(height: 6),
               Row(
                 children: [
-                  _buildAvatar(tech, size: isSmall ? 52 : 60, iconSize: isSmall ? 26 : 30),
+                  _buildAvatar(tech,
+                      size: isSmall ? 52 : 60, iconSize: isSmall ? 26 : 30),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(
@@ -895,7 +894,7 @@ class _NearbyMapScreenState extends State<NearbyMapScreen> {
                                 margin: const EdgeInsets.only(left: 5),
                                 padding: const EdgeInsets.all(2),
                                 decoration: const BoxDecoration(
-                                  color: Colors.blue,
+                                  color: AppTheme.accent,
                                   shape: BoxShape.circle,
                                 ),
                                 child: const Icon(Icons.check_rounded,
@@ -931,7 +930,8 @@ class _NearbyMapScreenState extends State<NearbyMapScreen> {
               Row(
                 children: [
                   if (tech.rating > 0) ...[
-                    const Icon(Icons.star_rounded, color: Colors.amber, size: 17),
+                    const Icon(Icons.star_rounded,
+                        color: AppTheme.secondary, size: 17),
                     const SizedBox(width: 3),
                     Text(
                       tech.rating.toStringAsFixed(1),
@@ -939,11 +939,12 @@ class _NearbyMapScreenState extends State<NearbyMapScreen> {
                     ),
                     const SizedBox(width: 14),
                   ],
-                  Icon(Icons.directions_car_rounded, size: 17, color: theme.hintColor),
+                  Icon(Icons.directions_car_rounded,
+                      size: 17, color: theme.hintColor),
                   const SizedBox(width: 4),
                   Text(
                     '${displayDistanceKm.toStringAsFixed(1)} km',
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       color: AppTheme.primary,
                     ),
@@ -1004,7 +1005,8 @@ class _NearbyMapScreenState extends State<NearbyMapScreen> {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(11),
                         ),
-                        padding: EdgeInsets.symmetric(vertical: isSmall ? 13 : 14),
+                        padding:
+                        EdgeInsets.symmetric(vertical: isSmall ? 13 : 14),
                       ),
                       child: Text(
                         l10n.viewProfile,
@@ -1022,22 +1024,22 @@ class _NearbyMapScreenState extends State<NearbyMapScreen> {
                       width: isSmall ? 48 : 54,
                       decoration: BoxDecoration(
                         color: isDark
-                            ? Colors.green.withOpacity(0.15)
-                            : Colors.green.shade50,
+                            ? AppTheme.accent.withOpacity(0.15)
+                            : AppTheme.bolt50,
                         borderRadius: BorderRadius.circular(11),
                         border: Border.all(
                           color: isDark
-                              ? Colors.green.withOpacity(0.3)
-                              : Colors.green.shade200,
+                              ? AppTheme.accent.withOpacity(0.3)
+                              : AppTheme.bolt200,
                           width: 1.3,
                         ),
                       ),
                       child: IconButton(
                         icon: Icon(
-                          hasOrigin ? Icons.directions_rounded : Icons.map_rounded,
-                          color: isDark
-                              ? Colors.green.shade300
-                              : Colors.green.shade700,
+                          hasOrigin
+                              ? Icons.directions_rounded
+                              : Icons.map_rounded,
+                          color: AppTheme.accent,
                           size: isSmall ? 24 : 28,
                         ),
                         onPressed: () => _openDirectionsInGoogleMaps(

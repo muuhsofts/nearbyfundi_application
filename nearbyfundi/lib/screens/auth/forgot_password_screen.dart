@@ -1,10 +1,13 @@
+// forgot_password_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../providers/auth_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/service_provider.dart';
 import '../../config/app_routes.dart';
+import '../../config/app_theme.dart';
 import '../../l10n/app_localizations.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
@@ -41,7 +44,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(AppLocalizations.of(context)!.otpSent),
-          backgroundColor: const Color(0xFF006B5E),
+          backgroundColor: AppTheme.success,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           margin: const EdgeInsets.all(16),
@@ -56,7 +59,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(auth.errorMessage!),
-          backgroundColor: Colors.red.shade700,
+          backgroundColor: AppTheme.error,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           margin: const EdgeInsets.all(16),
@@ -87,21 +90,22 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: isDark
-                ? const [
-              Color(0xFF0F1C1A),
-              Color(0xFF122421),
-              Color(0xFF0D1A17),
+                ? [
+              AppTheme.darkBackground,
+              AppTheme.darkSurface,
+              AppTheme.navy900,
             ]
-                : const [
-              Color(0xFFF0F7F5),
-              Color(0xFFE6F2EF),
-              Color(0xFFF5FAF8),
+                : [
+              AppTheme.scaffoldLight,
+              AppTheme.navy50,
+              AppTheme.light,
             ],
           ),
         ),
         child: SafeArea(
           child: Stack(
             children: [
+              // Decorative circles
               Positioned(
                 top: -80,
                 right: -60,
@@ -110,8 +114,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   height: 220,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: const Color(0xFF006B5E)
-                        .withOpacity(isDark ? 0.08 : 0.06),
+                    color: AppTheme.primary.withOpacity(isDark ? 0.12 : 0.06),
                   ),
                 ),
               ),
@@ -123,11 +126,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   height: 260,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: const Color(0xFF006B5E)
-                        .withOpacity(isDark ? 0.06 : 0.05),
+                    color: AppTheme.primary.withOpacity(isDark ? 0.08 : 0.05),
                   ),
                 ),
               ),
+
+              // Main content
               Center(
                 child: SingleChildScrollView(
                   padding: EdgeInsets.symmetric(
@@ -138,6 +142,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     constraints: const BoxConstraints(maxWidth: 420),
                     child: Column(
                       children: [
+                        // Top right controls
                         Align(
                           alignment: Alignment.centerRight,
                           child: Row(
@@ -164,14 +169,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                           ),
                         ),
                         const SizedBox(height: 12),
+
+                        // Floating card
                         Container(
                           width: double.infinity,
                           padding: EdgeInsets.fromLTRB(
                               isSmall ? 22 : 28, 28, isSmall ? 22 : 28, 28),
                           decoration: BoxDecoration(
-                            color: isDark
-                                ? const Color(0xFF1A2A27)
-                                : Colors.white,
+                            color: isDark ? AppTheme.darkSurface : Colors.white,
                             borderRadius: BorderRadius.circular(28),
                             boxShadow: [
                               BoxShadow(
@@ -182,7 +187,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                 spreadRadius: -4,
                               ),
                               BoxShadow(
-                                color: const Color(0xFF006B5E).withOpacity(0.06),
+                                color: AppTheme.primary.withOpacity(0.06),
                                 blurRadius: 24,
                                 offset: const Offset(0, 8),
                               ),
@@ -193,23 +198,27 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
+                                // Icon badge
                                 Center(
                                   child: Container(
                                     width: 88,
                                     height: 88,
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF006B5E)
-                                          .withOpacity(0.09),
+                                      color: AppTheme.primary.withOpacity(0.09),
                                       shape: BoxShape.circle,
                                     ),
-                                    child: const Icon(
+                                    child: Icon(
                                       Icons.lock_reset_rounded,
                                       size: 42,
-                                      color: Color(0xFF006B5E),
+                                      color: isDark
+                                          ? AppTheme.secondary
+                                          : AppTheme.primary,
                                     ),
                                   ),
                                 ),
                                 const SizedBox(height: 20),
+
+                                // Title
                                 Text(
                                   l10n.forgotPassword,
                                   textAlign: TextAlign.center,
@@ -230,6 +239,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 28),
+
+                                // Email
                                 _buildLabel(l10n.emailAddress),
                                 const SizedBox(height: 8),
                                 TextFormField(
@@ -253,17 +264,17 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                   },
                                 ),
                                 const SizedBox(height: 28),
+
+                                // Send button
                                 SizedBox(
                                   height: 54,
                                   child: ElevatedButton(
                                     onPressed:
                                     _isLoading ? null : _handleSend,
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor:
-                                      const Color(0xFF006B5E),
+                                      backgroundColor: AppTheme.primary,
                                       disabledBackgroundColor:
-                                      const Color(0xFF006B5E)
-                                          .withOpacity(0.55),
+                                      AppTheme.primary.withOpacity(0.55),
                                       foregroundColor: Colors.white,
                                       elevation: 0,
                                       shape: RoundedRectangleBorder(
@@ -292,6 +303,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 20),
+
+                                // Back to sign in
                                 Center(
                                   child: TextButton(
                                     onPressed: _isLoading
@@ -299,8 +312,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                         : () => Navigator.pop(context),
                                     child: Text(
                                       l10n.backToSignIn,
-                                      style: const TextStyle(
-                                        color: Color(0xFF006B5E),
+                                      style: TextStyle(
+                                        color: isDark
+                                            ? AppTheme.secondary
+                                            : AppTheme.primary,
                                         fontWeight: FontWeight.w600,
                                         fontSize: 15,
                                       ),
@@ -335,6 +350,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     );
   }
 
+  // ───────────────── Language Sheet ─────────────────
   void _showLanguageSheet(
       BuildContext context,
       SettingsProvider settings,
@@ -397,6 +413,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     );
   }
 
+  // ───────────────── Theme Sheet ─────────────────
   void _showThemeSheet(
       BuildContext context,
       ThemeProvider themeProvider,
@@ -463,7 +480,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   }
 }
 
-// Shared helpers (same as Register)
+// ───────────────── Elegant Icon Button ─────────────────
 class _ElegantIconButton extends StatelessWidget {
   final IconData icon;
   final String tooltip;
@@ -492,7 +509,11 @@ class _ElegantIconButton extends StatelessWidget {
             width: 44,
             height: 44,
             alignment: Alignment.center,
-            child: Icon(icon, size: 22, color: const Color(0xFF006B5E)),
+            child: Icon(
+              icon,
+              size: 22,
+              color: isDark ? AppTheme.secondary : AppTheme.primary,
+            ),
           ),
         ),
       ),
@@ -500,6 +521,7 @@ class _ElegantIconButton extends StatelessWidget {
   }
 }
 
+// ───────────────── Sheet Tile ─────────────────
 class _SheetTile extends StatelessWidget {
   final String title;
   final bool selected;
@@ -513,10 +535,11 @@ class _SheetTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final activeColor = isDark ? AppTheme.secondary : AppTheme.primary;
+
     return Material(
-      color: selected
-          ? const Color(0xFF006B5E).withOpacity(0.1)
-          : Colors.transparent,
+      color: selected ? activeColor.withOpacity(0.1) : Colors.transparent,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         onTap: onTap,
@@ -528,7 +551,7 @@ class _SheetTile extends StatelessWidget {
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: selected
-                  ? const Color(0xFF006B5E)
+                  ? activeColor
                   : Theme.of(context).dividerColor.withOpacity(0.35),
               width: selected ? 1.6 : 1,
             ),
@@ -536,8 +559,7 @@ class _SheetTile extends StatelessWidget {
           child: Row(
             children: [
               if (selected) ...[
-                const Icon(Icons.check_circle_rounded,
-                    color: Color(0xFF006B5E), size: 20),
+                Icon(Icons.check_circle_rounded, color: activeColor, size: 20),
                 const SizedBox(width: 12),
               ],
               Text(
@@ -546,7 +568,7 @@ class _SheetTile extends StatelessWidget {
                   fontSize: 15.5,
                   fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                   color: selected
-                      ? const Color(0xFF006B5E)
+                      ? activeColor
                       : Theme.of(context).colorScheme.onSurface,
                 ),
               ),
@@ -558,6 +580,7 @@ class _SheetTile extends StatelessWidget {
   }
 }
 
+// ───────────────── Input Decoration ─────────────────
 InputDecoration _modernInputDecoration(
     BuildContext context, {
       required String hint,
@@ -578,7 +601,7 @@ InputDecoration _modernInputDecoration(
     filled: true,
     fillColor: isDark
         ? Colors.white.withOpacity(0.05)
-        : const Color(0xFFF4F7F6),
+        : AppTheme.navy50,
     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(14),
@@ -590,15 +613,18 @@ InputDecoration _modernInputDecoration(
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(14),
-      borderSide: const BorderSide(color: Color(0xFF006B5E), width: 1.8),
+      borderSide: BorderSide(
+        color: isDark ? AppTheme.secondary : AppTheme.primary,
+        width: 1.8,
+      ),
     ),
     errorBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(14),
-      borderSide: const BorderSide(color: Colors.redAccent, width: 1.4),
+      borderSide: const BorderSide(color: AppTheme.error, width: 1.4),
     ),
     focusedErrorBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(14),
-      borderSide: const BorderSide(color: Colors.redAccent, width: 1.8),
+      borderSide: const BorderSide(color: AppTheme.error, width: 1.8),
     ),
   );
 }

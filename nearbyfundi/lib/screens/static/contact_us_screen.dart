@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+import '../../config/app_theme.dart';
 import '../../l10n/app_localizations.dart';
 
 class ContactUsScreen extends StatelessWidget {
@@ -7,7 +9,11 @@ class ContactUsScreen extends StatelessWidget {
 
   static const String email = 'ogbestseller01@gmail.com';
   static const String website = 'https://ogonegroup.co.tz';
-  static const List<String> phones = ['0679117297', '0612118849', '0746382880'];
+  static const List<String> phones = [
+    '0679117297',
+    '0612118849',
+    '0746382880',
+  ];
 
   Future<void> _launchEmail() async {
     final Uri uri = Uri(scheme: 'mailto', path: email);
@@ -36,35 +42,51 @@ class ContactUsScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text(
           l10n.contactUs,
-          style: TextStyle(color: theme.colorScheme.onPrimary),
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         elevation: 0,
-        backgroundColor: theme.primaryColor,
-        foregroundColor: theme.colorScheme.onPrimary,
+        backgroundColor: AppTheme.primary,
+        foregroundColor: Colors.white,
+        iconTheme: const IconThemeData(color: Colors.white),
+        leading: IconButton(
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: Colors.white,
+          ),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: Container(
         color: theme.colorScheme.surface,
         child: SingleChildScrollView(
-          padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 20),
+          padding: EdgeInsets.symmetric(
+            horizontal: horizontalPadding,
+            vertical: 20,
+          ),
           child: Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(28),
+            ),
             elevation: 1,
             child: Padding(
               padding: const EdgeInsets.all(24.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
+                  const Icon(
                     Icons.contact_mail_outlined,
                     size: 40,
-                    color: theme.primaryColor,
+                    color: AppTheme.primary,
                   ),
                   const SizedBox(height: 16),
                   Text(
                     l10n.getInTouch,
                     style: theme.textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: theme.primaryColor,
+                      color: AppTheme.primary,
                     ),
                   ),
                   const Divider(height: 32, thickness: 1.5),
@@ -92,7 +114,9 @@ class ContactUsScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  ...phones.map((phone) => _buildPhoneTile(phone, l10n.call, theme)),
+                  ...phones.map(
+                        (phone) => _buildPhoneTile(phone, l10n.call, theme),
+                  ),
                 ],
               ),
             ),
@@ -123,10 +147,10 @@ class ContactUsScreen extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: theme.primaryColor.withOpacity(0.12),
+                color: AppTheme.primary.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(icon, color: theme.primaryColor),
+              child: Icon(icon, color: AppTheme.primary),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -147,14 +171,19 @@ class ContactUsScreen extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(Icons.arrow_forward_ios, size: 16, color: theme.hintColor),
+            Icon(Icons.arrow_forward_ios,
+                size: 16, color: theme.hintColor),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildPhoneTile(String phone, String callLabel, ThemeData theme) {
+  Widget _buildPhoneTile(
+      String phone,
+      String callLabel,
+      ThemeData theme,
+      ) {
     return InkWell(
       onTap: () => _launchPhone(phone),
       borderRadius: BorderRadius.circular(16),
@@ -170,17 +199,22 @@ class ContactUsScreen extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: theme.primaryColor.withOpacity(0.12),
+                color: AppTheme.primary.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(Icons.phone_android_outlined, color: theme.primaryColor),
+              child: const Icon(
+                Icons.phone_android_outlined,
+                color: AppTheme.primary,
+              ),
             ),
             const SizedBox(width: 16),
-            Expanded(child: Text(phone, style: theme.textTheme.bodyMedium)),
+            Expanded(
+              child: Text(phone, style: theme.textTheme.bodyMedium),
+            ),
             Text(
               callLabel,
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.primaryColor,
+                color: AppTheme.primary,
                 fontWeight: FontWeight.w600,
               ),
             ),

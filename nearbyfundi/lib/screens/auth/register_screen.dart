@@ -1,6 +1,8 @@
+// register_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:provider/provider.dart';
+
 import '../../config/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../config/app_routes.dart';
@@ -63,7 +65,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0F1C1A) : const Color(0xFFF5F7FA),
+      backgroundColor:
+      isDark ? AppTheme.darkBackground : AppTheme.scaffoldLight,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -76,7 +79,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   constraints: const BoxConstraints(maxWidth: 480),
                   padding: const EdgeInsets.all(32),
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF1A2A27) : Colors.white,
+                    color: isDark ? AppTheme.darkSurface : Colors.white,
                     borderRadius: BorderRadius.circular(28),
                     boxShadow: [
                       BoxShadow(
@@ -414,13 +417,15 @@ InputDecoration _inputDecoration(
   return InputDecoration(
     hintText: hintText,
     hintStyle: theme.textTheme.bodyMedium?.copyWith(
-      color: Colors.grey[500],
+      color: theme.hintColor.withOpacity(0.7),
       fontWeight: FontWeight.w400,
     ),
     prefixIcon: Icon(prefixIcon, color: theme.hintColor, size: 20),
     suffixIcon: suffixIcon,
     filled: true,
-    fillColor: isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFF2F4F8),
+    fillColor: isDark
+        ? Colors.white.withOpacity(0.05)
+        : AppTheme.navy50,
     contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(16),
@@ -432,15 +437,18 @@ InputDecoration _inputDecoration(
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(16),
-      borderSide: BorderSide(color: theme.primaryColor, width: 2),
+      borderSide: BorderSide(
+        color: isDark ? AppTheme.secondary : AppTheme.primary,
+        width: 2,
+      ),
     ),
     errorBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(16),
-      borderSide: const BorderSide(color: Colors.red, width: 1.5),
+      borderSide: const BorderSide(color: AppTheme.error, width: 1.5),
     ),
     focusedErrorBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(16),
-      borderSide: const BorderSide(color: Colors.red, width: 2),
+      borderSide: const BorderSide(color: AppTheme.error, width: 2),
     ),
   );
 }

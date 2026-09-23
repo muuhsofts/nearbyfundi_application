@@ -9,6 +9,7 @@ import '../../providers/settings_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/service_provider.dart';
 import '../../config/app_routes.dart';
+import '../../config/app_theme.dart'; // Import your new theme
 import '../../l10n/app_localizations.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -110,7 +111,7 @@ class _LoginScreenState extends State<LoginScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Colors.red.shade700,
+        backgroundColor: AppTheme.error,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         margin: const EdgeInsets.all(16),
@@ -141,14 +142,14 @@ class _LoginScreenState extends State<LoginScreen> {
             end: Alignment.bottomRight,
             colors: isDark
                 ? [
-              const Color(0xFF0F1C1A),
-              const Color(0xFF122421),
-              const Color(0xFF0D1A17),
+              AppTheme.darkBackground,
+              AppTheme.darkSurface,
+              AppTheme.navy900,
             ]
                 : [
-              const Color(0xFFF0F7F5),
-              const Color(0xFFE6F2EF),
-              const Color(0xFFF5FAF8),
+              AppTheme.scaffoldLight,
+              AppTheme.navy50,
+              AppTheme.light,
             ],
           ),
         ),
@@ -164,7 +165,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   height: 220,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: const Color(0xFF006B5E).withOpacity(isDark ? 0.08 : 0.06),
+                    color: AppTheme.primary.withOpacity(isDark ? 0.12 : 0.06),
                   ),
                 ),
               ),
@@ -176,7 +177,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   height: 260,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: const Color(0xFF006B5E).withOpacity(isDark ? 0.06 : 0.05),
+                    color: AppTheme.primary.withOpacity(isDark ? 0.08 : 0.05),
                   ),
                 ),
               ),
@@ -240,7 +241,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           decoration: BoxDecoration(
                             color: isDark
-                                ? const Color(0xFF1A2A27)
+                                ? AppTheme.darkSurface
                                 : Colors.white,
                             borderRadius: BorderRadius.circular(28),
                             boxShadow: [
@@ -251,7 +252,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 spreadRadius: -4,
                               ),
                               BoxShadow(
-                                color: const Color(0xFF006B5E).withOpacity(0.06),
+                                color: AppTheme.primary.withOpacity(0.06),
                                 blurRadius: 24,
                                 offset: const Offset(0, 8),
                               ),
@@ -269,7 +270,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     height: 88,
                                     padding: const EdgeInsets.all(16),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF006B5E)
+                                      color: AppTheme.primary
                                           .withOpacity(0.09),
                                       shape: BoxShape.circle,
                                     ),
@@ -392,8 +393,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                     child: Text(
                                       l10n.forgotPassword,
-                                      style: const TextStyle(
-                                        color: Color(0xFF006B5E),
+                                      style: TextStyle(
+                                        color: isDark ? AppTheme.secondary : AppTheme.primary,
                                         fontWeight: FontWeight.w600,
                                         fontSize: 13.5,
                                       ),
@@ -416,7 +417,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                             ? null
                                             : (v) => setState(() =>
                                         _termsAccepted = v ?? false),
-                                        activeColor: const Color(0xFF006B5E),
+                                        activeColor: AppTheme.primary,
                                         shape: RoundedRectangleBorder(
                                           borderRadius:
                                           BorderRadius.circular(5),
@@ -440,8 +441,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                                 text: '${l10n.iAgreeToThe} '),
                                             TextSpan(
                                               text: l10n.termsAndConditions,
-                                              style: const TextStyle(
-                                                color: Color(0xFF006B5E),
+                                              style: TextStyle(
+                                                color: isDark ? AppTheme.secondary : AppTheme.primary,
                                                 fontWeight: FontWeight.w700,
                                               ),
                                               recognizer: TapGestureRecognizer()
@@ -453,8 +454,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                             TextSpan(text: ' ${l10n.and} '),
                                             TextSpan(
                                               text: l10n.privacyPolicy,
-                                              style: const TextStyle(
-                                                color: Color(0xFF006B5E),
+                                              style: TextStyle(
+                                                color: isDark ? AppTheme.secondary : AppTheme.primary,
                                                 fontWeight: FontWeight.w700,
                                               ),
                                               recognizer: TapGestureRecognizer()
@@ -480,13 +481,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                     _isLoading ? null : _handleLogin,
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor:
-                                      const Color(0xFF006B5E),
+                                      AppTheme.primary,
                                       disabledBackgroundColor:
-                                      const Color(0xFF006B5E)
+                                      AppTheme.primary
                                           .withOpacity(0.55),
                                       foregroundColor: Colors.white,
                                       elevation: 0,
-                                      shadowColor: const Color(0xFF006B5E)
+                                      shadowColor: AppTheme.primary
                                           .withOpacity(0.3),
                                       shape: RoundedRectangleBorder(
                                         borderRadius:
@@ -623,8 +624,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                       ),
                                       child: Text(
                                         l10n.signUp,
-                                        style: const TextStyle(
-                                          color: Color(0xFF006B5E),
+                                        style: TextStyle(
+                                          color: isDark ? AppTheme.secondary : AppTheme.primary,
                                           fontWeight: FontWeight.w700,
                                           fontSize: 14.5,
                                         ),
@@ -831,7 +832,7 @@ class _ElegantIconButton extends StatelessWidget {
             child: Icon(
               icon,
               size: 22,
-              color: const Color(0xFF006B5E),
+              color: isDark ? AppTheme.secondary : AppTheme.primary,
             ),
           ),
         ),
@@ -854,9 +855,12 @@ class _SheetTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final activeColor = isDark ? AppTheme.secondary : AppTheme.primary;
+
     return Material(
       color: selected
-          ? const Color(0xFF006B5E).withOpacity(0.1)
+          ? activeColor.withOpacity(0.1)
           : Colors.transparent,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
@@ -869,7 +873,7 @@ class _SheetTile extends StatelessWidget {
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: selected
-                  ? const Color(0xFF006B5E)
+                  ? activeColor
                   : Theme.of(context).dividerColor.withOpacity(0.35),
               width: selected ? 1.6 : 1,
             ),
@@ -877,8 +881,8 @@ class _SheetTile extends StatelessWidget {
           child: Row(
             children: [
               if (selected) ...[
-                const Icon(Icons.check_circle_rounded,
-                    color: Color(0xFF006B5E), size: 20),
+                Icon(Icons.check_circle_rounded,
+                    color: activeColor, size: 20),
                 const SizedBox(width: 12),
               ],
               Text(
@@ -887,7 +891,7 @@ class _SheetTile extends StatelessWidget {
                   fontSize: 15.5,
                   fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                   color: selected
-                      ? const Color(0xFF006B5E)
+                      ? activeColor
                       : Theme.of(context).colorScheme.onSurface,
                 ),
               ),
@@ -932,7 +936,7 @@ InputDecoration _modernInputDecoration(
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(14),
-      borderSide: const BorderSide(color: Color(0xFF006B5E), width: 1.8),
+      borderSide: BorderSide(color: isDark ? AppTheme.secondary : AppTheme.primary, width: 1.8),
     ),
     errorBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(14),

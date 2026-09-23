@@ -1,11 +1,10 @@
 // splash_screen.dart
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/app_routes.dart';
+import '../config/app_theme.dart';
 import '../providers/auth_provider.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -17,10 +16,6 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with TickerProviderStateMixin {
-  static const Color primaryGreen = Color(0xFF006B5E);
-  static const Color darkGreen = Color(0xFF003D35);
-  static const Color accentGreen = Color(0xFF00B894);
-
   static const String logoPath = 'assets/images/nearbyfundi-logo.png';
 
   late AnimationController _mainController;
@@ -106,8 +101,6 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.sizeOf(context);
-
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -115,9 +108,9 @@ class _SplashScreenState extends State<SplashScreen>
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF0A2E36),
-              Color(0xFF0F4B4A),
-              Color(0xFF1A6B5A),
+              AppTheme.navy950,
+              AppTheme.navy800,
+              AppTheme.primary,
             ],
           ),
         ),
@@ -147,7 +140,7 @@ class _SplashScreenState extends State<SplashScreen>
                                 shape: BoxShape.circle,
                                 boxShadow: [
                                   BoxShadow(
-                                    color: accentGreen.withOpacity(0.3),
+                                    color: AppTheme.secondary.withOpacity(0.35),
                                     blurRadius: 50,
                                     spreadRadius: 10,
                                   ),
@@ -192,7 +185,7 @@ class _SplashScreenState extends State<SplashScreen>
                           height: 3,
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
-                              colors: [Color(0xFF00B894), Color(0xFF00D4A0)],
+                              colors: [AppTheme.secondary, AppTheme.gold400],
                             ),
                             borderRadius: BorderRadius.circular(20),
                           ),
@@ -265,11 +258,11 @@ class _SplashScreenState extends State<SplashScreen>
             width: 10,
             height: 10,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.3 + (progress * 0.7)),
+              color: AppTheme.secondary.withOpacity(0.3 + (progress * 0.7)),
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: accentGreen.withOpacity(0.2 * progress),
+                  color: AppTheme.secondary.withOpacity(0.25 * progress),
                   blurRadius: 10,
                 ),
               ],

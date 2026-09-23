@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../config/app_theme.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/chat_conversation.dart';
@@ -37,13 +38,12 @@ class _ChatListScreenState extends State<ChatListScreen> {
     if (user != null && token != null && !_isInitialized) {
       _isInitialized = true;
 
-      // ✅ FIX: Use user.profilePhoto instead of user.profilePhoto
       final chatUser = ChatUser(
         id: user.id,
         name: user.name,
         email: user.email,
         phone: user.phone,
-        avatar: user.profilePhoto, // ✅ Now available
+        avatar: user.profilePhoto,
       );
 
       chatProvider.initialize(
@@ -58,7 +58,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -69,7 +68,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
             color: Colors.white,
           ),
         ),
-        backgroundColor: theme.primaryColor,
+        backgroundColor: AppTheme.primary,
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
@@ -90,7 +89,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(4),
                         decoration: const BoxDecoration(
-                          color: Colors.red,
+                          color: AppTheme.error,
                           shape: BoxShape.circle,
                         ),
                         constraints: const BoxConstraints(
@@ -119,9 +118,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
       body: Consumer<ChatProvider>(
         builder: (context, chatProvider, child) {
           if (chatProvider.isLoading && chatProvider.conversations.isEmpty) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
+            return const Center(child: CircularProgressIndicator());
           }
 
           if (chatProvider.conversations.isEmpty) {
@@ -172,13 +169,13 @@ class _ChatListScreenState extends State<ChatListScreen> {
             width: 100,
             height: 100,
             decoration: BoxDecoration(
-              color: theme.primaryColor.withOpacity(0.08),
+              color: AppTheme.primary.withOpacity(0.08),
               shape: BoxShape.circle,
             ),
             child: Icon(
               Icons.chat_outlined,
               size: 50,
-              color: theme.primaryColor.withOpacity(0.6),
+              color: AppTheme.primary.withOpacity(0.6),
             ),
           ),
           const SizedBox(height: 20),
@@ -201,13 +198,12 @@ class _ChatListScreenState extends State<ChatListScreen> {
           ),
           const SizedBox(height: 24),
           OutlinedButton.icon(
-            onPressed: () {
-              // Navigate to nearby screen
-              Navigator.pop(context);
-            },
+            onPressed: () => Navigator.pop(context),
             icon: const Icon(Icons.search_rounded),
             label: const Text('Find Technicians'),
             style: OutlinedButton.styleFrom(
+              foregroundColor: AppTheme.primary,
+              side: const BorderSide(color: AppTheme.primary),
               padding: const EdgeInsets.symmetric(
                 horizontal: 24,
                 vertical: 12,
@@ -242,36 +238,31 @@ class _ConversationTile extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
       child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 12,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         margin: const EdgeInsets.only(bottom: 6),
         decoration: BoxDecoration(
           color: hasUnread
-              ? theme.primaryColor.withOpacity(0.06)
+              ? AppTheme.primary.withOpacity(0.06)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(14),
         ),
         child: Row(
           children: [
-            // Avatar
             CircleAvatar(
               radius: 28,
-              backgroundColor: theme.primaryColor.withOpacity(0.1),
+              backgroundColor: AppTheme.primary.withOpacity(0.1),
               child: Text(
                 conversation.otherParty.name.isNotEmpty
                     ? conversation.otherParty.name[0].toUpperCase()
                     : '?',
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: theme.primaryColor,
+                  color: AppTheme.primary,
                 ),
               ),
             ),
             const SizedBox(width: 14),
-            // Content
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -283,9 +274,8 @@ class _ConversationTile extends StatelessWidget {
                           conversation.otherParty.name,
                           style: TextStyle(
                             fontSize: 16,
-                            fontWeight: hasUnread
-                                ? FontWeight.w700
-                                : FontWeight.w500,
+                            fontWeight:
+                            hasUnread ? FontWeight.w700 : FontWeight.w500,
                             color: hasUnread
                                 ? theme.textTheme.titleMedium?.color
                                 : theme.textTheme.titleMedium?.color
@@ -298,9 +288,7 @@ class _ConversationTile extends StatelessWidget {
                         conversation.getFormattedLastMessageTime(),
                         style: TextStyle(
                           fontSize: 12,
-                          color: isDark
-                              ? Colors.grey.shade500
-                              : Colors.grey.shade600,
+                          color: theme.hintColor,
                         ),
                       ),
                     ],
@@ -314,8 +302,8 @@ class _ConversationTile extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 14,
                             color: hasUnread
-                                ? (isDark ? Colors.white70 : Colors.black87)
-                                : (isDark ? Colors.grey.shade500 : Colors.grey.shade600),
+                                ? theme.colorScheme.onSurface
+                                : theme.hintColor,
                             fontWeight: hasUnread
                                 ? FontWeight.w600
                                 : FontWeight.normal,
@@ -332,7 +320,7 @@ class _ConversationTile extends StatelessWidget {
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: theme.primaryColor,
+                            color: AppTheme.primary,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(

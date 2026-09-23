@@ -1,27 +1,5 @@
 // FILE: lib/screens/home/nearby_screen.dart
 // Nearby Fundi - Fully Responsive with NO Overflow (iOS / Android / Tablet / Web)
-//
-// FIXES APPLIED IN THIS VERSION
-// ------------------------------------------------------------------
-// 1. Map markers (`_buildMapView`) previously overflowed their fixed
-//    Marker(width/height) box on some screen sizes because the inner
-//    Column's natural height could exceed the box (the classic
-//    "RenderFlex overflowed by N pixels" error). Fixed by:
-//      - Wrapping marker content in a FittedBox(fit: BoxFit.scaleDown)
-//        so it gracefully scales down to fit instead of overflowing,
-//        on ANY screen size / density.
-//      - Increasing the marker height budget slightly for breathing
-//        room (ResponsiveConstants.getMarkerHeight).
-// 2. Grid list tiles inside the technician bottom sheet
-//    (`_buildListTile(isGrid: true)`) used a fixed childAspectRatio
-//    GridView cell. Long names / areas / many badges could overflow
-//    the fixed-height cell. Fixed by wrapping the tile's content in a
-//    SingleChildScrollView so excess content scrolls/clips cleanly
-//    instead of throwing a render overflow error.
-// 3. Minor responsive polish: safer clamping of font/icon sizes on
-//    very small phones, and small spacing tightened to avoid
-//    accumulation of overflow on short viewports.
-// ------------------------------------------------------------------
 
 import 'dart:async';
 import 'dart:convert';
@@ -38,6 +16,7 @@ import '../../providers/technician_provider.dart';
 import '../../providers/service_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../config/app_routes.dart';
+import '../../config/app_theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../utils/image_utils.dart';
 import 'nearby_map_screen.dart';
@@ -130,9 +109,6 @@ class ResponsiveConstants {
     return 124.0;
   }
 
-  // Slightly taller than before to give marker content more breathing
-  // room; combined with the FittedBox safety net below this makes
-  // overflow effectively impossible on any device.
   static double getMarkerHeight(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
     if (width < mobileBreakpoint) return 118.0;
@@ -142,17 +118,19 @@ class ResponsiveConstants {
 }
 
 // ================================================================
-// CONSTANTS
+// CONSTANTS  — colors now come from AppTheme
 // ================================================================
 
 class NearbyConstants {
-  static const Color primaryGreen = Color(0xFF006B5E);
-  static const Color lightGreen = Color(0xFF008C7A);
-  static const Color selectedColor = Color(0xFF1565C0);
-  static const Color locationRed = Color(0xFFD32F2F);
-  static const Color technicianGreen = Color(0xFF00897B);
-  static const Color distanceGreen = Color(0xFF2E7D32);
-  static const Color verifiedBlue = Color(0xFF1976D2);
+  // Legacy aliases kept so existing references still compile,
+  // but they now point to the new brand palette.
+  static const Color primaryGreen = AppTheme.primary;
+  static const Color lightGreen = AppTheme.primaryLight;
+  static const Color selectedColor = AppTheme.accent;
+  static const Color locationRed = AppTheme.error;
+  static const Color technicianGreen = AppTheme.accent;
+  static const Color distanceGreen = AppTheme.accent;
+  static const Color verifiedBlue = AppTheme.accent;
   static const LatLng defaultMapCenter = LatLng(-6.7924, 39.2083);
 
   static const int maxHistoryEntries = 10;
@@ -190,7 +168,8 @@ class NearbyStrings {
   static const viewProfile = 'View Profile';
   static const directions = 'Get directions';
   static const couldNotOpenMaps = 'Could not open maps app.';
-  static const searchFailed = 'Search failed. Please check your connection and try again.';
+  static const searchFailed =
+      'Search failed. Please check your connection and try again.';
 }
 
 // ================================================================
@@ -206,10 +185,6 @@ class NearbyScreen extends StatefulWidget {
 
 class _NearbyScreenState extends State<NearbyScreen>
     with SingleTickerProviderStateMixin {
-  // --------------------------------------------------------------
-  // Controllers
-  // --------------------------------------------------------------
-
   final TextEditingController _locationController = TextEditingController();
   final TextEditingController _serviceSearchController = TextEditingController();
   final FocusNode _locationFocus = FocusNode();
@@ -217,15 +192,7 @@ class _NearbyScreenState extends State<NearbyScreen>
   final ScrollController _categoryChipScrollController = ScrollController();
   final MapController _mapController = MapController();
 
-  // --------------------------------------------------------------
-  // Animation
-  // --------------------------------------------------------------
-
   late AnimationController _pulseController;
-
-  // --------------------------------------------------------------
-  // State
-  // --------------------------------------------------------------
 
   bool _isHeaderVisible = true;
   bool _isSearching = false;
@@ -241,10 +208,6 @@ class _NearbyScreenState extends State<NearbyScreen>
 
   int _searchRadiusKm = NearbyConstants.defaultRadiusKm;
 
-  // --------------------------------------------------------------
-  // Data
-  // --------------------------------------------------------------
-
   final Map<int, TechnicianRouteData> _routesData = {};
 
   List<String> _searchHistory = [];
@@ -255,10 +218,6 @@ class _NearbyScreenState extends State<NearbyScreen>
 
   Timer? _suggestionDebounce;
   int _suggestionRequestId = 0;
-
-  // ==============================================================
-  // INIT
-  // ==============================================================
 
   @override
   void initState() {
@@ -280,10 +239,6 @@ class _NearbyScreenState extends State<NearbyScreen>
       context.read<ServiceProvider>().fetchServices(locale: _currentLocale);
     });
   }
-
-  // ==============================================================
-  // DISPOSE
-  // ==============================================================
 
   @override
   void dispose() {
@@ -845,13 +800,13 @@ class _NearbyScreenState extends State<NearbyScreen>
           errorBuilder: (_, __, ___) => Icon(
             Icons.build_rounded,
             size: contextIconSize,
-            color: Colors.grey.shade600,
+            color: AppTheme.greyText,
           ),
         )
             : Icon(
           Icons.build_rounded,
           size: contextIconSize,
-          color: Colors.grey.shade600,
+          color: AppTheme.greyText,
         ),
       ),
     );
@@ -880,7 +835,7 @@ class _NearbyScreenState extends State<NearbyScreen>
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: NearbyConstants.primaryGreen
+                    color: AppTheme.primary
                         .withOpacity(opacity.clamp(0.0, 1.0)),
                     width: 3,
                   ),
@@ -891,10 +846,10 @@ class _NearbyScreenState extends State<NearbyScreen>
               padding: const EdgeInsets.all(2),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: NearbyConstants.primaryGreen,
+                color: AppTheme.primary,
                 boxShadow: [
                   BoxShadow(
-                    color: NearbyConstants.primaryGreen.withOpacity(0.35),
+                    color: AppTheme.primary.withOpacity(0.35),
                     blurRadius: 14,
                     spreadRadius: 3,
                   ),
@@ -948,7 +903,7 @@ class _NearbyScreenState extends State<NearbyScreen>
                   width: 42,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade400,
+                    color: theme.dividerColor,
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
@@ -966,7 +921,8 @@ class _NearbyScreenState extends State<NearbyScreen>
                           '${sorted.length} ${l10n.fundisFound}',
                           style: theme.textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.w800,
-                            fontSize: ResponsiveConstants.isMobile(context) ? 18 : 22,
+                            fontSize:
+                            ResponsiveConstants.isMobile(context) ? 18 : 22,
                           ),
                         ),
                       ),
@@ -983,17 +939,17 @@ class _NearbyScreenState extends State<NearbyScreen>
                 Expanded(
                   child: columns > 1
                       ? Padding(
-                    padding: EdgeInsets.all(ResponsiveConstants.getPadding(context)),
+                    padding: EdgeInsets.all(
+                      ResponsiveConstants.getPadding(context),
+                    ),
                     child: GridView.builder(
                       controller: controller,
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: columns,
-                        crossAxisSpacing: ResponsiveConstants.getPadding(context),
-                        mainAxisSpacing: ResponsiveConstants.getPadding(context),
-                        // Slightly taller cells + internal scroll safety
-                        // net (see _buildListTile) removes the overflow
-                        // that a fixed aspect ratio can otherwise cause
-                        // when names/areas are long.
+                        crossAxisSpacing:
+                        ResponsiveConstants.getPadding(context),
+                        mainAxisSpacing:
+                        ResponsiveConstants.getPadding(context),
                         childAspectRatio: isDesktop ? 1.05 : 0.92,
                       ),
                       itemCount: sorted.length,
@@ -1010,7 +966,9 @@ class _NearbyScreenState extends State<NearbyScreen>
                   )
                       : ListView.builder(
                     controller: controller,
-                    padding: EdgeInsets.all(ResponsiveConstants.getPadding(context)),
+                    padding: EdgeInsets.all(
+                      ResponsiveConstants.getPadding(context),
+                    ),
                     itemCount: sorted.length,
                     itemBuilder: (_, index) {
                       final tech = sorted[index];
@@ -1060,9 +1018,9 @@ class _NearbyScreenState extends State<NearbyScreen>
           borderRadius: BorderRadius.circular(18),
           side: BorderSide(
             color: selected
-                ? NearbyConstants.selectedColor
+                ? AppTheme.accent
                 : recommended
-                ? NearbyConstants.primaryGreen.withOpacity(0.35)
+                ? AppTheme.primary.withOpacity(0.35)
                 : Colors.transparent,
             width: selected ? 1.5 : 1,
           ),
@@ -1081,10 +1039,6 @@ class _NearbyScreenState extends State<NearbyScreen>
               arguments: tech.id,
             );
           },
-          // FIX: a GridView cell has a fixed height. Any Column that
-          // exceeds it used to throw a RenderFlex overflow. Wrapping
-          // in a scroll view guarantees the content clips/scrolls
-          // instead of overflowing, on any screen size.
           child: SingleChildScrollView(
             physics: const ClampingScrollPhysics(),
             padding: EdgeInsets.all(ResponsiveConstants.getPadding(context)),
@@ -1118,7 +1072,7 @@ class _NearbyScreenState extends State<NearbyScreen>
                         Icon(
                           Icons.location_on_rounded,
                           size: fontSize + 2,
-                          color: NearbyConstants.locationRed,
+                          color: AppTheme.error,
                         ),
                         const SizedBox(width: 3),
                         Flexible(
@@ -1147,7 +1101,7 @@ class _NearbyScreenState extends State<NearbyScreen>
                         children: [
                           const Icon(
                             Icons.star_rounded,
-                            color: Colors.amber,
+                            color: AppTheme.secondary,
                             size: 12,
                           ),
                           const SizedBox(width: 2),
@@ -1179,7 +1133,7 @@ class _NearbyScreenState extends State<NearbyScreen>
                     child: Text(
                       'Near you',
                       style: TextStyle(
-                        color: NearbyConstants.primaryGreen,
+                        color: AppTheme.primary,
                         fontSize: fontSize - 1,
                         fontWeight: FontWeight.w700,
                       ),
@@ -1199,9 +1153,9 @@ class _NearbyScreenState extends State<NearbyScreen>
         borderRadius: BorderRadius.circular(18),
         side: BorderSide(
           color: selected
-              ? NearbyConstants.selectedColor
+              ? AppTheme.accent
               : recommended
-              ? NearbyConstants.primaryGreen.withOpacity(0.35)
+              ? AppTheme.primary.withOpacity(0.35)
               : Colors.transparent,
           width: selected ? 1.5 : 1,
         ),
@@ -1254,7 +1208,7 @@ class _NearbyScreenState extends State<NearbyScreen>
                             padding: EdgeInsets.only(left: 5),
                             child: Icon(
                               Icons.verified_rounded,
-                              color: NearbyConstants.verifiedBlue,
+                              color: AppTheme.accent,
                               size: 16,
                             ),
                           ),
@@ -1266,7 +1220,7 @@ class _NearbyScreenState extends State<NearbyScreen>
                         child: Text(
                           NearbyStrings.recommendedNearYou,
                           style: TextStyle(
-                            color: NearbyConstants.primaryGreen,
+                            color: AppTheme.primary,
                             fontSize: isMobile ? 9 : 11,
                             fontWeight: FontWeight.w700,
                           ),
@@ -1280,7 +1234,7 @@ class _NearbyScreenState extends State<NearbyScreen>
                             const Icon(
                               Icons.location_on_rounded,
                               size: 14,
-                              color: NearbyConstants.locationRed,
+                              color: AppTheme.error,
                             ),
                             const SizedBox(width: 3),
                             Expanded(
@@ -1308,7 +1262,7 @@ class _NearbyScreenState extends State<NearbyScreen>
                             children: [
                               const Icon(
                                 Icons.star_rounded,
-                                color: Colors.amber,
+                                color: AppTheme.secondary,
                                 size: 12,
                               ),
                               const SizedBox(width: 2),
@@ -1347,14 +1301,13 @@ class _NearbyScreenState extends State<NearbyScreen>
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: NearbyConstants.primaryGreen
-                                    .withOpacity(0.08),
+                                color: AppTheme.primary.withOpacity(0.08),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
                                 service,
                                 style: TextStyle(
-                                  color: NearbyConstants.primaryGreen,
+                                  color: AppTheme.primary,
                                   fontSize: isMobile ? 8 : 10,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -1369,9 +1322,7 @@ class _NearbyScreenState extends State<NearbyScreen>
               const SizedBox(width: 4),
               Icon(
                 Icons.chevron_right_rounded,
-                color: selected
-                    ? NearbyConstants.selectedColor
-                    : Colors.grey.shade400,
+                color: selected ? AppTheme.accent : theme.hintColor,
                 size: isMobile ? 18 : 24,
               ),
             ],
@@ -1385,18 +1336,18 @@ class _NearbyScreenState extends State<NearbyScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       decoration: BoxDecoration(
-        color: NearbyConstants.distanceGreen.withOpacity(0.08),
+        color: AppTheme.accent.withOpacity(0.08),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: fontSize + 1, color: NearbyConstants.distanceGreen),
+          Icon(icon, size: fontSize + 1, color: AppTheme.accent),
           const SizedBox(width: 2),
           Text(
             text,
             style: TextStyle(
-              color: NearbyConstants.distanceGreen,
+              color: AppTheme.accent,
               fontSize: fontSize,
               fontWeight: FontWeight.w700,
             ),
@@ -1441,20 +1392,6 @@ class _NearbyScreenState extends State<NearbyScreen>
         .map((t) => t.id)
         .toSet();
 
-    // ------------------------------------------------------------
-    // ANDROID OVERFLOW FIX
-    // ------------------------------------------------------------
-    // Root cause of the "RenderFlex overflowed by 13 pixels" seen only
-    // on Android: Android's default system font-scale is typically
-    // larger than iOS's. Several strips in this screen (service chips,
-    // category chips) intentionally live inside a fixed-height
-    // SizedBox to keep the horizontal scroller a consistent height.
-    // When the platform bumps up text size, the Row inside that fixed
-    // box asks for a few extra pixels it doesn't have -> overflow.
-    // Clamping the effective text scale here keeps layout consistent
-    // across iOS, Android, tablet and web while still honoring a
-    // reasonable amount of the user's accessibility text-size
-    // preference (0.9x-1.2x) instead of ignoring it outright.
     final mq = MediaQuery.of(context);
     final clampedScaler = mq.textScaler.clamp(
       minScaleFactor: 0.9,
@@ -1466,11 +1403,8 @@ class _NearbyScreenState extends State<NearbyScreen>
       child: Scaffold(
         backgroundColor: theme.scaffoldBackgroundColor,
 
-        // ==========================================================
-        // APP BAR
-        // ==========================================================
         appBar: AppBar(
-          backgroundColor: NearbyConstants.primaryGreen,
+          backgroundColor: AppTheme.primary,
           foregroundColor: Colors.white,
           elevation: 0,
           centerTitle: isTablet || isDesktop,
@@ -1543,9 +1477,6 @@ class _NearbyScreenState extends State<NearbyScreen>
           ],
         ),
 
-        // ==========================================================
-        // BODY
-        // ==========================================================
         body: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1610,7 +1541,7 @@ class _NearbyScreenState extends State<NearbyScreen>
   }
 
   // ==============================================================
-  // SEARCH PANEL - FIXED OVERFLOW
+  // SEARCH PANEL
   // ==============================================================
 
   Widget _buildSearchPanel(
@@ -1645,11 +1576,9 @@ class _NearbyScreenState extends State<NearbyScreen>
         ],
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.min, // CRITICAL: Prevents overflow
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // --------------------------------------------------------
           // LOCATION SEARCH
-          // --------------------------------------------------------
           Container(
             decoration: BoxDecoration(
               color: theme.colorScheme.surface,
@@ -1674,10 +1603,13 @@ class _NearbyScreenState extends State<NearbyScreen>
                     ),
                     decoration: InputDecoration(
                       hintText: l10n.searchLocation,
-                      hintStyle: TextStyle(color: theme.hintColor, fontSize: isMobile ? 11 : 14),
+                      hintStyle: TextStyle(
+                        color: theme.hintColor,
+                        fontSize: isMobile ? 11 : 14,
+                      ),
                       prefixIcon: const Icon(
                         Icons.search_rounded,
-                        color: NearbyConstants.primaryGreen,
+                        color: AppTheme.primary,
                         size: 18,
                       ),
                       suffixIcon: Row(
@@ -1702,7 +1634,7 @@ class _NearbyScreenState extends State<NearbyScreen>
                             child: IconButton(
                               icon: const Icon(
                                 Icons.map_rounded,
-                                color: NearbyConstants.primaryGreen,
+                                color: AppTheme.primary,
                                 size: 18,
                               ),
                               onPressed: _openMapPicker,
@@ -1726,16 +1658,14 @@ class _NearbyScreenState extends State<NearbyScreen>
                   ),
                 ),
 
-                // --------------------------------------------------
                 // SEARCH BUTTON
-                // --------------------------------------------------
                 Container(
                   margin: const EdgeInsets.all(3),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [
-                        NearbyConstants.primaryGreen,
-                        NearbyConstants.lightGreen,
+                        AppTheme.primary,
+                        AppTheme.primaryLight,
                       ],
                     ),
                     borderRadius: BorderRadius.circular(12),
@@ -1788,9 +1718,7 @@ class _NearbyScreenState extends State<NearbyScreen>
             ),
           ),
 
-          // --------------------------------------------------------
-          // SUGGESTIONS - FIXED WITH CONSTRAINED HEIGHT
-          // --------------------------------------------------------
+          // SUGGESTIONS
           if (_showSuggestions)
             ConstrainedBox(
               constraints: BoxConstraints(
@@ -1799,9 +1727,7 @@ class _NearbyScreenState extends State<NearbyScreen>
               child: _buildSuggestions(context, theme),
             ),
 
-          // --------------------------------------------------------
           // SEARCH RESULT SUMMARY
-          // --------------------------------------------------------
           if (_searchedArea.isNotEmpty && techProvider.technicians.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 6),
@@ -1811,14 +1737,14 @@ class _NearbyScreenState extends State<NearbyScreen>
                   vertical: isMobile ? 4 : 6,
                 ),
                 decoration: BoxDecoration(
-                  color: NearbyConstants.primaryGreen.withOpacity(0.07),
+                  color: AppTheme.primary.withOpacity(0.07),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
                   children: [
                     const Icon(
                       Icons.location_on_rounded,
-                      color: NearbyConstants.locationRed,
+                      color: AppTheme.error,
                       size: 14,
                     ),
                     const SizedBox(width: 4),
@@ -1828,7 +1754,7 @@ class _NearbyScreenState extends State<NearbyScreen>
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: NearbyConstants.primaryGreen,
+                          color: AppTheme.primary,
                           fontWeight: FontWeight.w700,
                           fontSize: isMobile ? 10 : 12,
                         ),
@@ -1840,7 +1766,7 @@ class _NearbyScreenState extends State<NearbyScreen>
                         vertical: isMobile ? 1 : 2,
                       ),
                       decoration: BoxDecoration(
-                        color: NearbyConstants.primaryGreen,
+                        color: AppTheme.primary,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
@@ -1859,9 +1785,7 @@ class _NearbyScreenState extends State<NearbyScreen>
 
           const SizedBox(height: 6),
 
-          // --------------------------------------------------------
           // SERVICE SEARCH
-          // --------------------------------------------------------
           TextField(
             controller: _serviceSearchController,
             decoration: InputDecoration(
@@ -1869,7 +1793,7 @@ class _NearbyScreenState extends State<NearbyScreen>
               hintStyle: TextStyle(fontSize: isMobile ? 11 : 13),
               prefixIcon: const Icon(
                 Icons.build_rounded,
-                color: NearbyConstants.primaryGreen,
+                color: AppTheme.primary,
                 size: 18,
               ),
               suffixIcon: _serviceSearchQuery.isNotEmpty
@@ -1902,9 +1826,7 @@ class _NearbyScreenState extends State<NearbyScreen>
             },
           ),
 
-          // --------------------------------------------------------
-          // SERVICES - FIXED OVERFLOW
-          // --------------------------------------------------------
+          // SERVICES
           if (services.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 6),
@@ -1952,9 +1874,7 @@ class _NearbyScreenState extends State<NearbyScreen>
               ),
             ),
 
-          // --------------------------------------------------------
           // CATEGORIES
-          // --------------------------------------------------------
           if (categories.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 4),
@@ -2032,7 +1952,7 @@ class _NearbyScreenState extends State<NearbyScreen>
                     child: Text(
                       NearbyStrings.clear,
                       style: TextStyle(
-                        color: NearbyConstants.primaryGreen,
+                        color: AppTheme.primary,
                         fontSize: isMobile ? 10 : 11,
                       ),
                     ),
@@ -2044,7 +1964,8 @@ class _NearbyScreenState extends State<NearbyScreen>
             ..._searchHistory.map(
                   (place) => ListTile(
                 dense: true,
-                leading: Icon(Icons.history_rounded, color: theme.hintColor, size: 16),
+                leading: Icon(Icons.history_rounded,
+                    color: theme.hintColor, size: 16),
                 title: Text(
                   place,
                   maxLines: 1,
@@ -2072,7 +1993,7 @@ class _NearbyScreenState extends State<NearbyScreen>
               dense: true,
               leading: const Icon(
                 Icons.location_on_rounded,
-                color: NearbyConstants.locationRed,
+                color: AppTheme.error,
                 size: 16,
               ),
               title: Text(
@@ -2141,9 +2062,7 @@ class _NearbyScreenState extends State<NearbyScreen>
       );
     }
 
-    // ------------------------------------------------------------
     // ROAD POLYLINES
-    // ------------------------------------------------------------
     final List<Polyline> polylines = [];
 
     for (final tech in technicians) {
@@ -2155,7 +2074,8 @@ class _NearbyScreenState extends State<NearbyScreen>
       polylines.add(
         Polyline(
           points: route.points,
-          strokeWidth: selected ? (isDesktop ? 12.0 : 10.0) : (isDesktop ? 10.0 : 8.0),
+          strokeWidth:
+          selected ? (isDesktop ? 12.0 : 10.0) : (isDesktop ? 10.0 : 8.0),
           color: Colors.white.withOpacity(0.85),
         ),
       );
@@ -2163,17 +2083,14 @@ class _NearbyScreenState extends State<NearbyScreen>
       polylines.add(
         Polyline(
           points: route.points,
-          strokeWidth: selected ? (isDesktop ? 8.0 : 6.5) : (isDesktop ? 6.0 : 5.0),
-          color: selected
-              ? NearbyConstants.selectedColor
-              : NearbyConstants.technicianGreen,
+          strokeWidth:
+          selected ? (isDesktop ? 8.0 : 6.5) : (isDesktop ? 6.0 : 5.0),
+          color: selected ? AppTheme.accent : AppTheme.primary,
         ),
       );
     }
 
-    // ------------------------------------------------------------
     // TECHNICIAN MARKERS
-    // ------------------------------------------------------------
     final markerWidth = ResponsiveConstants.getMarkerWidth(context);
     final markerHeight = ResponsiveConstants.getMarkerHeight(context);
     final avatarSize = ResponsiveConstants.getAvatarSize(context);
@@ -2189,8 +2106,6 @@ class _NearbyScreenState extends State<NearbyScreen>
         point: LatLng(tech.latitude!, tech.longitude!),
         width: markerWidth,
         height: markerHeight,
-        // Anchor from the bottom so the pin tip stays glued to the
-        // coordinate even if content above scales down.
         alignment: Alignment.bottomCenter,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
@@ -2201,16 +2116,6 @@ class _NearbyScreenState extends State<NearbyScreen>
 
             _showTechnicianModal(context, tech, origin, isRecommended);
           },
-          // FIX: This is the key overflow fix. The marker box has a
-          // fixed width/height imposed by flutter_map. Previously the
-          // inner Column could ask for more vertical space than that
-          // box (avatar + "Near you" badge + area badge + distance
-          // badge stacked up), which threw the "RenderFlex overflowed"
-          // error you saw. FittedBox with BoxFit.scaleDown makes the
-          // content shrink just enough to always fit — on phones,
-          // tablets, and web/desktop alike — with zero overflow risk,
-          // while staying full-size (no scaling at all) whenever there
-          // is enough room.
           child: FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.bottomCenter,
@@ -2225,9 +2130,7 @@ class _NearbyScreenState extends State<NearbyScreen>
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: selected
-                            ? NearbyConstants.selectedColor
-                            : Colors.white,
+                        color: selected ? AppTheme.accent : Colors.white,
                         width: 2.5,
                       ),
                     ),
@@ -2241,12 +2144,10 @@ class _NearbyScreenState extends State<NearbyScreen>
                 if (isRecommended)
                   Container(
                     constraints: BoxConstraints(maxWidth: markerWidth - 8.0),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 5,
-                      vertical: 2,
-                    ),
+                    padding:
+                    const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                     decoration: BoxDecoration(
-                      color: NearbyConstants.primaryGreen,
+                      color: AppTheme.primary,
                       borderRadius: BorderRadius.circular(8),
                       boxShadow: [
                         BoxShadow(
@@ -2258,7 +2159,8 @@ class _NearbyScreenState extends State<NearbyScreen>
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.near_me_rounded, color: Colors.white, size: 10),
+                        const Icon(Icons.near_me_rounded,
+                            color: Colors.white, size: 10),
                         const SizedBox(width: 2),
                         Flexible(
                           child: Text(
@@ -2279,17 +2181,12 @@ class _NearbyScreenState extends State<NearbyScreen>
                 if (tech.area != null && tech.area!.trim().isNotEmpty)
                   Container(
                     constraints: BoxConstraints(maxWidth: markerWidth - 8.0),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 4,
-                      vertical: 1,
-                    ),
+                    padding:
+                    const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: NearbyConstants.locationRed,
-                        width: 1,
-                      ),
+                      border: Border.all(color: AppTheme.error, width: 1),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withOpacity(0.10),
@@ -2303,7 +2200,7 @@ class _NearbyScreenState extends State<NearbyScreen>
                         const Icon(
                           Icons.location_on_rounded,
                           size: 9,
-                          color: NearbyConstants.locationRed,
+                          color: AppTheme.error,
                         ),
                         const SizedBox(width: 1),
                         Flexible(
@@ -2312,7 +2209,7 @@ class _NearbyScreenState extends State<NearbyScreen>
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              color: NearbyConstants.locationRed,
+                              color: AppTheme.error,
                               fontSize: 7.5,
                               fontWeight: FontWeight.w700,
                             ),
@@ -2324,17 +2221,12 @@ class _NearbyScreenState extends State<NearbyScreen>
                 const SizedBox(height: 2),
                 if (distance > 0)
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 5,
-                      vertical: 2,
-                    ),
+                    padding:
+                    const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: NearbyConstants.distanceGreen,
-                        width: 1,
-                      ),
+                      border: Border.all(color: AppTheme.accent, width: 1),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withOpacity(0.10),
@@ -2348,7 +2240,7 @@ class _NearbyScreenState extends State<NearbyScreen>
                         Text(
                           '${distance.toStringAsFixed(1)} km',
                           style: const TextStyle(
-                            color: NearbyConstants.distanceGreen,
+                            color: AppTheme.accent,
                             fontSize: 8,
                             fontWeight: FontWeight.w800,
                           ),
@@ -2357,19 +2249,19 @@ class _NearbyScreenState extends State<NearbyScreen>
                           const SizedBox(width: 2),
                           const Text(
                             '•',
-                            style: TextStyle(color: NearbyConstants.distanceGreen),
+                            style: TextStyle(color: AppTheme.accent),
                           ),
                           const SizedBox(width: 1),
                           const Icon(
                             Icons.access_time_rounded,
-                            color: NearbyConstants.distanceGreen,
+                            color: AppTheme.accent,
                             size: 9,
                           ),
                           const SizedBox(width: 1),
                           Text(
                             '~${duration.toStringAsFixed(0)}m',
                             style: const TextStyle(
-                              color: NearbyConstants.distanceGreen,
+                              color: AppTheme.accent,
                               fontSize: 7.5,
                               fontWeight: FontWeight.w800,
                             ),
@@ -2385,9 +2277,7 @@ class _NearbyScreenState extends State<NearbyScreen>
       );
     }).toList();
 
-    // ------------------------------------------------------------
     // USER MARKER
-    // ------------------------------------------------------------
     final originMarker = Marker(
       point: origin,
       width: isDesktop ? 90.0 : (isTablet ? 70.0 : 60.0),
@@ -2405,7 +2295,7 @@ class _NearbyScreenState extends State<NearbyScreen>
                 color: Colors.white,
                 boxShadow: [
                   BoxShadow(
-                    color: NearbyConstants.locationRed.withOpacity(0.35),
+                    color: AppTheme.error.withOpacity(0.35),
                     blurRadius: 10,
                     spreadRadius: 2,
                   ),
@@ -2413,7 +2303,7 @@ class _NearbyScreenState extends State<NearbyScreen>
               ),
               child: Icon(
                 Icons.location_on_rounded,
-                color: NearbyConstants.locationRed,
+                color: AppTheme.error,
                 size: isDesktop ? 48 : (isTablet ? 38 : 32),
               ),
             ),
@@ -2421,7 +2311,7 @@ class _NearbyScreenState extends State<NearbyScreen>
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
               decoration: BoxDecoration(
-                color: NearbyConstants.locationRed,
+                color: AppTheme.error,
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
@@ -2438,9 +2328,7 @@ class _NearbyScreenState extends State<NearbyScreen>
       ),
     );
 
-    // ------------------------------------------------------------
     // MAP
-    // ------------------------------------------------------------
     return FlutterMap(
       mapController: _mapController,
       options: MapOptions(
@@ -2497,7 +2385,6 @@ class _NearbyScreenState extends State<NearbyScreen>
         bool showExpandRadius = false,
       }) {
     final isDesktop = ResponsiveConstants.isDesktop(context);
-    final isMobile = ResponsiveConstants.isMobile(context);
     final iconSize = isDesktop ? 44.0 : 34.0;
 
     return Container(
@@ -2514,9 +2401,9 @@ class _NearbyScreenState extends State<NearbyScreen>
               height: isDesktop ? 80.0 : 64.0,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: NearbyConstants.primaryGreen.withOpacity(0.08),
+                color: AppTheme.primary.withOpacity(0.08),
               ),
-              child: Icon(icon, size: iconSize, color: NearbyConstants.primaryGreen),
+              child: Icon(icon, size: iconSize, color: AppTheme.primary),
             ),
             const SizedBox(height: 10),
             Text(
@@ -2543,13 +2430,11 @@ class _NearbyScreenState extends State<NearbyScreen>
                 icon: const Icon(Icons.add_location_alt_outlined, size: 16),
                 label: Text(
                   '${NearbyStrings.expandSearchRadius} (+${NearbyConstants.radiusStepKm} km)',
-                  style: TextStyle(
-                    fontSize: isDesktop ? 14 : 12,
-                  ),
+                  style: TextStyle(fontSize: isDesktop ? 14 : 12),
                 ),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: NearbyConstants.primaryGreen,
-                  side: const BorderSide(color: NearbyConstants.primaryGreen),
+                  foregroundColor: AppTheme.primary,
+                  side: const BorderSide(color: AppTheme.primary),
                   padding: EdgeInsets.symmetric(
                     horizontal: isDesktop ? 20.0 : 12.0,
                     vertical: isDesktop ? 14.0 : 10.0,
@@ -2657,16 +2542,14 @@ class _NearbyScreenState extends State<NearbyScreen>
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade400,
+                      color: theme.dividerColor,
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
                 ),
                 const SizedBox(height: 14),
 
-                // ------------------------------------------------
                 // HEADER
-                // ------------------------------------------------
                 Row(
                   children: [
                     _buildAvatar(
@@ -2688,14 +2571,15 @@ class _NearbyScreenState extends State<NearbyScreen>
                                   overflow: TextOverflow.ellipsis,
                                   style: theme.textTheme.titleLarge?.copyWith(
                                     fontWeight: FontWeight.w800,
-                                    fontSize: isDesktop ? 20 : (isMobile ? 16 : 18),
+                                    fontSize:
+                                    isDesktop ? 20 : (isMobile ? 16 : 18),
                                   ),
                                 ),
                               ),
                               if (tech.verified)
                                 Icon(
                                   Icons.verified_rounded,
-                                  color: NearbyConstants.verifiedBlue,
+                                  color: AppTheme.accent,
                                   size: isDesktop ? 20 : 16,
                                 ),
                             ],
@@ -2706,8 +2590,9 @@ class _NearbyScreenState extends State<NearbyScreen>
                               child: Text(
                                 NearbyStrings.recommendedReason,
                                 style: TextStyle(
-                                  color: NearbyConstants.primaryGreen,
-                                  fontSize: isDesktop ? 12 : (isMobile ? 9 : 11),
+                                  color: AppTheme.primary,
+                                  fontSize:
+                                  isDesktop ? 12 : (isMobile ? 9 : 11),
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
@@ -2719,7 +2604,7 @@ class _NearbyScreenState extends State<NearbyScreen>
                                 children: [
                                   const Icon(
                                     Icons.location_on_rounded,
-                                    color: NearbyConstants.locationRed,
+                                    color: AppTheme.error,
                                     size: 13,
                                   ),
                                   const SizedBox(width: 3),
@@ -2730,7 +2615,9 @@ class _NearbyScreenState extends State<NearbyScreen>
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
                                         color: theme.hintColor,
-                                        fontSize: isDesktop ? 13 : (isMobile ? 10 : 12),
+                                        fontSize: isDesktop
+                                            ? 13
+                                            : (isMobile ? 10 : 12),
                                       ),
                                     ),
                                   ),
@@ -2741,7 +2628,8 @@ class _NearbyScreenState extends State<NearbyScreen>
                       ),
                     ),
                     IconButton(
-                      tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                      tooltip: MaterialLocalizations.of(context)
+                          .closeButtonTooltip,
                       onPressed: () => Navigator.pop(sheetContext),
                       icon: const Icon(Icons.close_rounded),
                     ),
@@ -2750,17 +2638,15 @@ class _NearbyScreenState extends State<NearbyScreen>
 
                 const SizedBox(height: 12),
 
-                // ------------------------------------------------
                 // DISTANCE CARD
-                // ------------------------------------------------
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: NearbyConstants.distanceGreen.withOpacity(0.07),
+                    color: AppTheme.accent.withOpacity(0.07),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: NearbyConstants.distanceGreen.withOpacity(0.18),
+                      color: AppTheme.accent.withOpacity(0.18),
                     ),
                   ),
                   child: Wrap(
@@ -2787,7 +2673,8 @@ class _NearbyScreenState extends State<NearbyScreen>
                 if (tech.rating > 0)
                   Row(
                     children: [
-                      const Icon(Icons.star_rounded, color: Colors.amber, size: 16),
+                      const Icon(Icons.star_rounded,
+                          color: AppTheme.secondary, size: 16),
                       const SizedBox(width: 3),
                       Text(
                         tech.rating.toStringAsFixed(1),
@@ -2812,13 +2699,13 @@ class _NearbyScreenState extends State<NearbyScreen>
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: NearbyConstants.primaryGreen.withOpacity(0.08),
+                          color: AppTheme.primary.withOpacity(0.08),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
                           service,
                           style: TextStyle(
-                            color: NearbyConstants.primaryGreen,
+                            color: AppTheme.primary,
                             fontSize: isDesktop ? 13 : (isMobile ? 9 : 11),
                             fontWeight: FontWeight.w600,
                           ),
@@ -2829,9 +2716,7 @@ class _NearbyScreenState extends State<NearbyScreen>
 
                 const SizedBox(height: 14),
 
-                // ------------------------------------------------
                 // BUTTONS
-                // ------------------------------------------------
                 Row(
                   children: [
                     Expanded(
@@ -2845,11 +2730,12 @@ class _NearbyScreenState extends State<NearbyScreen>
                           );
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: NearbyConstants.primaryGreen,
+                          backgroundColor: AppTheme.primary,
                           foregroundColor: Colors.white,
                           elevation: 0,
                           padding: EdgeInsets.symmetric(
-                            vertical: isDesktop ? 14 : (isMobile ? 10 : 12),
+                            vertical:
+                            isDesktop ? 14 : (isMobile ? 10 : 12),
                           ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -2874,14 +2760,13 @@ class _NearbyScreenState extends State<NearbyScreen>
                             _openDirectionsInGoogleMaps(
                               context,
                               origin: origin,
-                              destination: LatLng(tech.latitude!, tech.longitude!),
+                              destination:
+                              LatLng(tech.latitude!, tech.longitude!),
                             );
                           },
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: NearbyConstants.selectedColor,
-                            side: const BorderSide(
-                              color: NearbyConstants.selectedColor,
-                            ),
+                            foregroundColor: AppTheme.accent,
+                            side: const BorderSide(color: AppTheme.accent),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -2909,12 +2794,13 @@ class _NearbyScreenState extends State<NearbyScreen>
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, color: NearbyConstants.distanceGreen, size: isDesktop ? 18 : 14),
+        Icon(icon,
+            color: AppTheme.accent, size: isDesktop ? 18 : 14),
         const SizedBox(width: 4),
         Text(
           value,
           style: TextStyle(
-            color: NearbyConstants.distanceGreen,
+            color: AppTheme.accent,
             fontWeight: FontWeight.w800,
             fontSize: isDesktop ? 14 : (isMobile ? 11 : 12),
           ),
@@ -2940,7 +2826,8 @@ class _NearbyScreenState extends State<NearbyScreen>
     );
 
     try {
-      final launched = await launchUrl(url, mode: LaunchMode.externalApplication);
+      final launched =
+      await launchUrl(url, mode: LaunchMode.externalApplication);
 
       if (!launched && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -2982,12 +2869,12 @@ class _NearbyScreenState extends State<NearbyScreen>
           ),
           decoration: BoxDecoration(
             color: isSelected
-                ? NearbyConstants.primaryGreen
+                ? AppTheme.primary
                 : theme.colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: isSelected
-                  ? NearbyConstants.primaryGreen
+                  ? AppTheme.primary
                   : theme.dividerColor.withOpacity(0.25),
             ),
           ),
@@ -3005,7 +2892,8 @@ class _NearbyScreenState extends State<NearbyScreen>
               Text(
                 label,
                 style: TextStyle(
-                  color: isSelected ? Colors.white : theme.colorScheme.onSurface,
+                  color:
+                  isSelected ? Colors.white : theme.colorScheme.onSurface,
                   fontSize: isDesktop ? 13 : (isMobile ? 9 : 10.5),
                   fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                 ),
@@ -3042,12 +2930,12 @@ class _NearbyScreenState extends State<NearbyScreen>
           ),
           decoration: BoxDecoration(
             color: isSelected
-                ? NearbyConstants.primaryGreen.withOpacity(0.10)
+                ? AppTheme.primary.withOpacity(0.10)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: isSelected
-                  ? NearbyConstants.primaryGreen
+                  ? AppTheme.primary
                   : theme.dividerColor.withOpacity(0.25),
             ),
           ),
@@ -3057,7 +2945,7 @@ class _NearbyScreenState extends State<NearbyScreen>
               if (isSelected) ...[
                 const Icon(
                   Icons.check_circle_rounded,
-                  color: NearbyConstants.primaryGreen,
+                  color: AppTheme.primary,
                   size: 10,
                 ),
                 const SizedBox(width: 3),
@@ -3066,7 +2954,7 @@ class _NearbyScreenState extends State<NearbyScreen>
                 label,
                 style: TextStyle(
                   color: isSelected
-                      ? NearbyConstants.primaryGreen
+                      ? AppTheme.primary
                       : theme.colorScheme.onSurface,
                   fontSize: isDesktop ? 13 : (isMobile ? 9 : 10),
                   fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
@@ -3107,7 +2995,7 @@ class _MapControlButton extends StatelessWidget {
       child: IconButton(
         tooltip: tooltip,
         onPressed: onPressed,
-        icon: Icon(icon, color: NearbyConstants.primaryGreen, size: iconSize),
+        icon: Icon(icon, color: AppTheme.primary, size: iconSize),
         padding: EdgeInsets.all(isDesktop ? 8 : 6),
         constraints: BoxConstraints(
           minWidth: isDesktop ? 44 : 36,

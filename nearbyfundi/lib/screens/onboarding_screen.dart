@@ -1,6 +1,8 @@
 // onboarding_screen.dart
 import 'package:flutter/material.dart';
+
 import '../config/app_routes.dart';
+import '../config/app_theme.dart';
 import '../l10n/app_localizations.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -11,10 +13,6 @@ class OnboardingScreen extends StatefulWidget {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  static const Color primaryGreen = Color(0xFF006B5E);
-  static const Color darkGreen = Color(0xFF003D35);
-  static const Color accentGreen = Color(0xFF00B894);
-
   static const String logoPath = 'assets/images/nearbyfundi-logo.png';
 
   final PageController _pageController = PageController();
@@ -66,19 +64,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final isSmall = size.width < 400;
 
     return Scaffold(
-      backgroundColor: darkGreen,
+      backgroundColor: AppTheme.primaryDark,
       body: Stack(
         children: [
-          // Background Gradient
+          // Background Gradient — Navy brand gradient
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  Color(0xFF002F29),
-                  Color(0xFF00574D),
-                  Color(0xFF006B5E),
+                  AppTheme.navy950,
+                  AppTheme.navy800,
+                  AppTheme.primary,
                 ],
               ),
             ),
@@ -180,7 +178,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                               height: 6,
                               decoration: BoxDecoration(
                                 color: active
-                                    ? Colors.white
+                                    ? AppTheme.secondary
                                     : Colors.white.withOpacity(0.25),
                                 borderRadius: BorderRadius.circular(20),
                               ),
@@ -199,8 +197,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                               ? _getStarted
                               : _nextPage,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: primaryGreen,
+                            backgroundColor: AppTheme.secondary,
+                            foregroundColor: AppTheme.primary,
                             elevation: 0,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
@@ -219,10 +217,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              Icon(
-                                _currentPage == _items.length - 1
-                                    ? Icons.arrow_forward_rounded
-                                    : Icons.arrow_forward_rounded,
+                              const Icon(
+                                Icons.arrow_forward_rounded,
                                 size: 22,
                               ),
                             ],
@@ -287,7 +283,7 @@ class _OnboardingPage extends StatelessWidget {
                 child: Icon(
                   item.icon,
                   size: 64,
-                  color: const Color(0xFF006B5E),
+                  color: AppTheme.primary,
                 ),
               ),
             ),
@@ -313,7 +309,7 @@ class _OnboardingPage extends StatelessWidget {
             width: 48,
             height: 4,
             decoration: BoxDecoration(
-              color: const Color(0xFF00B894),
+              color: AppTheme.secondary,
               borderRadius: BorderRadius.circular(20),
             ),
           ),
@@ -374,8 +370,16 @@ class _Benefit extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: Colors.white70, size: 16),
+          Icon(icon, color: AppTheme.secondary, size: 16),
           const SizedBox(width: 6),
+          const Text(
+            '',
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           Text(
             text,
             style: const TextStyle(
