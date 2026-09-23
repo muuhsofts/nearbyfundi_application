@@ -20,7 +20,9 @@ class $AssetsIconsGen {
   final AssetGenImage mpesa = const AssetGenImage('assets/icons/mpesa.png');
   final AssetGenImage nearby = const AssetGenImage('assets/icons/nearby.png');
   final AssetGenImage nearbyfundiLogo =
-      const AssetGenImage('assets/icons/nearbyfundi-logo.png');
+      const AssetGenImage('assets/icons/nearbyfundi-logov1.png');
+  final AssetGenImage nearbyfundiLogov2 =
+      const AssetGenImage('assets/icons/nearbyfundi-logov2.png');
   final AssetGenImage nearbylogo =
       const AssetGenImage('assets/icons/nearbylogo.png');
 }
@@ -31,10 +33,8 @@ class $AssetsImagesGen {
   final AssetGenImage backimg =
       const AssetGenImage('assets/images/backimg.jpg');
   final AssetGenImage home = const AssetGenImage('assets/images/home.jpg');
-  final AssetGenImage nearbyfundiLogo =
-      const AssetGenImage('assets/images/nearbyfundi-logo.png');
-  final AssetGenImage nearbyfundiImage =
-      const AssetGenImage('assets/images/nearbyfundi_image.jpg');
+  final AssetGenImage nearbyfundiLogov1 =
+      const AssetGenImage('assets/images/nearbyfundi-logov1.png');
 }
 
 class AssetGenImage {

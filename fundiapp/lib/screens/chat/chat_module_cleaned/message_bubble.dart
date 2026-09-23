@@ -1,9 +1,10 @@
 // lib/widgets/message_bubble.dart
 import 'package:flutter/material.dart';
-import '../models/chat_message.dart';
-import '../utils/image_utils.dart';
-import '../l10n/app_localizations.dart';
-import '../config/app_theme.dart';
+import '../../../config/app_theme.dart';
+import '../../../l10n/app_localizations.dart';
+import '../../../models/chat_message.dart';
+import '../../../utils/image_utils.dart';
+
 
 class MessageBubble extends StatelessWidget {
   final ChatMessage message;

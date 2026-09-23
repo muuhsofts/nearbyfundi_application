@@ -101,7 +101,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                       ),
                     ),
                     child: Image.asset(
-                      'assets/images/nearbyfundi-logo.png',
+                      'assets/images/nearbyfundi-logov2.png',
                       fit: BoxFit.contain,
                     ),
                   ),

@@ -183,7 +183,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                       ),
                     ),
                     child: Image.asset(
-                      'assets/images/nearbyfundi-logo.png',
+                      'assets/images/nearbyfundi-logov2.png',
                       fit: BoxFit.contain,
                     ),
                   ),

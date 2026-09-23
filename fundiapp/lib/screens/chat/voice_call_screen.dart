@@ -1,10 +1,10 @@
 // lib/screens/chat/voice_call_screen.dart
-
 import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+
+import '../../config/app_theme.dart';
 import '../../services/voice_call_service.dart';
+
 
 class VoiceCallScreen extends StatefulWidget {
   final String userName;
@@ -64,11 +64,10 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF075E54),
+      backgroundColor: AppTheme.primary,
       body: SafeArea(
         child: Column(
           children: [
-            // Top bar
             Container(
               padding: const EdgeInsets.all(16),
               child: Row(
@@ -84,6 +83,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                   const Text(
                     'Voice Call',
                     style: TextStyle(
+                      inherit: true,
                       color: Colors.white,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -98,13 +98,15 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // User avatar
                   CircleAvatar(
                     radius: 60,
                     backgroundColor: Colors.white.withOpacity(0.2),
                     child: Text(
-                      widget.userName.isNotEmpty ? widget.userName[0].toUpperCase() : '?',
+                      widget.userName.isNotEmpty
+                          ? widget.userName[0].toUpperCase()
+                          : '?',
                       style: const TextStyle(
+                        inherit: true,
                         color: Colors.white,
                         fontSize: 40,
                         fontWeight: FontWeight.bold,
@@ -115,6 +117,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                   Text(
                     widget.userName,
                     style: const TextStyle(
+                      inherit: true,
                       color: Colors.white,
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
@@ -122,8 +125,11 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    _isConnected ? _formatDuration(_callDuration) : 'Connecting...',
+                    _isConnected
+                        ? _formatDuration(_callDuration)
+                        : 'Connecting...',
                     style: TextStyle(
+                      inherit: true,
                       color: Colors.white.withOpacity(0.7),
                       fontSize: 16,
                     ),
@@ -131,28 +137,28 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                 ],
               ),
             ),
-            // Control buttons
             Container(
               padding: const EdgeInsets.all(32),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  // Mute button
                   _buildControlButton(
                     icon: _callService.isMuted ? Icons.mic_off : Icons.mic,
-                    color: _callService.isMuted ? Colors.red : Colors.white,
+                    color: _callService.isMuted ? AppTheme.error : Colors.white,
                     onPressed: _callService.toggleMute,
                   ),
-                  // Speaker button
                   _buildControlButton(
-                    icon: _callService.isSpeakerOn ? Icons.volume_up : Icons.volume_off,
-                    color: _callService.isSpeakerOn ? Colors.blue : Colors.white,
+                    icon: _callService.isSpeakerOn
+                        ? Icons.volume_up
+                        : Icons.volume_off,
+                    color: _callService.isSpeakerOn
+                        ? AppTheme.secondary
+                        : Colors.white,
                     onPressed: _callService.toggleSpeaker,
                   ),
-                  // End call button
                   _buildControlButton(
                     icon: Icons.call_end,
-                    color: Colors.red,
+                    color: AppTheme.error,
                     size: 70,
                     onPressed: () {
                       _callService.endCall();

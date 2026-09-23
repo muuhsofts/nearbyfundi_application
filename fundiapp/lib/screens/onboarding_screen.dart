@@ -229,7 +229,7 @@ color: isDark
 ),
 ),
 child: Image.asset(
-'assets/images/nearbyfundi-logo.png',
+'assets/images/nearbyfundi-logov2.png',
 fit: BoxFit.contain,
 errorBuilder: (_, __, ___) {
 return const Icon(

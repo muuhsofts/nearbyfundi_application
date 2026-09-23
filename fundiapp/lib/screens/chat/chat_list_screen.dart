@@ -1,12 +1,12 @@
 // lib/screens/chat/chat_list_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../providers/chat_provider.dart';
-import '../../providers/auth_provider.dart';
+import '../../config/app_theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/chat_conversation.dart';
 import '../../models/chat_user.dart';
-import '../../l10n/app_localizations.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/chat_provider.dart';
 import 'chat_screen.dart';
 
 class ChatListScreen extends StatefulWidget {
@@ -55,16 +55,30 @@ class _ChatListScreenState extends State<ChatListScreen> {
   }
 
   Future<void> _confirmAndDelete(
-      BuildContext context,
-      ChatConversation conversation,
-      ) async {
+    BuildContext context,
+    ChatConversation conversation,
+  ) async {
     final l10n = AppLocalizations.of(context)!;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(l10n.deleteConversation),
-        content: Text(l10n.deleteConversationConfirmation),
+        backgroundColor: isDark ? AppTheme.darkSurface : Colors.white,
+        title: Text(
+          l10n.deleteConversation,
+          style: TextStyle(
+            inherit: true,
+            color: isDark ? Colors.white : AppTheme.primary,
+          ),
+        ),
+        content: Text(
+          l10n.deleteConversationConfirmation,
+          style: TextStyle(
+            inherit: true,
+            color: isDark ? AppTheme.darkTextSecondary : AppTheme.greyText,
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -72,7 +86,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(foregroundColor: AppTheme.error),
             child: Text(l10n.delete),
           ),
         ],
@@ -82,7 +96,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
     if (confirm != true || !mounted) return;
 
     final success =
-    await context.read<ChatProvider>().deleteConversation(conversation.id);
+        await context.read<ChatProvider>().deleteConversation(conversation.id);
 
     if (!mounted) return;
 
@@ -91,7 +105,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
         content: Text(
           success ? l10n.conversationDeleted : 'Failed to delete conversation',
         ),
-        backgroundColor: success ? Colors.green : Colors.red,
+        backgroundColor: success ? AppTheme.success : AppTheme.error,
         duration: const Duration(seconds: 2),
       ),
     );
@@ -101,17 +115,20 @@ class _ChatListScreenState extends State<ChatListScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
+      backgroundColor: isDark ? AppTheme.darkBackground : AppTheme.scaffoldLight,
       appBar: AppBar(
         title: Text(
           l10n.chat,
-          style: TextStyle(
+          style: const TextStyle(
+            inherit: true,
             fontWeight: FontWeight.bold,
-            color: theme.colorScheme.onPrimary,
+            color: Colors.white,
           ),
         ),
-        backgroundColor: const Color(0xFF075E54),
+        backgroundColor: AppTheme.primary,
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
@@ -147,7 +164,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(4),
                         decoration: const BoxDecoration(
-                          color: Colors.red,
+                          color: AppTheme.secondary,
                           shape: BoxShape.circle,
                         ),
                         constraints: const BoxConstraints(
@@ -159,7 +176,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
                               ? '9+'
                               : '${chatProvider.totalUnread}',
                           style: const TextStyle(
-                            color: Colors.white,
+                            inherit: true,
+                            color: AppTheme.primary,
                             fontSize: 9,
                             fontWeight: FontWeight.bold,
                           ),
@@ -174,69 +192,79 @@ class _ChatListScreenState extends State<ChatListScreen> {
         ],
       ),
       body: _isInitializing
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: CircularProgressIndicator(color: AppTheme.primary),
+            )
           : Consumer<ChatProvider>(
-        builder: (context, chatProvider, child) {
-          final conversations = chatProvider.conversations;
+              builder: (context, chatProvider, child) {
+                final conversations = chatProvider.conversations;
 
-          if (chatProvider.isLoading && conversations.isEmpty) {
-            return const Center(child: CircularProgressIndicator());
-          }
+                if (chatProvider.isLoading && conversations.isEmpty) {
+                  return const Center(
+                    child: CircularProgressIndicator(color: AppTheme.primary),
+                  );
+                }
 
-          if (conversations.isEmpty) {
-            return _buildEmptyState(context, l10n, theme);
-          }
+                if (conversations.isEmpty) {
+                  return _buildEmptyState(context, l10n, isDark);
+                }
 
-          return RefreshIndicator(
-            onRefresh: () => chatProvider.refreshConversations(),
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 8,
-              ),
-              itemCount: conversations.length,
-              itemBuilder: (context, index) {
-                final conversation = conversations[index];
-                return _ConversationTile(
-                  conversation: conversation,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) =>
-                            ChatScreen(conversation: conversation),
-                      ),
-                    ).then((_) {
-                      chatProvider.refreshConversations();
-                    });
-                  },
-                  onDelete: () =>
-                      _confirmAndDelete(context, conversation),
+                return RefreshIndicator(
+                  color: AppTheme.primary,
+                  onRefresh: () => chatProvider.refreshConversations(),
+                  child: ListView.builder(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    itemCount: conversations.length,
+                    itemBuilder: (context, index) {
+                      final conversation = conversations[index];
+                      return _ConversationTile(
+                        conversation: conversation,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  ChatScreen(conversation: conversation),
+                            ),
+                          ).then((_) {
+                            chatProvider.refreshConversations();
+                          });
+                        },
+                        onDelete: () =>
+                            _confirmAndDelete(context, conversation),
+                      );
+                    },
+                  ),
                 );
               },
             ),
-          );
-        },
-      ),
     );
   }
 
   Widget _buildEmptyState(
-      BuildContext context,
-      AppLocalizations l10n,
-      ThemeData theme,
-      ) {
+    BuildContext context,
+    AppLocalizations l10n,
+    bool isDark,
+  ) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.chat_outlined, size: 80, color: Colors.grey.shade300),
+          Icon(
+            Icons.chat_outlined,
+            size: 80,
+            color: isDark ? AppTheme.darkBorder : AppTheme.navy200,
+          ),
           const SizedBox(height: 16),
           Text(
             l10n.noConversationsYet,
             style: TextStyle(
+              inherit: true,
               fontSize: 18,
-              color: Colors.grey.shade600,
+              color: isDark ? Colors.white : AppTheme.primary,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -244,7 +272,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
           Text(
             l10n.startChattingWithFundis,
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+            style: TextStyle(
+              inherit: true,
+              fontSize: 14,
+              color: isDark ? AppTheme.darkTextSecondary : AppTheme.greyText,
+            ),
           ),
         ],
       ),
@@ -266,20 +298,23 @@ class _ConversationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryText = isDark ? Colors.white : AppTheme.primary;
+    final mutedText =
+        isDark ? AppTheme.darkTextSecondary : AppTheme.greyText;
 
     return Dismissible(
       key: Key('conversation_${conversation.id}'),
       direction: DismissDirection.endToStart,
       confirmDismiss: (_) async {
         onDelete();
-        return false; // dialog handles real delete; don't auto-remove tile
+        return false;
       },
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 16),
         decoration: BoxDecoration(
-          color: Colors.red,
+          color: AppTheme.error,
           borderRadius: BorderRadius.circular(12),
         ),
         child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
@@ -292,7 +327,7 @@ class _ConversationTile extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 4),
           decoration: BoxDecoration(
             color: conversation.unreadCount > 0
-                ? theme.primaryColor.withOpacity(0.05)
+                ? AppTheme.primary.withOpacity(isDark ? 0.15 : 0.05)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
           ),
@@ -300,36 +335,39 @@ class _ConversationTile extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 28,
-                backgroundColor: Colors.grey.shade300,
+                backgroundColor:
+                    isDark ? AppTheme.darkSurfaceLight : AppTheme.navy100,
                 child: conversation.otherParty.avatar != null
                     ? ClipOval(
-                  child: Image.network(
-                    conversation.otherParty.avatar!,
-                    width: 56,
-                    height: 56,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Text(
-                      conversation.otherParty.name.isNotEmpty
-                          ? conversation.otherParty.name[0].toUpperCase()
-                          : '?',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey,
-                      ),
-                    ),
-                  ),
-                )
+                        child: Image.network(
+                          conversation.otherParty.avatar!,
+                          width: 56,
+                          height: 56,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Text(
+                            conversation.otherParty.name.isNotEmpty
+                                ? conversation.otherParty.name[0].toUpperCase()
+                                : '?',
+                            style: TextStyle(
+                              inherit: true,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: primaryText,
+                            ),
+                          ),
+                        ),
+                      )
                     : Text(
-                  conversation.otherParty.name.isNotEmpty
-                      ? conversation.otherParty.name[0].toUpperCase()
-                      : '?',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey,
-                  ),
-                ),
+                        conversation.otherParty.name.isNotEmpty
+                            ? conversation.otherParty.name[0].toUpperCase()
+                            : '?',
+                        style: TextStyle(
+                          inherit: true,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: primaryText,
+                        ),
+                      ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -342,7 +380,9 @@ class _ConversationTile extends StatelessWidget {
                           child: Text(
                             conversation.otherParty.name,
                             style: TextStyle(
+                              inherit: true,
                               fontSize: 16,
+                              color: primaryText,
                               fontWeight: conversation.unreadCount > 0
                                   ? FontWeight.w700
                                   : FontWeight.w500,
@@ -353,8 +393,9 @@ class _ConversationTile extends StatelessWidget {
                         Text(
                           _formatTime(conversation.lastMessageAt, l10n),
                           style: TextStyle(
+                            inherit: true,
                             fontSize: 12,
-                            color: Colors.grey.shade500,
+                            color: mutedText,
                           ),
                         ),
                       ],
@@ -367,10 +408,11 @@ class _ConversationTile extends StatelessWidget {
                             conversation.lastMessage?.content ??
                                 l10n.noMessagesYet,
                             style: TextStyle(
+                              inherit: true,
                               fontSize: 14,
                               color: conversation.unreadCount > 0
-                                  ? Colors.black87
-                                  : Colors.grey.shade600,
+                                  ? primaryText
+                                  : mutedText,
                               fontWeight: conversation.unreadCount > 0
                                   ? FontWeight.w600
                                   : FontWeight.normal,
@@ -384,7 +426,7 @@ class _ConversationTile extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.all(4),
                             decoration: const BoxDecoration(
-                              color: Colors.blue,
+                              color: AppTheme.secondary,
                               shape: BoxShape.circle,
                             ),
                             child: Text(
@@ -392,7 +434,8 @@ class _ConversationTile extends StatelessWidget {
                                   ? '9+'
                                   : '${conversation.unreadCount}',
                               style: const TextStyle(
-                                color: Colors.white,
+                                inherit: true,
+                                color: AppTheme.primary,
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
                               ),

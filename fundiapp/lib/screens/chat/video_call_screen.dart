@@ -1,8 +1,9 @@
 // lib/screens/chat/video_call_screen.dart
-
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../config/app_theme.dart';
 import '../../services/video_call_service.dart';
+
 
 class VideoCallScreen extends StatefulWidget {
   final String userName;
@@ -63,23 +64,22 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        color: Colors.black,
+        color: AppTheme.navy950,
         child: Stack(
           children: [
-            // Remote video placeholder
             Container(
-              color: Colors.grey.shade900,
+              color: AppTheme.navy900,
               child: const Center(
                 child: Text(
                   'Video Call',
                   style: TextStyle(
+                    inherit: true,
                     color: Colors.white54,
                     fontSize: 20,
                   ),
                 ),
               ),
             ),
-            // Local video (small preview)
             Positioned(
               top: 60,
               right: 16,
@@ -87,7 +87,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                 width: 120,
                 height: 160,
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade800,
+                  color: AppTheme.navy800,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: Colors.white.withOpacity(0.3)),
                 ),
@@ -100,7 +100,6 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                 ),
               ),
             ),
-            // Top bar
             Positioned(
               top: 0,
               left: 0,
@@ -121,6 +120,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                       const Text(
                         'Video Call',
                         style: TextStyle(
+                          inherit: true,
                           color: Colors.white,
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -133,7 +133,6 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                 ),
               ),
             ),
-            // Call info
             Positioned(
               top: 80,
               left: 0,
@@ -143,6 +142,7 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                   Text(
                     widget.userName,
                     style: const TextStyle(
+                      inherit: true,
                       color: Colors.white,
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -150,8 +150,11 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    _isConnected ? _formatDuration(_callDuration) : 'Connecting...',
+                    _isConnected
+                        ? _formatDuration(_callDuration)
+                        : 'Connecting...',
                     style: TextStyle(
+                      inherit: true,
                       color: Colors.white.withOpacity(0.7),
                       fontSize: 14,
                     ),
@@ -159,7 +162,6 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                 ],
               ),
             ),
-            // Bottom controls
             Positioned(
               bottom: 40,
               left: 0,
@@ -169,28 +171,33 @@ class _VideoCallScreenState extends State<VideoCallScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    // Mute
                     _buildControlButton(
                       icon: _callService.isMuted ? Icons.mic_off : Icons.mic,
-                      color: _callService.isMuted ? Colors.red : Colors.white,
+                      color:
+                          _callService.isMuted ? AppTheme.error : Colors.white,
                       onPressed: _callService.toggleMute,
                     ),
-                    // Camera
                     _buildControlButton(
-                      icon: _callService.isCameraOn ? Icons.videocam : Icons.videocam_off,
-                      color: _callService.isCameraOn ? Colors.white : Colors.red,
+                      icon: _callService.isCameraOn
+                          ? Icons.videocam
+                          : Icons.videocam_off,
+                      color: _callService.isCameraOn
+                          ? Colors.white
+                          : AppTheme.error,
                       onPressed: _callService.toggleCamera,
                     ),
-                    // Speaker
                     _buildControlButton(
-                      icon: _callService.isSpeakerOn ? Icons.volume_up : Icons.volume_off,
-                      color: _callService.isSpeakerOn ? Colors.blue : Colors.white,
+                      icon: _callService.isSpeakerOn
+                          ? Icons.volume_up
+                          : Icons.volume_off,
+                      color: _callService.isSpeakerOn
+                          ? AppTheme.secondary
+                          : Colors.white,
                       onPressed: _callService.toggleSpeaker,
                     ),
-                    // End call
                     _buildControlButton(
                       icon: Icons.call_end,
-                      color: Colors.red,
+                      color: AppTheme.error,
                       size: 60,
                       onPressed: () {
                         _callService.endCall();

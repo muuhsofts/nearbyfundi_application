@@ -1,10 +1,4 @@
 // lib/screens/chat/chat_screen.dart
-// FIXES:
-// 1. isCurrentUser = message.senderId == currentUserId
-// 4. Voice: download to temp then play; send voiceDuration
-// 6. Call buttons show "Coming soon"
-// 7. Typing debounce + force false on send/dispose
-
 import 'dart:io';
 import 'dart:async';
 
@@ -19,14 +13,15 @@ import 'package:file_picker/file_picker.dart';
 import 'package:dio/dio.dart';
 import 'package:provider/provider.dart';
 
-import '../../providers/chat_provider.dart';
-import '../../providers/auth_provider.dart';
+import '../../config/app_theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/chat_conversation.dart';
 import '../../models/chat_message.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/chat_provider.dart';
+import '../../services/voice_recording_service.dart';
 import '../../widgets/message_bubble.dart';
 import '../../widgets/typing_indicator.dart';
-import '../../l10n/app_localizations.dart';
-import '../../services/voice_recording_service.dart';
 
 class ChatScreen extends StatefulWidget {
   final ChatConversation conversation;
@@ -57,9 +52,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Duration _playbackPosition = Duration.zero;
   Duration _playbackDuration = Duration.zero;
 
-  /// Fixed: no broken ?? / ?: mix — always int
-  int get _currentUserId =>
-      context.read<AuthProvider>().user?.id ?? 0;
+  int get _currentUserId => context.read<AuthProvider>().user?.id ?? 0;
 
   @override
   void initState() {
@@ -92,15 +85,11 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _subscribeToUser() {
-    context
-        .read<ChatProvider>()
-        .subscribeToUser(widget.conversation.otherParty.id);
+    context.read<ChatProvider>().subscribeToUser(widget.conversation.otherParty.id);
   }
 
   Future<void> _loadMessages() async {
-    await context
-        .read<ChatProvider>()
-        .getMessages(conversationId: widget.conversation.id);
+    await context.read<ChatProvider>().getMessages(conversationId: widget.conversation.id);
     _scrollToBottom();
   }
 
@@ -117,12 +106,8 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _markConversationAsRead() async {
-    await context
-        .read<ChatProvider>()
-        .markConversationAsRead(widget.conversation.id);
+    await context.read<ChatProvider>().markConversationAsRead(widget.conversation.id);
   }
-
-  // ── Typing (debounce + force false) ───────────────────────────────────────
 
   void _onTextChanged(String text) {
     setState(() {});
@@ -180,7 +165,7 @@ class _ChatScreenState extends State<ChatScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('${l10n.failedToSend}: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppTheme.error,
           ),
         );
       }
@@ -231,7 +216,7 @@ class _ChatScreenState extends State<ChatScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to pick file: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppTheme.error,
           ),
         );
       }
@@ -239,11 +224,11 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _sendFile(
-      File file,
-      String type,
-      String content, {
-        int? voiceDuration,
-      }) async {
+    File file,
+    String type,
+    String content, {
+    int? voiceDuration,
+  }) async {
     setState(() => _isSending = true);
     await _forceStopTyping();
     try {
@@ -259,11 +244,11 @@ class _ChatScreenState extends State<ChatScreen> {
       if (mounted) {
         final l10n = AppLocalizations.of(context)!;
         final errorMsg =
-        type == 'image' ? l10n.failedToSendImage : l10n.failedToSendFile;
+            type == 'image' ? l10n.failedToSendImage : l10n.failedToSendFile;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('$errorMsg: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppTheme.error,
           ),
         );
       }
@@ -271,8 +256,6 @@ class _ChatScreenState extends State<ChatScreen> {
       if (mounted) setState(() => _isSending = false);
     }
   }
-
-  // ── Voice recording ───────────────────────────────────────────────────────
 
   void _startVoiceRecording() async {
     try {
@@ -282,7 +265,7 @@ class _ChatScreenState extends State<ChatScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to start recording: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppTheme.error,
           ),
         );
       }
@@ -306,7 +289,7 @@ class _ChatScreenState extends State<ChatScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to stop recording: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppTheme.error,
           ),
         );
       }
@@ -321,7 +304,6 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  /// Download remote voice to temp file, then play locally
   Future<void> _playVoiceMessage(ChatMessage message) async {
     final url = message.file?.url;
     if (url == null || url.isEmpty) return;
@@ -352,7 +334,7 @@ class _ChatScreenState extends State<ChatScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to play voice: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppTheme.error,
           ),
         );
       }
@@ -403,7 +385,7 @@ class _ChatScreenState extends State<ChatScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Voice error: $error'),
-          backgroundColor: Colors.red,
+          backgroundColor: AppTheme.error,
         ),
       );
     }
@@ -437,9 +419,9 @@ class _ChatScreenState extends State<ChatScreen> {
       final fileName = message.file!.name ?? 'file_${message.id}';
       final extension = message.file!.extension ?? '';
       final fullFileName =
-      extension.isNotEmpty && !fileName.endsWith('.$extension')
-          ? '$fileName.$extension'
-          : fileName;
+          extension.isNotEmpty && !fileName.endsWith('.$extension')
+              ? '$fileName.$extension'
+              : fileName;
 
       if (Platform.isAndroid) {
         final directory = await getExternalStorageDirectory();
@@ -455,16 +437,17 @@ class _ChatScreenState extends State<ChatScreen> {
       }
 
       final result =
-      await context.read<ChatProvider>().downloadFile(message.id, savePath);
+          await context.read<ChatProvider>().downloadFile(message.id, savePath);
 
       if (result != null && mounted) {
         final l10n = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('${l10n.fileDownloaded}: $fullFileName'),
-            backgroundColor: Colors.green,
+            backgroundColor: AppTheme.success,
             action: SnackBarAction(
               label: 'Open',
+              textColor: Colors.white,
               onPressed: () => OpenFile.open(savePath),
             ),
           ),
@@ -476,7 +459,7 @@ class _ChatScreenState extends State<ChatScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('${l10n.downloadFailed}: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppTheme.error,
           ),
         );
       }
@@ -484,12 +467,24 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _deleteConversation() async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Conversation'),
-        content: const Text(
+        backgroundColor: isDark ? AppTheme.darkSurface : Colors.white,
+        title: Text(
+          'Delete Conversation',
+          style: TextStyle(
+            inherit: true,
+            color: isDark ? Colors.white : AppTheme.primary,
+          ),
+        ),
+        content: Text(
           'Are you sure you want to delete this entire conversation? This cannot be undone.',
+          style: TextStyle(
+            inherit: true,
+            color: isDark ? AppTheme.darkTextSecondary : AppTheme.greyText,
+          ),
         ),
         actions: [
           TextButton(
@@ -498,7 +493,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(foregroundColor: AppTheme.error),
             child: const Text('Delete'),
           ),
         ],
@@ -515,7 +510,7 @@ class _ChatScreenState extends State<ChatScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(l10n.conversationDeleted),
-            backgroundColor: Colors.green,
+            backgroundColor: AppTheme.success,
           ),
         );
       }
@@ -523,11 +518,25 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _deleteFile(ChatMessage message) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete File'),
-        content: const Text('Delete this file from the message?'),
+        backgroundColor: isDark ? AppTheme.darkSurface : Colors.white,
+        title: Text(
+          'Delete File',
+          style: TextStyle(
+            inherit: true,
+            color: isDark ? Colors.white : AppTheme.primary,
+          ),
+        ),
+        content: Text(
+          'Delete this file from the message?',
+          style: TextStyle(
+            inherit: true,
+            color: isDark ? AppTheme.darkTextSecondary : AppTheme.greyText,
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -535,7 +544,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(foregroundColor: AppTheme.error),
             child: const Text('Delete'),
           ),
         ],
@@ -550,9 +559,11 @@ class _ChatScreenState extends State<ChatScreen> {
     final l10n = AppLocalizations.of(context)!;
     final currentUserId = context.read<AuthProvider>().user?.id ?? 0;
     final isMine = message.isFromMe(currentUserId);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     showModalBottomSheet(
       context: context,
+      backgroundColor: isDark ? AppTheme.darkSurface : Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -562,7 +573,7 @@ class _ChatScreenState extends State<ChatScreen> {
             children: [
               if (message.content != null && message.content!.isNotEmpty)
                 ListTile(
-                  leading: const Icon(Icons.content_copy, color: Colors.blue),
+                  leading: const Icon(Icons.content_copy, color: AppTheme.primary),
                   title: Text(l10n.copy),
                   onTap: () {
                     Navigator.pop(context);
@@ -574,7 +585,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               if (message.file != null)
                 ListTile(
-                  leading: const Icon(Icons.download, color: Colors.green),
+                  leading: const Icon(Icons.download, color: AppTheme.success),
                   title: Text(l10n.downloadFile),
                   onTap: () {
                     Navigator.pop(context);
@@ -585,7 +596,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 ListTile(
                   leading: Icon(
                     _isPlayingVoice ? Icons.pause : Icons.play_arrow,
-                    color: Colors.blue,
+                    color: AppTheme.primary,
                   ),
                   title: Text(_isPlayingVoice ? 'Pause Voice' : 'Play Voice'),
                   onTap: () {
@@ -595,11 +606,10 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               if (isMine)
                 ListTile(
-                  leading:
-                  const Icon(Icons.delete_outline, color: Colors.red),
+                  leading: const Icon(Icons.delete_outline, color: AppTheme.error),
                   title: Text(
                     l10n.deleteMessage,
-                    style: const TextStyle(color: Colors.red),
+                    style: const TextStyle(inherit: true, color: AppTheme.error),
                   ),
                   onTap: () {
                     Navigator.pop(context);
@@ -618,9 +628,10 @@ class _ChatScreenState extends State<ChatScreen> {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     final currentUserId = context.watch<AuthProvider>().user?.id ?? 0;
+    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFECE5DD),
+      backgroundColor: isDark ? AppTheme.darkBackground : AppTheme.navy50,
       appBar: _buildAppBar(context, theme, l10n),
       body: Column(
         children: [
@@ -628,23 +639,23 @@ class _ChatScreenState extends State<ChatScreen> {
             child: Consumer<ChatProvider>(
               builder: (context, provider, child) {
                 if (provider.isLoading && provider.currentMessages.isEmpty) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const Center(
+                    child: CircularProgressIndicator(color: AppTheme.primary),
+                  );
                 }
 
                 if (provider.currentMessages.isEmpty) {
-                  return _buildEmptyState(context, l10n);
+                  return _buildEmptyState(context, l10n, isDark);
                 }
 
                 return ListView.builder(
                   controller: _scrollController,
-                  padding:
-                  const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
                   reverse: true,
                   itemCount: provider.currentMessages.length,
                   itemBuilder: (context, index) {
                     final message = provider.currentMessages[
-                    provider.currentMessages.length - 1 - index];
-                    // Ownership by sender id (works for customer & fundi)
+                        provider.currentMessages.length - 1 - index];
                     final isCurrentUser = message.isFromMe(currentUserId);
 
                     return MessageBubble(
@@ -680,21 +691,21 @@ class _ChatScreenState extends State<ChatScreen> {
               return const SizedBox.shrink();
             },
           ),
-          _buildMessageInput(context, theme, l10n),
+          _buildMessageInput(context, theme, l10n, isDark),
         ],
       ),
     );
   }
 
   PreferredSizeWidget _buildAppBar(
-      BuildContext context,
-      ThemeData theme,
-      AppLocalizations l10n,
-      ) {
+    BuildContext context,
+    ThemeData theme,
+    AppLocalizations l10n,
+  ) {
     final otherParty = widget.conversation.otherParty;
 
     return AppBar(
-      backgroundColor: const Color(0xFF075E54),
+      backgroundColor: AppTheme.primary,
       elevation: 0,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -710,6 +721,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   ? otherParty.name[0].toUpperCase()
                   : '?',
               style: const TextStyle(
+                inherit: true,
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
@@ -724,6 +736,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 Text(
                   otherParty.name,
                   style: const TextStyle(
+                    inherit: true,
                     color: Colors.white,
                     fontWeight: FontWeight.w600,
                     fontSize: 16,
@@ -733,9 +746,10 @@ class _ChatScreenState extends State<ChatScreen> {
                 Text(
                   otherParty.isOnline ? l10n.online : l10n.lastSeen,
                   style: TextStyle(
+                    inherit: true,
                     fontSize: 12,
                     color: otherParty.isOnline
-                        ? Colors.lightGreenAccent
+                        ? AppTheme.secondary
                         : Colors.white.withOpacity(0.7),
                   ),
                 ),
@@ -746,12 +760,12 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.videocam, color: Colors.white70),
+          icon: Icon(Icons.videocam, color: Colors.white.withOpacity(0.7)),
           tooltip: 'Video call – Coming soon',
           onPressed: () => _showComingSoon('Video call'),
         ),
         IconButton(
-          icon: const Icon(Icons.phone, color: Colors.white70),
+          icon: Icon(Icons.phone, color: Colors.white.withOpacity(0.7)),
           tooltip: 'Voice call – Coming soon',
           onPressed: () => _showComingSoon('Voice call'),
         ),
@@ -765,7 +779,7 @@ class _ChatScreenState extends State<ChatScreen> {
               value: 'delete_conversation',
               child: Text(
                 'Delete Conversation',
-                style: TextStyle(color: Colors.red),
+                style: TextStyle(inherit: true, color: AppTheme.error),
               ),
             ),
           ],
@@ -774,33 +788,43 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildEmptyState(BuildContext context, AppLocalizations l10n) {
+  Widget _buildEmptyState(
+    BuildContext context,
+    AppLocalizations l10n,
+    bool isDark,
+  ) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           CircleAvatar(
             radius: 50,
-            backgroundColor: Colors.grey.shade200,
+            backgroundColor:
+                isDark ? AppTheme.darkSurfaceLight : AppTheme.navy100,
             child: Icon(
               Icons.chat_bubble_outline,
               size: 50,
-              color: Colors.grey.shade400,
+              color: isDark ? AppTheme.darkTextSecondary : AppTheme.greyText,
             ),
           ),
           const SizedBox(height: 16),
           Text(
             l10n.noMessagesYet,
-            style: const TextStyle(
+            style: TextStyle(
+              inherit: true,
               fontSize: 16,
               fontWeight: FontWeight.w500,
-              color: Colors.black54,
+              color: isDark ? Colors.white : AppTheme.primary,
             ),
           ),
           const SizedBox(height: 8),
           Text(
             l10n.sayHelloToStart,
-            style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+            style: TextStyle(
+              inherit: true,
+              color: isDark ? AppTheme.darkTextSecondary : AppTheme.greyText,
+              fontSize: 14,
+            ),
           ),
         ],
       ),
@@ -808,19 +832,20 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildMessageInput(
-      BuildContext context,
-      ThemeData theme,
-      AppLocalizations l10n,
-      ) {
+    BuildContext context,
+    ThemeData theme,
+    AppLocalizations l10n,
+    bool isDark,
+  ) {
     return Column(
       children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: isDark ? AppTheme.darkSurface : Colors.white,
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
                 blurRadius: 4,
                 offset: const Offset(0, -2),
               ),
@@ -831,7 +856,7 @@ class _ChatScreenState extends State<ChatScreen> {
               PopupMenuButton<String>(
                 icon: Icon(
                   Icons.attach_file,
-                  color: Colors.grey.shade600,
+                  color: isDark ? AppTheme.darkTextSecondary : AppTheme.greyText,
                   size: 26,
                 ),
                 onSelected: (value) {
@@ -880,15 +905,24 @@ class _ChatScreenState extends State<ChatScreen> {
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
+                    color: isDark ? AppTheme.darkSurfaceLight : AppTheme.navy50,
                     borderRadius: BorderRadius.circular(24),
                   ),
                   child: TextField(
                     controller: _textController,
                     onChanged: _onTextChanged,
+                    style: TextStyle(
+                      inherit: true,
+                      color: isDark ? Colors.white : AppTheme.primary,
+                    ),
                     decoration: InputDecoration(
                       hintText: l10n.typeAMessage,
-                      hintStyle: TextStyle(color: Colors.grey.shade500),
+                      hintStyle: TextStyle(
+                        inherit: true,
+                        color: isDark
+                            ? AppTheme.darkTextSecondary
+                            : AppTheme.greyText,
+                      ),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 16,
@@ -906,7 +940,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   _showEmojiPicker
                       ? Icons.keyboard
                       : Icons.emoji_emotions_outlined,
-                  color: Colors.grey.shade600,
+                  color: isDark ? AppTheme.darkTextSecondary : AppTheme.greyText,
                   size: 26,
                 ),
                 onPressed: () =>
@@ -915,19 +949,19 @@ class _ChatScreenState extends State<ChatScreen> {
               if (_textController.text.trim().isNotEmpty)
                 Container(
                   decoration: const BoxDecoration(
-                    color: Color(0xFF075E54),
+                    color: AppTheme.primary,
                     shape: BoxShape.circle,
                   ),
                   child: IconButton(
                     icon: _isSending
                         ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
                         : const Icon(Icons.send, color: Colors.white, size: 22),
                     onPressed: _isSending ? null : _sendMessage,
                     padding: EdgeInsets.zero,
@@ -944,15 +978,18 @@ class _ChatScreenState extends State<ChatScreen> {
                   child: Container(
                     decoration: BoxDecoration(
                       color: _isRecording
-                          ? Colors.red.withOpacity(0.1)
+                          ? AppTheme.error.withOpacity(0.1)
                           : Colors.transparent,
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
                       icon: Icon(
                         _isRecording ? Icons.stop_circle : Icons.mic,
-                        color:
-                        _isRecording ? Colors.red : Colors.grey.shade600,
+                        color: _isRecording
+                            ? AppTheme.error
+                            : (isDark
+                                ? AppTheme.darkTextSecondary
+                                : AppTheme.greyText),
                         size: 26,
                       ),
                       onPressed: null,
@@ -965,21 +1002,22 @@ class _ChatScreenState extends State<ChatScreen> {
         if (_isRecording)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: Colors.red.shade50,
+            color: AppTheme.error.withOpacity(0.1),
             child: Row(
               children: [
-                const Icon(Icons.circle, color: Colors.red, size: 12),
+                const Icon(Icons.circle, color: AppTheme.error, size: 12),
                 const SizedBox(width: 8),
                 Text(
                   'Recording... ${_recordingDuration}s',
                   style: const TextStyle(
-                    color: Colors.red,
+                    inherit: true,
+                    color: AppTheme.error,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 const Spacer(),
                 IconButton(
-                  icon: const Icon(Icons.close, color: Colors.red),
+                  icon: const Icon(Icons.close, color: AppTheme.error),
                   onPressed: _cancelVoiceRecording,
                 ),
               ],

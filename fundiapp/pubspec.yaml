@@ -97,9 +97,9 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/icons/nearbyfundi-logo.png"
-  adaptive_icon_background: "#0B0F1A"
-  adaptive_icon_foreground: "assets/icons/nearbyfundi-logo.png"
+  image_path: "assets/icons/nearbyfundi-logov1.png"
+  adaptive_icon_background: "#eaf1fb"
+  adaptive_icon_foreground: "assets/icons/nearbyfundi-logov1.png"
   min_sdk_android: 21
   remove_alpha_ios: true
   ios_content_mode: center

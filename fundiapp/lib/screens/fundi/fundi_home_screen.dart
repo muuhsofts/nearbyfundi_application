@@ -1,3 +1,4 @@
+// lib/screens/fundi/fundi_home_screen.dart
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -67,9 +68,6 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
     }
   }
 
-  // ============================================================
-  // DATA
-  // ============================================================
   void _initializeData() {
     context.read<TechnicianProvider>().fetchMyProfile();
     context.read<RequestProvider>().loadMyRequests();
@@ -79,25 +77,20 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
 
   Future<void> _manualRefresh() async {
     if (_isRefreshing) return;
-
     setState(() => _isRefreshing = true);
-
     await Future.wait([
       context.read<TechnicianProvider>().fetchMyProfile(),
       context.read<RequestProvider>().loadMyRequests(),
       context.read<NotificationProvider>().loadNotifications(),
     ]);
-
     if (mounted) setState(() => _isRefreshing = false);
   }
 
   void _initializeChat() {
     final auth = context.read<AuthProvider>();
     final chat = context.read<ChatProvider>();
-
     final user = auth.user;
     final token = auth.token;
-
     if (user != null && token != null) {
       chat.initialize(
         token: token,
@@ -121,63 +114,140 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
   }
 
   // ============================================================
-  // DRAWER
+  // DRAWER – OG ONE GROUP + Mini Apps (Partnerships)
   // ============================================================
   Drawer _buildDrawer(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryText = isDark ? Colors.white : AppTheme.primary;
+    final mutedText = isDark ? AppTheme.darkTextSecondary : AppTheme.greyText;
 
     return Drawer(
-      backgroundColor: theme.cardColor,
+      backgroundColor: isDark ? AppTheme.darkSurface : Colors.white,
       child: SafeArea(
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(20, 28, 20, 20),
-              decoration: BoxDecoration(
-                color: theme.cardColor,
-                border: Border(
-                  bottom: BorderSide(
-                    color: theme.dividerColor.withOpacity(0.5),
-                  ),
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [AppTheme.primary, AppTheme.primaryDark],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
               ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.all(6),
+                    child: Image.asset(
+                      'assets/images/nearbyfundi-logov1.png',
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => const Icon(
+                        Icons.business_rounded,
+                        color: AppTheme.primary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'OG ONE GROUP',
+                          style: TextStyle(
+                            inherit: true,
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Mini Apps',
+                          style: TextStyle(
+                            inherit: true,
+                            color: AppTheme.secondary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
               child: Text(
-                'Menu',
-                style: theme.textTheme.titleLarge?.copyWith(
+                'Partnerships',
+                style: TextStyle(
+                  inherit: true,
+                  fontSize: 13,
                   fontWeight: FontWeight.w700,
-                  letterSpacing: -0.3,
+                  letterSpacing: 0.6,
+                  color: mutedText,
                 ),
               ),
             ),
-            const SizedBox(height: 8),
+            // Single Coming soon entry
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              child: _MiniAppTile(
+                item: _MiniAppItem(
+                  name: 'Coming soon',
+                  subtitle: 'OG ONE GROUP mini apps',
+                  icon: Icons.apps_rounded,
+                  color: AppTheme.secondary,
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showComingSoon(context, 'OG ONE GROUP Mini Apps');
+                  },
+                ),
+              ),
+            ),
+            const Spacer(),
+            Divider(color: isDark ? AppTheme.darkBorder : AppTheme.borderLight),
             ListTile(
-              leading: Icon(Icons.handshake_outlined, color: colorScheme.primary),
+              leading: const Icon(Icons.info_outline_rounded,
+                  color: AppTheme.primary),
               title: Text(
-                'Partnerships',
-                style: theme.textTheme.titleMedium?.copyWith(
+                'About OG ONE GROUP',
+                style: TextStyle(
+                  inherit: true,
+                  color: primaryText,
                   fontWeight: FontWeight.w500,
                 ),
               ),
               onTap: () {
                 Navigator.pop(context);
-                _showComingSoon(context, 'Partnerships');
+                launchUrl(
+                  Uri.parse('https://ogonegroup.com'),
+                  mode: LaunchMode.externalApplication,
+                ).catchError((_) => false);
               },
             ),
+            const SizedBox(height: 8),
           ],
         ),
       ),
     );
   }
 
-  // ============================================================
-  // NOTIFICATIONS BOTTOM SHEET (Modern UI)
-  // ============================================================
   void _showNotifications(BuildContext context) {
     final provider = context.read<NotificationProvider>();
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
+    final isDark = theme.brightness == Brightness.dark;
 
     showModalBottomSheet(
       context: context,
@@ -192,8 +262,9 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
           builder: (context, scrollController) {
             return Container(
               decoration: BoxDecoration(
-                color: theme.cardColor,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                color: isDark ? AppTheme.darkSurface : theme.cardColor,
+                borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(28)),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.12),
@@ -204,19 +275,17 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
               ),
               child: Column(
                 children: [
-                  // Handle
                   const SizedBox(height: 12),
                   Container(
                     width: 42,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: theme.dividerColor.withOpacity(0.6),
+                      color: (isDark ? AppTheme.darkBorder : theme.dividerColor)
+                          .withOpacity(0.6),
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
                   const SizedBox(height: 18),
-
-                  // Header
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Row(
@@ -224,8 +293,10 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
                         Text(
                           l10n.notifications,
                           style: theme.textTheme.titleLarge?.copyWith(
+                            inherit: true,
                             fontWeight: FontWeight.w800,
                             letterSpacing: -0.4,
+                            color: isDark ? Colors.white : AppTheme.primary,
                           ),
                         ),
                         const Spacer(),
@@ -235,27 +306,30 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
                             Navigator.pop(ctx);
                           },
                           style: TextButton.styleFrom(
-                            foregroundColor: theme.primaryColor,
+                            foregroundColor: AppTheme.primary,
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                           ),
                           child: Text(
                             l10n.markAllAsRead,
-                            style: const TextStyle(fontWeight: FontWeight.w600),
+                            style: const TextStyle(
+                              inherit: true,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 8),
-
-                  // List
                   Expanded(
                     child: Consumer<NotificationProvider>(
                       builder: (context, notificationProvider, _) {
                         if (notificationProvider.isLoading) {
-                          return const Center(child: CircularProgressIndicator());
+                          return const Center(
+                            child: CircularProgressIndicator(
+                                color: AppTheme.primary),
+                          );
                         }
-
                         if (notificationProvider.notifications.isEmpty) {
                           return Center(
                             child: Column(
@@ -264,13 +338,18 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
                                 Icon(
                                   Icons.notifications_off_outlined,
                                   size: 68,
-                                  color: theme.hintColor.withOpacity(0.6),
+                                  color: isDark
+                                      ? AppTheme.darkTextSecondary
+                                      : theme.hintColor.withOpacity(0.6),
                                 ),
                                 const SizedBox(height: 16),
                                 Text(
                                   l10n.noNotificationsYet,
                                   style: theme.textTheme.bodyLarge?.copyWith(
-                                    color: theme.hintColor,
+                                    inherit: true,
+                                    color: isDark
+                                        ? AppTheme.darkTextSecondary
+                                        : theme.hintColor,
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
@@ -278,7 +357,6 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
                             ),
                           );
                         }
-
                         return ListView.separated(
                           controller: scrollController,
                           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -287,15 +365,14 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
                           itemBuilder: (context, index) {
                             final notification =
                             notificationProvider.notifications[index];
-
                             return _NotificationTile(
                               notification: notification,
                               onTap: () {
-                                notificationProvider.markAsRead(notification['id']);
+                                notificationProvider
+                                    .markAsRead(notification['id']);
                                 Navigator.pop(ctx);
-
-                                final type = notification['type']?.toString() ?? '';
-
+                                final type =
+                                    notification['type']?.toString() ?? '';
                                 if (type == 'chat_message') {
                                   _navigateToTab(3);
                                 } else if (type == 'new_request' ||
@@ -321,27 +398,24 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
     );
   }
 
-  // ============================================================
-  // COMING SOON
-  // ============================================================
   void _showComingSoon(BuildContext context, String feature) {
-    final theme = Theme.of(context);
-
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
           children: [
-            const Icon(Icons.construction_rounded, color: Colors.white, size: 20),
+            const Icon(Icons.construction_rounded,
+                color: Colors.white, size: 20),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 '$feature ${AppLocalizations.of(context)!.comingSoon} 🚀',
-                style: const TextStyle(fontWeight: FontWeight.w500),
+                style: const TextStyle(
+                    inherit: true, fontWeight: FontWeight.w500),
               ),
             ),
           ],
         ),
-        backgroundColor: theme.primaryColor,
+        backgroundColor: AppTheme.primary,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         duration: const Duration(seconds: 2),
@@ -349,18 +423,13 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
     );
   }
 
-  // ============================================================
-  // LOGOUT
-  // ============================================================
   Future<void> _logoutWithConfirmation(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
-
     final confirm = await showConfirmationDialog(
       context,
       l10n.logout,
       l10n.logoutConfirmation,
     );
-
     if (confirm == true) {
       await context.read<AuthProvider>().logout();
       if (context.mounted) {
@@ -369,9 +438,6 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
     }
   }
 
-  // ============================================================
-  // BUILD
-  // ============================================================
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -379,19 +445,20 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
     final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
+      backgroundColor: isDark ? AppTheme.darkBackground : theme.scaffoldBackgroundColor,
       drawer: _buildDrawer(context),
       appBar: AppBar(
         title: Text(
           l10n.fundiDashboard,
           style: const TextStyle(
+            inherit: true,
             color: Colors.white,
             fontWeight: FontWeight.bold,
             letterSpacing: -0.3,
           ),
         ),
         elevation: 0,
-        backgroundColor: theme.primaryColor,
+        backgroundColor: AppTheme.primary,
         foregroundColor: Colors.white,
         leading: Builder(
           builder: (context) => IconButton(
@@ -414,19 +481,20 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
             tooltip: 'Refresh',
             onPressed: _isRefreshing ? null : _manualRefresh,
           ),
-          NotificationBellIcon(
-            onTap: () => _showNotifications(context),
-          ),
+          NotificationBellIcon(onTap: () => _showNotifications(context)),
           IconButton(
-            icon: const Icon(Icons.smart_toy_rounded, color: Colors.white, size: 26),
+            icon: const Icon(Icons.smart_toy_rounded,
+                color: Colors.white, size: 26),
             onPressed: () => _showComingSoon(context, l10n.aiAssistant),
             tooltip: '${l10n.aiAssistant} (${l10n.comingSoon})',
           ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
             offset: const Offset(0, 50),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             elevation: 10,
+            color: isDark ? AppTheme.darkSurface : Colors.white,
             itemBuilder: (context) => _buildMenuItems(context),
           ),
         ],
@@ -434,16 +502,19 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
       body: _screens[_currentIndex],
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
+          color: isDark ? AppTheme.darkSurface : theme.cardColor,
           boxShadow: [
             BoxShadow(
-              color: theme.shadowColor.withOpacity(0.07),
+              color: Colors.black.withOpacity(isDark ? 0.35 : 0.07),
               blurRadius: 12,
               offset: const Offset(0, -3),
             ),
           ],
           border: Border(
             top: BorderSide(
-              color: theme.dividerColor.withOpacity(0.45),
+              color: isDark
+                  ? AppTheme.darkBorder
+                  : theme.dividerColor.withOpacity(0.45),
               width: 0.5,
             ),
           ),
@@ -452,12 +523,13 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
           builder: (context, chatProvider, _) {
             return BottomNavigationBar(
               currentIndex: _currentIndex,
-              selectedItemColor: theme.primaryColor,
-              unselectedItemColor:
-              isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+              selectedItemColor: AppTheme.primary,
+              unselectedItemColor: isDark
+                  ? AppTheme.darkTextSecondary
+                  : AppTheme.greyText,
               onTap: (i) => setState(() => _currentIndex = i),
               type: BottomNavigationBarType.fixed,
-              backgroundColor: theme.cardColor,
+              backgroundColor: isDark ? AppTheme.darkSurface : theme.cardColor,
               elevation: 0,
               selectedFontSize: 12,
               unselectedFontSize: 11,
@@ -527,14 +599,15 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
     return Container(
       padding: const EdgeInsets.all(3.5),
       decoration: const BoxDecoration(
-        color: Colors.red,
+        color: AppTheme.secondary,
         shape: BoxShape.circle,
       ),
       constraints: const BoxConstraints(minWidth: 15, minHeight: 15),
       child: Text(
         count > 9 ? '9+' : '$count',
         style: const TextStyle(
-          color: Colors.white,
+          inherit: true,
+          color: AppTheme.primary,
           fontSize: 8.5,
           fontWeight: FontWeight.bold,
         ),
@@ -543,12 +616,8 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
     );
   }
 
-  // ============================================================
-  // MENU
-  // ============================================================
   List<PopupMenuEntry<String>> _buildMenuItems(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-
     return [
       _buildPopupMenuItem(
         context,
@@ -591,42 +660,167 @@ class _FundiHomeScreenState extends State<FundiHomeScreen>
         required VoidCallback onTap,
         bool isDestructive = false,
       }) {
-    final theme = Theme.of(context);
-    final color = isDestructive ? Colors.red : theme.primaryColor;
-
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final color = isDestructive ? AppTheme.error : AppTheme.primary;
     return PopupMenuItem<String>(
       value: key,
       onTap: onTap,
-      child: Row(
-        children: [
-          Icon(icon, color: color, size: 22),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              title,
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: isDestructive ? Colors.red : null,
-                fontWeight: isDestructive ? FontWeight.w600 : FontWeight.normal,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  inherit: true,
+                  color: isDestructive
+                      ? AppTheme.error
+                      : (isDark ? Colors.white : AppTheme.primary),
+                  fontWeight:
+                  isDestructive ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Mini apps models / tiles (gold hover) ──────────────────────
+
+class _MiniAppItem {
+  final String name;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _MiniAppItem({
+    required this.name,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+}
+
+class _MiniAppTile extends StatefulWidget {
+  final _MiniAppItem item;
+  const _MiniAppTile({required this.item});
+
+  @override
+  State<_MiniAppTile> createState() => _MiniAppTileState();
+}
+
+class _MiniAppTileState extends State<_MiniAppTile> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = _hovered
+        ? AppTheme.secondary.withOpacity(isDark ? 0.22 : 0.18)
+        : Colors.transparent;
+    final border = _hovered
+        ? AppTheme.secondary
+        : (isDark
+        ? AppTheme.darkBorder
+        : AppTheme.borderLight.withOpacity(0.4));
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: Material(
+          color: bg,
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            onTap: widget.item.onTap,
+            onHighlightChanged: (v) => setState(() => _hovered = v),
+            borderRadius: BorderRadius.circular(14),
+            splashColor: AppTheme.secondary.withOpacity(0.25),
+            highlightColor: AppTheme.secondary.withOpacity(0.12),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: border, width: _hovered ? 1.5 : 1),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: widget.item.color.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(widget.item.icon,
+                        color: widget.item.color, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.item.name,
+                          style: TextStyle(
+                            inherit: true,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                            color: isDark ? Colors.white : AppTheme.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          widget.item.subtitle,
+                          style: TextStyle(
+                            inherit: true,
+                            fontSize: 12,
+                            color: isDark
+                                ? AppTheme.darkTextSecondary
+                                : AppTheme.greyText,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 14,
+                    color: _hovered
+                        ? AppTheme.secondary
+                        : (isDark
+                        ? AppTheme.darkTextSecondary
+                        : AppTheme.greyText),
+                  ),
+                ],
               ),
             ),
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
 // ================================================================
-// NOTIFICATION TILE – Modern Card Style
+// NOTIFICATION TILE
 // ================================================================
 class _NotificationTile extends StatelessWidget {
   final Map<String, dynamic> notification;
   final VoidCallback onTap;
 
-  const _NotificationTile({
-    required this.notification,
-    required this.onTap,
-  });
+  const _NotificationTile({required this.notification, required this.onTap});
 
   bool get _isRead {
     final v = notification['is_read'];
@@ -639,8 +833,11 @@ class _NotificationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final isRead = _isRead;
     final type = notification['type']?.toString();
+    final primaryText = isDark ? Colors.white : AppTheme.primary;
+    final mutedText = isDark ? AppTheme.darkTextSecondary : AppTheme.greyText;
 
     return Material(
       color: Colors.transparent,
@@ -652,46 +849,49 @@ class _NotificationTile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           decoration: BoxDecoration(
             color: isRead
-                ? theme.cardColor
-                : theme.primaryColor.withOpacity(0.06),
+                ? (isDark ? AppTheme.darkSurface : theme.cardColor)
+                : AppTheme.primary.withOpacity(isDark ? 0.15 : 0.06),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: isRead
-                  ? theme.dividerColor.withOpacity(0.45)
-                  : theme.primaryColor.withOpacity(0.18),
+                  ? (isDark
+                  ? AppTheme.darkBorder
+                  : theme.dividerColor.withOpacity(0.45))
+                  : AppTheme.primary.withOpacity(0.18),
             ),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Icon circle
               Container(
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
                   color: isRead
-                      ? theme.dividerColor.withOpacity(0.25)
-                      : theme.primaryColor.withOpacity(0.12),
+                      ? (isDark
+                      ? AppTheme.darkSurfaceLight
+                      : theme.dividerColor.withOpacity(0.25))
+                      : AppTheme.primary.withOpacity(0.12),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   _getIcon(type),
-                  color: isRead ? theme.hintColor : theme.primaryColor,
+                  color: isRead ? mutedText : AppTheme.primary,
                   size: 22,
                 ),
               ),
               const SizedBox(width: 14),
-
-              // Content
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       notification['title']?.toString() ?? '',
-                      style: theme.textTheme.bodyMedium?.copyWith(
+                      style: TextStyle(
+                        inherit: true,
                         fontWeight: isRead ? FontWeight.w500 : FontWeight.w700,
                         height: 1.25,
+                        color: primaryText,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -701,24 +901,24 @@ class _NotificationTile extends StatelessWidget {
                       notification['body']?.toString() ?? '',
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.hintColor,
+                      style: TextStyle(
+                        inherit: true,
+                        color: mutedText,
                         height: 1.35,
+                        fontSize: 13,
                       ),
                     ),
                   ],
                 ),
               ),
-
-              // Unread dot
               if (!isRead) ...[
                 const SizedBox(width: 10),
                 Container(
                   width: 9,
                   height: 9,
                   margin: const EdgeInsets.only(top: 6),
-                  decoration: BoxDecoration(
-                    color: theme.primaryColor,
+                  decoration: const BoxDecoration(
+                    color: AppTheme.secondary,
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -759,7 +959,7 @@ class _NotificationTile extends StatelessWidget {
 }
 
 // ================================================================
-// HOME DASHBOARD CONTENT – Modern UI
+// HOME DASHBOARD CONTENT
 // ================================================================
 class _HomeDashboardContent extends StatelessWidget {
   const _HomeDashboardContent();
@@ -796,17 +996,17 @@ class _HomeDashboardContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
+    final isDark = theme.brightness == Brightness.dark;
 
     final auth = context.watch<AuthProvider>();
     final user = auth.user;
-
     final tech = context.watch<TechnicianProvider>().technician;
     final online = tech?.isOnline ?? false;
-
     final requestProvider = context.watch<RequestProvider>();
     final requests = requestProvider.requests;
 
-    final pendingRequests = requests.where((r) => r.status == 'pending').length;
+    final pendingRequests =
+        requests.where((r) => r.status == 'pending').length;
     final completedRequests =
         requests.where((r) => r.status == 'completed').length;
 
@@ -824,13 +1024,17 @@ class _HomeDashboardContent extends StatelessWidget {
     final cardPadding = isTablet ? 22.0 : 18.0;
     final gap = isTablet ? 16.0 : 12.0;
 
+    final primaryText = isDark ? Colors.white : AppTheme.primary;
+    final mutedText = isDark ? AppTheme.darkTextSecondary : AppTheme.greyText;
+    final cardBg = isDark ? AppTheme.darkSurface : theme.cardColor;
+
     return SafeArea(
       bottom: true,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final bottomPadding = MediaQuery.of(context).padding.bottom + 80.0;
-
           return RefreshIndicator(
+            color: AppTheme.primary,
             onRefresh: () async {
               await context.read<RequestProvider>().loadMyRequests();
               await context.read<TechnicianProvider>().fetchMyProfile();
@@ -846,22 +1050,18 @@ class _HomeDashboardContent extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── Greeting Card ─────────────────────────────
                   Container(
                     padding: EdgeInsets.all(cardPadding),
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          theme.primaryColor,
-                          theme.primaryColorDark ?? theme.primaryColor,
-                        ],
+                      gradient: const LinearGradient(
+                        colors: [AppTheme.primary, AppTheme.primaryDark],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
                       borderRadius: BorderRadius.circular(22),
                       boxShadow: [
                         BoxShadow(
-                          color: theme.primaryColor.withOpacity(0.32),
+                          color: AppTheme.primary.withOpacity(0.32),
                           blurRadius: 20,
                           offset: const Offset(0, 10),
                         ),
@@ -877,7 +1077,8 @@ class _HomeDashboardContent extends StatelessWidget {
                                 ? user!.name[0].toUpperCase()
                                 : 'F',
                             style: TextStyle(
-                              color: theme.primaryColor,
+                              inherit: true,
+                              color: AppTheme.primary,
                               fontSize: isTablet ? 28 : 24,
                               fontWeight: FontWeight.bold,
                             ),
@@ -891,6 +1092,7 @@ class _HomeDashboardContent extends StatelessWidget {
                               Text(
                                 '${l10n.hello}, ${user?.name ?? 'Fundi'}! 👋',
                                 style: const TextStyle(
+                                  inherit: true,
                                   color: Colors.white,
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
@@ -909,21 +1111,19 @@ class _HomeDashboardContent extends StatelessWidget {
                                         vertical: 4,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: Colors.green.shade600,
+                                        color: AppTheme.success,
                                         borderRadius: BorderRadius.circular(20),
                                       ),
                                       child: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          const Icon(
-                                            Icons.wifi_rounded,
-                                            color: Colors.white,
-                                            size: 13,
-                                          ),
+                                          const Icon(Icons.wifi_rounded,
+                                              color: Colors.white, size: 13),
                                           const SizedBox(width: 4),
                                           Text(
                                             l10n.online,
                                             style: const TextStyle(
+                                              inherit: true,
                                               color: Colors.white,
                                               fontSize: 12,
                                               fontWeight: FontWeight.w600,
@@ -941,13 +1141,14 @@ class _HomeDashboardContent extends StatelessWidget {
                                         vertical: 4,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: Colors.orange.shade700,
+                                        color: AppTheme.warning,
                                         borderRadius: BorderRadius.circular(20),
                                       ),
                                       child: Text(
                                         '$pendingRequests ${l10n.pending}',
                                         style: const TextStyle(
-                                          color: Colors.white,
+                                          inherit: true,
+                                          color: AppTheme.primary,
                                           fontSize: 12,
                                           fontWeight: FontWeight.w600,
                                         ),
@@ -958,18 +1159,12 @@ class _HomeDashboardContent extends StatelessWidget {
                             ],
                           ),
                         ),
-                        const Icon(
-                          Icons.check_circle_rounded,
-                          color: Colors.white,
-                          size: 28,
-                        ),
+                        const Icon(Icons.check_circle_rounded,
+                            color: Colors.white, size: 28),
                       ],
                     ),
                   ),
-
                   SizedBox(height: gap + 8),
-
-                  // ── Stats ─────────────────────────────────────
                   Row(
                     children: [
                       Flexible(
@@ -978,7 +1173,7 @@ class _HomeDashboardContent extends StatelessWidget {
                           icon: Icons.list_alt_rounded,
                           label: l10n.totalRequests,
                           value: requests.length.toString(),
-                          color: Colors.blue,
+                          color: AppTheme.accent,
                           isTablet: isTablet,
                           onTap: () => _navigateToTab(context, 2),
                         ),
@@ -990,7 +1185,7 @@ class _HomeDashboardContent extends StatelessWidget {
                           icon: Icons.pending_rounded,
                           label: l10n.pending,
                           value: pendingRequests.toString(),
-                          color: Colors.orange,
+                          color: AppTheme.warning,
                           isTablet: isTablet,
                           onTap: () => _navigateToTab(context, 2),
                         ),
@@ -1002,25 +1197,24 @@ class _HomeDashboardContent extends StatelessWidget {
                           icon: Icons.check_circle_rounded,
                           label: l10n.completed,
                           value: completedRequests.toString(),
-                          color: Colors.green,
+                          color: AppTheme.success,
                           isTablet: isTablet,
                           onTap: () => _navigateToTab(context, 2),
                         ),
                       ),
                     ],
                   ),
-
                   SizedBox(height: gap + 12),
-
-                  // ── Latest Requests Header ────────────────────
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
                         'Latest Requests',
                         style: theme.textTheme.titleLarge?.copyWith(
+                          inherit: true,
                           fontWeight: FontWeight.w800,
                           letterSpacing: -0.4,
+                          color: primaryText,
                         ),
                       ),
                       if (requests.isNotEmpty)
@@ -1028,41 +1222,40 @@ class _HomeDashboardContent extends StatelessWidget {
                           onPressed: () => _navigateToTab(context, 2),
                           child: const Text(
                             'View All',
-                            style: TextStyle(fontWeight: FontWeight.w600),
+                            style: TextStyle(
+                              inherit: true,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.primary,
+                            ),
                           ),
                         ),
                     ],
                   ),
-
                   const SizedBox(height: 10),
-
-                  // ── Latest Requests List ──────────────────────
                   if (topFiveRequests.isEmpty)
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(
-                        vertical: 36,
-                        horizontal: 20,
-                      ),
+                          vertical: 36, horizontal: 20),
                       decoration: BoxDecoration(
-                        color: theme.cardColor,
+                        color: cardBg,
                         borderRadius: BorderRadius.circular(18),
                         border: Border.all(
-                          color: theme.dividerColor.withOpacity(0.5),
+                          color: isDark
+                              ? AppTheme.darkBorder
+                              : theme.dividerColor.withOpacity(0.5),
                         ),
                       ),
                       child: Column(
                         children: [
-                          Icon(
-                            Icons.inbox_outlined,
-                            size: 48,
-                            color: theme.hintColor.withOpacity(0.7),
-                          ),
+                          Icon(Icons.inbox_outlined,
+                              size: 48, color: mutedText),
                           const SizedBox(height: 14),
                           Text(
                             l10n.noRequests,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.hintColor,
+                            style: TextStyle(
+                              inherit: true,
+                              color: mutedText,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -1072,10 +1265,9 @@ class _HomeDashboardContent extends StatelessWidget {
                   else
                     Column(
                       children: topFiveRequests
-                          .map((request) => _buildLatestRequest(context, request))
+                          .map((r) => _buildLatestRequest(context, r))
                           .toList(),
                     ),
-
                   const SizedBox(height: 16),
                 ],
               ),
@@ -1086,12 +1278,15 @@ class _HomeDashboardContent extends StatelessWidget {
     );
   }
 
-  // ─── Latest Request Card ─────────────────────────────────────
   Widget _buildLatestRequest(BuildContext context, dynamic request) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final status = request.status?.toString() ?? 'pending';
     final statusColor = _requestStatusColor(status);
     final created = _formatRequestDate(request);
+    final primaryText = isDark ? Colors.white : AppTheme.primary;
+    final mutedText = isDark ? AppTheme.darkTextSecondary : AppTheme.greyText;
+    final cardBg = isDark ? AppTheme.darkSurface : theme.cardColor;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -1104,14 +1299,16 @@ class _HomeDashboardContent extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.all(15),
             decoration: BoxDecoration(
-              color: theme.cardColor,
+              color: cardBg,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: theme.dividerColor.withOpacity(0.5),
+                color: isDark
+                    ? AppTheme.darkBorder
+                    : theme.dividerColor.withOpacity(0.5),
               ),
               boxShadow: [
                 BoxShadow(
-                  color: theme.shadowColor.withOpacity(0.05),
+                  color: Colors.black.withOpacity(isDark ? 0.25 : 0.05),
                   blurRadius: 8,
                   offset: const Offset(0, 3),
                 ),
@@ -1127,11 +1324,8 @@ class _HomeDashboardContent extends StatelessWidget {
                     color: statusColor.withOpacity(0.13),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
-                    _requestStatusIcon(status),
-                    color: statusColor,
-                    size: 22,
-                  ),
+                  child: Icon(_requestStatusIcon(status),
+                      color: statusColor, size: 22),
                 ),
                 const SizedBox(width: 13),
                 Expanded(
@@ -1143,8 +1337,10 @@ class _HomeDashboardContent extends StatelessWidget {
                           Expanded(
                             child: Text(
                               request.serviceName.toString(),
-                              style: theme.textTheme.titleSmall?.copyWith(
+                              style: TextStyle(
+                                inherit: true,
                                 fontWeight: FontWeight.w700,
+                                color: primaryText,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -1153,9 +1349,7 @@ class _HomeDashboardContent extends StatelessWidget {
                           const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 9,
-                              vertical: 4,
-                            ),
+                                horizontal: 9, vertical: 4),
                             decoration: BoxDecoration(
                               color: statusColor.withOpacity(0.13),
                               borderRadius: BorderRadius.circular(20),
@@ -1163,6 +1357,7 @@ class _HomeDashboardContent extends StatelessWidget {
                             child: Text(
                               _requestStatusLabel(status),
                               style: TextStyle(
+                                inherit: true,
                                 color: statusColor,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
@@ -1175,16 +1370,16 @@ class _HomeDashboardContent extends StatelessWidget {
                       const SizedBox(height: 6),
                       Row(
                         children: [
-                          Icon(
-                            Icons.person_outline_rounded,
-                            size: 14,
-                            color: theme.hintColor,
-                          ),
+                          Icon(Icons.person_outline_rounded,
+                              size: 14, color: mutedText),
                           const SizedBox(width: 5),
                           Expanded(
                             child: Text(
                               request.customerName.toString(),
-                              style: theme.textTheme.bodySmall,
+                              style: TextStyle(
+                                  inherit: true,
+                                  color: mutedText,
+                                  fontSize: 13),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -1195,16 +1390,14 @@ class _HomeDashboardContent extends StatelessWidget {
                         const SizedBox(height: 5),
                         Row(
                           children: [
-                            Icon(
-                              Icons.access_time_rounded,
-                              size: 13,
-                              color: theme.hintColor,
-                            ),
+                            Icon(Icons.access_time_rounded,
+                                size: 13, color: mutedText),
                             const SizedBox(width: 5),
                             Text(
                               created,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.hintColor,
+                              style: TextStyle(
+                                inherit: true,
+                                color: mutedText,
                                 fontSize: 11.5,
                               ),
                             ),
@@ -1228,9 +1421,9 @@ class _HomeDashboardContent extends StatelessWidget {
       case 'in_progress':
         return AppTheme.primary;
       case 'on_the_way':
-        return Colors.green;
+        return AppTheme.success;
       case 'arrived':
-        return Colors.teal;
+        return AppTheme.accent;
       case 'completed':
         return AppTheme.success;
       case 'rejected':
@@ -1285,11 +1478,11 @@ class _HomeDashboardContent extends StatelessWidget {
   }
 
   void _navigateToTab(BuildContext context, int index) {
-    final homeState = context.findAncestorStateOfType<_FundiHomeScreenState>();
+    final homeState =
+    context.findAncestorStateOfType<_FundiHomeScreenState>();
     homeState?._navigateToTab(index);
   }
 
-  // ─── Stat Card ───────────────────────────────────────────────
   Widget _buildStatCard(
       BuildContext context, {
         required IconData icon,
@@ -1300,6 +1493,9 @@ class _HomeDashboardContent extends StatelessWidget {
         required VoidCallback onTap,
       }) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final cardBg = isDark ? AppTheme.darkSurface : theme.cardColor;
+    final mutedText = isDark ? AppTheme.darkTextSecondary : AppTheme.greyText;
 
     return Material(
       color: Colors.transparent,
@@ -1312,11 +1508,14 @@ class _HomeDashboardContent extends StatelessWidget {
             horizontal: isTablet ? 12.0 : 8.0,
           ),
           decoration: BoxDecoration(
-            color: theme.cardColor,
+            color: cardBg,
             borderRadius: BorderRadius.circular(16),
+            border: isDark
+                ? Border.all(color: AppTheme.darkBorder)
+                : null,
             boxShadow: [
               BoxShadow(
-                color: theme.shadowColor.withOpacity(0.07),
+                color: Colors.black.withOpacity(isDark ? 0.25 : 0.07),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
@@ -1332,7 +1531,8 @@ class _HomeDashboardContent extends StatelessWidget {
                   const SizedBox(width: 5),
                   Text(
                     value,
-                    style: theme.textTheme.headlineSmall?.copyWith(
+                    style: TextStyle(
+                      inherit: true,
                       fontSize: isTablet ? 20 : 16,
                       fontWeight: FontWeight.bold,
                       color: color,
@@ -1343,9 +1543,10 @@ class _HomeDashboardContent extends StatelessWidget {
               const SizedBox(height: 5),
               Text(
                 label,
-                style: theme.textTheme.bodySmall?.copyWith(
+                style: TextStyle(
+                  inherit: true,
                   fontSize: isTablet ? 11 : 10,
-                  color: theme.hintColor,
+                  color: mutedText,
                   fontWeight: FontWeight.w500,
                 ),
                 textAlign: TextAlign.center,
