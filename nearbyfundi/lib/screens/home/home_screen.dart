@@ -226,6 +226,34 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ================================================================
+  // ABOUT OG ONE GROUP
+  // ================================================================
+
+  void _showAboutOgOneGroup() {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Row(
+          children: [
+            Icon(Icons.info_outline_rounded, color: Colors.white),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'About OG ONE GROUP — Coming Soon',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: theme.primaryColor,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  // ================================================================
   // NOTIFICATIONS
   // ================================================================
 
@@ -411,8 +439,10 @@ class _HomeScreenState extends State<HomeScreen> {
   // ================================================================
   // LEFT DRAWER
   // ================================================================
-  // GROUP 1: Brand header (logo + "OG ONE GROUP" + close)
-  // GROUP 2: MORE → Mini Apps (Coming Soon)
+  // Header:  logo + "OG ONE GROUP" + "Mini Apps" (gold)
+  // Body:    "Partnerships" section label
+  //          "Coming soon" tile with subtitle "OG ONE GROUP mini apps"
+  // Footer:  info icon + "About OG ONE GROUP"
   // ================================================================
 
   Widget _buildDrawer(BuildContext context, ThemeData theme) {
@@ -431,18 +461,16 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           children: [
             // ==========================================================
-            // GROUP 1 — BRAND HEADER (logo + OG ONE GROUP + close)
+            // HEADER — Logo + OG ONE GROUP + Mini Apps (gold)
             // ==========================================================
             Container(
-              margin: const EdgeInsets.all(14),
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
                   colors: [AppTheme.primary, AppTheme.primaryDark],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: const BorderRadius.all(Radius.circular(22)),
                 boxShadow: [
                   BoxShadow(
                     color: AppTheme.primary
@@ -456,89 +484,213 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   // Logo
                   Container(
-                    width: 52,
-                    height: 52,
+                    width: 56,
+                    height: 56,
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(16),
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    padding: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.all(8),
                     child: Image.asset(
                       'assets/images/nearbyfundi-logo.png',
                       fit: BoxFit.contain,
                     ),
                   ),
 
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 14),
 
-                  // Text on the right of the logo
+                  // Text column
                   Expanded(
-                    child: Text(
-                      'OG ONE GROUP',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.nunito(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.6,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'OG ONE GROUP',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.nunito(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.4,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Mini Apps',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.nunito(
+                            color: AppTheme.secondary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-
-                  // Close button
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close_rounded,
-                        color: Colors.white),
                   ),
                 ],
               ),
             ),
 
             // ==========================================================
-            // GROUP 2 — MORE → MINI APPS
+            // BODY — Partnerships section + Coming soon tile
             // ==========================================================
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
+                    padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
                     child: Text(
-                      'MORE',
+                      'Partnerships',
                       style: GoogleFonts.nunito(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.2,
-                        color:
-                        theme.colorScheme.onSurface.withOpacity(0.45),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: theme.colorScheme.onSurface
+                            .withOpacity(0.55),
                       ),
                     ),
                   ),
-                  _DrawerItem(
-                    icon: Icons.widgets_rounded,
-                    title: 'Mini Apps',
-                    subtitle: 'Coming Soon',
-                    color: theme.primaryColor,
-                    onTap: () {
-                      Navigator.pop(context);
-                      _showMiniAppsComingSoon();
-                    },
+
+                  // Coming soon tile
+                  Container(
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surface,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color:
+                        theme.dividerColor.withOpacity(0.35),
+                        width: 1,
+                      ),
+                    ),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(16),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _showMiniAppsComingSoon();
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 14,
+                        ),
+                        child: Row(
+                          children: [
+                            // Icon box
+                            Container(
+                              width: 46,
+                              height: 46,
+                              decoration: BoxDecoration(
+                                color: AppTheme.secondary
+                                    .withOpacity(0.18),
+                                borderRadius:
+                                BorderRadius.circular(12),
+                              ),
+                              child: const Icon(
+                                Icons.apps_rounded,
+                                color: AppTheme.secondary,
+                                size: 24,
+                              ),
+                            ),
+
+                            const SizedBox(width: 14),
+
+                            // Text column
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'Coming soon',
+                                    style: GoogleFonts.nunito(
+                                      color: theme
+                                          .colorScheme.onSurface,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'OG ONE GROUP mini apps',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.nunito(
+                                      color: theme.colorScheme
+                                          .onSurface
+                                          .withOpacity(0.55),
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Chevron
+                            Icon(
+                              Icons.chevron_right_rounded,
+                              color: theme.hintColor,
+                              size: 22,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
 
             // ==========================================================
-            // FOOTER
+            // FOOTER — About OG ONE GROUP
             // ==========================================================
             Padding(
-              padding: const EdgeInsets.all(18),
-              child: Text(
-                '© NearbyFundi',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.hintColor,
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showAboutOgOneGroup();
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 8,
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 26,
+                        height: 26,
+                        decoration: BoxDecoration(
+                          color: AppTheme.primary.withOpacity(0.10),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.info_outline_rounded,
+                          color: AppTheme.primary,
+                          size: 16,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'About OG ONE GROUP',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.nunito(
+                            color: theme.colorScheme.onSurface,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -857,70 +1009,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             );
           },
-        ),
-      ),
-    );
-  }
-}
-
-// ==================================================================
-// DRAWER ITEM
-// ==================================================================
-
-class _DrawerItem extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String? subtitle;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _DrawerItem({
-    required this.icon,
-    required this.title,
-    this.subtitle,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 3),
-      child: ListTile(
-        onTap: onTap,
-        shape:
-        RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        contentPadding:
-        const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-        leading: Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.09),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(icon, color: color, size: 21),
-        ),
-        title: Text(
-          title,
-          style: theme.textTheme.bodyLarge
-              ?.copyWith(fontWeight: FontWeight.w600),
-        ),
-        subtitle: subtitle != null
-            ? Text(
-          subtitle!,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: AppTheme.secondary,
-            fontWeight: FontWeight.w700,
-            fontSize: 11,
-          ),
-        )
-            : null,
-        trailing: Icon(
-          Icons.chevron_right_rounded,
-          color: theme.hintColor,
         ),
       ),
     );
