@@ -19,7 +19,7 @@ class $AssetsIconsGen {
       const AssetGenImage('assets/icons/mixx_by_yas.png');
   final AssetGenImage mpesa = const AssetGenImage('assets/icons/mpesa.png');
   final AssetGenImage nearby = const AssetGenImage('assets/icons/nearby.png');
-  final AssetGenImage nearbyfundiLogo =
+  final AssetGenImage nearbyfundiLogov1 =
       const AssetGenImage('assets/icons/nearbyfundi-logov1.png');
   final AssetGenImage nearbyfundiLogov2 =
       const AssetGenImage('assets/icons/nearbyfundi-logov2.png');

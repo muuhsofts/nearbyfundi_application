@@ -50,8 +50,9 @@ class DefaultFirebaseOptions {
     messagingSenderId: '217153819583',
     projectId: 'nearbyfundi-8032f',
     storageBucket: 'nearbyfundi-8032f.firebasestorage.app',
-    iosClientId: '217153819583-7jv5l9jai0vu02euuldqkdodssqkqfrl.apps.googleusercontent.com',
-    iosBundleId: 'com.fundapp',
+    iosClientId:
+    '217153819583-7jv5l9jai0vu02euuldqkdodssqkqfrl.apps.googleusercontent.com',
+    iosBundleId: 'com.fundiapp',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
@@ -60,7 +61,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '217153819583',
     projectId: 'nearbyfundi-8032f',
     storageBucket: 'nearbyfundi-8032f.firebasestorage.app',
-    iosClientId: '217153819583-7jv5l9jai0vu02euuldqkdodssqkqfrl.apps.googleusercontent.com',
-    iosBundleId: 'com.fundapp',
+    iosClientId:
+    '217153819583-7jv5l9jai0vu02euuldqkdodssqkqfrl.apps.googleusercontent.com',
+    iosBundleId: 'com.fundiapp',
   );
 }

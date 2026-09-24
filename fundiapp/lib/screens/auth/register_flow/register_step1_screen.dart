@@ -4,14 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../../config/app_theme.dart';
+import '../../../config/country_codes.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../config/app_routes.dart';
 import '../../../widgets/custom_button.dart';
 import '../../../widgets/loading_overlay.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/country.dart';
-import '../../../config/country_codes.dart';
-import '../../../widgets/country_picker.dart';
+import '../../../widgets/flag_icon.dart';
 import '../../../services/storage_service.dart';
 
 class RegisterStep1Screen extends StatefulWidget {
@@ -139,6 +139,58 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
               },
             ),
             const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────
+  // Country selection (SVG flags via FlagIcon)
+  // ─────────────────────────────────────────────
+  Future<void> _openCountrySheet() async {
+    final picked = await showModalBottomSheet<Country>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _CountrySheet(
+        countries: _countries,
+        selected: _selectedCountry,
+      ),
+    );
+    if (picked != null && mounted) {
+      setState(() => _selectedCountry = picked);
+    }
+  }
+
+  Widget _buildCountryButton(ThemeData theme) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: _openCountrySheet,
+      child: Container(
+        height: 56,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: theme.dividerColor),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FlagIcon(emoji: _selectedCountry.flag, height: 20),
+            const SizedBox(width: 8),
+            Text(
+              _selectedCountry.dialCode,
+              style: theme.textTheme.bodyMedium,
+            ),
+            Icon(
+              Icons.arrow_drop_down,
+              color: theme.colorScheme.onSurface.withOpacity(0.6),
+            ),
           ],
         ),
       ),
@@ -290,12 +342,9 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
                 const SizedBox(height: 16),
 
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    CountryPicker(
-                      selectedCountry: _selectedCountry,
-                      onChanged: (c) => setState(() => _selectedCountry = c),
-                      countries: _countries,
-                    ),
+                    _buildCountryButton(theme),
                     const SizedBox(width: 8),
                     Expanded(
                       child: TextFormField(
@@ -431,6 +480,122 @@ class _RegisterStep1ScreenState extends State<RegisterStep1Screen> {
         suffixIcon: suffixIcon,
       ),
       validator: validator,
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+// Searchable country list shown in the bottom sheet
+// ─────────────────────────────────────────────
+class _CountrySheet extends StatefulWidget {
+  final List<Country> countries;
+  final Country selected;
+
+  const _CountrySheet({required this.countries, required this.selected});
+
+  @override
+  State<_CountrySheet> createState() => _CountrySheetState();
+}
+
+class _CountrySheetState extends State<_CountrySheet> {
+  final _searchController = TextEditingController();
+  late List<Country> _filtered;
+
+  @override
+  void initState() {
+    super.initState();
+    _filtered = widget.countries;
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _filter(String query) {
+    final q = query.trim().toLowerCase();
+    setState(() {
+      _filtered = q.isEmpty
+          ? widget.countries
+          : widget.countries
+          .where((c) =>
+      c.name.toLowerCase().contains(q) || c.dialCode.contains(q))
+          .toList();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.85,
+        child: Column(
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: theme.dividerColor,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: TextField(
+                controller: _searchController,
+                onChanged: _filter,
+                decoration: const InputDecoration(
+                  hintText: 'Search country...',
+                  prefixIcon: Icon(Icons.search),
+                ),
+              ),
+            ),
+            Expanded(
+              child: _filtered.isEmpty
+                  ? Center(
+                child: Text(
+                  'No country found',
+                  style: theme.textTheme.bodyMedium,
+                ),
+              )
+                  : ListView.builder(
+                itemCount: _filtered.length,
+                itemBuilder: (context, i) {
+                  final c = _filtered[i];
+                  // Match on name too: several countries share +1.
+                  final isSelected = c.name == widget.selected.name &&
+                      c.dialCode == widget.selected.dialCode;
+                  return ListTile(
+                    leading: FlagIcon(emoji: c.flag, height: 24),
+                    title: Text(c.name),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(c.dialCode),
+                        if (isSelected) ...[
+                          const SizedBox(width: 8),
+                          Icon(
+                            Icons.check_circle,
+                            size: 18,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ],
+                      ],
+                    ),
+                    onTap: () => Navigator.pop(context, c),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

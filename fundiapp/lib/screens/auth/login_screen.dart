@@ -10,10 +10,10 @@ import '../../providers/theme_provider.dart';
 import '../../config/app_routes.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/loading_overlay.dart';
+import '../../widgets/flag_icon.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/country.dart';
 import '../../config/country_codes.dart';
-import '../../widgets/country_picker.dart';
 import '../../services/storage_service.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -104,6 +104,124 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
     }
+  }
+
+  // ─────────────────────────────────────────────
+  // Sign-up navigation (resumes an unfinished registration)
+  // ─────────────────────────────────────────────
+  Future<void> _handleSignUp() async {
+    final storedId = await StorageService.getTechnicianId();
+    if (!mounted) return;
+
+    if (storedId != null) {
+      final authProvider = context.read<AuthProvider>();
+      final step = await authProvider.getRegistrationStep(storedId);
+      if (!mounted) return;
+
+      if (step != null) {
+        switch (step) {
+          case 1:
+            Navigator.pushNamed(context, AppRoutes.registerStep1);
+            break;
+          case 2:
+            Navigator.pushNamed(
+              context,
+              AppRoutes.registerStep2,
+              arguments: storedId,
+            );
+            break;
+          case 3:
+            Navigator.pushNamed(
+              context,
+              AppRoutes.registerStep3,
+              arguments: storedId,
+            );
+            break;
+          case 4:
+            Navigator.pushNamed(
+              context,
+              AppRoutes.registerStep4,
+              arguments: storedId,
+            );
+            break;
+          default:
+            Navigator.pushNamed(context, AppRoutes.registerStep1);
+        }
+        return;
+      } else {
+        await StorageService.clearTechnicianData();
+        if (!mounted) return;
+      }
+    }
+    Navigator.pushNamed(context, AppRoutes.registerStep1);
+  }
+
+  // ─────────────────────────────────────────────
+  // Country selection (SVG flags via FlagIcon)
+  // ─────────────────────────────────────────────
+  Future<void> _openCountrySheet() async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final picked = await showModalBottomSheet<Country>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: isDark ? AppTheme.darkSurface : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => _CountrySheet(
+        countries: _countries,
+        selected: _selectedCountry,
+      ),
+    );
+
+    if (picked != null && mounted) {
+      setState(() => _selectedCountry = picked);
+    }
+  }
+
+  Widget _buildCountryButton({
+    required bool isDark,
+    required Color textColor,
+    required Color mutedText,
+  }) {
+    return Material(
+      color: isDark ? AppTheme.darkSurfaceLight : AppTheme.navy50,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: _openCountrySheet,
+        child: Container(
+          height: 58,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isDark
+                  ? AppTheme.darkBorder
+                  : AppTheme.borderLight.withOpacity(0.5),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FlagIcon(emoji: _selectedCountry.flag, height: 20),
+              const SizedBox(width: 8),
+              Text(
+                _selectedCountry.dialCode,
+                style: TextStyle(
+                  inherit: true,
+                  color: textColor,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Icon(Icons.arrow_drop_down, color: mutedText),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -420,12 +538,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                       )
                                     else
                                       Row(
+                                        crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                         children: [
-                                          CountryPicker(
-                                            selectedCountry: _selectedCountry,
-                                            onChanged: (c) => setState(
-                                                    () => _selectedCountry = c),
-                                            countries: _countries,
+                                          _buildCountryButton(
+                                            isDark: isDark,
+                                            textColor: primaryText,
+                                            mutedText: mutedText,
                                           ),
                                           const SizedBox(width: 10),
                                           Expanded(
@@ -635,57 +754,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                           ),
                                         ),
                                         TextButton(
-                                          onPressed: () async {
-                                            final storedId = await StorageService
-                                                .getTechnicianId();
-                                            if (storedId != null) {
-                                              final auth =
-                                              context.read<AuthProvider>();
-                                              final step = await auth
-                                                  .getRegistrationStep(
-                                                  storedId);
-                                              if (step != null) {
-                                                switch (step) {
-                                                  case 1:
-                                                    Navigator.pushNamed(context,
-                                                        AppRoutes
-                                                            .registerStep1);
-                                                    break;
-                                                  case 2:
-                                                    Navigator.pushNamed(
-                                                      context,
-                                                      AppRoutes.registerStep2,
-                                                      arguments: storedId,
-                                                    );
-                                                    break;
-                                                  case 3:
-                                                    Navigator.pushNamed(
-                                                      context,
-                                                      AppRoutes.registerStep3,
-                                                      arguments: storedId,
-                                                    );
-                                                    break;
-                                                  case 4:
-                                                    Navigator.pushNamed(
-                                                      context,
-                                                      AppRoutes.registerStep4,
-                                                      arguments: storedId,
-                                                    );
-                                                    break;
-                                                  default:
-                                                    Navigator.pushNamed(context,
-                                                        AppRoutes
-                                                            .registerStep1);
-                                                }
-                                                return;
-                                              } else {
-                                                await StorageService
-                                                    .clearTechnicianData();
-                                              }
-                                            }
-                                            Navigator.pushNamed(context,
-                                                AppRoutes.registerStep1);
-                                          },
+                                          onPressed: _handleSignUp,
                                           child: Text(
                                             l10n.signUp,
                                             style: const TextStyle(
@@ -759,7 +828,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 18),
                 _SheetTile(
-                  title: 'English 🇬🇧',
+                  title: 'English',
+                  leading: const FlagIcon(emoji: '🇬🇧', height: 18),
                   selected: settings.locale == 'en',
                   onTap: () async {
                     await settings.updateLocale('en');
@@ -768,7 +838,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 10),
                 _SheetTile(
-                  title: 'Kiswahili 🇹🇿',
+                  title: 'Kiswahili',
+                  leading: const FlagIcon(emoji: '🇹🇿', height: 18),
                   selected: settings.locale == 'sw',
                   onTap: () async {
                     await settings.updateLocale('sw');
@@ -822,7 +893,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 18),
                 _SheetTile(
-                  title: 'Light ☀️',
+                  title: 'Light',
+                  leading: const Icon(Icons.light_mode_rounded),
                   selected: !themeProvider.isDarkMode,
                   onTap: () {
                     themeProvider.setThemeMode(ThemeMode.light);
@@ -831,7 +903,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 10),
                 _SheetTile(
-                  title: 'Dark 🌙',
+                  title: 'Dark',
+                  leading: const Icon(Icons.dark_mode_rounded),
                   selected: themeProvider.isDarkMode,
                   onTap: () {
                     themeProvider.setThemeMode(ThemeMode.dark);
@@ -931,8 +1004,11 @@ class _ElegantIconButton extends StatelessWidget {
   }
 }
 
+/// Selectable row used in the language and theme sheets.
+/// `leading` is an optional flag or icon shown before the title.
 class _SheetTile extends StatelessWidget {
   final String title;
+  final Widget? leading;
   final bool selected;
   final VoidCallback onTap;
 
@@ -940,6 +1016,7 @@ class _SheetTile extends StatelessWidget {
     required this.title,
     required this.selected,
     required this.onTap,
+    this.leading,
   });
 
   @override
@@ -976,6 +1053,16 @@ class _SheetTile extends StatelessWidget {
                     color: AppTheme.primary, size: 20),
                 const SizedBox(width: 12),
               ],
+              if (leading != null) ...[
+                IconTheme(
+                  data: IconThemeData(
+                    color: selected ? AppTheme.primary : textColor,
+                    size: 20,
+                  ),
+                  child: leading!,
+                ),
+                const SizedBox(width: 12),
+              ],
               Text(
                 title,
                 style: TextStyle(
@@ -987,6 +1074,158 @@ class _SheetTile extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Searchable country list shown in the phone-login bottom sheet.
+class _CountrySheet extends StatefulWidget {
+  final List<Country> countries;
+  final Country selected;
+
+  const _CountrySheet({required this.countries, required this.selected});
+
+  @override
+  State<_CountrySheet> createState() => _CountrySheetState();
+}
+
+class _CountrySheetState extends State<_CountrySheet> {
+  final _searchController = TextEditingController();
+  late List<Country> _filtered;
+
+  @override
+  void initState() {
+    super.initState();
+    _filtered = widget.countries;
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _filter(String query) {
+    final q = query.trim().toLowerCase();
+    setState(() {
+      _filtered = q.isEmpty
+          ? widget.countries
+          : widget.countries
+          .where((c) =>
+      c.name.toLowerCase().contains(q) || c.dialCode.contains(q))
+          .toList();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : AppTheme.primary;
+    final mutedText = isDark ? AppTheme.darkTextSecondary : AppTheme.greyText;
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.85,
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: isDark ? AppTheme.darkBorder : Colors.grey.shade400,
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: TextField(
+                controller: _searchController,
+                onChanged: _filter,
+                style: TextStyle(inherit: true, color: textColor),
+                decoration: InputDecoration(
+                  hintText: 'Search country...',
+                  hintStyle: TextStyle(inherit: true, color: mutedText),
+                  prefixIcon: Icon(
+                    Icons.search_rounded,
+                    color: AppTheme.primary.withOpacity(0.85),
+                  ),
+                  filled: true,
+                  fillColor:
+                  isDark ? AppTheme.darkSurfaceLight : AppTheme.navy50,
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 14),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(
+                        color: AppTheme.primary, width: 1.8),
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: _filtered.isEmpty
+                  ? Center(
+                child: Text(
+                  'No country found',
+                  style: TextStyle(inherit: true, color: mutedText),
+                ),
+              )
+                  : ListView.builder(
+                itemCount: _filtered.length,
+                itemBuilder: (context, i) {
+                  final c = _filtered[i];
+                  // Match on name too: several countries share +1.
+                  final isSelected = c.name == widget.selected.name &&
+                      c.dialCode == widget.selected.dialCode;
+                  return ListTile(
+                    leading: FlagIcon(emoji: c.flag, height: 24),
+                    title: Text(
+                      c.name,
+                      style: TextStyle(
+                        inherit: true,
+                        color: textColor,
+                        fontWeight: isSelected
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                      ),
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          c.dialCode,
+                          style: TextStyle(
+                              inherit: true, color: mutedText),
+                        ),
+                        if (isSelected) ...[
+                          const SizedBox(width: 8),
+                          const Icon(
+                            Icons.check_circle_rounded,
+                            size: 18,
+                            color: AppTheme.primary,
+                          ),
+                        ],
+                      ],
+                    ),
+                    onTap: () => Navigator.pop(context, c),
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );

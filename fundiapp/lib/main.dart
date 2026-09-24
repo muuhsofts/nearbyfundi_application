@@ -1,3 +1,8 @@
+import 'dart:async';
+import 'dart:ui' show PlatformDispatcher;
+
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, kDebugMode, kProfileMode, kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -68,49 +73,112 @@ import 'screens/subscription/downloads_screen.dart';
 // Optional when you add the screen:
 // import 'screens/notifications/notifications_screen.dart';
 
+// ============================================================
+// BOOT DEBUG HELPERS
+// ============================================================
+
+final Stopwatch _bootClock = Stopwatch();
+
+/// Prints a boot step with elapsed milliseconds since main() started.
+/// Filter your console with "[BOOT]" to follow the startup sequence.
+void _log(String message) {
+  debugPrint('[BOOT +${_bootClock.elapsedMilliseconds}ms] $message');
+}
+
+/// Logs before/after creating a provider so a crashing constructor is easy to find.
+/// Note: providers are lazy, so these logs appear the first time each is read.
+T _timed<T>(String name, T Function() build) {
+  _log('⏳ Creating $name');
+  try {
+    final value = build();
+    _log('✅ Created $name');
+    return value;
+  } catch (e, stackTrace) {
+    debugPrint('❌ [BOOT] $name constructor FAILED: $e');
+    debugPrint('$stackTrace');
+    rethrow;
+  }
+}
+
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  debugPrint('📩 BG handler start: ${message.messageId}');
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   debugPrint('📩 BG message: ${message.messageId}');
 }
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  _bootClock.start();
+  _log('🚀 main() started');
 
+  WidgetsFlutterBinding.ensureInitialized();
+  _log('✅ WidgetsFlutterBinding initialized');
+  _log('ℹ️ Platform: $defaultTargetPlatform | '
+      'debug=$kDebugMode profile=$kProfileMode release=$kReleaseMode');
+
+  // ----------------------------------------------------------
+  // Global error hooks: catch anything that would otherwise be silent
+  // ----------------------------------------------------------
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    debugPrint('🔥 [FlutterError] ${details.exceptionAsString()}');
+    debugPrint('${details.stack}');
+  };
+
+  PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
+    debugPrint('🔥 [PlatformDispatcher] Uncaught async error: $error');
+    debugPrint('$stack');
+    return true;
+  };
+  _log('✅ Global error handlers installed');
+
+  // ----------------------------------------------------------
+  // 1. Firebase
+  // ----------------------------------------------------------
   try {
+    _log('⏳ [1/4] Firebase.initializeApp starting');
+    _log('ℹ️ Firebase apps already registered (native): '
+        '${Firebase.apps.map((a) => a.name).toList()}');
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
     debugPrint('✅ Firebase initialized successfully');
+    final opts = Firebase.app().options;
+    _log('ℹ️ Firebase app: ${Firebase.app().name} | appId=${opts.appId} | '
+        'project=${opts.projectId} | bundle=${opts.iosBundleId}');
   } catch (e, stackTrace) {
     debugPrint('❌ Firebase initialization failed: $e');
     debugPrint('$stackTrace');
   }
 
   // Top-level background handler (required)
+  _log('⏳ Registering FirebaseMessaging background handler');
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  _log('✅ Background handler registered');
 
+  // ----------------------------------------------------------
+  // 3. Secure screen
+  // ----------------------------------------------------------
   try {
-    await FcmService.init();
-    debugPrint('✅ FCM initialized successfully');
-  } catch (e, stackTrace) {
-    debugPrint('❌ FCM initialization failed: $e');
-    debugPrint('$stackTrace');
-  }
-
-  try {
+    _log('⏳ [2/4] SecurityService.enableSecureScreen starting');
     await SecurityService.enableSecureScreen();
     debugPrint('✅ Secure screen initialized successfully');
+    _log('✅ [2/4] SecurityService.enableSecureScreen finished');
   } catch (e, stackTrace) {
     debugPrint('❌ Secure screen initialization failed: $e');
     debugPrint('$stackTrace');
   }
 
+  // ----------------------------------------------------------
+  // 4. System UI
+  // ----------------------------------------------------------
   try {
+    _log('⏳ [3/4] System UI configuration starting');
     await SystemChrome.setPreferredOrientations(const [
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
     ]);
+    _log('✅ Preferred orientations set');
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -119,33 +187,79 @@ Future<void> main() async {
         systemNavigationBarIconBrightness: Brightness.light,
       ),
     );
+    _log('✅ [3/4] System UI overlay style set');
   } catch (e, stackTrace) {
     debugPrint('⚠️ System UI configuration failed: $e');
     debugPrint('$stackTrace');
   }
 
+  // ----------------------------------------------------------
+  // 5. AuthProvider + runApp
+  // ----------------------------------------------------------
+  _log('⏳ [4/4] Creating AuthProvider');
   final authProvider = AuthProvider(navigatorKey: navigatorKey);
+  _log('✅ AuthProvider created');
   ProviderRegistry.registerAuthProvider(authProvider);
+  _log('✅ AuthProvider registered in ProviderRegistry');
 
+  _log('⏳ Calling runApp()');
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider<AuthProvider>.value(value: authProvider),
-        ChangeNotifierProvider(create: (_) => PostProvider()),
-        ChangeNotifierProvider(create: (_) => RequestProvider()),
-        ChangeNotifierProvider(create: (_) => PortfolioProvider()),
-        ChangeNotifierProvider(create: (_) => TechnicianProvider()),
-        ChangeNotifierProvider(create: (_) => ServiceProvider()),
-        ChangeNotifierProvider(create: (_) => NotificationProvider()),
-        ChangeNotifierProvider(create: (_) => SettingsProvider()),
-        ChangeNotifierProvider(create: (_) => StaticPageProvider()),
-        ChangeNotifierProvider(create: (_) => ThemeProvider()),
-        ChangeNotifierProvider(create: (_) => ChatProvider()),
-        ChangeNotifierProvider(create: (_) => SubscriptionProvider()),
+        ChangeNotifierProvider(
+            create: (_) => _timed('PostProvider', () => PostProvider())),
+        ChangeNotifierProvider(
+            create: (_) => _timed('RequestProvider', () => RequestProvider())),
+        ChangeNotifierProvider(
+            create: (_) =>
+                _timed('PortfolioProvider', () => PortfolioProvider())),
+        ChangeNotifierProvider(
+            create: (_) =>
+                _timed('TechnicianProvider', () => TechnicianProvider())),
+        ChangeNotifierProvider(
+            create: (_) => _timed('ServiceProvider', () => ServiceProvider())),
+        ChangeNotifierProvider(
+            create: (_) =>
+                _timed('NotificationProvider', () => NotificationProvider())),
+        ChangeNotifierProvider(
+            create: (_) =>
+                _timed('SettingsProvider', () => SettingsProvider())),
+        ChangeNotifierProvider(
+            create: (_) =>
+                _timed('StaticPageProvider', () => StaticPageProvider())),
+        ChangeNotifierProvider(
+            create: (_) => _timed('ThemeProvider', () => ThemeProvider())),
+        ChangeNotifierProvider(
+            create: (_) => _timed('ChatProvider', () => ChatProvider())),
+        ChangeNotifierProvider(
+            create: (_) =>
+                _timed('SubscriptionProvider', () => SubscriptionProvider())),
       ],
       child: const MyApp(),
     ),
   );
+  _log('✅ runApp() returned');
+
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    _log('🎉 First Flutter frame rendered');
+  });
+
+  // ----------------------------------------------------------
+  // FCM: runs in the background so the splash shows immediately.
+  // On iOS it waits for the notification permission dialog.
+  // ----------------------------------------------------------
+  unawaited(() async {
+    try {
+      _log('⏳ FcmService.init starting (background)');
+      await FcmService.init();
+      debugPrint('✅ FCM initialized successfully');
+      _log('✅ FcmService.init finished');
+    } catch (e, stackTrace) {
+      debugPrint('❌ FCM initialization failed: $e');
+      debugPrint('$stackTrace');
+    }
+  }());
 }
 
 class MyApp extends StatelessWidget {
@@ -153,8 +267,11 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    _log('🧱 MyApp.build()');
     return Consumer2<ThemeProvider, SettingsProvider>(
       builder: (context, themeProvider, settings, _) {
+        debugPrint('🧱 MaterialApp rebuild | themeMode=${themeProvider.themeMode} '
+            '| locale=${settings.currentLocale}');
         return MaterialApp(
           title: 'NETSAF FUNDI APP',
           debugShowCheckedModeBanner: false,
@@ -194,6 +311,8 @@ class MyApp extends StatelessWidget {
 
 Route<dynamic> _generateRoute(RouteSettings settings) {
   final Object? args = settings.arguments;
+  debugPrint('🧭 Route requested: ${settings.name} | '
+      'args type: ${args?.runtimeType}');
 
   switch (settings.name) {
     case AppRoutes.splash:
@@ -244,6 +363,7 @@ Route<dynamic> _generateRoute(RouteSettings settings) {
           settings: settings,
         );
       }
+      debugPrint('⚠️ registerReview called without Map args → RegisterStep1');
       return MaterialPageRoute(
         builder: (_) => const RegisterStep1Screen(),
         settings: settings,
@@ -335,6 +455,8 @@ Route<dynamic> _generateRoute(RouteSettings settings) {
           settings: settings,
         );
       }
+      debugPrint('⚠️ chat route called without ChatConversation '
+          '(got ${args?.runtimeType}) → ChatListScreen');
       return MaterialPageRoute(
         builder: (_) => const ChatListScreen(),
         settings: settings,
