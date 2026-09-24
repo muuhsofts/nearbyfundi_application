@@ -1,9 +1,10 @@
 import tinycolor from 'tinycolor2';
 
-const primary = '#075E54';
-const secondary = '#F5A623';
-const success = '#21AE8C';
-const accent = '#00A896';
+const primary = '#001D45';
+const secondary = '#F5C30E';
+const warning = '#F5C30E';
+const success = '#0A8A6D';
+const info = '#074B83';
 
 const lightenRate = 7.5;
 const darkenRate = 15;
@@ -13,15 +14,21 @@ const defaultTheme = {
     mode: 'light',
     primary: {
       main: primary,
-      light: '#0A8A6D',
-      dark: '#054A44',
+      light: '#0A3670',
+      dark: '#001533',
       contrastText: '#FFFFFF',
     },
     secondary: {
       main: secondary,
-      light: tinycolor(secondary).lighten(lightenRate).toHexString(),
-      dark: tinycolor(secondary).darken(darkenRate).toHexString(),
-      contrastText: '#FFFFFF',
+      light: '#FFC61F',
+      dark: '#D9A300',
+      contrastText: primary,
+    },
+    warning: {
+      main: warning,
+      light: '#FFC61F',
+      dark: '#D9A300',
+      contrastText: primary,
     },
     success: {
       main: success,
@@ -30,42 +37,36 @@ const defaultTheme = {
       contrastText: '#FFFFFF',
     },
     info: {
-      main: accent,
-      light: tinycolor(accent).lighten(lightenRate).toHexString(),
-      dark: tinycolor(accent).darken(darkenRate).toHexString(),
-      contrastText: '#FFFFFF',
-    },
-    warning: {
-      main: secondary,
-      light: tinycolor(secondary).lighten(lightenRate).toHexString(),
-      dark: tinycolor(secondary).darken(darkenRate).toHexString(),
+      main: info,
+      light: tinycolor(info).lighten(lightenRate).toHexString(),
+      dark: tinycolor(info).darken(darkenRate).toHexString(),
       contrastText: '#FFFFFF',
     },
     error: {
-      main: '#EF4444',
+      main: '#E53935',
       light: '#F87171',
       dark: '#B91C1C',
       contrastText: '#FFFFFF',
     },
     text: {
-      primary: '#13191D',
-      secondary: '#6B7A8A',
+      primary: '#001D45',
+      secondary: '#074B83',
       disabled: '#9AA5B1',
-      hint: '#6B7A8A',
+      hint: '#074B83',
     },
     background: {
-      default: '#F8F9FA',
+      default: '#EAF1FB',
       paper: '#FFFFFF',
-      light: '#F0F2F5',
+      light: '#CFE0F5',
     },
-    divider: '#E8ECF0',
+    divider: '#9FC0EB',
     action: {
-      active: '#6B7A8A',
-      hover: 'rgba(7, 94, 84, 0.06)',
-      selected: 'rgba(7, 94, 84, 0.12)',
+      active: '#074B83',
+      hover: 'rgba(0, 29, 69, 0.06)',
+      selected: 'rgba(0, 29, 69, 0.12)',
       disabled: 'rgba(0, 0, 0, 0.3)',
       disabledBackground: 'rgba(0, 0, 0, 0.08)',
-      focus: 'rgba(7, 94, 84, 0.16)',
+      focus: 'rgba(0, 29, 69, 0.16)',
     },
   },
   customShadows: {

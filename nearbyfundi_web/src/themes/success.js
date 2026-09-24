@@ -1,10 +1,10 @@
 import tinycolor from 'tinycolor2';
 
-const primary = '#21AE8C';
-const secondary = '#00A896';
-const warning = '#F5A623';
-const success = '#21AE8C';
-const info = '#00A896';
+const primary = '#0A8A6D';
+const secondary = '#074B83';
+const warning = '#F5C30E';
+const success = '#0A8A6D';
+const info = '#074B83';
 
 const lightenRate = 7.5;
 const darkenRate = 15;
@@ -16,7 +16,7 @@ const successTheme = {
       main: primary,
       light: tinycolor(primary).lighten(lightenRate).toHexString(),
       dark: tinycolor(primary).darken(darkenRate).toHexString(),
-      contrastText: '#fff',
+      contrastText: '#FFFFFF',
     },
     secondary: {
       main: secondary,
@@ -26,47 +26,47 @@ const successTheme = {
     },
     warning: {
       main: warning,
-      light: tinycolor(warning).lighten(lightenRate).toHexString(),
-      dark: tinycolor(warning).darken(darkenRate).toHexString(),
-      contrastText: '#fff',
+      light: '#FFC61F',
+      dark: '#D9A300',
+      contrastText: '#001D45',
     },
     success: {
       main: success,
       light: tinycolor(success).lighten(lightenRate).toHexString(),
       dark: tinycolor(success).darken(darkenRate).toHexString(),
-      contrastText: '#fff',
+      contrastText: '#FFFFFF',
     },
     info: {
       main: info,
       light: tinycolor(info).lighten(lightenRate).toHexString(),
       dark: tinycolor(info).darken(darkenRate).toHexString(),
-      contrastText: '#fff',
+      contrastText: '#FFFFFF',
     },
     error: {
-      main: '#EF4444',
+      main: '#E53935',
       light: '#F87171',
       dark: '#B91C1C',
-      contrastText: '#fff',
+      contrastText: '#FFFFFF',
     },
     text: {
-      primary: '#13191D',
-      secondary: '#6B7A8A',
+      primary: '#001D45',
+      secondary: '#074B83',
       disabled: '#9AA5B1',
-      hint: '#6B7A8A',
+      hint: '#074B83',
     },
     background: {
-      default: '#F8F9FA',
+      default: '#EAF1FB',
       paper: '#FFFFFF',
-      light: '#F0F2F5',
+      light: '#CFE0F5',
     },
-    divider: '#E8ECF0',
+    divider: '#9FC0EB',
     action: {
-      active: '#6B7A8A',
-      hover: 'rgba(33, 174, 140, 0.06)',
-      selected: 'rgba(33, 174, 140, 0.12)',
+      active: '#074B83',
+      hover: 'rgba(10, 138, 109, 0.06)',
+      selected: 'rgba(10, 138, 109, 0.12)',
       disabled: 'rgba(0, 0, 0, 0.3)',
       disabledBackground: 'rgba(0, 0, 0, 0.08)',
-      focus: 'rgba(33, 174, 140, 0.16)',
+      focus: 'rgba(10, 138, 109, 0.16)',
     },
   },
   customShadows: {

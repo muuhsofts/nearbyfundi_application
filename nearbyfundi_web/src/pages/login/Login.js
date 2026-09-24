@@ -25,29 +25,31 @@ import LanguageSwitcher from 'components/LanguageSwitcher/LanguageSwitcher';
 import { useThemeKey } from 'context/ThemeContext';
 
 /* -----------------------------------------------------------
- *  Brand palette — DO NOT change outside this file
+ *  Brand palette — mobile only (Navy / Gold / Bolt / Green)
  * ----------------------------------------------------------- */
 const BRAND = {
-    primary:   '#0d7377', // Deep Teal / Forest Green
-    secondary: '#1E4D4F', // Mint / Vibrant Green
-    success:   '#10B981', // Emerald
-    info:      '#8B5CF6', // Violet
-    warning:   '#F59E0B', // Amber
+    primary:   '#001D45', // Navy 700
+    secondary: '#F5C30E', // Gold 500
+    accent:    '#074B83', // Bolt 800
+    success:   '#0A8A6D', // Green
+    info:      '#074B83',
+    warning:   '#F5C30E',
 };
-const BRAND_LIGHT = '#14919b';
-const BRAND_GRADIENT = `linear-gradient(135deg, ${BRAND_LIGHT} 0%, ${BRAND.primary} 55%, ${BRAND.secondary} 100%)`;
+const BRAND_LIGHT = '#0A3670'; // Navy 600
+const BRAND_GRADIENT = `linear-gradient(135deg, ${BRAND_LIGHT} 0%, ${BRAND.primary} 55%, ${BRAND.accent} 100%)`;
 
 const logo = '/assets/logo.png';
+const aboutMap = '/assets/about-map.png';   // ← page-wide background image
 const EASE = [0.22, 1, 0.36, 1];
 
 /* -----------------------------------------------------------
- *  Theme options — reuse brand colors
+ *  Theme options — reuse mobile brand colors
  * ----------------------------------------------------------- */
 const THEME_OPTIONS = [
-    { key: 'default',   color: BRAND.primary,   label: 'Teal' },
-    { key: 'secondary', color: BRAND.info,      label: 'Violet' },
+    { key: 'default',   color: BRAND.primary,   label: 'Navy'  },
+    { key: 'secondary', color: BRAND.secondary, label: 'Gold'  },
     { key: 'success',   color: BRAND.success,   label: 'Green' },
-    { key: 'dark',      color: '#0F172A',       label: 'Dark' },
+    { key: 'dark',      color: '#000C1F',       label: 'Dark'  },
 ];
 
 /* -----------------------------------------------------------
@@ -172,17 +174,45 @@ function ThemeSwitcher() {
 }
 
 /* -----------------------------------------------------------
- *  Animated page background: drifting glow orbs + dot grid
+ *  Animated page background:
+ *  about-map.png (faded, page-wide) + drifting glow orbs + dot grid
  * ----------------------------------------------------------- */
 const ORBS = [
-    { size: 520, top: '-12%', left: '-8%',  color: '#14919b', dur: 18, dx: 60,  dy: 40 },
-    { size: 440, top: '55%',  left: '70%',  color: '#10B981', dur: 22, dx: -50, dy: -30 },
-    { size: 360, top: '10%',  left: '62%',  color: '#8B5CF6', dur: 26, dx: -40, dy: 50 },
+    { size: 520, top: '-12%', left: '-8%',  color: '#001D45', dur: 18, dx: 60,  dy: 40 },
+    { size: 440, top: '55%',  left: '70%',  color: '#074B83', dur: 22, dx: -50, dy: -30 },
+    { size: 360, top: '10%',  left: '62%',  color: '#F5C30E', dur: 26, dx: -40, dy: 50 },
 ];
 
 function BackgroundFX() {
     return (
         <Box aria-hidden sx={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
+            {/* ---- Map image layer (page-wide, faded) ---- */}
+            <Box
+                sx={{
+                    position: 'absolute',
+                    inset: 0,
+                    backgroundImage: `url(${aboutMap})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    backgroundRepeat: 'no-repeat',
+                    // Different fade per theme
+                    opacity: (theme) => theme.palette.mode === 'dark' ? 0.35 : 0.28,
+                    filter: 'saturate(0.85)',
+                }}
+            />
+
+            {/* ---- Navy veil so the map doesn't overpower the card ---- */}
+            <Box
+                sx={{
+                    position: 'absolute',
+                    inset: 0,
+                    background: (theme) => theme.palette.mode === 'dark'
+                        ? `linear-gradient(135deg, ${alpha('#00050F', 0.82)} 0%, ${alpha('#000C1F', 0.78)} 50%, ${alpha('#001533', 0.82)} 100%)`
+                        : `linear-gradient(135deg, ${alpha(BRAND.primary, 0.72)} 0%, ${alpha(BRAND.accent, 0.66)} 50%, ${alpha(BRAND_LIGHT, 0.72)} 100%)`,
+                }}
+            />
+
+            {/* ---- Soft drifting glow orbs ---- */}
             {ORBS.map((o, i) => (
                 <motion.div
                     key={i}
@@ -191,10 +221,12 @@ function BackgroundFX() {
                     style={{
                         position: 'absolute', top: o.top, left: o.left,
                         width: o.size, height: o.size, borderRadius: '50%',
-                        background: o.color, opacity: 0.22, filter: 'blur(90px)',
+                        background: o.color, opacity: 0.28, filter: 'blur(90px)',
                     }}
                 />
             ))}
+
+            {/* ---- Dot grid on top ---- */}
             <Box sx={{
                 position: 'absolute', inset: 0,
                 backgroundImage: 'radial-gradient(rgba(255,255,255,0.13) 1px, transparent 1px)',
@@ -545,9 +577,10 @@ export default function Login() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
+                    // Solid base gradient behind everything (the map image sits in BackgroundFX on top)
                     background: (theme) => theme.palette.mode === 'dark'
-                        ? 'linear-gradient(135deg, #0F172A 0%, #1A1A2E 50%, #23232D 100%)'
-                        : `linear-gradient(135deg, ${BRAND.secondary} 0%, ${BRAND.primary} 40%, ${BRAND_LIGHT} 100%)`,
+                        ? 'linear-gradient(135deg, #00050F 0%, #000C1F 50%, #001533 100%)'
+                        : `linear-gradient(135deg, ${BRAND.primary} 0%, ${BRAND.accent} 40%, ${BRAND_LIGHT} 100%)`,
                     px: { xs: 1.5, sm: 3 },
                     pt: { xs: 9, sm: 10, md: 3 },
                     pb: { xs: 3, md: 3 },
@@ -555,6 +588,7 @@ export default function Login() {
                     overflow: 'hidden',
                 }}
             >
+                {/* Full-page background: map + veil + orbs + grid */}
                 <BackgroundFX />
 
                 {/* Language + Theme Switcher */}
@@ -614,27 +648,28 @@ export default function Login() {
                                 overflow: 'hidden',
                                 display: 'flex',
                                 flexDirection: { xs: 'column', md: 'row' },
-                                boxShadow: '0 30px 60px -12px rgba(0,0,0,0.4)',
+                                boxShadow: '0 30px 60px -12px rgba(0,0,0,0.5)',
                                 bgcolor: 'background.paper',
                             }}
                         >
-                            {/* ---------- Left branding panel ---------- */}
+                            {/* ---------- Left branding panel (clean gradient, no image) ---------- */}
                             <Box
                                 sx={{
                                     flex: { xs: 'none', md: '0 0 42%' },
-                                    background: (theme) => theme.palette.mode === 'dark'
-                                        ? `linear-gradient(160deg, ${BRAND.secondary} 0%, ${BRAND.primary} 100%)`
-                                        : `linear-gradient(160deg, ${BRAND.secondary} 0%, ${BRAND.primary} 60%, ${BRAND_LIGHT} 100%)`,
+                                    position: 'relative',
+                                    overflow: 'hidden',
                                     color: '#fff',
                                     p: { xs: 2.5, sm: 3.5, md: 5 },
                                     display: 'flex',
                                     flexDirection: 'column',
                                     justifyContent: 'center',
-                                    minHeight: { xs: 0, md: 580 },
-                                    position: 'relative',
-                                    overflow: 'hidden',
+                                    minHeight: { xs: 260, md: 580 },
+                                    background: (theme) => theme.palette.mode === 'dark'
+                                        ? `linear-gradient(160deg, ${BRAND.primary} 0%, ${BRAND.accent} 100%)`
+                                        : `linear-gradient(160deg, ${BRAND.primary} 0%, ${BRAND.accent} 60%, ${BRAND_LIGHT} 100%)`,
                                 }}
                             >
+                                {/* Decorative corner circles */}
                                 <Box sx={{ position: 'absolute', top: -80, right: -60, width: 280, height: 280, borderRadius: '50%', bgcolor: alpha('#fff', 0.08) }} />
                                 <Box sx={{ position: 'absolute', bottom: -110, left: -80, width: 260, height: 260, borderRadius: '50%', bgcolor: alpha('#fff', 0.06) }} />
                                 <PulseRings />
@@ -646,21 +681,39 @@ export default function Login() {
                                     alignItems: { xs: 'center', md: 'flex-start' },
                                     gap: { xs: 2, md: 0 },
                                 }}>
+                                    {/* LOGO — bigger + visible */}
                                     <motion.div
                                         initial={{ scale: 0, rotate: -20, opacity: 0 }}
                                         animate={{ scale: 1, rotate: 0, opacity: 1 }}
                                         transition={{ type: 'spring', stiffness: 220, damping: 14, delay: 0.25 }}
                                     >
                                         <Box sx={{
-                                            width: { xs: 48, md: 64 }, height: { xs: 48, md: 64 },
-                                            mb: { md: 3 }, borderRadius: { xs: 3, md: 3.5 },
-                                            bgcolor: 'rgba(255,255,255,0.14)',
-                                            border: '1px solid rgba(255,255,255,0.28)',
-                                            backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+                                            width: { xs: 72, md: 96 },
+                                            height: { xs: 72, md: 96 },
+                                            mb: { md: 3 },
+                                            borderRadius: { xs: 3, md: 4 },
+                                            bgcolor: 'rgba(255,255,255,0.95)',
+                                            border: '1px solid rgba(255,255,255,0.4)',
+                                            boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                                             flexShrink: 0,
+                                            p: 1,
                                         }}>
-                                            <Box component="img" src={logo} alt="NearbyFundi" sx={{ width: { xs: 28, md: 38 }, height: { xs: 28, md: 38 }, filter: 'brightness(0) invert(1)' }} />
+                                            <Box
+                                                component="img"
+                                                src={logo}
+                                                alt="NearbyFundi"
+                                                onError={(e) => {
+                                                    e.target.onerror = null;
+                                                    e.target.src = `data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 24 24"%3E%3Ctext x="0" y="18" font-size="18" fill="%23001D45" font-weight="bold"%3ENF%3C/text%3E%3C/svg%3E`;
+                                                }}
+                                                sx={{
+                                                    width: { xs: 56, md: 72 },
+                                                    height: { xs: 56, md: 72 },
+                                                    objectFit: 'contain',
+                                                    display: 'block',
+                                                }}
+                                            />
                                         </Box>
                                     </motion.div>
 

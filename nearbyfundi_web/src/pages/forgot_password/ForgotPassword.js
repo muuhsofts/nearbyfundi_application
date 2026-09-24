@@ -11,6 +11,29 @@ import { showSnackbar } from 'utils/snackbar';
 import { authService } from 'services/auth.service';
 import { tAuth } from './forgotlang';
 
+/* -----------------------------------------------------------
+ *  Mobile brand palette (Navy / Bolt / Gold / Green)
+ * ----------------------------------------------------------- */
+const BRAND = {
+    primary:   '#001D45', // Navy 700
+    secondary: '#F5C30E', // Gold 500
+    accent:    '#074B83', // Bolt 800
+    success:   '#0A8A6D', // Green
+};
+const BRAND_LIGHT = '#0A3670'; // Navy 600
+const BRAND_GRADIENT = `linear-gradient(135deg, ${BRAND_LIGHT} 0%, ${BRAND.primary} 55%, ${BRAND.accent} 100%)`;
+
+/* -----------------------------------------------------------
+ *  Mobile neutrals
+ * ----------------------------------------------------------- */
+const TEXT_PRIMARY   = '#001D45'; // Navy 700
+const TEXT_SECONDARY = '#074B83'; // Bolt 800
+const BG_DEFAULT     = '#EAF1FB'; // Navy 50
+const BG_PAPER       = '#FFFFFF';
+const BG_FIELD       = '#F0F7FF'; // Bolt 50
+const BORDER_DEFAULT = '#9FC0EB'; // Navy 200
+const BORDER_HOVER   = '#0A3670'; // Navy 600
+
 const logo = '/assets/logo.png';
 
 export default function ForgotPassword() {
@@ -55,7 +78,7 @@ export default function ForgotPassword() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                bgcolor: '#f5f7fa',
+                bgcolor: BG_DEFAULT,
                 p: { xs: 2, sm: 3 },
             }}
         >
@@ -67,9 +90,9 @@ export default function ForgotPassword() {
                             sx={{
                                 p: { xs: 4, sm: 5, md: 6 },
                                 borderRadius: 4,
-                                boxShadow: '0 20px 60px rgba(0,0,0,0.06)',
-                                border: `1px solid ${alpha('#006B5E', 0.15)}`,
-                                bgcolor: '#ffffff',
+                                boxShadow: '0 20px 60px rgba(0, 29, 69, 0.08)',
+                                border: `1px solid ${alpha(BRAND.primary, 0.15)}`,
+                                bgcolor: BG_PAPER,
                             }}
                         >
                             <Box textAlign="center" mb={4}>
@@ -79,14 +102,14 @@ export default function ForgotPassword() {
                                     alt="NearbyFundi"
                                     onError={(e) => {
                                         e.target.onerror = null;
-                                        e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 24 24"%3E%3Ctext x="0" y="18" font-size="18" fill="%23006B5E"%3ENF%3C/text%3E%3C/svg%3E';
+                                        e.target.src = `data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 24 24"%3E%3Ctext x="0" y="18" font-size="18" fill="%23001D45"%3ENF%3C/text%3E%3C/svg%3E`;
                                     }}
                                     sx={{ width: 50, height: 50, mx: 'auto', mb: 2 }}
                                 />
-                                <Typography variant="h4" fontWeight="800" gutterBottom sx={{ color: '#0f172a' }}>
+                                <Typography variant="h4" fontWeight="800" gutterBottom sx={{ color: TEXT_PRIMARY }}>
                                     {t('auth.forgot.title')}
                                 </Typography>
-                                <Typography variant="body2" sx={{ color: '#334155', fontWeight: 500 }}>
+                                <Typography variant="body2" sx={{ color: TEXT_SECONDARY, fontWeight: 500 }}>
                                     {t('auth.forgot.subtitle')}
                                 </Typography>
                             </Box>
@@ -102,31 +125,31 @@ export default function ForgotPassword() {
                                     autoFocus
                                     sx={{
                                         '& .MuiInputLabel-root': {
-                                            color: '#475569',
+                                            color: TEXT_SECONDARY,
                                             fontWeight: 500,
-                                            '&.Mui-focused': { color: '#006B5E' },
+                                            '&.Mui-focused': { color: BRAND.primary },
                                         },
                                         '& .MuiInputBase-root': {
                                             borderRadius: 2,
                                             py: 0.5,
-                                            bgcolor: '#f8fafc',
-                                            color: '#0f172a',
+                                            bgcolor: BG_FIELD,
+                                            color: TEXT_PRIMARY,
                                             fontWeight: 500,
                                         },
                                         '& .MuiOutlinedInput-notchedOutline': {
-                                            borderColor: '#cbd5e1',
+                                            borderColor: BORDER_DEFAULT,
                                         },
                                         '&:hover .MuiOutlinedInput-notchedOutline': {
-                                            borderColor: '#94a3b8',
+                                            borderColor: BORDER_HOVER,
                                         },
                                         '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                                            borderColor: '#006B5E',
+                                            borderColor: BRAND.primary,
                                         },
                                     }}
                                     InputProps={{
                                         startAdornment: (
                                             <InputAdornment position="start">
-                                                <EmailIcon sx={{ color: '#475569' }} fontSize="small" />
+                                                <EmailIcon sx={{ color: TEXT_SECONDARY }} fontSize="small" />
                                             </InputAdornment>
                                         ),
                                     }}
@@ -150,12 +173,12 @@ export default function ForgotPassword() {
                                         fontWeight: 700,
                                         borderRadius: 2,
                                         textTransform: 'none',
-                                        background: 'linear-gradient(135deg, #006B5E 0%, #00897B 100%)',
+                                        background: BRAND_GRADIENT,
                                         color: '#ffffff',
                                         '&:hover': {
                                             transform: 'translateY(-2px)',
                                             boxShadow: 4,
-                                            background: 'linear-gradient(135deg, #005245 0%, #006B5E 100%)',
+                                            background: `linear-gradient(135deg, ${BRAND.primary} 0%, ${BRAND.accent} 100%)`,
                                         },
                                     }}
                                 >
@@ -167,7 +190,7 @@ export default function ForgotPassword() {
                                     variant="text"
                                     startIcon={<ArrowBackIcon />}
                                     onClick={() => navigate('/login')}
-                                    sx={{ mt: 2, textTransform: 'none', color: '#006B5E', fontWeight: 700 }}
+                                    sx={{ mt: 2, textTransform: 'none', color: BRAND.primary, fontWeight: 700 }}
                                 >
                                     {t('auth.forgot.backToLogin')}
                                 </Button>

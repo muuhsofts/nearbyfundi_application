@@ -14,15 +14,15 @@ const appConfig = {
   },
   app: {
     colors: {
-      dark: '#002B49',      // Dark navy - for headers, footers, dark elements
+      dark: '#001D45',      // Navy 700 - for headers, footers, dark elements
       light: '#FFFFFF',     // White - for backgrounds, cards
-      sea: '#004472',       // Deep blue - for primary buttons, links
-      sky: '#E9EBEF',       // Light gray - for page backgrounds
-      wave: '#D1E7F6',      // Light blue - for highlights, badges
-      rain: '#CCDDE9',      // Muted blue - for borders, dividers
-      middle: '#D7DFE6',    // Medium gray - for secondary backgrounds
-      black: '#13191D',     // Almost black - for text
-      salat: '#21AE8C',     // Green - for success, accepted, verified
+      sea: '#074B83',       // Bolt 800 - for primary buttons, links
+      sky: '#EAF1FB',       // Navy 50 - for page backgrounds
+      wave: '#CFE0F5',      // Navy 100 - for highlights, badges
+      rain: '#9FC0EB',      // Navy 200 - for borders, dividers
+      middle: '#E0EFFE',    // Bolt 100 - for secondary backgrounds
+      black: '#001D45',     // Navy 700 - for text
+      salat: '#00050F',     // Green - for success, accepted, verified
     },
   },
 };

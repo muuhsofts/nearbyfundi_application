@@ -1,9 +1,10 @@
 import tinycolor from 'tinycolor2';
 
-const primary = '#075E54';
-const secondary = '#F5A623';
-const success = '#21AE8C';
-const accent = '#00A896';
+const primary = '#F5C30E';
+const secondary = '#001D45';
+const warning = '#F5C30E';
+const success = '#0A8A6D';
+const info = '#074B83';
 
 const lightenRate = 7.5;
 const darkenRate = 15;
@@ -13,15 +14,21 @@ const darkTheme = {
     mode: 'dark',
     primary: {
       main: primary,
-      light: '#0A8A6D',
-      dark: '#054A44',
-      contrastText: '#FFFFFF',
+      light: '#FFC61F',
+      dark: '#D9A300',
+      contrastText: '#001D45',
     },
     secondary: {
       main: secondary,
-      light: tinycolor(secondary).lighten(lightenRate).toHexString(),
-      dark: tinycolor(secondary).darken(darkenRate).toHexString(),
+      light: '#0A3670',
+      dark: '#001533',
       contrastText: '#FFFFFF',
+    },
+    warning: {
+      main: warning,
+      light: '#FFC61F',
+      dark: '#D9A300',
+      contrastText: '#001D45',
     },
     success: {
       main: success,
@@ -30,42 +37,36 @@ const darkTheme = {
       contrastText: '#FFFFFF',
     },
     info: {
-      main: accent,
-      light: tinycolor(accent).lighten(lightenRate).toHexString(),
-      dark: tinycolor(accent).darken(darkenRate).toHexString(),
-      contrastText: '#FFFFFF',
-    },
-    warning: {
-      main: secondary,
-      light: tinycolor(secondary).lighten(lightenRate).toHexString(),
-      dark: tinycolor(secondary).darken(darkenRate).toHexString(),
+      main: info,
+      light: tinycolor(info).lighten(lightenRate).toHexString(),
+      dark: tinycolor(info).darken(darkenRate).toHexString(),
       contrastText: '#FFFFFF',
     },
     error: {
-      main: '#EF4444',
+      main: '#E53935',
       light: '#F87171',
       dark: '#B91C1C',
       contrastText: '#FFFFFF',
     },
     text: {
-      primary: '#F0F0F5',
-      secondary: '#9A9AAF',
+      primary: '#FFFFFF',
+      secondary: '#9FC0EB',
       disabled: '#6B6B80',
-      hint: '#9A9AAF',
+      hint: '#9FC0EB',
     },
     background: {
-      default: '#0A0A0F',
-      paper: '#1A1A24',
-      light: '#2A2A3A',
+      default: '#00050F',
+      paper: '#000C1F',
+      light: '#001533',
     },
-    divider: '#2A2A3A',
+    divider: '#001533',
     action: {
-      active: '#9A9AAF',
+      active: '#9FC0EB',
       hover: 'rgba(255, 255, 255, 0.06)',
-      selected: 'rgba(7, 94, 84, 0.18)',
+      selected: 'rgba(245, 195, 14, 0.18)',
       disabled: 'rgba(255, 255, 255, 0.3)',
       disabledBackground: 'rgba(255, 255, 255, 0.12)',
-      focus: 'rgba(7, 94, 84, 0.20)',
+      focus: 'rgba(245, 195, 14, 0.20)',
     },
   },
   customShadows: {
