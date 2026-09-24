@@ -10,6 +10,7 @@ import '../../config/app_config.dart';
 import '../../config/app_routes.dart';
 import '../../config/app_theme.dart';
 import '../../widgets/confirmation_dialog.dart';
+import '../../widgets/flag_icon.dart';
 import '../../l10n/app_localizations.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -242,80 +243,25 @@ class _LanguageToggle extends StatelessWidget {
           child: Row(
             children: [
               Expanded(
-                child: _LanguageOption(
-                  label: 'English 🇬🇧',
+                child: _SegmentOption(
                   isSelected: isEnglish,
                   onTap: () => onChanged('en'),
+                  leading: const FlagIcon(emoji: '🇬🇧', height: 16),
+                  label: 'English',
                 ),
               ),
               Expanded(
-                child: _LanguageOption(
-                  label: 'Kiswahili 🇹🇿',
+                child: _SegmentOption(
                   isSelected: !isEnglish,
                   onTap: () => onChanged('sw'),
+                  leading: const FlagIcon(emoji: '🇹🇿', height: 16),
+                  label: 'Kiswahili',
                 ),
               ),
             ],
           ),
         ),
       ],
-    );
-  }
-}
-
-class _LanguageOption extends StatelessWidget {
-  final String label;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _LanguageOption({
-    required this.label,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final activeColor = isDark ? AppTheme.secondary : AppTheme.primary;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? activeColor.withOpacity(0.1)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: isSelected ? activeColor : Colors.transparent,
-            width: 1.5,
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (isSelected)
-              Icon(
-                Icons.check_circle_rounded,
-                color: activeColor,
-                size: 16,
-              ),
-            if (isSelected) const SizedBox(width: 6),
-            Text(
-              label,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                color: isSelected
-                    ? activeColor
-                    : theme.colorScheme.onSurface.withOpacity(0.6),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -356,24 +302,27 @@ class _ThemeToggle extends StatelessWidget {
           child: Row(
             children: [
               Expanded(
-                child: _ThemeOption(
-                  label: 'Light ☀️',
+                child: _SegmentOption(
                   isSelected: currentThemeMode == ThemeMode.light,
                   onTap: () => onChanged(ThemeMode.light),
+                  leading: const Icon(Icons.light_mode_rounded, size: 16),
+                  label: 'Light',
                 ),
               ),
               Expanded(
-                child: _ThemeOption(
-                  label: 'Dark 🌙',
+                child: _SegmentOption(
                   isSelected: currentThemeMode == ThemeMode.dark,
                   onTap: () => onChanged(ThemeMode.dark),
+                  leading: const Icon(Icons.dark_mode_rounded, size: 16),
+                  label: 'Dark',
                 ),
               ),
               Expanded(
-                child: _ThemeOption(
-                  label: 'System ⚙️',
+                child: _SegmentOption(
                   isSelected: currentThemeMode == ThemeMode.system,
                   onTap: () => onChanged(ThemeMode.system),
+                  leading: const Icon(Icons.settings_suggest_rounded, size: 16),
+                  label: 'System',
                 ),
               ),
             ],
@@ -384,15 +333,21 @@ class _ThemeToggle extends StatelessWidget {
   }
 }
 
-class _ThemeOption extends StatelessWidget {
-  final String label;
+// ─── Shared Segment Option ────────────────────────────────────────────
+/// A reusable, overflow-safe segment used by both the language and
+/// theme toggles. Shows a leading icon (or flag) + optional checkmark
+/// + label, all constrained with Flexible to prevent overflow.
+class _SegmentOption extends StatelessWidget {
   final bool isSelected;
   final VoidCallback onTap;
+  final Widget leading;
+  final String label;
 
-  const _ThemeOption({
-    required this.label,
+  const _SegmentOption({
     required this.isSelected,
     required this.onTap,
+    required this.leading,
+    required this.label,
   });
 
   @override
@@ -403,8 +358,10 @@ class _ThemeOption extends StatelessWidget {
 
     return GestureDetector(
       onTap: onTap,
+      behavior: HitTestBehavior.opaque,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        margin: const EdgeInsets.all(4),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
         decoration: BoxDecoration(
           color: isSelected
               ? activeColor.withOpacity(0.1)
@@ -418,20 +375,39 @@ class _ThemeOption extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            if (isSelected)
+            if (isSelected) ...[
               Icon(
                 Icons.check_circle_rounded,
                 color: activeColor,
-                size: 16,
+                size: 14,
               ),
-            if (isSelected) const SizedBox(width: 6),
-            Text(
-              label,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                color: isSelected
-                    ? activeColor
-                    : theme.colorScheme.onSurface.withOpacity(0.6),
+              const SizedBox(width: 4),
+            ],
+            // Leading icon/flag — fades in color when not selected
+            Opacity(
+              opacity: isSelected ? 1.0 : 0.6,
+              child: IconTheme(
+                data: IconThemeData(
+                  color: isSelected ? activeColor : theme.hintColor,
+                  size: 16,
+                ),
+                child: leading,
+              ),
+            ),
+            const SizedBox(width: 6),
+            // Label — Flexible + ellipsis prevents the overflow you saw
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontWeight:
+                  isSelected ? FontWeight.w600 : FontWeight.w500,
+                  color: isSelected
+                      ? activeColor
+                      : theme.colorScheme.onSurface.withOpacity(0.6),
+                ),
               ),
             ),
           ],

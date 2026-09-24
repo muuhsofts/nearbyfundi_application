@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../config/app_routes.dart';
 import '../../config/app_theme.dart';
-import '../../widgets/custom_button.dart';
 import '../../widgets/confirmation_dialog.dart';
 import '../../l10n/app_localizations.dart';
 
@@ -42,8 +41,10 @@ class ProfileScreen extends StatelessWidget {
         backgroundColor: AppTheme.primary,
         foregroundColor: Colors.white,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-          onPressed: () => Navigator.pushReplacementNamed(context, AppRoutes.home),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded,
+              color: Colors.white),
+          onPressed: () =>
+              Navigator.pushReplacementNamed(context, AppRoutes.home),
         ),
         actions: [
           IconButton(
@@ -54,7 +55,8 @@ class ProfileScreen extends StatelessWidget {
         ],
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 20),
+        padding:
+        EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 20),
         child: Column(
           children: [
             // ─── Premium Profile Card ──────────────────────────────────
@@ -120,7 +122,7 @@ class ProfileScreen extends StatelessWidget {
                           backgroundColor: AppTheme.primary.withOpacity(0.08),
                           child: Text(
                             initial,
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 40,
                               fontWeight: FontWeight.bold,
                               color: AppTheme.primary,
@@ -170,7 +172,8 @@ class ProfileScreen extends StatelessWidget {
                       const SizedBox(height: 16),
                       // ─── Gold Status Badge ─────────────────────────────
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 4),
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             colors: [
@@ -235,12 +238,12 @@ class ProfileScreen extends StatelessWidget {
               color: AppTheme.secondary,
             ),
             const SizedBox(height: 12),
-            // 👇 Updated Notifications button to navigate
             _buildActionButton(
               context,
               icon: Icons.notifications_outlined,
               label: l10n.notifications,
-              onTap: () => Navigator.pushNamed(context, AppRoutes.notifications),
+              onTap: () =>
+                  Navigator.pushNamed(context, AppRoutes.notifications),
               theme: theme,
               color: Colors.blueAccent,
             ),
@@ -267,6 +270,10 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
+  /// Reusable tappable card row.
+  ///
+  /// Wraps the [ListTile] in a [Material] so ink splashes render
+  /// correctly on top of the custom background decoration.
   Widget _buildActionButton(
       BuildContext context, {
         required IconData icon,
@@ -276,9 +283,9 @@ class ProfileScreen extends StatelessWidget {
         Color? color,
       }) {
     final iconColor = color ?? AppTheme.primary;
+
     return Container(
       decoration: BoxDecoration(
-        color: theme.cardColor,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -287,39 +294,65 @@ class ProfileScreen extends StatelessWidget {
             offset: const Offset(0, 4),
           ),
         ],
-        border: Border.all(
-          color: iconColor.withOpacity(0.08),
-          width: 0.5,
-        ),
       ),
-      child: ListTile(
-        leading: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [iconColor.withOpacity(0.15), iconColor.withOpacity(0.05)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+      // ✅ Material provides the background + ink splash surface
+      child: Material(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(16),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: iconColor.withOpacity(0.08),
+                width: 0.5,
+              ),
             ),
-            borderRadius: BorderRadius.circular(12),
+            padding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                // ─── Leading icon ────────────────────────────────
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        iconColor.withOpacity(0.15),
+                        iconColor.withOpacity(0.05),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, color: iconColor, size: 22),
+                ),
+                const SizedBox(width: 16),
+                // ─── Label ───────────────────────────────────────
+                Expanded(
+                  child: Text(
+                    label,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
+                      fontSize: 16,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                  ),
+                ),
+                // ─── Trailing chevron ────────────────────────────
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 16,
+                  color: theme.hintColor.withOpacity(0.5),
+                ),
+              ],
+            ),
           ),
-          child: Icon(icon, color: iconColor, size: 22),
         ),
-        title: Text(
-          label,
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w500,
-            fontSize: 16,
-            color: theme.colorScheme.onSurface,
-          ),
-        ),
-        trailing: Icon(
-          Icons.arrow_forward_ios_rounded,
-          size: 16,
-          color: theme.hintColor.withOpacity(0.5),
-        ),
-        onTap: onTap,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       ),
     );
   }
@@ -332,7 +365,6 @@ class ProfileScreen extends StatelessWidget {
       ) {
     return Container(
       decoration: BoxDecoration(
-        color: theme.cardColor,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -341,47 +373,70 @@ class ProfileScreen extends StatelessWidget {
             offset: const Offset(0, 4),
           ),
         ],
-        border: Border.all(
-          color: AppTheme.error.withOpacity(0.1),
-          width: 0.5,
-        ),
       ),
-      child: ListTile(
-        leading: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: AppTheme.error.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(Icons.logout_rounded, color: AppTheme.error, size: 22),
-        ),
-        title: Text(
-          l10n.logout,
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w500,
-            fontSize: 16,
-            color: AppTheme.error,
-          ),
-        ),
-        trailing: Icon(
-          Icons.arrow_forward_ios_rounded,
-          size: 16,
-          color: AppTheme.error.withOpacity(0.4),
-        ),
-        onTap: () async {
-          final confirm = await showConfirmationDialog(
-            context,
-            l10n.logout,
-            l10n.logoutConfirmation,
-          );
-          if (confirm == true) {
-            await auth.logout();
-            if (context.mounted) {
-              Navigator.pushReplacementNamed(context, AppRoutes.login);
+      child: Material(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(16),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () async {
+            final confirm = await showConfirmationDialog(
+              context,
+              l10n.logout,
+              l10n.logoutConfirmation,
+            );
+            if (confirm == true) {
+              await auth.logout();
+              if (context.mounted) {
+                Navigator.pushReplacementNamed(context, AppRoutes.login);
+              }
             }
-          }
-        },
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          },
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: AppTheme.error.withOpacity(0.1),
+                width: 0.5,
+              ),
+            ),
+            padding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.error.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.logout_rounded,
+                    color: AppTheme.error,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    l10n.logout,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
+                      fontSize: 16,
+                      color: AppTheme.error,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 16,
+                  color: AppTheme.error.withOpacity(0.4),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
