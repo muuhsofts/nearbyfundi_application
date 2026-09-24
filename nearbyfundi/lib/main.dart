@@ -1,5 +1,10 @@
+import 'dart:async';
+import 'dart:ui' show PlatformDispatcher;
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, kDebugMode, kProfileMode, kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -49,6 +54,33 @@ import 'services/security_service.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
+// ============================================================
+// BOOT DEBUG HELPERS
+// ============================================================
+
+final Stopwatch _bootClock = Stopwatch();
+
+/// Prints a boot step with elapsed milliseconds since main() started.
+/// Filter your console with "[BOOT]" to follow the startup sequence.
+void _log(String message) {
+  debugPrint('[BOOT +${_bootClock.elapsedMilliseconds}ms] $message');
+}
+
+/// Logs before/after creating a provider so a crashing constructor is easy to find.
+/// Providers are lazy, so these logs appear the first time each is read.
+T _timed<T>(String name, T Function() build) {
+  _log('⏳ Creating $name');
+  try {
+    final value = build();
+    _log('✅ Created $name');
+    return value;
+  } catch (e, stackTrace) {
+    debugPrint('❌ [BOOT] $name constructor FAILED: $e');
+    debugPrint('$stackTrace');
+    rethrow;
+  }
+}
+
 // Top-level entry point required by Firebase for background messages
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -56,25 +88,101 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   debugPrint('📩 Background message received: ${message.messageId}');
 }
 
-void main() async {
+Future<void> main() async {
+  _bootClock.start();
+  _log('🚀 main() started');
+
   WidgetsFlutterBinding.ensureInitialized();
+  _log('✅ WidgetsFlutterBinding initialized');
+  _log('ℹ️ Platform: $defaultTargetPlatform | '
+      'debug=$kDebugMode profile=$kProfileMode release=$kReleaseMode');
 
-  // Initialize Firebase and set background handler
-  await Firebase.initializeApp();
+  // ----------------------------------------------------------
+  // Global error hooks: catch anything that would otherwise be silent
+  // ----------------------------------------------------------
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    debugPrint('🔥 [FlutterError] ${details.exceptionAsString()}');
+    debugPrint('${details.stack}');
+  };
+
+  PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
+    debugPrint('🔥 [PlatformDispatcher] Uncaught async error: $error');
+    debugPrint('$stack');
+    return true;
+  };
+  _log('✅ Global error handlers installed');
+
+  // ----------------------------------------------------------
+  // 1. Firebase
+  // ----------------------------------------------------------
+  try {
+    _log('⏳ [1/3] Firebase.initializeApp starting');
+    _log('ℹ️ Firebase apps already registered (native): '
+        '${Firebase.apps.map((a) => a.name).toList()}');
+    await Firebase.initializeApp();
+    final opts = Firebase.app().options;
+    _log('✅ Firebase initialized | appId=${opts.appId} | '
+        'project=${opts.projectId} | bundle=${opts.iosBundleId}');
+  } catch (e, stackTrace) {
+    debugPrint('❌ Firebase initialization failed: $e');
+    debugPrint('$stackTrace');
+  }
+
+  // Top-level background handler (required)
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  _log('✅ Background handler registered');
 
-  // Initialize FCM configuration
-  await FcmService.initialize();
-  await SecurityService.enableSecureScreen();
+  // ----------------------------------------------------------
+  // 2. Secure screen
+  // ----------------------------------------------------------
+  try {
+    _log('⏳ [2/3] SecurityService.enableSecureScreen starting');
+    await SecurityService.enableSecureScreen();
+    _log('✅ [2/3] SecurityService.enableSecureScreen finished');
+  } catch (e, stackTrace) {
+    debugPrint('❌ Secure screen initialization failed: $e');
+    debugPrint('$stackTrace');
+  }
 
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.dark,
-    systemNavigationBarColor: Colors.transparent,
-    systemNavigationBarIconBrightness: Brightness.light,
-  ));
+  // ----------------------------------------------------------
+  // 3. System UI
+  // ----------------------------------------------------------
+  try {
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ));
+    _log('✅ [3/3] System UI overlay style set');
+  } catch (e, stackTrace) {
+    debugPrint('⚠️ System UI configuration failed: $e');
+    debugPrint('$stackTrace');
+  }
 
+  _log('⏳ Calling runApp()');
   runApp(const MyApp());
+  _log('✅ runApp() returned');
+
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    _log('🎉 First Flutter frame rendered');
+  });
+
+  // ----------------------------------------------------------
+  // FCM: runs in the background so the splash shows immediately.
+  // On iOS it waits for the notification permission dialog.
+  // ----------------------------------------------------------
+  unawaited(() async {
+    try {
+      _log('⏳ FcmService.initialize starting (background)');
+      await FcmService.initialize();
+      _log('✅ FcmService.initialize finished');
+    } catch (e, stackTrace) {
+      debugPrint('❌ FCM initialization failed: $e');
+      debugPrint('$stackTrace');
+    }
+  }());
 }
 
 class MyApp extends StatelessWidget {
@@ -82,19 +190,36 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    _log('🧱 MyApp.build()');
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => PostProvider()),
-        ChangeNotifierProvider(create: (_) => RequestProvider()),
-        ChangeNotifierProvider(create: (_) => TechnicianProvider()),
-        ChangeNotifierProvider(create: (_) => ServiceProvider()),
-        ChangeNotifierProvider(create: (_) => NotificationProvider()),
-        ChangeNotifierProvider(create: (_) => SettingsProvider()),
-        ChangeNotifierProvider(create: (_) => LocationProvider()),
-        ChangeNotifierProvider(create: (_) => StaticPageProvider()),
-        ChangeNotifierProvider(create: (_) => ThemeProvider()),
-        ChangeNotifierProvider(create: (_) => ChatProvider()),
+        ChangeNotifierProvider(
+            create: (_) => _timed('AuthProvider', () => AuthProvider())),
+        ChangeNotifierProvider(
+            create: (_) => _timed('PostProvider', () => PostProvider())),
+        ChangeNotifierProvider(
+            create: (_) => _timed('RequestProvider', () => RequestProvider())),
+        ChangeNotifierProvider(
+            create: (_) =>
+                _timed('TechnicianProvider', () => TechnicianProvider())),
+        ChangeNotifierProvider(
+            create: (_) => _timed('ServiceProvider', () => ServiceProvider())),
+        ChangeNotifierProvider(
+            create: (_) =>
+                _timed('NotificationProvider', () => NotificationProvider())),
+        ChangeNotifierProvider(
+            create: (_) =>
+                _timed('SettingsProvider', () => SettingsProvider())),
+        ChangeNotifierProvider(
+            create: (_) =>
+                _timed('LocationProvider', () => LocationProvider())),
+        ChangeNotifierProvider(
+            create: (_) =>
+                _timed('StaticPageProvider', () => StaticPageProvider())),
+        ChangeNotifierProvider(
+            create: (_) => _timed('ThemeProvider', () => ThemeProvider())),
+        ChangeNotifierProvider(
+            create: (_) => _timed('ChatProvider', () => ChatProvider())),
       ],
       child: Consumer2<ThemeProvider, SettingsProvider>(
         builder: (context, themeProvider, settings, _) {
@@ -117,81 +242,106 @@ class MyApp extends StatelessWidget {
             ],
             navigatorKey: navigatorKey,
             initialRoute: AppRoutes.splash,
-            onGenerateRoute: (routeSettings) {
-              switch (routeSettings.name) {
-                case AppRoutes.splash:
-                  return MaterialPageRoute(builder: (_) => const SplashScreen());
-                case AppRoutes.onboarding:
-                  return MaterialPageRoute(builder: (_) => const OnboardingScreen());
-                case AppRoutes.login:
-                  return MaterialPageRoute(builder: (_) => const LoginScreen());
-                case AppRoutes.register:
-                  return MaterialPageRoute(builder: (_) => const RegisterScreen());
-                case AppRoutes.otp:
-                  return MaterialPageRoute(
-                    builder: (_) => OtpVerificationScreen(
-                      email: routeSettings.arguments as String,
-                    ),
-                  );
-                case AppRoutes.forgot:
-                  return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());
-                case AppRoutes.reset:
-                  return MaterialPageRoute(
-                    builder: (_) => ResetPasswordScreen(
-                      email: routeSettings.arguments as String,
-                    ),
-                  );
-                case AppRoutes.home:
-                  return MaterialPageRoute(builder: (_) => const HomeScreen());
-                case AppRoutes.technicianDetail:
-                  return MaterialPageRoute(
-                    builder: (_) => TechnicianDetailScreen(
-                      technicianId: routeSettings.arguments as int,
-                    ),
-                  );
-                case AppRoutes.postDetail:
-                  return MaterialPageRoute(
-                    builder: (_) => PostDetailScreen(
-                      postId: routeSettings.arguments as int,
-                    ),
-                  );
-                case AppRoutes.editProfile:
-                  return MaterialPageRoute(builder: (_) => const EditProfileScreen());
-                case AppRoutes.settings:
-                  return MaterialPageRoute(builder: (_) => const SettingsScreen());
-                case AppRoutes.about:
-                  return MaterialPageRoute(builder: (_) => const AboutScreen());
-                case AppRoutes.terms:
-                  return MaterialPageRoute(builder: (_) => const TermsScreen());
-                case AppRoutes.faq:
-                  return MaterialPageRoute(builder: (_) => const FaqScreen());
-                case AppRoutes.contactUs:
-                  return MaterialPageRoute(builder: (_) => const ContactUsScreen());
-                case AppRoutes.chatList:
-                  return MaterialPageRoute(builder: (_) => const ChatListScreen());
-                case AppRoutes.chatScreen:
-                  return MaterialPageRoute(
-                    builder: (_) => ChatScreen(
-                      conversation: routeSettings.arguments as ChatConversation,
-                    ),
-                  );
-                case AppRoutes.notifications:
-                  return MaterialPageRoute(builder: (_) => const NotificationsScreen());
-                case AppRoutes.privacyPolicy:
-                  return MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen());
-                case AppRoutes.tracking:
-                  return MaterialPageRoute(
-                    builder: (_) => TrackingScreen(
-                      requestId: routeSettings.arguments as int,
-                    ),
-                  );
-                default:
-                  return MaterialPageRoute(builder: (_) => const SplashScreen());
-              }
-            },
+            onGenerateRoute: _generateRoute,
           );
         },
       ),
     );
   }
+}
+
+// ============================================================
+// ROUTING
+// ============================================================
+
+Route<dynamic> _generateRoute(RouteSettings routeSettings) {
+  final Object? args = routeSettings.arguments;
+  debugPrint('🧭 Route requested: ${routeSettings.name} | '
+      'args type: ${args?.runtimeType}');
+
+  // Keeps `settings` on every route so route names survive
+  // (popUntil, ModalRoute.of(context)?.settings.name, etc).
+  MaterialPageRoute<dynamic> route(Widget page) => MaterialPageRoute(
+    builder: (_) => page,
+    settings: routeSettings,
+  );
+
+  switch (routeSettings.name) {
+    case AppRoutes.splash:
+      return route(const SplashScreen());
+    case AppRoutes.onboarding:
+      return route(const OnboardingScreen());
+    case AppRoutes.login:
+      return route(const LoginScreen());
+    case AppRoutes.register:
+      return route(const RegisterScreen());
+    case AppRoutes.otp:
+      return route(OtpVerificationScreen(email: _stringArg(args)));
+    case AppRoutes.forgot:
+      return route(const ForgotPasswordScreen());
+    case AppRoutes.reset:
+      return route(ResetPasswordScreen(email: _stringArg(args)));
+    case AppRoutes.home:
+      return route(const HomeScreen());
+    case AppRoutes.technicianDetail:
+      return route(TechnicianDetailScreen(technicianId: _intArg(args)));
+    case AppRoutes.postDetail:
+      return route(PostDetailScreen(postId: _intArg(args)));
+    case AppRoutes.editProfile:
+      return route(const EditProfileScreen());
+    case AppRoutes.settings:
+      return route(const SettingsScreen());
+    case AppRoutes.about:
+      return route(const AboutScreen());
+    case AppRoutes.terms:
+      return route(const TermsScreen());
+    case AppRoutes.faq:
+      return route(const FaqScreen());
+    case AppRoutes.contactUs:
+      return route(const ContactUsScreen());
+    case AppRoutes.chatList:
+      return route(const ChatListScreen());
+    case AppRoutes.chatScreen:
+      if (args is ChatConversation) {
+        return route(ChatScreen(conversation: args));
+      }
+      debugPrint('⚠️ chatScreen called without ChatConversation '
+          '(got ${args?.runtimeType}) → ChatListScreen');
+      return route(const ChatListScreen());
+    case AppRoutes.notifications:
+      return route(const NotificationsScreen());
+    case AppRoutes.privacyPolicy:
+      return route(const PrivacyPolicyScreen());
+    case AppRoutes.tracking:
+      return route(TrackingScreen(requestId: _intArg(args)));
+    default:
+      debugPrint('⚠️ Unknown route: ${routeSettings.name}');
+      return route(const SplashScreen());
+  }
+}
+
+/// Reads an int from an int, a numeric String, or a Map ({'id': ...}).
+/// Returns 0 (and logs) instead of throwing when the argument is wrong.
+int _intArg(Object? args) {
+  if (args is int) return args;
+  if (args is String) return int.tryParse(args) ?? 0;
+  if (args is Map) {
+    final value = args['id'] ??
+        args['technicianId'] ??
+        args['postId'] ??
+        args['requestId'];
+    if (value is int) return value;
+    if (value is String) return int.tryParse(value) ?? 0;
+  }
+  debugPrint('⚠️ Expected an int route argument, got ${args?.runtimeType}');
+  return 0;
+}
+
+/// Reads a String from a String or a Map ({'email': ...}).
+/// Returns '' (and logs) instead of throwing when the argument is wrong.
+String _stringArg(Object? args) {
+  if (args is String) return args;
+  if (args is Map) return args['email']?.toString() ?? '';
+  debugPrint('⚠️ Expected a String route argument, got ${args?.runtimeType}');
+  return '';
 }

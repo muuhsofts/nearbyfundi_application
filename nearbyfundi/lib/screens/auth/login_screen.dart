@@ -9,7 +9,8 @@ import '../../providers/settings_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/service_provider.dart';
 import '../../config/app_routes.dart';
-import '../../config/app_theme.dart'; // Import your new theme
+import '../../config/app_theme.dart';
+import '../../widgets/flag_icon.dart';
 import '../../l10n/app_localizations.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -53,9 +54,8 @@ class _LoginScreenState extends State<LoginScreen> {
       _passwordController.text.trim(),
     );
 
-    setState(() => _isLoading = false);
-
     if (!mounted) return;
+    setState(() => _isLoading = false);
 
     if (success) {
       Navigator.pushReplacementNamed(context, AppRoutes.home);
@@ -80,7 +80,8 @@ class _LoginScreenState extends State<LoginScreen> {
       await googleSignIn.signOut();
       final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
       if (googleUser == null) {
-        setState(() => _isLoading = false);
+        // User closed the Google dialog
+        if (mounted) setState(() => _isLoading = false);
         return;
       }
 
@@ -94,14 +95,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
       final bool success = await auth.loginWithGoogle(idToken);
 
+      if (!mounted) return;
       setState(() => _isLoading = false);
 
-      if (success && mounted) {
+      if (success) {
         Navigator.pushReplacementNamed(context, AppRoutes.home);
-      } else if (auth.errorMessage != null && mounted) {
+      } else if (auth.errorMessage != null) {
         _showSnackBar(auth.errorMessage!);
       }
     } catch (e) {
+      debugPrint('❌ Google sign-in failed: $e');
+      if (!mounted) return;
       setState(() => _isLoading = false);
       _showSnackBar('Google sign-in failed: $e');
     }
@@ -661,7 +665,27 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // ───────────────── Language Sheet ─────────────────
+  // ───────────────── Language ─────────────────
+
+  /// Changes the app language. Always closes the sheet, even if the
+  /// server calls fail (for example when the user is offline or logged out).
+  Future<void> _changeLanguage(
+      BuildContext sheetContext,
+      String code,
+      SettingsProvider settings,
+      AuthProvider auth,
+      ServiceProvider serviceProvider,
+      ) async {
+    try {
+      await settings.updateLocale(code);
+      await auth.updateLocale(code);
+      await serviceProvider.fetchServices(locale: code);
+    } catch (e) {
+      debugPrint('⚠️ Language change to "$code" failed: $e');
+    }
+    if (sheetContext.mounted) Navigator.pop(sheetContext);
+  }
+
   void _showLanguageSheet(
       BuildContext context,
       SettingsProvider settings,
@@ -700,25 +724,19 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 20),
                 _SheetTile(
-                  title: 'English 🇬🇧',
+                  title: 'English',
+                  leading: const FlagIcon(emoji: '🇬🇧', height: 18),
                   selected: settings.locale == 'en',
-                  onTap: () async {
-                    await settings.updateLocale('en');
-                    await auth.updateLocale('en');
-                    await serviceProvider.fetchServices(locale: 'en');
-                    if (ctx.mounted) Navigator.pop(ctx);
-                  },
+                  onTap: () => _changeLanguage(
+                      ctx, 'en', settings, auth, serviceProvider),
                 ),
                 const SizedBox(height: 10),
                 _SheetTile(
-                  title: 'Kiswahili 🇹🇿',
+                  title: 'Kiswahili',
+                  leading: const FlagIcon(emoji: '🇹🇿', height: 18),
                   selected: settings.locale == 'sw',
-                  onTap: () async {
-                    await settings.updateLocale('sw');
-                    await auth.updateLocale('sw');
-                    await serviceProvider.fetchServices(locale: 'sw');
-                    if (ctx.mounted) Navigator.pop(ctx);
-                  },
+                  onTap: () => _changeLanguage(
+                      ctx, 'sw', settings, auth, serviceProvider),
                 ),
               ],
             ),
@@ -728,7 +746,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // ───────────────── Theme Sheet ─────────────────
+  // ───────────────── Theme ─────────────────
   void _showThemeSheet(
       BuildContext context,
       ThemeProvider themeProvider,
@@ -765,7 +783,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 20),
                 _SheetTile(
-                  title: 'Light ☀️',
+                  title: 'Light',
+                  leading: const Icon(Icons.light_mode_rounded),
                   selected: themeProvider.themeMode == ThemeMode.light,
                   onTap: () {
                     themeProvider.setThemeMode(ThemeMode.light);
@@ -774,7 +793,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 10),
                 _SheetTile(
-                  title: 'Dark 🌙',
+                  title: 'Dark',
+                  leading: const Icon(Icons.dark_mode_rounded),
                   selected: themeProvider.themeMode == ThemeMode.dark,
                   onTap: () {
                     themeProvider.setThemeMode(ThemeMode.dark);
@@ -783,7 +803,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 10),
                 _SheetTile(
-                  title: 'System ⚙️',
+                  title: 'System',
+                  leading: const Icon(Icons.brightness_auto_rounded),
                   selected: themeProvider.themeMode == ThemeMode.system,
                   onTap: () {
                     themeProvider.setThemeMode(ThemeMode.system);
@@ -842,8 +863,11 @@ class _ElegantIconButton extends StatelessWidget {
 }
 
 // ───────────────── Sheet Tile ─────────────────
+/// Selectable row for the language and theme sheets.
+/// `leading` is an optional flag or icon shown before the title.
 class _SheetTile extends StatelessWidget {
   final String title;
+  final Widget? leading;
   final bool selected;
   final VoidCallback onTap;
 
@@ -851,12 +875,14 @@ class _SheetTile extends StatelessWidget {
     required this.title,
     required this.selected,
     required this.onTap,
+    this.leading,
   });
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final activeColor = isDark ? AppTheme.secondary : AppTheme.primary;
+    final textColor = Theme.of(context).colorScheme.onSurface;
 
     return Material(
       color: selected
@@ -885,14 +911,22 @@ class _SheetTile extends StatelessWidget {
                     color: activeColor, size: 20),
                 const SizedBox(width: 12),
               ],
+              if (leading != null) ...[
+                IconTheme(
+                  data: IconThemeData(
+                    color: selected ? activeColor : textColor,
+                    size: 20,
+                  ),
+                  child: leading!,
+                ),
+                const SizedBox(width: 12),
+              ],
               Text(
                 title,
                 style: TextStyle(
                   fontSize: 15.5,
                   fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  color: selected
-                      ? activeColor
-                      : Theme.of(context).colorScheme.onSurface,
+                  color: selected ? activeColor : textColor,
                 ),
               ),
             ],

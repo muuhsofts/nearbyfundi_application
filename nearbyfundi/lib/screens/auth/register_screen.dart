@@ -8,10 +8,10 @@ import '../../providers/auth_provider.dart';
 import '../../config/app_routes.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/loading_overlay.dart';
+import '../../widgets/flag_icon.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/country.dart';
 import '../../config/country_codes.dart';
-import '../../widgets/country_picker.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -31,8 +31,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscureConfirm = true;
   bool _termsAccepted = false;
 
-  late List<Country> _countries;
-  Country? _selectedCountry;
+  late final List<Country> _countries;
+  late Country _selectedCountry;
 
   @override
   void initState() {
@@ -54,8 +54,99 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
+  /// Dial code + digits, e.g. "255712345678".
+  String get _fullPhone {
+    final digits =
+    _phoneController.text.trim().replaceAll(RegExp(r'[^0-9]'), '');
+    final dialCode = _selectedCountry.dialCode.replaceAll('+', '');
+    return '$dialCode$digits';
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppTheme.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
   Future<void> _handleRegister() async {
-    // Keep your existing implementation here
+    if (!_formKey.currentState!.validate()) return;
+
+    if (!_termsAccepted) {
+      final l10n = AppLocalizations.of(context)!;
+      _showSnackBar(l10n.pleaseAcceptTerms);
+      return;
+    }
+
+    final auth = context.read<AuthProvider>();
+    auth.clearError();
+
+    // TODO: call your AuthProvider register method here. Values ready to send:
+    //   name:                  _nameController.text.trim()
+    //   email:                 _emailController.text.trim()
+    //   phone:                 _fullPhone
+    //   password:              _passwordController.text.trim()
+    //   password_confirmation: _confirmController.text.trim()
+    debugPrint('📝 Register form valid | phone=$_fullPhone');
+  }
+
+  // ─────────────────────────────────────────────
+  // Country selection (SVG flags via FlagIcon)
+  // ─────────────────────────────────────────────
+  Future<void> _openCountrySheet() async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final picked = await showModalBottomSheet<Country>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: isDark ? AppTheme.darkSurface : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => _CountrySheet(
+        countries: _countries,
+        selected: _selectedCountry,
+      ),
+    );
+
+    if (picked != null && mounted) {
+      setState(() => _selectedCountry = picked);
+    }
+  }
+
+  Widget _buildCountryButton(ThemeData theme, bool isDark) {
+    return Material(
+      color: isDark ? Colors.white.withOpacity(0.05) : AppTheme.navy50,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: _openCountrySheet,
+        child: Container(
+          height: 60,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FlagIcon(emoji: _selectedCountry.flag, height: 20),
+              const SizedBox(width: 8),
+              Text(
+                _selectedCountry.dialCode,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Icon(Icons.arrow_drop_down, color: theme.hintColor),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -175,14 +266,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         _buildFieldLabel(l10n.phoneNumber),
                         const SizedBox(height: 6),
                         Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            CountryPicker(
-                              selectedCountry: _selectedCountry!,
-                              onChanged: (country) {
-                                setState(() => _selectedCountry = country);
-                              },
-                              countries: _countries,
-                            ),
+                            _buildCountryButton(theme, isDark),
                             const SizedBox(width: 10),
                             Expanded(
                               child: TextFormField(
@@ -400,6 +486,136 @@ class _RegisterScreenState extends State<RegisterScreen> {
         fontWeight: FontWeight.w700,
         color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
         letterSpacing: 0.8,
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+// Searchable country list shown in the bottom sheet
+// ─────────────────────────────────────────────
+class _CountrySheet extends StatefulWidget {
+  final List<Country> countries;
+  final Country selected;
+
+  const _CountrySheet({required this.countries, required this.selected});
+
+  @override
+  State<_CountrySheet> createState() => _CountrySheetState();
+}
+
+class _CountrySheetState extends State<_CountrySheet> {
+  final _searchController = TextEditingController();
+  late List<Country> _filtered;
+
+  @override
+  void initState() {
+    super.initState();
+    _filtered = widget.countries;
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _filter(String query) {
+    final q = query.trim().toLowerCase();
+    setState(() {
+      _filtered = q.isEmpty
+          ? widget.countries
+          : widget.countries
+          .where((c) =>
+      c.name.toLowerCase().contains(q) || c.dialCode.contains(q))
+          .toList();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final activeColor = isDark ? AppTheme.secondary : AppTheme.primary;
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.85,
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade400,
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: TextField(
+                controller: _searchController,
+                onChanged: _filter,
+                decoration: _inputDecoration(
+                  context,
+                  hintText: 'Search country...',
+                  prefixIcon: Icons.search_rounded,
+                ),
+              ),
+            ),
+            Expanded(
+              child: _filtered.isEmpty
+                  ? Center(
+                child: Text(
+                  'No country found',
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(color: theme.hintColor),
+                ),
+              )
+                  : ListView.builder(
+                itemCount: _filtered.length,
+                itemBuilder: (context, i) {
+                  final c = _filtered[i];
+                  // Match on name too: several countries share +1.
+                  final isSelected = c.name == widget.selected.name &&
+                      c.dialCode == widget.selected.dialCode;
+                  return ListTile(
+                    leading: FlagIcon(emoji: c.flag, height: 24),
+                    title: Text(
+                      c.name,
+                      style: TextStyle(
+                        fontWeight: isSelected
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                        color: isSelected
+                            ? activeColor
+                            : theme.colorScheme.onSurface,
+                      ),
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          c.dialCode,
+                          style: TextStyle(color: theme.hintColor),
+                        ),
+                        if (isSelected) ...[
+                          const SizedBox(width: 8),
+                          Icon(Icons.check_circle_rounded,
+                              size: 18, color: activeColor),
+                        ],
+                      ],
+                    ),
+                    onTap: () => Navigator.pop(context, c),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
