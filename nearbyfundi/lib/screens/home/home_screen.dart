@@ -492,7 +492,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     padding: const EdgeInsets.all(8),
                     child: Image.asset(
-                      'assets/images/nearbyfundi-logo.png',
+                      'assets/images/app_icon.png',
                       fit: BoxFit.contain,
                     ),
                   ),

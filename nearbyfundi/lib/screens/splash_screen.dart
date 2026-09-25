@@ -16,7 +16,7 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with TickerProviderStateMixin {
-  static const String logoPath = 'assets/images/nearbyfundi-logo.png';
+  static const String logoPath = 'assets/images/app_icon.png';
 
   late AnimationController _mainController;
   late AnimationController _pulseController;

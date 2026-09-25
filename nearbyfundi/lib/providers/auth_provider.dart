@@ -1,3 +1,4 @@
+// lib/providers/auth_provider.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
@@ -45,10 +46,12 @@ class AuthProvider extends ChangeNotifier {
       'email': email,
       'password': password,
       'password_confirmation': confirmPassword,
-      if (phone != null) 'phone': phone,
+      if (phone != null && phone.isNotEmpty) 'phone': phone,
     });
     _setLoading(false);
+
     if (res.success) return true;
+
     _error = res.message;
     notifyListeners();
     return false;
@@ -59,21 +62,25 @@ class AuthProvider extends ChangeNotifier {
     _setLoading(true);
     final res = await _api.registerFundi(data);
     _setLoading(false);
+
     if (res.success) return true;
+
     _error = res.message;
     notifyListeners();
     return false;
   }
 
-  // ─── Login (email or phone) ──────────────────────────────────────
+  // ─── Login (Email or Phone) ────────────────────────────────────────
   Future<bool> login(String identifier, String password) async {
     _setLoading(true);
-    final res = await _api.login(identifier, password);
+    final res = await _api.login(identifier.trim(), password);
+
     if (res.success && res.data != null) {
       await _saveSession(res.data);
       _setLoading(false);
       return true;
     }
+
     _error = res.message;
     _setLoading(false);
     return false;
@@ -84,14 +91,14 @@ class AuthProvider extends ChangeNotifier {
     _setLoading(true);
     final fcmToken = await FcmService.getToken().catchError((_) => null);
 
-    // Pass idToken to your ApiService method
     final res = await _api.loginWithGoogle(idToken, fcmToken: fcmToken);
-
     _setLoading(false);
+
     if (res.success && res.data != null) {
       await _saveSession(res.data);
       return true;
     }
+
     _error = res.message;
     notifyListeners();
     return false;
@@ -101,23 +108,28 @@ class AuthProvider extends ChangeNotifier {
   Future<bool> verifyOtp(String email, String otp) async {
     _setLoading(true);
     final fcmToken = await FcmService.getToken().catchError((_) => null);
+
     final res = await _api.verifyOtp(email, otp, fcmToken: fcmToken);
+
     if (res.success && res.data != null) {
       await _saveSession(res.data);
       _setLoading(false);
       return true;
     }
+
     _error = res.message;
     _setLoading(false);
     return false;
   }
 
-  // ─── Forgot Password ──────────────────────────────────────────────
+  // ─── Forgot Password ───────────────────────────────────────────────
   Future<bool> forgotPassword(String email) async {
     _setLoading(true);
     final res = await _api.forgotPassword(email);
     _setLoading(false);
+
     if (res.success) return true;
+
     _error = res.message;
     notifyListeners();
     return false;
@@ -126,9 +138,15 @@ class AuthProvider extends ChangeNotifier {
   // ─── Reset Password ────────────────────────────────────────────────
   Future<bool> resetPassword(String email, String otp, String password) async {
     _setLoading(true);
-    final res = await _api.resetPassword(email: email, otp: otp, password: password);
+    final res = await _api.resetPassword(
+      email: email,
+      otp: otp,
+      password: password,
+    );
     _setLoading(false);
+
     if (res.success) return true;
+
     _error = res.message;
     notifyListeners();
     return false;
@@ -138,6 +156,7 @@ class AuthProvider extends ChangeNotifier {
   Future<bool> updateProfile(Map<String, dynamic> data) async {
     _setLoading(true);
     final res = await _api.updateProfile(data);
+
     if (res.success && res.data != null) {
       final userData = res.data['user'] ?? res.data;
       _user = User.fromJson(userData, _token!);
@@ -146,17 +165,23 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return true;
     }
+
     _error = res.message;
     _setLoading(false);
     return false;
   }
 
-  // ─── Change Password ──────────────────────────────────────────────
+  // ─── Change Password ───────────────────────────────────────────────
   Future<bool> changePassword(String current, String newPwd) async {
     _setLoading(true);
-    final res = await _api.changePassword(currentPassword: current, newPassword: newPwd);
+    final res = await _api.changePassword(
+      currentPassword: current,
+      newPassword: newPwd,
+    );
     _setLoading(false);
+
     if (res.success) return true;
+
     _error = res.message;
     notifyListeners();
     return false;
@@ -166,20 +191,15 @@ class AuthProvider extends ChangeNotifier {
   Future<bool> updateLocale(String locale) async {
     _setLoading(true);
     final res = await _api.updateLocale(locale);
+
     if (res.success && _user != null) {
-      _user = User(
-        id: _user!.id,
-        name: _user!.name,
-        email: _user!.email,
-        phone: _user!.phone,
-        locale: locale,
-        token: _token!,
-      );
+      _user = _user!.copyWith(locale: locale);
       await _storeUser();
       await StorageService.saveLocale(locale);
       _setLoading(false);
       return true;
     }
+
     _error = res.message;
     _setLoading(false);
     return false;
@@ -190,7 +210,9 @@ class AuthProvider extends ChangeNotifier {
     _setLoading(true);
     final res = await _api.resendOtp(email);
     _setLoading(false);
+
     if (res.success) return true;
+
     _error = res.message;
     notifyListeners();
     return false;
@@ -201,16 +223,18 @@ class AuthProvider extends ChangeNotifier {
     _setLoading(true);
     final res = await _api.deleteAccount();
     _setLoading(false);
+
     if (res.success) {
       await logout();
       return true;
     }
+
     _error = res.message;
     notifyListeners();
     return false;
   }
 
-  // ─── Load User (refresh profile) ──────────────────────────────────
+  // ─── Load User (refresh profile) ───────────────────────────────────
   Future<void> loadUser() async {
     _isLoading = true;
     _error = null;
@@ -236,7 +260,11 @@ class AuthProvider extends ChangeNotifier {
 
   // ─── Logout ────────────────────────────────────────────────────────
   Future<void> logout() async {
-    await _api.logout();
+    try {
+      await _api.logout();
+    } catch (_) {
+      // Ignore network errors on logout
+    }
     await _clearSession();
   }
 
@@ -254,7 +282,7 @@ class AuthProvider extends ChangeNotifier {
         _user = User.fromJson(userMap, storedToken);
         notifyListeners();
         _refreshProfile();
-      } catch (e) {
+      } catch (_) {
         await _clearSession();
       }
     } else {
@@ -314,6 +342,7 @@ class AuthProvider extends ChangeNotifier {
     try {
       final fcmToken = await FcmService.getToken();
       if (fcmToken == null) return;
+
       final res = await _api.updateDeviceToken(fcmToken);
       if (!res.success) {
         debugPrint('⚠️ Failed to push FCM token: ${res.message}');

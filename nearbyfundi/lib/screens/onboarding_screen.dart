@@ -13,7 +13,7 @@ class OnboardingScreen extends StatefulWidget {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  static const String logoPath = 'assets/images/nearbyfundi-logo.png';
+  static const String logoPath = 'assets/images/app_icon.png';
 
   final PageController _pageController = PageController();
   int _currentPage = 0;

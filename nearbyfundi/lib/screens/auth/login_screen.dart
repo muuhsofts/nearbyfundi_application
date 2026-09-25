@@ -12,6 +12,8 @@ import '../../config/app_routes.dart';
 import '../../config/app_theme.dart';
 import '../../widgets/flag_icon.dart';
 import '../../l10n/app_localizations.dart';
+import '../../models/country.dart';
+import '../../config/country_codes.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -22,18 +24,48 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
+  final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
 
   bool _obscurePassword = true;
   bool _termsAccepted = false;
+  bool _rememberMe = false;
   bool _isLoading = false;
+  bool _isEmailMode = true; // true = Email, false = Phone
+
+  late final List<Country> _countries;
+  late Country _selectedCountry;
+
+  @override
+  void initState() {
+    super.initState();
+    _countries = CountryCodes.all;
+    _selectedCountry = _countries.firstWhere(
+          (c) => c.dialCode == '+255',
+      orElse: () => _countries.first,
+    );
+  }
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _identifierController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  /// Full phone ready for backend (e.g. 255679117291)
+  String get _fullPhone {
+    String digits = _identifierController.text
+        .trim()
+        .replaceAll(RegExp(r'[^0-9]'), '');
+
+    // Remove leading 0 if user typed 0679... or 07...
+    if (digits.startsWith('0')) {
+      digits = digits.substring(1);
+    }
+
+    final dialCode = _selectedCountry.dialCode.replaceAll('+', ''); // "255"
+    return '$dialCode$digits'; // → 255679117291
   }
 
   Future<void> _handleLogin() async {
@@ -49,8 +81,13 @@ class _LoginScreenState extends State<LoginScreen> {
     final auth = context.read<AuthProvider>();
     auth.clearError();
 
+    // Use full phone (with country code) when in phone mode
+    final identifier = _isEmailMode
+        ? _identifierController.text.trim()
+        : _fullPhone;
+
     final success = await auth.login(
-      _emailController.text.trim(),
+      identifier,
       _passwordController.text.trim(),
     );
 
@@ -80,7 +117,6 @@ class _LoginScreenState extends State<LoginScreen> {
       await googleSignIn.signOut();
       final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
       if (googleUser == null) {
-        // User closed the Google dialog
         if (mounted) setState(() => _isLoading = false);
         return;
       }
@@ -119,6 +155,61 @@ class _LoginScreenState extends State<LoginScreen> {
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────
+  // Country selection
+  // ─────────────────────────────────────────────
+  Future<void> _openCountrySheet() async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final picked = await showModalBottomSheet<Country>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: isDark ? AppTheme.darkSurface : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => _CountrySheet(
+        countries: _countries,
+        selected: _selectedCountry,
+      ),
+    );
+
+    if (picked != null && mounted) {
+      setState(() => _selectedCountry = picked);
+    }
+  }
+
+  Widget _buildCountryButton(ThemeData theme, bool isDark) {
+    return Material(
+      color: isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFF4F7F6),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: _isLoading ? null : _openCountrySheet,
+        child: Container(
+          height: 56,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FlagIcon(emoji: _selectedCountry.flag, height: 20),
+              const SizedBox(width: 6),
+              Text(
+                _selectedCountry.dialCode,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14.5,
+                ),
+              ),
+              Icon(Icons.arrow_drop_down, color: theme.hintColor, size: 22),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -244,13 +335,12 @@ class _LoginScreenState extends State<LoginScreen> {
                             28,
                           ),
                           decoration: BoxDecoration(
-                            color: isDark
-                                ? AppTheme.darkSurface
-                                : Colors.white,
+                            color: isDark ? AppTheme.darkSurface : Colors.white,
                             borderRadius: BorderRadius.circular(28),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(isDark ? 0.35 : 0.08),
+                                color: Colors.black
+                                    .withOpacity(isDark ? 0.35 : 0.08),
                                 blurRadius: 40,
                                 offset: const Offset(0, 16),
                                 spreadRadius: -4,
@@ -274,12 +364,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                     height: 88,
                                     padding: const EdgeInsets.all(16),
                                     decoration: BoxDecoration(
-                                      color: AppTheme.primary
-                                          .withOpacity(0.09),
+                                      color: AppTheme.primary.withOpacity(0.09),
                                       shape: BoxShape.circle,
                                     ),
                                     child: Image.asset(
-                                      'assets/images/nearbyfundi-logo.png',
+                                      'assets/images/app_icon.png',
                                       fit: BoxFit.contain,
                                     ),
                                   ),
@@ -312,35 +401,167 @@ class _LoginScreenState extends State<LoginScreen> {
 
                                 const SizedBox(height: 28),
 
-                                // Email
-                                _buildLabel(l10n.emailAddress),
-                                const SizedBox(height: 8),
-                                TextFormField(
-                                  controller: _emailController,
-                                  enabled: !_isLoading,
-                                  keyboardType: TextInputType.emailAddress,
-                                  style: const TextStyle(fontSize: 15),
-                                  decoration: _modernInputDecoration(
-                                    context,
-                                    hint: 'you@example.com',
-                                    icon: Icons.email_outlined,
+                                // ─── Email / Phone Toggle ───
+                                Container(
+                                  height: 48,
+                                  decoration: BoxDecoration(
+                                    color: isDark
+                                        ? Colors.white.withOpacity(0.06)
+                                        : const Color(0xFFF0F4F3),
+                                    borderRadius: BorderRadius.circular(14),
                                   ),
-                                  validator: (v) {
-                                    if (v == null || v.isEmpty) {
-                                      return l10n.enterEmail;
-                                    }
-                                    if (!v.contains('@')) {
-                                      return l10n.enterValidEmail;
-                                    }
-                                    return null;
-                                  },
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: GestureDetector(
+                                          onTap: _isLoading
+                                              ? null
+                                              : () {
+                                            setState(() {
+                                              _isEmailMode = true;
+                                              _identifierController.clear();
+                                            });
+                                          },
+                                          child: AnimatedContainer(
+                                            duration:
+                                            const Duration(milliseconds: 200),
+                                            margin: const EdgeInsets.all(4),
+                                            decoration: BoxDecoration(
+                                              color: _isEmailMode
+                                                  ? AppTheme.primary
+                                                  : Colors.transparent,
+                                              borderRadius:
+                                              BorderRadius.circular(12),
+                                            ),
+                                            alignment: Alignment.center,
+                                            child: Text(
+                                              'Email',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w700,
+                                                fontSize: 15,
+                                                color: _isEmailMode
+                                                    ? Colors.white
+                                                    : theme.hintColor,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: GestureDetector(
+                                          onTap: _isLoading
+                                              ? null
+                                              : () {
+                                            setState(() {
+                                              _isEmailMode = false;
+                                              _identifierController.clear();
+                                            });
+                                          },
+                                          child: AnimatedContainer(
+                                            duration:
+                                            const Duration(milliseconds: 200),
+                                            margin: const EdgeInsets.all(4),
+                                            decoration: BoxDecoration(
+                                              color: !_isEmailMode
+                                                  ? AppTheme.primary
+                                                  : Colors.transparent,
+                                              borderRadius:
+                                              BorderRadius.circular(12),
+                                            ),
+                                            alignment: Alignment.center,
+                                            child: Text(
+                                              'Phone',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w700,
+                                                fontSize: 15,
+                                                color: !_isEmailMode
+                                                    ? Colors.white
+                                                    : theme.hintColor,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
+
+                                const SizedBox(height: 20),
+
+                                // ─── Identifier Field ───
+                                if (_isEmailMode)
+                                  TextFormField(
+                                    controller: _identifierController,
+                                    enabled: !_isLoading,
+                                    keyboardType: TextInputType.emailAddress,
+                                    textInputAction: TextInputAction.next,
+                                    style: const TextStyle(fontSize: 15),
+                                    decoration: _modernInputDecoration(
+                                      context,
+                                      hint: 'you@example.com',
+                                      icon: Icons.email_outlined,
+                                    ),
+                                    validator: (v) {
+                                      if (v == null || v.trim().isEmpty) {
+                                        return l10n.enterEmail;
+                                      }
+                                      final isEmail = RegExp(
+                                          r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                                          .hasMatch(v.trim());
+                                      if (!isEmail) {
+                                        return l10n.enterValidEmail;
+                                      }
+                                      return null;
+                                    },
+                                  )
+                                else
+                                  Row(
+                                    crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                    children: [
+                                      _buildCountryButton(theme, isDark),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: TextFormField(
+                                          controller: _identifierController,
+                                          enabled: !_isLoading,
+                                          keyboardType: TextInputType.phone,
+                                          textInputAction: TextInputAction.next,
+                                          style: const TextStyle(fontSize: 15),
+                                          decoration: _modernInputDecoration(
+                                            context,
+                                            hint: '679117291',
+                                            icon: Icons.phone_outlined,
+                                          ),
+                                          validator: (v) {
+                                            if (v == null ||
+                                                v.trim().isEmpty) {
+                                              return 'Please enter phone number';
+                                            }
+
+                                            String digits = v
+                                                .trim()
+                                                .replaceAll(
+                                                RegExp(r'[^0-9]'), '');
+                                            if (digits.startsWith('0')) {
+                                              digits = digits.substring(1);
+                                            }
+
+                                            // Tanzania mobile: 9 digits starting with 6 or 7
+                                            if (!RegExp(r'^[67]\d{8}$')
+                                                .hasMatch(digits)) {
+                                              return 'Enter a valid 9-digit number (e.g. 679117291)';
+                                            }
+                                            return null;
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  ),
 
                                 const SizedBox(height: 18),
 
                                 // Password
-                                _buildLabel(l10n.password),
-                                const SizedBox(height: 8),
                                 TextFormField(
                                   controller: _passwordController,
                                   enabled: !_isLoading,
@@ -376,34 +597,65 @@ class _LoginScreenState extends State<LoginScreen> {
                                   },
                                 ),
 
-                                const SizedBox(height: 6),
+                                const SizedBox(height: 10),
 
-                                // Forgot password
-                                Align(
-                                  alignment: Alignment.centerRight,
-                                  child: TextButton(
-                                    onPressed: _isLoading
-                                        ? null
-                                        : () => Navigator.pushNamed(
-                                      context,
-                                      AppRoutes.forgot,
-                                    ),
-                                    style: TextButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 4, vertical: 4),
-                                      minimumSize: Size.zero,
-                                      tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                    ),
-                                    child: Text(
-                                      l10n.forgotPassword,
-                                      style: TextStyle(
-                                        color: isDark ? AppTheme.secondary : AppTheme.primary,
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 13.5,
+                                // Remember me + Forgot password
+                                Row(
+                                  children: [
+                                    SizedBox(
+                                      width: 22,
+                                      height: 22,
+                                      child: Checkbox(
+                                        value: _rememberMe,
+                                        onChanged: _isLoading
+                                            ? null
+                                            : (v) => setState(
+                                                () => _rememberMe = v ?? false),
+                                        activeColor: AppTheme.primary,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                          BorderRadius.circular(5),
+                                        ),
+                                        materialTapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
                                       ),
                                     ),
-                                  ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Remember me',
+                                      style: TextStyle(
+                                        fontSize: 13.5,
+                                        color: theme.colorScheme.onSurface
+                                            .withOpacity(0.75),
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    TextButton(
+                                      onPressed: _isLoading
+                                          ? null
+                                          : () => Navigator.pushNamed(
+                                        context,
+                                        AppRoutes.forgot,
+                                      ),
+                                      style: TextButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 4, vertical: 4),
+                                        minimumSize: Size.zero,
+                                        tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                      child: Text(
+                                        l10n.forgotPassword,
+                                        style: TextStyle(
+                                          color: isDark
+                                              ? AppTheme.secondary
+                                              : AppTheme.primary,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 13.5,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
 
                                 const SizedBox(height: 14),
@@ -446,26 +698,35 @@ class _LoginScreenState extends State<LoginScreen> {
                                             TextSpan(
                                               text: l10n.termsAndConditions,
                                               style: TextStyle(
-                                                color: isDark ? AppTheme.secondary : AppTheme.primary,
+                                                color: isDark
+                                                    ? AppTheme.secondary
+                                                    : AppTheme.primary,
                                                 fontWeight: FontWeight.w700,
                                               ),
-                                              recognizer: TapGestureRecognizer()
+                                              recognizer:
+                                              TapGestureRecognizer()
                                                 ..onTap = () {
                                                   Navigator.pushNamed(
-                                                      context, AppRoutes.terms);
+                                                      context,
+                                                      AppRoutes.terms);
                                                 },
                                             ),
                                             TextSpan(text: ' ${l10n.and} '),
                                             TextSpan(
                                               text: l10n.privacyPolicy,
                                               style: TextStyle(
-                                                color: isDark ? AppTheme.secondary : AppTheme.primary,
+                                                color: isDark
+                                                    ? AppTheme.secondary
+                                                    : AppTheme.primary,
                                                 fontWeight: FontWeight.w700,
                                               ),
-                                              recognizer: TapGestureRecognizer()
+                                              recognizer:
+                                              TapGestureRecognizer()
                                                 ..onTap = () {
-                                                  Navigator.pushNamed(context,
-                                                      AppRoutes.privacyPolicy);
+                                                  Navigator.pushNamed(
+                                                      context,
+                                                      AppRoutes
+                                                          .privacyPolicy);
                                                 },
                                             ),
                                           ],
@@ -484,15 +745,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                     onPressed:
                                     _isLoading ? null : _handleLogin,
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor:
-                                      AppTheme.primary,
+                                      backgroundColor: AppTheme.primary,
                                       disabledBackgroundColor:
-                                      AppTheme.primary
-                                          .withOpacity(0.55),
+                                      AppTheme.primary.withOpacity(0.55),
                                       foregroundColor: Colors.white,
                                       elevation: 0,
-                                      shadowColor: AppTheme.primary
-                                          .withOpacity(0.3),
+                                      shadowColor:
+                                      AppTheme.primary.withOpacity(0.3),
                                       shape: RoundedRectangleBorder(
                                         borderRadius:
                                         BorderRadius.circular(16),
@@ -516,85 +775,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                         fontWeight: FontWeight.w700,
                                         letterSpacing: 0.2,
                                       ),
-                                    ),
-                                  ),
-                                ),
-
-                                const SizedBox(height: 22),
-
-                                // OR divider
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Divider(
-                                        color: theme.dividerColor
-                                            .withOpacity(0.4),
-                                      ),
-                                    ),
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 14),
-                                      child: Text(
-                                        l10n.or,
-                                        style: TextStyle(
-                                          fontSize: 12.5,
-                                          fontWeight: FontWeight.w600,
-                                          color: theme.hintColor,
-                                        ),
-                                      ),
-                                    ),
-                                    Expanded(
-                                      child: Divider(
-                                        color: theme.dividerColor
-                                            .withOpacity(0.4),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-
-                                const SizedBox(height: 22),
-
-                                // Google Button
-                                SizedBox(
-                                  height: 52,
-                                  child: OutlinedButton(
-                                    onPressed: _isLoading
-                                        ? null
-                                        : _handleGoogleSignIn,
-                                    style: OutlinedButton.styleFrom(
-                                      side: BorderSide(
-                                        color: theme.dividerColor
-                                            .withOpacity(0.45),
-                                        width: 1.2,
-                                      ),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                        BorderRadius.circular(16),
-                                      ),
-                                      backgroundColor: isDark
-                                          ? Colors.white.withOpacity(0.04)
-                                          : Colors.grey.shade50,
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment:
-                                      MainAxisAlignment.center,
-                                      children: [
-                                        Image.asset(
-                                          'assets/images/google_logo.png',
-                                          height: 20,
-                                          width: 20,
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Text(
-                                          l10n.continueWithGoogle,
-                                          style: TextStyle(
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.w600,
-                                            color: theme
-                                                .colorScheme.onSurface,
-                                          ),
-                                        ),
-                                      ],
                                     ),
                                   ),
                                 ),
@@ -629,7 +809,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                       child: Text(
                                         l10n.signUp,
                                         style: TextStyle(
-                                          color: isDark ? AppTheme.secondary : AppTheme.primary,
+                                          color: isDark
+                                              ? AppTheme.secondary
+                                              : AppTheme.primary,
                                           fontWeight: FontWeight.w700,
                                           fontSize: 14.5,
                                         ),
@@ -653,22 +835,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildLabel(String text) {
-    return Text(
-      text.toUpperCase(),
-      style: TextStyle(
-        fontSize: 11.5,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 0.8,
-        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.55),
-      ),
-    );
-  }
-
   // ───────────────── Language ─────────────────
-
-  /// Changes the app language. Always closes the sheet, even if the
-  /// server calls fail (for example when the user is offline or logged out).
   Future<void> _changeLanguage(
       BuildContext sheetContext,
       String code,
@@ -820,6 +987,141 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
+// ───────────────── Country Sheet ─────────────────
+class _CountrySheet extends StatefulWidget {
+  final List<Country> countries;
+  final Country selected;
+
+  const _CountrySheet({required this.countries, required this.selected});
+
+  @override
+  State<_CountrySheet> createState() => _CountrySheetState();
+}
+
+class _CountrySheetState extends State<_CountrySheet> {
+  final _searchController = TextEditingController();
+  late List<Country> _filtered;
+
+  @override
+  void initState() {
+    super.initState();
+    _filtered = widget.countries;
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _filter(String query) {
+    final q = query.trim().toLowerCase();
+    setState(() {
+      _filtered = q.isEmpty
+          ? widget.countries
+          : widget.countries
+          .where((c) =>
+      c.name.toLowerCase().contains(q) ||
+          c.dialCode.contains(q))
+          .toList();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final activeColor = isDark ? AppTheme.secondary : AppTheme.primary;
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.85,
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade400,
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: TextField(
+                controller: _searchController,
+                onChanged: _filter,
+                decoration: InputDecoration(
+                  hintText: 'Search country...',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  filled: true,
+                  fillColor: isDark
+                      ? Colors.white.withOpacity(0.05)
+                      : const Color(0xFFF4F7F6),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: _filtered.isEmpty
+                  ? Center(
+                child: Text(
+                  'No country found',
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(color: theme.hintColor),
+                ),
+              )
+                  : ListView.builder(
+                itemCount: _filtered.length,
+                itemBuilder: (context, i) {
+                  final c = _filtered[i];
+                  final isSelected = c.name == widget.selected.name &&
+                      c.dialCode == widget.selected.dialCode;
+                  return ListTile(
+                    leading: FlagIcon(emoji: c.flag, height: 24),
+                    title: Text(
+                      c.name,
+                      style: TextStyle(
+                        fontWeight: isSelected
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                        color: isSelected
+                            ? activeColor
+                            : theme.colorScheme.onSurface,
+                      ),
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          c.dialCode,
+                          style: TextStyle(color: theme.hintColor),
+                        ),
+                        if (isSelected) ...[
+                          const SizedBox(width: 8),
+                          Icon(Icons.check_circle_rounded,
+                              size: 18, color: activeColor),
+                        ],
+                      ],
+                    ),
+                    onTap: () => Navigator.pop(context, c),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ───────────────── Elegant Icon Button ─────────────────
 class _ElegantIconButton extends StatelessWidget {
   final IconData icon;
@@ -863,8 +1165,6 @@ class _ElegantIconButton extends StatelessWidget {
 }
 
 // ───────────────── Sheet Tile ─────────────────
-/// Selectable row for the language and theme sheets.
-/// `leading` is an optional flag or icon shown before the title.
 class _SheetTile extends StatelessWidget {
   final String title;
   final Widget? leading;
@@ -885,9 +1185,7 @@ class _SheetTile extends StatelessWidget {
     final textColor = Theme.of(context).colorScheme.onSurface;
 
     return Material(
-      color: selected
-          ? activeColor.withOpacity(0.1)
-          : Colors.transparent,
+      color: selected ? activeColor.withOpacity(0.1) : Colors.transparent,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         onTap: onTap,
@@ -907,8 +1205,7 @@ class _SheetTile extends StatelessWidget {
           child: Row(
             children: [
               if (selected) ...[
-                Icon(Icons.check_circle_rounded,
-                    color: activeColor, size: 20),
+                Icon(Icons.check_circle_rounded, color: activeColor, size: 20),
                 const SizedBox(width: 12),
               ],
               if (leading != null) ...[
@@ -956,9 +1253,7 @@ InputDecoration _modernInputDecoration(
     prefixIcon: Icon(icon, size: 20, color: theme.hintColor),
     suffixIcon: suffix,
     filled: true,
-    fillColor: isDark
-        ? Colors.white.withOpacity(0.05)
-        : const Color(0xFFF4F7F6),
+    fillColor: isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFF4F7F6),
     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(14),
@@ -970,7 +1265,8 @@ InputDecoration _modernInputDecoration(
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(14),
-      borderSide: BorderSide(color: isDark ? AppTheme.secondary : AppTheme.primary, width: 1.8),
+      borderSide: BorderSide(
+          color: isDark ? AppTheme.secondary : AppTheme.primary, width: 1.8),
     ),
     errorBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(14),
