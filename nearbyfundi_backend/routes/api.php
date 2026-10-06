@@ -35,6 +35,7 @@ use App\Http\Controllers\Api\Finance\FinanceSubscriptionController;
 use App\Http\Controllers\Api\Finance\FinanceTechnicianController;
 use App\Http\Controllers\Api\Finance\FinanceCustomerController;
 use App\Http\Controllers\Api\Finance\FinanceRequestController;
+use App\Http\Controllers\Api\FeedbackController;
 use App\Http\Controllers\Api\SmsLogController;
 
 
@@ -577,6 +578,39 @@ Route::prefix('v22')
             Route::delete('sms-logs/{id}', [SmsLogController::class, 'deleteSmsLog']);
         });
     });
+
+
+    // =============================================
+// V23 – FEEDBACK
+// App:   send only (public, optional token)
+// Admin: index, stats, show, edit, delete
+// =============================================
+Route::prefix('v23')->group(function () {
+ 
+    // ----- PUBLIC (mobile app) – send only -----
+    Route::post('feedback', [FeedbackController::class, 'store'])
+        ->middleware('throttle:5,1'); // max 5 submissions / minute per IP
+ 
+    // ----- ADMIN -----
+    Route::middleware(['auth:sanctum', 'active.session'])
+        ->prefix('admin')
+        ->group(function () {
+ 
+            Route::middleware(['permission:feedback.view'])->group(function () {
+                Route::get('feedback', [FeedbackController::class, 'index']);
+                Route::get('feedback/stats', [FeedbackController::class, 'stats']); // keep above {id}
+                Route::get('feedback/{id}', [FeedbackController::class, 'show']);
+            });
+ 
+            Route::middleware(['permission:feedback.edit'])->group(function () {
+                Route::put('feedback/{id}', [FeedbackController::class, 'update']);
+            });
+ 
+            Route::middleware(['permission:feedback.delete'])->group(function () {
+                Route::delete('feedback/{id}', [FeedbackController::class, 'destroy']);
+            });
+        });
+});
 
 
 // =============================================

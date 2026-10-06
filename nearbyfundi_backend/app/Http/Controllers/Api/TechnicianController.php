@@ -30,86 +30,86 @@ class TechnicianController extends BaseApiController
     // ──────────────────────────────────────────────
 
     /**
-     * Step 1: Personal Information
-     */
-    public function registerStep1(Request $request)
-    {
-        $data = $request->validate([
-            'name'          => 'required|string|max:255',
-            'email'         => 'required|email|unique:users',
-            'password'      => 'required|string|min:8|confirmed',
-            'phone'         => 'nullable|string|max:20',
-            'profile_photo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+ * Step 1: Personal Information
+ */
+public function registerStep1(Request $request)
+{
+    $data = $request->validate([
+        'name'          => 'required|string|max:255',
+        'email'         => 'required|email|unique:users,email',
+        'password'      => 'required|string|min:8|confirmed',
+        'phone'         => 'nullable|string|max:20|unique:users,phone',
+        'profile_photo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+    ]);
+
+    DB::beginTransaction();
+    try {
+        $role = Role::where('name', 'FUNDI')->firstOrFail();
+
+        $user = User::create([
+            'name'      => $data['name'],
+            'email'     => $data['email'],
+            'password'  => Hash::make($data['password']),
+            'phone'     => $data['phone'] ?? null,
+            'status'    => 'pending',
+            'is_active' => false,
+            'locale'    => 'en',
         ]);
 
-        DB::beginTransaction();
-        try {
-            $role = Role::where('name', 'FUNDI')->firstOrFail();
+        $user->assignRole($role);
 
-            $user = User::create([
-                'name'      => $data['name'],
-                'email'     => $data['email'],
-                'password'  => Hash::make($data['password']),
-                'phone'     => $data['phone'] ?? null,
-                'status'    => 'pending',
-                'is_active' => false,
-                'locale'    => 'en',
-            ]);
+        $technicianData = [
+            'user_id'                => $user->id,
+            'registration_step'      => 1,
+            'registration_completed' => false,
+            'verified'               => false,
+            'verification_status'    => 'pending',
+            'is_online'              => false,
+        ];
 
-            $user->assignRole($role);
-
-            $technicianData = [
-                'user_id'                => $user->id,
-                'registration_step'      => 1,
-                'registration_completed' => false,
-                'verified'               => false,
-                'verification_status'    => 'pending',
-                'is_online'              => false,
-            ];
-
-            if ($request->hasFile('profile_photo')) {
-                $path = $request->file('profile_photo')->store('technicians', 'public');
-                $technicianData['profile_photo'] = $path;
-            }
-
-            $technician = Technician::create($technicianData);
-
-            $otp = Otp::create([
-                'email'      => $user->email,
-                'otp'        => Otp::generateOtp(),
-                'token'      => Otp::generateToken(),
-                'type'       => Otp::TYPE_EMAIL_VERIFICATION,
-                'name'       => $user->name,
-                'expires_at' => Carbon::now()->addMinutes(10),
-                'is_used'    => false,
-                'ip_address' => $request->ip(),
-                'user_agent' => $request->userAgent(),
-            ]);
-
-            Mail::to($user->email)->send(
-                new OtpMail(
-                    $otp->otp,
-                    $user->email,
-                    $user->name,
-                    Otp::TYPE_EMAIL_VERIFICATION,
-                    $otp->getVerificationUrl()
-                )
-            );
-
-            DB::commit();
-
-            $this->logAudit('register_step1', 'technician', $technician->id, "Technician Step 1 completed for {$user->email}");
-
-            return $this->successResponse([
-                'technician_id' => $technician->id,
-                'user'          => $user->only(['id', 'name', 'email', 'phone']),
-                'step'          => 1,
-            ], 'Step 1 completed. Proceed to identification.');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return $this->serverError('Step 1 failed: ' . $e->getMessage());
+        if ($request->hasFile('profile_photo')) {
+            $path = $request->file('profile_photo')->store('technicians', 'public');
+            $technicianData['profile_photo'] = $path;
         }
+
+        $technician = Technician::create($technicianData);
+
+        $otp = Otp::create([
+            'email'      => $user->email,
+            'otp'        => Otp::generateOtp(),
+            'token'      => Otp::generateToken(),
+            'type'       => Otp::TYPE_EMAIL_VERIFICATION,
+            'name'       => $user->name,
+            'expires_at' => Carbon::now()->addMinutes(10),
+            'is_used'    => false,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
+
+        Mail::to($user->email)->send(
+            new OtpMail(
+                $otp->otp,
+                $user->email,
+                $user->name,
+                Otp::TYPE_EMAIL_VERIFICATION,
+                $otp->getVerificationUrl()
+            )
+        );
+
+        DB::commit();
+
+        $this->logAudit('register_step1', 'technician', $technician->id, "Technician Step 1 completed for {$user->email}");
+
+        return $this->successResponse([
+            'technician_id' => $technician->id,
+            'user'          => $user->only(['id', 'name', 'email', 'phone']),
+            'step'          => 1,
+        ], 'Step 1 completed. Proceed to identification.');
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return $this->serverError('Step 1 failed: ' . $e->getMessage());
     }
+}
 
     /**
      * Step 2: Identification Information
