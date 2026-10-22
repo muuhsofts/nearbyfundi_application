@@ -182,11 +182,8 @@ class MiniAppQrController extends BaseApiController
         $format = $request->query('format', 'svg') === 'png' ? 'png' : 'svg';
         $size   = max(128, min((int) $request->query('size', 512), 1024));
 
-        $image = QrCode::format($format)
-            ->size($size)
-            ->margin(2)
-            ->errorCorrection('H')
-            ->generate($qr->qr_payload);
+        // Use the helper method to generate QR with logo
+        $image = $this->generateQrWithLogo($qr->qr_payload, $format, $size);
 
         return response($image, 200, [
             'Content-Type'  => $format === 'png' ? 'image/png' : 'image/svg+xml',
@@ -229,5 +226,44 @@ class MiniAppQrController extends BaseApiController
             'qr_image_url'    => url("/api/v24/mini-apps/qr/{$r->token}/image"),
             'created_at'      => $r->created_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * Generates a QR code with the company logo embedded in the center.
+     */
+    private function generateQrWithLogo(string $payload, string $format, int $size)
+    {
+        $logoPath = public_path('all_images/logo.png');
+
+        if ($format === 'png') {
+            $qr = QrCode::format('png')->size($size)->margin(2)->errorCorrection('H');
+            if (file_exists($logoPath)) {
+                try {
+                    // Requires intervention/image package
+                    $qr->merge($logoPath, 0.22, true);
+                } catch (\Exception $e) {
+                    // Fallback to normal QR if merge fails
+                }
+            }
+            return $qr->generate($payload);
+        }
+
+        // SVG Generation
+        $image = QrCode::format('svg')->size($size)->margin(2)->errorCorrection('H')->generate($payload);
+
+        if (file_exists($logoPath)) {
+            $logoData = base64_encode(file_get_contents($logoPath));
+            $logoSize = $size * 0.22; // 22% of the QR size
+            $logoPos = ($size - $logoSize) / 2;
+            $padding = $size * 0.02; // small padding around logo
+
+            // White background for the logo to improve scannability
+            $svgRect = '<rect x="'.($logoPos - $padding).'" y="'.($logoPos - $padding).'" width="'.($logoSize + $padding * 2).'" height="'.($logoSize + $padding * 2).'" fill="#FFFFFF" rx="'.($size * 0.03).'" />';
+            $svgLogo = '<image x="'.$logoPos.'" y="'.$logoPos.'" width="'.$logoSize.'" height="'.$logoSize.'" href="data:image/png;base64,'.$logoData.'" />';
+
+            $image = str_replace('</svg>', $svgRect . $svgLogo . '</svg>', $image);
+        }
+
+        return $image;
     }
 }

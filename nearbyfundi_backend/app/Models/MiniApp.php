@@ -36,7 +36,7 @@ class MiniApp extends Model
         return $q->orderBy('sort_order')->orderBy('id');
     }
 
-        public function qrCodes()
+    public function qrCodes()
     {
         return $this->hasMany(MiniAppQr::class);
     }
