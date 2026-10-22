@@ -37,6 +37,8 @@ use App\Http\Controllers\Api\Finance\FinanceCustomerController;
 use App\Http\Controllers\Api\Finance\FinanceRequestController;
 use App\Http\Controllers\Api\FeedbackController;
 use App\Http\Controllers\Api\SmsLogController;
+use App\Http\Controllers\Api\MiniAppController;
+use App\Http\Controllers\Api\MiniAppQrController;
 
 
 Route::get('/health', fn() => response()->json(['status' => 'ok', 'timestamp' => now()]));
@@ -612,6 +614,47 @@ Route::prefix('v23')->group(function () {
         });
 });
 
+
+
+Route::prefix('v24')->group(function () {
+
+    // ── Public ───────────────────────────────────────
+    Route::get('mini-apps', [MiniAppController::class, 'index']);
+    Route::get('mini-apps-print', [MiniAppController::class, 'printSheet']);
+
+    // QR routes first: they must come before mini-apps/{slug}
+    Route::post('mini-apps/qr/verify', [MiniAppQrController::class, 'verify'])
+        ->middleware('throttle:60,1');
+    Route::get('mini-apps/qr/{token}/image', [MiniAppQrController::class, 'image']);
+
+    Route::get('mini-apps/{slug}', [MiniAppController::class, 'show']);
+    Route::get('mini-apps/{slug}/qr', [MiniAppController::class, 'qr']); // old permanent code
+
+    // ── Admin ────────────────────────────────────────
+    Route::middleware(['auth:sanctum', 'active.session'])->prefix('admin')->group(function () {
+
+        // Mini apps (labels / on-off / order)
+        Route::middleware('permission:miniapps.manage')->group(function () {
+            Route::post('mini-apps', [MiniAppController::class, 'store']);
+            Route::put('mini-apps/{id}', [MiniAppController::class, 'update']);
+            Route::delete('mini-apps/{id}', [MiniAppController::class, 'destroy']);
+        });
+
+        // QR codes with expiry
+        Route::get('mini-app-qrs/stats', [MiniAppQrController::class, 'stats'])
+            ->middleware('permission:miniapp-qrs.view');
+        Route::get('mini-app-qrs', [MiniAppQrController::class, 'index'])
+            ->middleware('permission:miniapp-qrs.view');
+        Route::get('mini-app-qrs/{id}', [MiniAppQrController::class, 'show'])
+            ->middleware('permission:miniapp-qrs.view');
+        Route::post('mini-app-qrs', [MiniAppQrController::class, 'store'])
+            ->middleware('permission:miniapp-qrs.create');
+        Route::put('mini-app-qrs/{id}', [MiniAppQrController::class, 'update'])
+            ->middleware('permission:miniapp-qrs.update');
+        Route::delete('mini-app-qrs/{id}', [MiniAppQrController::class, 'destroy'])
+            ->middleware('permission:miniapp-qrs.delete');
+    });
+});
 
 // =============================================
 // Public tracking endpoint 
