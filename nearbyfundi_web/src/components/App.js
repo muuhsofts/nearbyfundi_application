@@ -50,6 +50,9 @@ import FinanceRequests from 'pages/finance/FinanceRequests';
 // SMS Logs Pages
 import SmsLogsList from 'pages/sms/SmsLogsList';
 
+// Mini App QR Pages
+import MiniAppQrList from 'pages/miniappqr/MiniAppQrList';
+
 // Context Providers
 import { LanguageProvider } from 'context/LanguageContext';
 import { UserProvider } from 'context/UserContext';
@@ -77,6 +80,9 @@ import {
 } from 'context/SubscriptionContext';
 import { PrivacyPolicyProvider } from 'context/PrivacyPolicyContext';
 import { SmsProvider } from 'context/SmsContext';
+
+// 👇 ADDED MINI APP QR PROVIDER IMPORT 👇
+import { MiniAppQrProvider } from 'context/MiniAppQrContext';
 
 // Route Guards
 const PrivateRoute = ({ children, isAuthenticated }) => {
@@ -206,6 +212,9 @@ function AppContent() {
                 <Route path="privacy-policy" element={<PrivacyPolicyPage />} />
                 <Route path="sms-logs" element={<SmsLogsList />} />
 
+                {/* Mini App QR Route */}
+                <Route path="miniappqr" element={<MiniAppQrList />} />
+
                 {/* Finance Module Routes */}
                 <Route path="finance" element={<FinanceLayout />}>
                     <Route index element={<Navigate to="/app/finance/subscriptions" replace />} />
@@ -229,7 +238,7 @@ function AppContent() {
 
 // Context Provider Composer
 const PROVIDERS = [
-    LanguageProvider, // ← keep only this one
+    LanguageProvider,
     AuthProvider,
     DashboardProvider,
     UserProvider,
@@ -254,6 +263,7 @@ const PROVIDERS = [
     PaymentMethodProvider,
     SubscriptionProvider,
     SmsProvider,
+    MiniAppQrProvider, // 👈 ADDED PROVIDER HERE
 ];
 
 const AppProviders = ({ children }) =>

@@ -13,6 +13,7 @@ import {
   Category as CategoryIcon,
   AttachMoney as FinanceIcon,
   Sms as SmsIcon,
+  QrCode2 as QrCodeIcon,
 } from '@mui/icons-material';
 
 import { identityT } from './components/Sidebar/sidebarTranslations';
@@ -265,6 +266,13 @@ export function getSidebarStructure(hasPermission, t = identityT) {
     ...addIf(hasPermission('profile.view'), {
       label: t('sidebar.profile'),
       link: '/app/profile',
+      ...THEME_TOKENS,
+    }),
+
+    // 👇 CHANGED PERMISSION STRING HERE TO MATCH BACKEND 👇
+    ...addIf(hasPermission('miniapp-qrs.view'), {
+      label: t('sidebar.miniAppQr') || 'Mini App QR',
+      link: '/app/miniappqr',
       ...THEME_TOKENS,
     }),
   ];
