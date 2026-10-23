@@ -1,18 +1,20 @@
 // src/pages/posts/PostsList.js
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-    Box, Paper, Typography, Button, Table, TableBody, TableCell, TableContainer,
-    TableHead, TableRow, TablePagination, TableSortLabel, TextField,
-    InputAdornment, IconButton, Chip, Menu, MenuItem, Dialog, DialogTitle,
-    DialogContent, DialogActions, CircularProgress, useMediaQuery, useTheme,
-    Card, CardContent, Divider, Avatar, Stack, Grid, DialogContentText,
+    Box, Paper, Typography, Button, Table, TableBody, TableCell,
+    TableContainer, TableHead, TableRow, TablePagination, TableSortLabel,
+    TextField, InputAdornment, IconButton, Chip, Menu, MenuItem, Dialog,
+    DialogTitle, DialogContent, DialogActions, CircularProgress,
+    useMediaQuery, useTheme, Card, CardContent, Divider, Avatar, Stack,
+    Grid, DialogContentText, Tooltip,
 } from '@mui/material';
 import {
     Search as SearchIcon, Refresh as RefreshIcon, MoreVert as MoreVertIcon,
     Delete as DeleteIcon, Visibility as ViewIcon, Favorite as FavoriteIcon,
     Comment as CommentIcon, Person as PersonIcon, LocationOn as LocationIcon,
     Verified as VerifiedIcon, Star as StarIcon, CalendarToday as CalendarIcon,
-    Clear as ClearIcon, PhotoCamera as PhotoCameraIcon, Description as DescriptionIcon,
+    Clear as ClearIcon, PhotoCamera as PhotoCameraIcon,
+    Description as DescriptionIcon, Edit as EditIcon, Add as AddIcon,
 } from '@mui/icons-material';
 import { postService } from 'services/post.service';
 import { technicianService } from 'services/technician.service';
@@ -23,14 +25,23 @@ import { tPost } from './postslang';
 import { format } from 'date-fns';
 import appConfig from '../../config';
 
+import MultiImageCarousel from '../../components/common/MultiImageCarousel';
+import PostFormDialog from './PostFormDialog';
+import {
+    getImageUrl,
+    getPostImages,
+    normalizePost,
+    normalizePosts,
+    getYouTubeId,
+} from 'utils/postMedia';
+
 const colors = appConfig.app.colors;
 
-// Status styles (labels resolved via t())
 const getStatusStyles = (t) => ({
     published: { color: '#047857', bg: '#d1fae5', border: '#10b981', label: t('post.status.published') },
-    draft: { color: '#4b5563', bg: '#f3f4f6', border: '#9ca3af', label: t('post.status.draft') },
-    pending: { color: '#b45309', bg: '#fef3c7', border: '#f59e0b', label: t('post.status.pending') },
-    archived: { color: '#6b7280', bg: '#e5e7eb', border: '#9ca3af', label: t('post.status.archived') },
+    draft:     { color: '#4b5563', bg: '#f3f4f6', border: '#9ca3af', label: t('post.status.draft') },
+    pending:   { color: '#b45309', bg: '#fef3c7', border: '#f59e0b', label: t('post.status.pending') },
+    archived:  { color: '#6b7280', bg: '#e5e7eb', border: '#9ca3af', label: t('post.status.archived') },
 });
 
 const getHeadCells = (t) => [
@@ -46,7 +57,6 @@ const getHeadCells = (t) => [
 const PostsList = () => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-    const isTablet = useMediaQuery(theme.breakpoints.down('md'));
     const showTableView = useMediaQuery(theme.breakpoints.up('md'));
 
     const { language } = useLanguage();
@@ -57,6 +67,7 @@ const PostsList = () => {
     const { can } = usePermissions();
     const canView = can('posts.view');
     const canDelete = can('posts.delete');
+    const canEdit = can('posts.edit') || can('posts.create');
 
     const [posts, setPosts] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -65,38 +76,41 @@ const PostsList = () => {
     const [search, setSearch] = useState('');
     const [technicianFilter, setTechnicianFilter] = useState('all');
     const [technicians, setTechnicians] = useState([]);
-    const [loadingTechnicians, setLoadingTechnicians] = useState(false);
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
     const [order, setOrder] = useState('desc');
     const [orderBy, setOrderBy] = useState('created_at');
+
     const [selectedPost, setSelectedPost] = useState(null);
     const [openViewDialog, setOpenViewDialog] = useState(false);
     const [actionMenu, setActionMenu] = useState(null);
     const [selectedPostForMenu, setSelectedPostForMenu] = useState(null);
+
+    // Form dialog state
+    const [formOpen, setFormOpen] = useState(false);
+    const [formInitial, setFormInitial] = useState(null);
+    const [formSubmitting, setFormSubmitting] = useState(false);
+
     const [confirmDialog, setConfirmDialog] = useState({
         open: false, title: '', message: '', action: null,
     });
-    const [imageLoaded, setImageLoaded] = useState({});
 
-    const loadTechnicians = async () => {
-        setLoadingTechnicians(true);
-        try {
-            const response = await technicianService.getTechnicians({ per_page: 100, status: 'active' });
-            if (response?.data?.status === 'success') {
-                const data = response.data.data;
-                if (data && data.data) setTechnicians(data.data);
-                else if (Array.isArray(data)) setTechnicians(data);
-                else setTechnicians([]);
+    // ───────────── load data ─────────────
+    useEffect(() => {
+        (async () => {
+            try {
+                const response = await technicianService.getTechnicians({ per_page: 100, status: 'active' });
+                if (response?.data?.status === 'success') {
+                    const data = response.data.data;
+                    if (data && data.data) setTechnicians(data.data);
+                    else if (Array.isArray(data)) setTechnicians(data);
+                    else setTechnicians([]);
+                }
+            } catch (err) {
+                console.error('Error loading technicians:', err);
             }
-        } catch (err) {
-            console.error('Error loading technicians:', err);
-        } finally {
-            setLoadingTechnicians(false);
-        }
-    };
-
-    useEffect(() => { loadTechnicians(); }, []);
+        })();
+    }, []);
 
     const loadPosts = async () => {
         if (!canView) return;
@@ -112,7 +126,7 @@ const PostsList = () => {
             if (response?.data?.status === 'success') {
                 const data = response.data.data;
                 if (data && data.data) {
-                    setPosts(data.data);
+                    setPosts(normalizePosts(data.data));
                     setPagination({
                         total: data.total || 0,
                         per_page: data.per_page || rowsPerPage,
@@ -120,11 +134,9 @@ const PostsList = () => {
                         last_page: data.last_page || 1,
                     });
                 } else if (Array.isArray(data)) {
-                    setPosts(data);
+                    setPosts(normalizePosts(data));
                     setPagination({ total: data.length, per_page: rowsPerPage, current_page: 1, last_page: 1 });
-                } else {
-                    setPosts([]);
-                }
+                } else setPosts([]);
             } else {
                 setPosts([]);
             }
@@ -138,25 +150,53 @@ const PostsList = () => {
 
     useEffect(() => {
         if (canView) loadPosts();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [page, rowsPerPage, search, technicianFilter, canView]);
 
-    const refreshAll = () => { loadPosts(); };
-
+    // ───────────── actions ─────────────
     const handleViewPost = async (post) => {
         try {
             const response = await postService.getPost(post.id);
-            if (response?.data?.status === 'success') setSelectedPost(response.data.data);
-            else setSelectedPost(post);
-        } catch (err) {
-            console.error('Error fetching post details:', err);
+            if (response?.data?.status === 'success') {
+                setSelectedPost(normalizePost(response.data.data));
+            } else {
+                setSelectedPost(post);
+            }
+        } catch {
             setSelectedPost(post);
         }
         setOpenViewDialog(true);
     };
 
-    const handleCloseDialog = () => {
-        setOpenViewDialog(false);
-        setSelectedPost(null);
+    const openCreateForm = () => {
+        setFormInitial(null);
+        setFormOpen(true);
+    };
+
+    const openEditForm = (post) => {
+        setFormInitial(post);
+        setFormOpen(true);
+    };
+
+    const submitForm = async (payload) => {
+        setFormSubmitting(true);
+        try {
+            if (formInitial?.id) {
+                await postService.updatePost(formInitial.id, payload);
+                showSnackbar({ type: 'success', message: 'Post updated' });
+            } else {
+                await postService.createPost(payload);
+                showSnackbar({ type: 'success', message: 'Post created' });
+            }
+            setFormOpen(false);
+            setFormInitial(null);
+            await loadPosts();
+        } catch (err) {
+            const message = err?.response?.data?.message || 'Failed to save post';
+            showSnackbar({ type: 'error', message });
+        } finally {
+            setFormSubmitting(false);
+        }
     };
 
     const handleDeletePost = async (id) => {
@@ -164,24 +204,21 @@ const PostsList = () => {
             await postService.deletePost(id);
             showSnackbar({ type: 'success', message: t('post.toast.deleteSuccess') });
             await loadPosts();
-            return true;
         } catch (err) {
-            console.error('Delete error:', err);
             const errorMessage = err.response?.data?.message || t('post.toast.deleteFailed');
             showSnackbar({ type: 'error', message: errorMessage });
             throw err;
         }
     };
 
-    const openConfirmDialog = (title, message, actionFn) => {
+    const openConfirmDialog = (title, message, actionFn) =>
         setConfirmDialog({ open: true, title, message, action: actionFn });
-    };
 
     const handleConfirm = async () => {
         if (!confirmDialog.action) return;
         const action = confirmDialog.action;
-        setConfirmDialog(prev => ({ ...prev, open: false }));
-        try { await action(); } catch (err) { console.error('Confirm action failed:', err); }
+        setConfirmDialog((prev) => ({ ...prev, open: false }));
+        try { await action(); } catch (err) { console.error(err); }
     };
 
     const handleRequestSort = (property) => {
@@ -209,20 +246,8 @@ const PostsList = () => {
         return sorted;
     }, [posts, orderBy, order]);
 
-    const handleImageLoad = (id) => setImageLoaded(prev => ({ ...prev, [id]: true }));
-
-    const getInitials = (name) => {
-        if (!name) return '?';
-        return name.split(' ').map(word => word[0]).join('').toUpperCase().substring(0, 2);
-    };
-
-    const getImageUrl = (image) => {
-        if (!image) return null;
-        if (image.startsWith('http://') || image.startsWith('https://')) return image;
-        const baseUrl = process.env.REACT_APP_API_URL || 'http://192.168.100.144:8000';
-        const cleanPath = image.replace(/^\/+/, '');
-        return `${baseUrl}/storage/${cleanPath}`;
-    };
+    const getInitials = (name) =>
+        !name ? '?' : name.split(' ').map((w) => w[0]).join('').toUpperCase().substring(0, 2);
 
     const formatDate = (dateStr) => {
         if (!dateStr) return '-';
@@ -253,43 +278,36 @@ const PostsList = () => {
         setSelectedPostForMenu(post);
         setActionMenu(event.currentTarget);
     };
-
     const handleMenuClose = () => {
         setActionMenu(null);
         setSelectedPostForMenu(null);
     };
 
-    const handleAction = async (actionType) => {
+    const handleAction = (type) => {
         if (!selectedPostForMenu) return;
+        const target = selectedPostForMenu;
         handleMenuClose();
-        switch (actionType) {
-            case 'view':
-                handleViewPost(selectedPostForMenu);
-                break;
-            case 'delete':
-                openConfirmDialog(
-                    t('post.delete.title'),
-                    t('post.delete.message', { title: selectedPostForMenu.title || t('post.common.untitled') }),
-                    () => handleDeletePost(selectedPostForMenu.id)
-                );
-                break;
-            default: break;
+        if (type === 'view') return handleViewPost(target);
+        if (type === 'edit') return openEditForm(target);
+        if (type === 'delete') {
+            return openConfirmDialog(
+                t('post.delete.title'),
+                t('post.delete.message', { title: target.title || t('post.common.untitled') }),
+                () => handleDeletePost(target.id)
+            );
         }
     };
 
+    // ───────────── stats ─────────────
     const totalPosts = pagination.total || 0;
     const totalLikes = posts.reduce((acc, p) => acc + (p.likes_count || 0), 0);
     const totalComments = posts.reduce((acc, p) => acc + (p.comments_count || 0), 0);
-    const uniqueTechnicians = new Set(posts.map(p => p.technician?.id).filter(Boolean)).size;
+    const uniqueTechnicians = new Set(posts.map((p) => p.technician?.id).filter(Boolean)).size;
 
     if (!canView) {
         return (
             <Box p={3}>
-                <Paper elevation={0} sx={{
-                    p: 4, textAlign: 'center', borderRadius: 3,
-                    border: '1px solid', borderColor: 'divider',
-                    bgcolor: 'background.paper',
-                }}>
+                <Paper elevation={0} sx={{ p: 4, textAlign: 'center', borderRadius: 3, border: '1px solid', borderColor: 'divider' }}>
                     <Typography color="error" fontWeight={600}>{t('post.accessDenied')}</Typography>
                 </Paper>
             </Box>
@@ -298,59 +316,39 @@ const PostsList = () => {
 
     return (
         <Box sx={{ width: '100%', p: { xs: 1.5, sm: 2.5 }, m: 0, bgcolor: 'background.default' }}>
-            <Paper elevation={0} sx={{
-                width: '100%', borderRadius: 3, overflow: 'hidden',
-                border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper',
-            }}>
+            <Paper elevation={0} sx={{ width: '100%', borderRadius: 3, overflow: 'hidden', border: '1px solid', borderColor: 'divider' }}>
                 {/* HEADER */}
                 <Box sx={{ px: { xs: 2, sm: 3 }, py: 2.5, borderBottom: '1px solid', borderColor: 'divider' }}>
-                    <Stack
-                        direction={{ xs: 'column', sm: 'row' }}
-                        justifyContent="space-between"
-                        alignItems={{ xs: 'stretch', sm: 'center' }}
-                        spacing={2} mb={2.5}
-                    >
+                    <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'center' }} spacing={2} mb={2.5}>
                         <Box>
-                            <Typography variant="h5" fontWeight={800} color="text.primary">
-                                {t('post.header.title')}
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary" fontWeight={500}>
-                                {t('post.header.subtitle')}
-                            </Typography>
+                            <Typography variant="h5" fontWeight={800}>{t('post.header.title')}</Typography>
+                            <Typography variant="body2" color="text.secondary" fontWeight={500}>{t('post.header.subtitle')}</Typography>
                         </Box>
-
-                        <Stack direction="row" spacing={1.5} alignItems="center" justifyContent={{ xs: 'space-between', sm: 'flex-end' }}>
+                        <Stack direction="row" spacing={1.5} alignItems="center">
+                            {canEdit && (
+                                <Button
+                                    variant="outlined" startIcon={<AddIcon />} onClick={openCreateForm}
+                                    size={isMobile ? 'small' : 'medium'}
+                                    sx={{ borderRadius: 2, fontWeight: 600, textTransform: 'none', px: 2.5 }}
+                                >
+                                    Create
+                                </Button>
+                            )}
                             <Button
-                                variant="contained" startIcon={<RefreshIcon />}
-                                onClick={refreshAll} disabled={loading}
-                                size={isMobile ? 'small' : 'medium'}
-                                sx={{
-                                    borderRadius: 2, fontWeight: 600, textTransform: 'none', px: 2.5,
-                                    boxShadow: 'none', bgcolor: 'primary.main',
-                                    '&:hover': { boxShadow: '0 4px 12px rgba(0,0,0,0.15)' },
-                                }}
+                                variant="contained" startIcon={<RefreshIcon />} onClick={loadPosts}
+                                disabled={loading} size={isMobile ? 'small' : 'medium'}
+                                sx={{ borderRadius: 2, fontWeight: 600, textTransform: 'none', px: 2.5, boxShadow: 'none' }}
                             >
                                 {t('post.common.refresh')}
                             </Button>
                         </Stack>
                     </Stack>
 
-                    {/* FILTERS */}
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}
-                           alignItems={{ xs: 'stretch', sm: 'center' }} flexWrap="wrap">
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', sm: 'center' }} flexWrap="wrap">
                         <TextField
-                            select label={t('post.filter.technician')} size="small"
-                            value={technicianFilter}
+                            select label={t('post.filter.technician')} size="small" value={technicianFilter}
                             onChange={(e) => { setTechnicianFilter(e.target.value); setPage(0); }}
-                            sx={{
-                                minWidth: { xs: '100%', sm: 180 }, flexGrow: { xs: 1, sm: 0 },
-                                '& .MuiOutlinedInput-root': {
-                                    borderRadius: 2, bgcolor: 'action.hover',
-                                    '& fieldset': { borderColor: 'transparent' },
-                                    '&:hover fieldset': { borderColor: 'divider' },
-                                    '&.Mui-focused fieldset': { borderColor: 'primary.main' },
-                                },
-                            }}
+                            sx={{ minWidth: { xs: '100%', sm: 180 } }}
                         >
                             <MenuItem value="all">{t('post.common.all')}</MenuItem>
                             {technicians.map((tech) => (
@@ -361,32 +359,19 @@ const PostsList = () => {
                         </TextField>
 
                         <TextField
-                            placeholder={t('post.filter.searchPlaceholder')}
-                            size="small" value={search}
+                            placeholder={t('post.filter.searchPlaceholder')} size="small" value={search}
                             onChange={(e) => { setSearch(e.target.value); setPage(0); }}
                             InputProps={{
                                 startAdornment: (
-                                    <InputAdornment position="start">
-                                        <SearchIcon fontSize="small" color="action" />
-                                    </InputAdornment>
+                                    <InputAdornment position="start"><SearchIcon fontSize="small" color="action" /></InputAdornment>
                                 ),
                                 endAdornment: search ? (
                                     <InputAdornment position="end">
-                                        <IconButton size="small" onClick={() => setSearch('')}>
-                                            <ClearIcon fontSize="small" />
-                                        </IconButton>
+                                        <IconButton size="small" onClick={() => setSearch('')}><ClearIcon fontSize="small" /></IconButton>
                                     </InputAdornment>
                                 ) : null,
                             }}
-                            sx={{
-                                minWidth: { xs: '100%', sm: 260 }, flexGrow: { xs: 1, sm: 0 },
-                                '& .MuiOutlinedInput-root': {
-                                    borderRadius: 2, bgcolor: 'action.hover',
-                                    '& fieldset': { borderColor: 'transparent' },
-                                    '&:hover fieldset': { borderColor: 'divider' },
-                                    '&.Mui-focused fieldset': { borderColor: 'primary.main' },
-                                },
-                            }}
+                            sx={{ minWidth: { xs: '100%', sm: 260 } }}
                         />
                     </Stack>
                 </Box>
@@ -401,21 +386,13 @@ const PostsList = () => {
                             { label: t('post.stats.totalComments'), value: totalComments, color: '#10b981', icon: <CommentIcon sx={{ fontSize: 18 }} /> },
                         ].map((item, idx) => (
                             <Grid item xs={6} sm={3} key={idx}>
-                                <Card elevation={0} sx={{
-                                    borderRadius: 2, border: '1px solid', borderColor: 'divider',
-                                    bgcolor: 'background.paper', // ✅ Theme aware
-                                    height: '100%',
-                                }}>
+                                <Card elevation={0} sx={{ borderRadius: 2, border: '1px solid', borderColor: 'divider', height: '100%' }}>
                                     <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
                                         <Box display="flex" alignItems="center" justifyContent="space-between">
-                                            <Typography variant="caption" sx={{ color: item.color, fontWeight: 600 }}>
-                                                {item.label}
-                                            </Typography>
+                                            <Typography variant="caption" sx={{ color: item.color, fontWeight: 600 }}>{item.label}</Typography>
                                             {item.icon}
                                         </Box>
-                                        <Typography variant="h4" sx={{ color: item.color, fontWeight: 700 }}>
-                                            {item.value}
-                                        </Typography>
+                                        <Typography variant="h4" sx={{ color: item.color, fontWeight: 700 }}>{item.value}</Typography>
                                     </CardContent>
                                 </Card>
                             </Grid>
@@ -423,19 +400,12 @@ const PostsList = () => {
                     </Grid>
                 </Box>
 
-                {/* TABLE */}
+                {/* TABLE / CARDS */}
                 {showTableView ? (
                     <TableContainer>
                         <Table sx={{ minWidth: 900 }}>
                             <TableHead>
-                                <TableRow sx={{
-                                    bgcolor: 'action.hover',
-                                    '& th': {
-                                        fontWeight: 700, fontSize: '0.8125rem', color: 'text.secondary',
-                                        textTransform: 'uppercase', letterSpacing: 0.6,
-                                        borderBottom: '1px solid', borderColor: 'divider', py: 1.75,
-                                    },
-                                }}>
+                                <TableRow sx={{ bgcolor: 'action.hover', '& th': { fontWeight: 700, fontSize: '0.8125rem', color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 0.6, borderBottom: '1px solid', borderColor: 'divider', py: 1.75 } }}>
                                     {headCells.map((cell) => (
                                         <TableCell key={cell.id} sx={{ whiteSpace: 'nowrap' }}>
                                             {!cell.disableSort ? (
@@ -451,7 +421,6 @@ const PostsList = () => {
                                     ))}
                                 </TableRow>
                             </TableHead>
-
                             <TableBody>
                                 {loading ? (
                                     <TableRow>
@@ -462,36 +431,38 @@ const PostsList = () => {
                                 ) : sortedPosts.length === 0 ? (
                                     <TableRow>
                                         <TableCell colSpan={headCells.length} align="center" sx={{ py: 8 }}>
-                                            <Typography color="text.secondary" fontWeight={500}>
-                                                {t('post.table.noFound')}
-                                            </Typography>
+                                            <Typography color="text.secondary" fontWeight={500}>{t('post.table.noFound')}</Typography>
                                         </TableCell>
                                     </TableRow>
                                 ) : (
                                     sortedPosts.map((post) => {
-                                        const imageUrl = post.image ? getImageUrl(post.image) : null;
+                                        const images = post.images;
+                                        const firstImg = images[0];
                                         return (
-                                            <TableRow key={post.id} hover sx={{ '&:last-child td': { borderBottom: 0 }, transition: 'background-color 0.15s' }}>
+                                            <TableRow key={post.id} hover>
                                                 <TableCell sx={{ py: 2 }}>
                                                     <Stack direction="row" spacing={1.5} alignItems="center">
-                                                        {imageUrl ? (
-                                                            <Box sx={{
-                                                                width: 48, height: 48, borderRadius: 1.5, overflow: 'hidden',
-                                                                flexShrink: 0, bgcolor: 'action.hover',
-                                                                border: '1px solid', borderColor: 'divider',
-                                                            }}>
-                                                                <img src={imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                                                     onError={(e) => { e.target.style.display = 'none'; }} />
-                                                            </Box>
-                                                        ) : (
-                                                            <Box sx={{
-                                                                width: 48, height: 48, borderRadius: 1.5, bgcolor: 'action.hover',
-                                                                border: '1px solid', borderColor: 'divider',
-                                                                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                                                            }}>
-                                                                <PhotoCameraIcon sx={{ color: 'text.disabled', fontSize: 24 }} />
-                                                            </Box>
-                                                        )}
+                                                        <Box sx={{ position: 'relative', flexShrink: 0 }}>
+                                                            {firstImg ? (
+                                                                <Box sx={{ width: 48, height: 48, borderRadius: 1.5, overflow: 'hidden', bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
+                                                                    <img
+                                                                        src={getImageUrl(firstImg)}
+                                                                        alt=""
+                                                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                                        onError={(e) => { e.target.style.display = 'none'; }}
+                                                                    />
+                                                                </Box>
+                                                            ) : (
+                                                                <Box sx={{ width: 48, height: 48, borderRadius: 1.5, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                                    <PhotoCameraIcon sx={{ color: 'text.disabled', fontSize: 24 }} />
+                                                                </Box>
+                                                            )}
+                                                            {images.length > 1 && (
+                                                                <Box sx={{ position: 'absolute', top: -6, right: -6, bgcolor: 'primary.main', color: '#fff', borderRadius: 10, px: 0.75, fontSize: 10, fontWeight: 700 }}>
+                                                                    +{images.length - 1}
+                                                                </Box>
+                                                            )}
+                                                        </Box>
                                                         <Box>
                                                             <Typography variant="body2" fontWeight={600} color="text.primary" noWrap sx={{ maxWidth: 180 }}>
                                                                 {post.title || t('post.common.untitled')}
@@ -506,18 +477,14 @@ const PostsList = () => {
                                                 <TableCell>
                                                     <Stack direction="row" spacing={1} alignItems="center">
                                                         <Avatar
-                                                            src={post.technician?.profile_photo ? getImageUrl(post.technician.profile_photo) : undefined}
-                                                            sx={{
-                                                                width: 32, height: 32,
-                                                                bgcolor: colors.sea || '#0f766e',
-                                                                fontSize: 12, fontWeight: 600,
-                                                            }}
+                                                            src={post.technician?.avatar ? getImageUrl(post.technician.avatar) : undefined}
+                                                            sx={{ width: 32, height: 32, bgcolor: colors.sea || '#0f766e', fontSize: 12, fontWeight: 600 }}
                                                         >
-                                                            {getInitials(post.technician?.user?.name || post.technician?.name)}
+                                                            {getInitials(post.technician?.name)}
                                                         </Avatar>
                                                         <Box>
                                                             <Typography variant="body2" fontWeight={500}>
-                                                                {post.technician?.user?.name || post.technician?.name || t('post.common.emDash')}
+                                                                {post.technician?.name || t('post.common.emDash')}
                                                             </Typography>
                                                             {post.technician?.verified && (
                                                                 <VerifiedIcon sx={{ fontSize: 12, color: 'success.main', display: 'block' }} />
@@ -527,29 +494,13 @@ const PostsList = () => {
                                                 </TableCell>
 
                                                 <TableCell>
-                                                    <Chip
-                                                        icon={<FavoriteIcon sx={{ fontSize: 14 }} />}
-                                                        label={post.likes_count || 0}
-                                                        size="small"
-                                                        sx={{
-                                                            fontWeight: 700, bgcolor: 'error.light', color: 'error.main',
-                                                            border: '1px solid', borderColor: 'error.main', height: 28,
-                                                            '& .MuiChip-icon': { color: 'error.main' },
-                                                        }}
-                                                    />
+                                                    <Chip icon={<FavoriteIcon sx={{ fontSize: 14 }} />} label={post.likes_count || 0} size="small"
+                                                          sx={{ fontWeight: 700, bgcolor: 'error.light', color: 'error.main', border: '1px solid', borderColor: 'error.main', height: 28, '& .MuiChip-icon': { color: 'error.main' } }} />
                                                 </TableCell>
 
                                                 <TableCell>
-                                                    <Chip
-                                                        icon={<CommentIcon sx={{ fontSize: 14 }} />}
-                                                        label={post.comments_count || 0}
-                                                        size="small"
-                                                        sx={{
-                                                            fontWeight: 700, bgcolor: 'success.light', color: 'success.main',
-                                                            border: '1px solid', borderColor: 'success.main', height: 28,
-                                                            '& .MuiChip-icon': { color: 'success.main' },
-                                                        }}
-                                                    />
+                                                    <Chip icon={<CommentIcon sx={{ fontSize: 14 }} />} label={post.comments_count || 0} size="small"
+                                                          sx={{ fontWeight: 700, bgcolor: 'success.light', color: 'success.main', border: '1px solid', borderColor: 'success.main', height: 28, '& .MuiChip-icon': { color: 'success.main' } }} />
                                                 </TableCell>
 
                                                 <TableCell>{getStatusChip(post.status)}</TableCell>
@@ -561,14 +512,7 @@ const PostsList = () => {
                                                 </TableCell>
 
                                                 <TableCell align="center">
-                                                    <IconButton
-                                                        size="small"
-                                                        onClick={(e) => handleMenuOpen(e, post)}
-                                                        sx={{
-                                                            color: 'text.secondary',
-                                                            '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
-                                                        }}
-                                                    >
+                                                    <IconButton size="small" onClick={(e) => handleMenuOpen(e, post)}>
                                                         <MoreVertIcon />
                                                     </IconButton>
                                                 </TableCell>
@@ -583,87 +527,60 @@ const PostsList = () => {
                     /* MOBILE CARDS */
                     <Box sx={{ p: { xs: 2, sm: 2.5 } }}>
                         {loading ? (
-                            <Box display="flex" justifyContent="center" py={6}>
-                                <CircularProgress size={36} thickness={4} />
-                            </Box>
+                            <Box display="flex" justifyContent="center" py={6}><CircularProgress size={36} /></Box>
                         ) : sortedPosts.length === 0 ? (
-                            <Paper variant="outlined" sx={{ p: 5, textAlign: 'center', borderRadius: 3, borderStyle: 'dashed', bgcolor: 'background.paper' }}>
-                                <Typography color="text.secondary" fontWeight={500}>
-                                    {t('post.table.noFound')}
-                                </Typography>
+                            <Paper variant="outlined" sx={{ p: 5, textAlign: 'center', borderRadius: 3, borderStyle: 'dashed' }}>
+                                <Typography color="text.secondary" fontWeight={500}>{t('post.table.noFound')}</Typography>
                             </Paper>
                         ) : (
                             <Grid container spacing={2}>
                                 {sortedPosts.map((post) => {
-                                    const imageUrl = post.image ? getImageUrl(post.image) : null;
+                                    const images = post.images;
                                     return (
                                         <Grid item xs={12} sm={6} lg={4} key={post.id}>
-                                            <Card elevation={0} sx={{
-                                                borderRadius: 3, border: '1px solid', borderColor: 'divider',
-                                                bgcolor: 'background.paper', // ✅ Theme aware
-                                                overflow: 'hidden', height: '100%',
-                                                display: 'flex', flexDirection: 'column',
-                                                transition: 'box-shadow 0.2s',
-                                                '&:hover': { boxShadow: 2 },
-                                            }}>
-                                                {imageUrl ? (
-                                                    <Box sx={{ width: '100%', height: 160, overflow: 'hidden', bgcolor: 'action.hover', position: 'relative' }}>
-                                                        <img src={imageUrl} alt={post.title || 'Post image'}
-                                                             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                                             onError={(e) => { e.target.style.display = 'none'; }} />
-                                                        <Box sx={{ position: 'absolute', top: 8, right: 8 }}>
-                                                            {getStatusChip(post.status)}
-                                                        </Box>
+                                            <Card elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', overflow: 'hidden', height: '100%', display: 'flex', flexDirection: 'column' }}>
+                                                <Box sx={{ position: 'relative' }}>
+                                                    <MultiImageCarousel
+                                                        images={images}
+                                                        height={180}
+                                                        fit="cover"
+                                                        emptyFallback={
+                                                            <Box sx={{ width: '100%', height: 180, bgcolor: 'action.hover', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                                                                <PhotoCameraIcon sx={{ color: 'text.disabled', fontSize: 40 }} />
+                                                                <Typography variant="caption" color="text.disabled" sx={{ mt: 1 }}>
+                                                                    {t('post.common.noImage')}
+                                                                </Typography>
+                                                            </Box>
+                                                        }
+                                                    />
+                                                    <Box sx={{ position: 'absolute', top: 8, right: 8 }}>
+                                                        {getStatusChip(post.status)}
                                                     </Box>
-                                                ) : (
-                                                    <Box sx={{
-                                                        width: '100%', height: 160, bgcolor: 'action.hover',
-                                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                        flexDirection: 'column',
-                                                        borderBottom: '1px solid', borderColor: 'divider',
-                                                        position: 'relative',
-                                                    }}>
-                                                        <PhotoCameraIcon sx={{ color: 'text.disabled', fontSize: 48 }} />
-                                                        <Typography variant="caption" color="text.disabled" sx={{ mt: 1 }}>
-                                                            {t('post.common.noImage')}
-                                                        </Typography>
-                                                        <Box sx={{ position: 'absolute', top: 8, right: 8 }}>
-                                                            {getStatusChip(post.status)}
-                                                        </Box>
-                                                    </Box>
-                                                )}
+                                                </Box>
 
                                                 <CardContent sx={{ p: 2.5, flex: 1, display: 'flex', flexDirection: 'column' }}>
                                                     <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={1}>
                                                         <Typography variant="h6" fontWeight={700} noWrap sx={{ maxWidth: '80%' }}>
                                                             {post.title || t('post.common.untitled')}
                                                         </Typography>
-                                                        <IconButton size="small" onClick={(e) => handleMenuOpen(e, post)}
-                                                                    sx={{ color: 'text.secondary', mt: -0.5 }}>
+                                                        <IconButton size="small" onClick={(e) => handleMenuOpen(e, post)}>
                                                             <MoreVertIcon fontSize="small" />
                                                         </IconButton>
                                                     </Stack>
 
-                                                    <Typography variant="body2" color="text.secondary" sx={{
-                                                        mb: 2, display: '-webkit-box', WebkitLineClamp: 2,
-                                                        WebkitBoxOrient: 'vertical', overflow: 'hidden', flex: 1,
-                                                    }}>
+                                                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', flex: 1 }}>
                                                         {post.content || t('post.common.noContent')}
                                                     </Typography>
 
                                                     <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
                                                         <Avatar
-                                                            src={post.technician?.profile_photo ? getImageUrl(post.technician.profile_photo) : undefined}
-                                                            sx={{
-                                                                width: 28, height: 28,
-                                                                bgcolor: colors.sea || '#0f766e',
-                                                                fontSize: 11, fontWeight: 600,
-                                                            }}
+                                                            src={post.technician?.avatar ? getImageUrl(post.technician.avatar) : undefined}
+                                                            sx={{ width: 28, height: 28, bgcolor: colors.sea || '#0f766e', fontSize: 11, fontWeight: 600 }}
                                                         >
-                                                            {getInitials(post.technician?.user?.name || post.technician?.name)}
+                                                            {getInitials(post.technician?.name)}
                                                         </Avatar>
                                                         <Typography variant="body2" fontWeight={500}>
-                                                            {post.technician?.user?.name || post.technician?.name || t('post.common.emDash')}
+                                                            {post.technician?.name || t('post.common.emDash')}
                                                         </Typography>
                                                         {post.technician?.verified && (
                                                             <VerifiedIcon sx={{ fontSize: 14, color: 'success.main' }} />
@@ -674,35 +591,18 @@ const PostsList = () => {
 
                                                     <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
                                                         <Stack direction="row" spacing={1}>
-                                                            <Chip icon={<FavoriteIcon sx={{ fontSize: 14 }} />}
-                                                                  label={post.likes_count || 0} size="small"
-                                                                  sx={{
-                                                                      fontWeight: 700, bgcolor: 'error.light', color: 'error.main',
-                                                                      border: '1px solid', borderColor: 'error.main', height: 26,
-                                                                      '& .MuiChip-icon': { color: 'error.main' },
-                                                                  }} />
-                                                            <Chip icon={<CommentIcon sx={{ fontSize: 14 }} />}
-                                                                  label={post.comments_count || 0} size="small"
-                                                                  sx={{
-                                                                      fontWeight: 700, bgcolor: 'success.light', color: 'success.main',
-                                                                      border: '1px solid', borderColor: 'success.main', height: 26,
-                                                                      '& .MuiChip-icon': { color: 'success.main' },
-                                                                  }} />
+                                                            <Chip icon={<FavoriteIcon sx={{ fontSize: 14 }} />} label={post.likes_count || 0} size="small"
+                                                                  sx={{ fontWeight: 700, bgcolor: 'error.light', color: 'error.main', border: '1px solid', borderColor: 'error.main', height: 26, '& .MuiChip-icon': { color: 'error.main' } }} />
+                                                            <Chip icon={<CommentIcon sx={{ fontSize: 14 }} />} label={post.comments_count || 0} size="small"
+                                                                  sx={{ fontWeight: 700, bgcolor: 'success.light', color: 'success.main', border: '1px solid', borderColor: 'success.main', height: 26, '& .MuiChip-icon': { color: 'success.main' } }} />
                                                         </Stack>
                                                         <Typography variant="caption" color="text.secondary" fontWeight={500}>
                                                             {formatDate(post.created_at)}
                                                         </Typography>
                                                     </Stack>
 
-                                                    <Button
-                                                        variant="outlined" fullWidth startIcon={<ViewIcon />}
-                                                        onClick={() => handleViewPost(post)}
-                                                        sx={{
-                                                            mt: 2, borderRadius: 2, textTransform: 'none', fontWeight: 600,
-                                                            borderColor: 'divider', color: colors.sea || '#0f766e',
-                                                            '&:hover': { borderColor: colors.sea || '#0f766e', bgcolor: 'action.hover' },
-                                                        }}
-                                                    >
+                                                    <Button variant="outlined" fullWidth startIcon={<ViewIcon />} onClick={() => handleViewPost(post)}
+                                                            sx={{ mt: 2, borderRadius: 2, textTransform: 'none', fontWeight: 600 }}>
                                                         {t('post.common.view')}
                                                     </Button>
                                                 </CardContent>
@@ -724,71 +624,60 @@ const PostsList = () => {
                         rowsPerPage={rowsPerPage}
                         page={page}
                         onPageChange={(e, newPage) => setPage(newPage)}
-                        onRowsPerPageChange={(e) => {
-                            setRowsPerPage(parseInt(e.target.value, 10));
-                            setPage(0);
-                        }}
-                        sx={{
-                            '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
-                                fontWeight: 500,
-                            },
-                        }}
+                        onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
                     />
                 </Box>
             </Paper>
 
             {/* ACTION MENU */}
             <Menu
-                anchorEl={actionMenu}
-                open={Boolean(actionMenu)}
-                onClose={handleMenuClose}
+                anchorEl={actionMenu} open={Boolean(actionMenu)} onClose={handleMenuClose}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                 transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-                PaperProps={{ elevation: 8, sx: { borderRadius: 2, minWidth: 180, mt: 0.5, bgcolor: 'background.paper' } }}
+                PaperProps={{ elevation: 8, sx: { borderRadius: 2, minWidth: 180, mt: 0.5 } }}
             >
-                <MenuItem onClick={() => handleAction('view')} sx={{ fontWeight: 500 }}>
+                <MenuItem onClick={() => handleAction('view')}>
                     <ViewIcon sx={{ mr: 1.5, fontSize: 20, color: colors.sea || '#0f766e' }} />
                     {t('post.menu.viewPost')}
                 </MenuItem>
+                {canEdit && (
+                    <MenuItem onClick={() => handleAction('edit')}>
+                        <EditIcon sx={{ mr: 1.5, fontSize: 20, color: 'primary.main' }} />
+                        Edit
+                    </MenuItem>
+                )}
                 {canDelete && (
-                    <MenuItem onClick={() => handleAction('delete')} sx={{ color: 'error.main', fontWeight: 500 }}>
+                    <MenuItem onClick={() => handleAction('delete')} sx={{ color: 'error.main' }}>
                         <DeleteIcon sx={{ mr: 1.5, fontSize: 20 }} />
                         {t('post.menu.delete')}
                     </MenuItem>
                 )}
             </Menu>
 
-            {/* POST DETAIL DIALOG */}
+            {/* POST DETAIL DIALOG — multi-image */}
             <Dialog
-                open={openViewDialog}
-                onClose={handleCloseDialog}
+                open={openViewDialog} onClose={() => setOpenViewDialog(false)}
                 maxWidth="md" fullWidth
-                PaperProps={{
-                    sx: { borderRadius: 3, border: '1px solid', borderColor: 'divider', maxHeight: '90vh', bgcolor: 'background.paper' },
-                }}
+                PaperProps={{ sx: { borderRadius: 3, maxHeight: '90vh' } }}
             >
                 {selectedPost && (
                     <>
                         <DialogTitle sx={{ pb: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
                             <Box display="flex" justifyContent="space-between" alignItems="flex-start">
                                 <Box flex={1} minWidth={0}>
-                                    <Typography variant="h6" fontWeight={700} color="text.primary">
+                                    <Typography variant="h6" fontWeight={700}>
                                         {selectedPost.title || t('post.common.untitled')}
                                     </Typography>
                                     <Stack direction="row" spacing={2} alignItems="center" mt={1} flexWrap="wrap">
                                         <Stack direction="row" spacing={1} alignItems="center">
                                             <Avatar
-                                                src={selectedPost.technician?.profile_photo ? getImageUrl(selectedPost.technician.profile_photo) : undefined}
-                                                sx={{
-                                                    width: 28, height: 28,
-                                                    bgcolor: colors.sea || '#0f766e',
-                                                    fontSize: 11, fontWeight: 600,
-                                                }}
+                                                src={selectedPost.technician?.avatar ? getImageUrl(selectedPost.technician.avatar) : undefined}
+                                                sx={{ width: 28, height: 28, bgcolor: colors.sea || '#0f766e', fontSize: 11, fontWeight: 600 }}
                                             >
-                                                {getInitials(selectedPost.technician?.user?.name || selectedPost.technician?.name)}
+                                                {getInitials(selectedPost.technician?.name)}
                                             </Avatar>
                                             <Typography variant="body2" fontWeight={500}>
-                                                {selectedPost.technician?.user?.name || selectedPost.technician?.name || t('post.common.unknown')}
+                                                {selectedPost.technician?.name || t('post.common.unknown')}
                                             </Typography>
                                             {selectedPost.technician?.verified && (
                                                 <VerifiedIcon sx={{ fontSize: 14, color: 'success.main' }} />
@@ -801,42 +690,59 @@ const PostsList = () => {
                                         {getStatusChip(selectedPost.status)}
                                     </Stack>
                                 </Box>
-                                <IconButton onClick={handleCloseDialog} size="small" sx={{ color: 'text.secondary' }}>
+                                <IconButton onClick={() => setOpenViewDialog(false)} size="small">
                                     <ClearIcon />
                                 </IconButton>
                             </Box>
                         </DialogTitle>
 
                         <DialogContent sx={{ p: 3 }}>
-                            {selectedPost.image && (
-                                <Box sx={{
-                                    width: '100%', maxHeight: 400, bgcolor: 'action.hover',
-                                    borderRadius: 2, overflow: 'hidden', mb: 3,
-                                    border: '1px solid', borderColor: 'divider',
-                                    display: 'flex', justifyContent: 'center', alignItems: 'center', p: 1,
-                                }}>
-                                    <img src={getImageUrl(selectedPost.image)} alt={selectedPost.title || 'Post image'}
-                                         style={{ maxWidth: '100%', maxHeight: '380px', width: 'auto', height: 'auto', objectFit: 'contain' }}
-                                         onError={(e) => { e.target.style.display = 'none'; }} />
+                            {/* MEDIA */}
+                            {selectedPost.images?.length > 0 && (
+                                <Box mb={3}>
+                                    <MultiImageCarousel
+                                        images={selectedPost.images}
+                                        height={380}
+                                        fit="contain"
+                                        showThumbnails
+                                    />
                                 </Box>
                             )}
 
+                            {/* YOUTUBE EMBED */}
+                            {(() => {
+                                const ytId = getYouTubeId(selectedPost.youtube_url || selectedPost.youtube_embed);
+                                if (!ytId) return null;
+                                return (
+                                    <Box mb={3}>
+                                        <Box
+                                            component="iframe"
+                                            src={`https://www.youtube.com/embed/${ytId}`}
+                                            title="YouTube video"
+                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                            allowFullScreen
+                                            sx={{ width: '100%', aspectRatio: '16 / 9', border: 0, borderRadius: 2 }}
+                                        />
+                                    </Box>
+                                );
+                            })()}
+
                             <Box mb={3}>
-                                <Typography variant="subtitle2" fontWeight={600} gutterBottom color="text.primary">
+                                <Typography variant="subtitle2" fontWeight={600} gutterBottom>
                                     {t('post.dialog.content')}
                                 </Typography>
-                                <Paper variant="outlined" sx={{ p: 2.5, bgcolor: 'action.hover', borderColor: 'divider', borderRadius: 2 }}>
+                                <Paper variant="outlined" sx={{ p: 2.5, bgcolor: 'action.hover', borderRadius: 2 }}>
                                     <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
                                         {selectedPost.content || t('post.dialog.noContentProvided')}
                                     </Typography>
                                 </Paper>
                             </Box>
 
-                            <Divider sx={{ mb: 3, borderColor: 'divider' }} />
+                            <Divider sx={{ mb: 3 }} />
 
                             <Grid container spacing={2}>
                                 <Grid item xs={12} sm={6}>
-                                    <Typography variant="subtitle2" fontWeight={600} gutterBottom color="text.primary">
+                                    <Typography variant="subtitle2" fontWeight={600} gutterBottom>
                                         {t('post.dialog.engagement')}
                                     </Typography>
                                     <Stack direction="row" spacing={3}>
@@ -866,7 +772,7 @@ const PostsList = () => {
                                 </Grid>
                                 {selectedPost.technician?.area && (
                                     <Grid item xs={12} sm={6}>
-                                        <Typography variant="subtitle2" fontWeight={600} gutterBottom color="text.primary">
+                                        <Typography variant="subtitle2" fontWeight={600} gutterBottom>
                                             {t('post.dialog.technicianInfo')}
                                         </Typography>
                                         <Box display="flex" alignItems="center" gap={1}>
@@ -885,60 +791,61 @@ const PostsList = () => {
                                 )}
                             </Grid>
 
-                            {selectedPost.comments && selectedPost.comments.length > 0 && (
+                            {selectedPost.comments?.length > 0 && (
                                 <>
-                                    <Divider sx={{ my: 3, borderColor: 'divider' }} />
-                                    <Box>
-                                        <Typography variant="subtitle2" fontWeight={600} gutterBottom color="text.primary">
-                                            {t('post.dialog.commentsCount', { n: selectedPost.comments.length })}
-                                        </Typography>
-                                        <Stack spacing={2}>
-                                            {selectedPost.comments.map((comment, idx) => (
-                                                <Paper key={idx} variant="outlined" sx={{
-                                                    p: 2, borderColor: 'divider', borderRadius: 2, bgcolor: 'action.hover',
-                                                }}>
+                                    <Divider sx={{ my: 3 }} />
+                                    <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                                        {t('post.dialog.commentsCount', { n: selectedPost.comments.length })}
+                                    </Typography>
+                                    <Stack spacing={2}>
+                                        {selectedPost.comments.map((comment, idx) => {
+                                            const c = comment.comment || comment.content;
+                                            const cName = comment.user?.name || comment.userName || comment.name;
+                                            const cAvatar = comment.user?.profile_photo;
+                                            return (
+                                                <Paper key={idx} variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
                                                     <Box display="flex" alignItems="flex-start" gap={1.5}>
-                                                        <Avatar
-                                                            src={comment.user?.profile_photo ? getImageUrl(comment.user.profile_photo) : undefined}
-                                                            sx={{
-                                                                width: 32, height: 32,
-                                                                bgcolor: colors.sea || '#0f766e',
-                                                                fontSize: 12, fontWeight: 600,
-                                                            }}
-                                                        >
-                                                            {getInitials(comment.user?.name || comment.name)}
+                                                        <Avatar src={cAvatar ? getImageUrl(cAvatar) : undefined}
+                                                                sx={{ width: 32, height: 32, bgcolor: colors.sea || '#0f766e', fontSize: 12, fontWeight: 600 }}>
+                                                            {getInitials(cName)}
                                                         </Avatar>
                                                         <Box flex={1}>
                                                             <Box display="flex" alignItems="center" gap={1.5}>
                                                                 <Typography variant="body2" fontWeight={600}>
-                                                                    {comment.user?.name || comment.name || t('post.common.unknown')}
+                                                                    {cName || t('post.common.unknown')}
                                                                 </Typography>
                                                                 <Typography variant="caption" color="text.secondary">
                                                                     {formatDateFull(comment.created_at)}
                                                                 </Typography>
                                                             </Box>
-                                                            <Typography variant="body2" sx={{ mt: 0.5 }}>
-                                                                {comment.content || comment.comment}
-                                                            </Typography>
+                                                            <Typography variant="body2" sx={{ mt: 0.5 }}>{c}</Typography>
                                                         </Box>
                                                     </Box>
                                                 </Paper>
-                                            ))}
-                                        </Stack>
-                                    </Box>
+                                            );
+                                        })}
+                                    </Stack>
                                 </>
                             )}
                         </DialogContent>
 
                         <DialogActions sx={{ p: 2.5, borderTop: '1px solid', borderColor: 'divider' }}>
+                            {canEdit && (
+                                <Button
+                                    onClick={() => {
+                                        const p = selectedPost;
+                                        setOpenViewDialog(false);
+                                        openEditForm(p);
+                                    }}
+                                    variant="outlined"
+                                    sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600, mr: 'auto' }}
+                                >
+                                    Edit Post
+                                </Button>
+                            )}
                             <Button
-                                onClick={handleCloseDialog}
-                                variant="contained"
-                                sx={{
-                                    borderRadius: 2, fontWeight: 700, textTransform: 'none', px: 4,
-                                    bgcolor: colors.sea || '#0f766e',
-                                    '&:hover': { bgcolor: colors.dark || '#0d5c56' },
-                                }}
+                                onClick={() => setOpenViewDialog(false)} variant="contained"
+                                sx={{ borderRadius: 2, fontWeight: 700, textTransform: 'none', px: 4, bgcolor: colors.sea || '#0f766e', '&:hover': { bgcolor: colors.dark || '#0d5c56' } }}
                             >
                                 {t('post.common.close')}
                             </Button>
@@ -947,29 +854,31 @@ const PostsList = () => {
                 )}
             </Dialog>
 
-            {/* CONFIRMATION DIALOG */}
+            {/* CREATE / EDIT */}
+            <PostFormDialog
+                open={formOpen}
+                onClose={() => { if (!formSubmitting) { setFormOpen(false); setFormInitial(null); } }}
+                onSubmit={submitForm}
+                initialData={formInitial}
+                submitting={formSubmitting}
+            />
+
+            {/* CONFIRM DIALOG */}
             <Dialog
                 open={confirmDialog.open}
-                onClose={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+                onClose={() => setConfirmDialog((prev) => ({ ...prev, open: false }))}
                 fullWidth maxWidth="xs"
-                PaperProps={{ sx: { borderRadius: 3, bgcolor: 'background.paper' } }}
+                PaperProps={{ sx: { borderRadius: 3 } }}
             >
                 <DialogTitle sx={{ fontWeight: 700, pb: 1 }}>{confirmDialog.title}</DialogTitle>
                 <DialogContent>
                     <DialogContentText color="text.secondary">{confirmDialog.message}</DialogContentText>
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2.5, pt: 1 }}>
-                    <Button
-                        onClick={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
-                        sx={{ fontWeight: 600, textTransform: 'none' }}
-                    >
+                    <Button onClick={() => setConfirmDialog((prev) => ({ ...prev, open: false }))} sx={{ fontWeight: 600, textTransform: 'none' }}>
                         {t('post.common.cancel')}
                     </Button>
-                    <Button
-                        onClick={handleConfirm}
-                        variant="contained" color="error"
-                        sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 2 }}
-                    >
+                    <Button onClick={handleConfirm} variant="contained" color="error" sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 2 }}>
                         {t('post.common.confirm')}
                     </Button>
                 </DialogActions>
