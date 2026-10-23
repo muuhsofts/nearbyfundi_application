@@ -3,57 +3,69 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Storage;
 
 class Post extends Model
 {
     protected $fillable = [
-        'technician_id', 
-        'title', 
-        'content', 
-        'image',
+        'technician_id',
+        'title',
+        'content',
+        'images',          // ← now an array
         'youtube_url',
-        'youtube_embed'
+        'youtube_embed',
     ];
 
-    // Helper to get YouTube embed URL
+    protected $casts = [
+        'images' => 'array',   // automatically converts JSON ↔ PHP array
+    ];
+
+    // Full public URLs for all images (ready for the frontend)
+    public function getImageUrlsAttribute(): array
+    {
+        if (empty($this->images) || !is_array($this->images)) {
+            return [];
+        }
+
+        return array_map(function ($path) {
+            return $path ? url('storage/' . $path) : null;
+        }, $this->images);
+    }
+
+    // Keep YouTube helpers exactly as they were
     public function getYoutubeEmbedAttribute($value)
     {
         if ($value) {
             return $value;
         }
-        
+
         if ($this->youtube_url) {
             return $this->convertToEmbedUrl($this->youtube_url);
         }
-        
+
         return null;
     }
 
-    // Convert YouTube URL to embed URL
     public function convertToEmbedUrl($url)
     {
-        // Handle youtu.be format
         if (strpos($url, 'youtu.be') !== false) {
             $videoId = $this->extractVideoId($url);
             if ($videoId) {
                 return "https://www.youtube.com/embed/{$videoId}";
             }
         }
-        
-        // Handle youtube.com/watch?v= format
+
         if (strpos($url, 'youtube.com/watch') !== false) {
             parse_str(parse_url($url, PHP_URL_QUERY), $params);
             if (isset($params['v'])) {
                 return "https://www.youtube.com/embed/{$params['v']}";
             }
         }
-        
-        // Handle youtube.com/embed/ format
+
         if (strpos($url, 'youtube.com/embed') !== false) {
             return $url;
         }
-        
-        // If it's already an embed URL or we can't parse it, return as is
+
         return $url;
     }
 
@@ -61,6 +73,20 @@ class Post extends Model
     {
         preg_match('/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([^&\n?#]+)/', $url, $matches);
         return $matches[1] ?? null;
+    }
+
+    // Delete all physical files when the post is deleted
+    protected static function booted()
+    {
+        static::deleting(function (Post $post) {
+            if (!empty($post->images) && is_array($post->images)) {
+                foreach ($post->images as $path) {
+                    if ($path && Storage::disk('public')->exists($path)) {
+                        Storage::disk('public')->delete($path);
+                    }
+                }
+            }
+        });
     }
 
     public function technician()

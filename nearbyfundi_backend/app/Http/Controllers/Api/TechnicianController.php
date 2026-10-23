@@ -12,6 +12,7 @@ use App\Models\ServiceRequest;
 use App\Mail\OtpMail;
 use App\Notifications\NewActivityNotification;
 use App\Services\GeocodingService;
+use App\Services\SmsNotificationService;
 use App\Traits\Auditable;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -30,15 +31,19 @@ class TechnicianController extends BaseApiController
     // ──────────────────────────────────────────────
 
     /**
+     * Step 1: Personal Information
+     */
+    /**
  * Step 1: Personal Information
+ * Email is now OPTIONAL.
  */
 public function registerStep1(Request $request)
 {
     $data = $request->validate([
         'name'          => 'required|string|max:255',
-        'email'         => 'required|email|unique:users,email',
+        'email'         => 'nullable|email|unique:users,email',   // ← optional
         'password'      => 'required|string|min:8|confirmed',
-        'phone'         => 'nullable|string|max:20|unique:users,phone',
+        'phone'         => 'required|string|max:20|unique:users,phone', // phone required when email is optional
         'profile_photo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
     ]);
 
@@ -48,9 +53,9 @@ public function registerStep1(Request $request)
 
         $user = User::create([
             'name'      => $data['name'],
-            'email'     => $data['email'],
+            'email'     => $data['email'] ?? null,          // ← can be null
             'password'  => Hash::make($data['password']),
-            'phone'     => $data['phone'] ?? null,
+            'phone'     => $data['phone'],
             'status'    => 'pending',
             'is_active' => false,
             'locale'    => 'en',
@@ -74,36 +79,45 @@ public function registerStep1(Request $request)
 
         $technician = Technician::create($technicianData);
 
-        $otp = Otp::create([
-            'email'      => $user->email,
-            'otp'        => Otp::generateOtp(),
-            'token'      => Otp::generateToken(),
-            'type'       => Otp::TYPE_EMAIL_VERIFICATION,
-            'name'       => $user->name,
-            'expires_at' => Carbon::now()->addMinutes(10),
-            'is_used'    => false,
-            'ip_address' => $request->ip(),
-            'user_agent' => $request->userAgent(),
-        ]);
+        // Only create & send OTP when email is provided
+        if (!empty($user->email)) {
+            $otp = Otp::create([
+                'email'      => $user->email,
+                'otp'        => Otp::generateOtp(),
+                'token'      => Otp::generateToken(),
+                'type'       => Otp::TYPE_EMAIL_VERIFICATION,
+                'name'       => $user->name,
+                'expires_at' => Carbon::now()->addMinutes(10),
+                'is_used'    => false,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
 
-        Mail::to($user->email)->send(
-            new OtpMail(
-                $otp->otp,
-                $user->email,
-                $user->name,
-                Otp::TYPE_EMAIL_VERIFICATION,
-                $otp->getVerificationUrl()
-            )
-        );
+            Mail::to($user->email)->send(
+                new OtpMail(
+                    $otp->otp,
+                    $user->email,
+                    $user->name,
+                    Otp::TYPE_EMAIL_VERIFICATION,
+                    $otp->getVerificationUrl()
+                )
+            );
+        }
 
         DB::commit();
 
-        $this->logAudit('register_step1', 'technician', $technician->id, "Technician Step 1 completed for {$user->email}");
+        $this->logAudit(
+            'register_step1',
+            'technician',
+            $technician->id,
+            "Technician Step 1 completed for " . ($user->email ?? $user->phone)
+        );
 
         return $this->successResponse([
             'technician_id' => $technician->id,
             'user'          => $user->only(['id', 'name', 'email', 'phone']),
             'step'          => 1,
+            'email_required_for_otp' => !empty($user->email), // frontend can use this
         ], 'Step 1 completed. Proceed to identification.');
     } catch (\Exception $e) {
         DB::rollBack();
@@ -203,11 +217,11 @@ public function registerStep1(Request $request)
     public function registerStep4(Request $request)
     {
         $request->validate([
-            'technician_id'           => 'required|exists:technicians,id',
-            'services'                => 'required|array|min:1',
-            'services.*.service_id'   => 'required|exists:services,id',
-            'services.*.min_price'    => 'required|numeric|min:0',
-            'services.*.max_price'    => 'required|numeric|min:0|gte:services.*.min_price',
+            'technician_id'         => 'required|exists:technicians,id',
+            'services'              => 'required|array|min:1',
+            'services.*.service_id' => 'required|exists:services,id',
+            'services.*.min_price'  => 'required|numeric|min:0',
+            'services.*.max_price'  => 'required|numeric|min:0|gte:services.*.min_price',
         ]);
 
         $technician = Technician::findOrFail($request->technician_id);
@@ -259,14 +273,15 @@ public function registerStep1(Request $request)
 
     /**
      * Final Submit Registration
+     * → Sends SMS notification to all ADMINISTRATOR users with fundi name + email
      */
-    public function submitRegistration(Request $request)
+    public function submitRegistration(Request $request, SmsNotificationService $smsService)
     {
         $request->validate([
             'technician_id' => 'required|exists:technicians,id',
         ]);
 
-        $technician = Technician::with('servicePrices')->findOrFail($request->technician_id);
+        $technician = Technician::with(['servicePrices', 'user'])->findOrFail($request->technician_id);
 
         if ($technician->registration_step < 4) {
             return $this->errorResponse('Please complete all 4 registration steps first.', 422);
@@ -287,6 +302,12 @@ public function registerStep1(Request $request)
         ]);
 
         $technician->user->update(['status' => 'pending']);
+
+        // ── Notify all ADMINISTRATOR users via SMS ──
+        $fundiName  = $technician->user->name  ?? 'Unknown';
+        $fundiEmail = $technician->user->email ?? 'N/A';
+
+        $smsService->notifyAdminsNewFundiRegistration($fundiName, $fundiEmail, $technician->id);
 
         $this->logAudit('submit_registration', 'technician', $technician->id, 'Technician submitted registration for approval.');
 
@@ -1024,31 +1045,30 @@ public function registerStep1(Request $request)
      * Title & body are always sanitized – never empty or numeric.
      */
     private function createNotification(User $user, string $title, string $body, string $type, array $data = []): void
-{
-    try {
-        $cleanTitle = (trim($title) !== '' && !is_numeric($title))
-            ? trim($title) : config('app.name', 'NearbyFundi');
+    {
+        try {
+            $cleanTitle = (trim($title) !== '' && !is_numeric($title))
+                ? trim($title) : config('app.name', 'NearbyFundi');
 
-        $cleanBody = (trim($body) !== '' && !is_numeric($body))
-            ? trim($body) : 'You have a new update';
+            $cleanBody = (trim($body) !== '' && !is_numeric($body))
+                ? trim($body) : 'You have a new update';
 
-        $notification = Notification::create([
-            'user_id' => $user->id,
-            'title'   => $cleanTitle,
-            'body'    => $cleanBody,
-            'type'    => $type,
-            'data'    => json_encode($data),
-            'is_read' => false,
-        ]);
+            $notification = Notification::create([
+                'user_id' => $user->id,
+                'title'   => $cleanTitle,
+                'body'    => $cleanBody,
+                'type'    => $type,
+                'data'    => json_encode($data),
+                'is_read' => false,
+            ]);
 
-        app(\App\Services\FcmService::class)
-            ->sendFromNotification($notification->fresh('user'));
+            app(\App\Services\FcmService::class)
+                ->sendFromNotification($notification->fresh('user'));
 
-    } catch (\Throwable $e) {
-        \Log::error('Failed to create notification: ' . $e->getMessage());
+        } catch (\Throwable $e) {
+            \Log::error('Failed to create notification: ' . $e->getMessage());
+        }
     }
-}
-
 
     private function haversineGreatCircleDistance($latitudeFrom, $longitudeFrom, $latitudeTo, $longitudeTo, $earthRadius = 6371)
     {

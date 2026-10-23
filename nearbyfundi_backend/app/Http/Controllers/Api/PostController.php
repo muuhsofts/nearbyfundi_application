@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Models\Post;
 use App\Traits\Auditable;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class PostController extends BaseApiController
 {
@@ -27,6 +28,12 @@ class PostController extends BaseApiController
 
         $posts = $query->paginate(15);
 
+        // Append full image URLs for frontend convenience
+        $posts->getCollection()->transform(function ($post) {
+            $post->image_urls = $post->image_urls;
+            return $post;
+        });
+
         return $this->successResponse($posts);
     }
 
@@ -42,11 +49,15 @@ class PostController extends BaseApiController
         ])->withCount(['comments', 'likes'])
           ->findOrFail($id);
 
+        $post->image_urls = $post->image_urls;
+
         return $this->successResponse($post);
     }
 
     /**
      * TECHNICIAN: Create a new post.
+     * Supports 0, 1 or multiple images (Instagram style).
+     * content comes straight from the text editor (HTML/rich text is fine).
      */
     public function store(Request $request)
     {
@@ -58,37 +69,49 @@ class PostController extends BaseApiController
 
         $data = $request->validate([
             'title'        => 'required|string|max:255',
-            'content'      => 'required|string',
-            'image'        => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'content'      => 'required|string',               // text editor content – keep as-is
+            'images'       => 'nullable|array|max:10',         // max 10 images
+            'images.*'     => 'image|mimes:jpg,jpeg,png,webp|max:2048',
             'youtube_url'  => 'nullable|string|max:500',
         ]);
 
         $post = new Post();
         $post->technician_id = $technician->id;
-        $post->title = $data['title'];
-        $post->content = $data['content'];
+        $post->title         = $data['title'];
+        $post->content       = $data['content'];   // rich text from editor is stored exactly
 
-        // Handle YouTube URL
-        if ($request->has('youtube_url') && !empty($request->youtube_url)) {
-            $post->youtube_url = $request->youtube_url;
+        // YouTube
+        if ($request->filled('youtube_url')) {
+            $post->youtube_url   = $request->youtube_url;
             $post->youtube_embed = $this->convertToEmbedUrl($request->youtube_url);
         }
 
-        // Handle image upload
-        if ($request->hasFile('image')) {
-            $path = $request->file('image')->store('posts', 'public');
-            $post->image = $path;
+        // Multiple images
+        $imagePaths = [];
+        if ($request->hasFile('images')) {
+            foreach ($request->file('images') as $file) {
+                if ($file->isValid()) {
+                    $imagePaths[] = $file->store('posts', 'public');
+                }
+            }
         }
+        $post->images = $imagePaths;
 
         $post->save();
 
         $this->logAudit('create_post', 'blog', $post->id, "Technician created post: {$post->title}");
 
-        return $this->created($post->load('technician.user'), 'Post created successfully.');
+        $post->load('technician.user');
+        $post->image_urls = $post->image_urls;
+
+        return $this->created($post, 'Post created successfully.');
     }
 
     /**
      * TECHNICIAN or ADMIN/MANAGER: Update a post.
+     * - You can send new images (they will replace the old ones)
+     * - Or send an empty images array / omit it to keep existing images
+     * - content is still taken exactly from the text editor
      */
     public function update(Request $request, $id)
     {
@@ -103,37 +126,47 @@ class PostController extends BaseApiController
         $data = $request->validate([
             'title'        => 'sometimes|string|max:255',
             'content'      => 'sometimes|string',
-            'image'        => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'images'       => 'nullable|array|max:10',
+            'images.*'     => 'image|mimes:jpg,jpeg,png,webp|max:2048',
             'youtube_url'  => 'nullable|string|max:500',
         ]);
 
-        // Handle title and content
         if ($request->has('title')) {
             $post->title = $data['title'];
         }
         if ($request->has('content')) {
-            $post->content = $data['content'];
+            $post->content = $data['content'];   // keep text-editor content as-is
         }
 
-        // Handle YouTube URL
+        // YouTube
         if ($request->has('youtube_url')) {
             if (empty($request->youtube_url)) {
-                $post->youtube_url = null;
+                $post->youtube_url   = null;
                 $post->youtube_embed = null;
             } else {
-                $post->youtube_url = $request->youtube_url;
+                $post->youtube_url   = $request->youtube_url;
                 $post->youtube_embed = $this->convertToEmbedUrl($request->youtube_url);
             }
         }
 
-        // Handle image upload
-        if ($request->hasFile('image')) {
-            // Delete old image if exists
-            if ($post->image && file_exists(public_path('storage/' . $post->image))) {
-                unlink(public_path('storage/' . $post->image));
+        // Handle images – only replace if new files are uploaded
+        if ($request->hasFile('images')) {
+            // Delete old physical files
+            if (!empty($post->images) && is_array($post->images)) {
+                foreach ($post->images as $oldPath) {
+                    if ($oldPath && Storage::disk('public')->exists($oldPath)) {
+                        Storage::disk('public')->delete($oldPath);
+                    }
+                }
             }
-            $path = $request->file('image')->store('posts', 'public');
-            $post->image = $path;
+
+            $imagePaths = [];
+            foreach ($request->file('images') as $file) {
+                if ($file->isValid()) {
+                    $imagePaths[] = $file->store('posts', 'public');
+                }
+            }
+            $post->images = $imagePaths;
         }
 
         $old = $post->toArray();
@@ -143,11 +176,14 @@ class PostController extends BaseApiController
 
         $this->logAudit('update_post', 'blog', $id, "Post #{$id} updated", $old, $new);
 
+        $post->image_urls = $post->image_urls;
+
         return $this->successResponse($post, 'Post updated.');
     }
 
     /**
      * TECHNICIAN or ADMIN/MANAGER: Delete a post.
+     * (Physical image files are automatically deleted by the model boot method)
      */
     public function destroy(Request $request, $id)
     {
@@ -159,22 +195,14 @@ class PostController extends BaseApiController
             return $this->forbidden('Unauthorized.');
         }
 
-        if ($post->image && file_exists(public_path('storage/' . $post->image))) {
-            unlink(public_path('storage/' . $post->image));
-        }
-
-        $post->delete();
+        $post->delete();   // model boot takes care of deleting image files
         $this->logAudit('delete_post', 'blog', $id, "Post #{$id} deleted");
 
         return $this->successResponse(null, 'Post deleted.');
     }
 
-    // ---------------------- NEW: Technician-specific methods ----------------------
+    // ---------------------- Technician-specific methods ----------------------
 
-    /**
-     * TECHNICIAN: Get all posts belonging to the authenticated technician,
-     * with full comments and likes (including user details).
-     */
     public function myPosts(Request $request)
     {
         $user = $request->user();
@@ -192,16 +220,16 @@ class PostController extends BaseApiController
           ->orderBy('created_at', 'desc')
           ->get();
 
+        $posts->transform(function ($post) {
+            $post->image_urls = $post->image_urls;
+            return $post;
+        });
+
         return $this->successResponse($posts);
     }
 
-    /**
-     * ADMIN/MANAGER: Get all posts with full details (comments & likes).
-     * This is a more detailed version of index().
-     */
     public function allWithDetails(Request $request)
     {
-        // Only admins and managers can see all posts with full details
         if (!$request->user()->hasAnyRole(['ADMINISTRATOR', 'MANAGER'])) {
             return $this->forbidden('Unauthorized.');
         }
@@ -219,6 +247,11 @@ class PostController extends BaseApiController
 
         $posts = $query->paginate(15);
 
+        $posts->getCollection()->transform(function ($post) {
+            $post->image_urls = $post->image_urls;
+            return $post;
+        });
+
         return $this->successResponse($posts);
     }
 
@@ -226,38 +259,29 @@ class PostController extends BaseApiController
     //  HELPER METHODS
     // ============================================================
 
-    /**
-     * Convert YouTube URL to embed URL
-     */
     private function convertToEmbedUrl($url)
     {
-        // Handle youtu.be format
         if (strpos($url, 'youtu.be') !== false) {
             $videoId = $this->extractVideoId($url);
             if ($videoId) {
                 return "https://www.youtube.com/embed/{$videoId}";
             }
         }
-        
-        // Handle youtube.com/watch?v= format
+
         if (strpos($url, 'youtube.com/watch') !== false) {
             parse_str(parse_url($url, PHP_URL_QUERY), $params);
             if (isset($params['v'])) {
                 return "https://www.youtube.com/embed/{$params['v']}";
             }
         }
-        
-        // Handle youtube.com/embed/ format
+
         if (strpos($url, 'youtube.com/embed') !== false) {
             return $url;
         }
-        
+
         return $url;
     }
 
-    /**
-     * Extract YouTube video ID
-     */
     private function extractVideoId($url)
     {
         preg_match('/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([^&\n?#]+)/', $url, $matches);
