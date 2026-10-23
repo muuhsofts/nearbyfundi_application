@@ -94,7 +94,6 @@ const MiniAppQrList = () => {
         } finally {
             setLoading(false);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [canView, page, rowsPerPage, search, appFilter, statusFilter, language]);
 
     // Debounce typing in the search box
