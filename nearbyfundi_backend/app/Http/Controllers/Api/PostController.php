@@ -11,134 +11,120 @@ class PostController extends BaseApiController
 {
     use Auditable;
 
-    /**
-     * PUBLIC: List posts (newest first).
-     * Supports filtering by technician_id.
-     * Returns counts of comments & likes (lightweight).
-     */
+    private const MAX_IMAGES = 10;
+
+    // ============================================================
+    //  PUBLIC
+    // ============================================================
+
+    /** List posts, newest first. Optional filter: technician_id. */
     public function index(Request $request)
     {
         $query = Post::with('technician.user')
             ->withCount(['comments', 'likes'])
             ->orderBy('created_at', 'desc');
 
-        if ($request->has('technician_id')) {
+        if ($request->filled('technician_id')) {
             $query->where('technician_id', $request->technician_id);
         }
 
         $posts = $query->paginate(15);
-
-        // Append full image URLs for frontend convenience
-        $posts->getCollection()->transform(function ($post) {
-            $post->image_urls = $post->image_urls;
-            return $post;
-        });
+        $posts->getCollection()->transform(fn ($post) => $this->withImageUrls($post));
 
         return $this->successResponse($posts);
     }
 
-    /**
-     * PUBLIC: Get a single post with full comments and likes (users included).
-     */
+    /** Single post with comments and likes. */
     public function show($id)
     {
-        $post = Post::with([
-            'technician.user',
-            'comments.user',
-            'likes.user'
-        ])->withCount(['comments', 'likes'])
-          ->findOrFail($id);
+        $post = Post::with(['technician.user', 'comments.user', 'likes.user'])
+            ->withCount(['comments', 'likes'])
+            ->findOrFail($id);
 
-        $post->image_urls = $post->image_urls;
-
-        return $this->successResponse($post);
+        return $this->successResponse($this->withImageUrls($post));
     }
 
-    /**
-     * TECHNICIAN: Create a new post.
-     * Supports 0, 1 or multiple images (Instagram style).
-     * content comes straight from the text editor (HTML/rich text is fine).
-     */
+    // ============================================================
+    //  TECHNICIAN
+    // ============================================================
+
+    /** Create a post with 0..10 images. */
     public function store(Request $request)
     {
-        $user = $request->user();
-        $technician = $user->technician;
+        $technician = $request->user()->technician;
         if (!$technician) {
             return $this->forbidden('Only technicians can create posts.');
         }
 
         $data = $request->validate([
-            'title'        => 'required|string|max:255',
-            'content'      => 'required|string',               // text editor content – keep as-is
-            'images'       => 'nullable|array|max:10',         // max 10 images
-            'images.*'     => 'image|mimes:jpg,jpeg,png,webp|max:2048',
-            'youtube_url'  => 'nullable|string|max:500',
+            'title'       => 'required|string|max:255',
+            'content'     => 'required|string',
+            'images'      => 'nullable|array|max:' . self::MAX_IMAGES,
+            'images.*'    => 'image|mimes:jpg,jpeg,png,webp|max:5120',
+            'youtube_url' => 'nullable|string|max:500',
         ]);
 
-        $post = new Post();
+        $post                = new Post();
         $post->technician_id = $technician->id;
         $post->title         = $data['title'];
-        $post->content       = $data['content'];   // rich text from editor is stored exactly
+        $post->content       = $data['content'];
 
-        // YouTube
         if ($request->filled('youtube_url')) {
             $post->youtube_url   = $request->youtube_url;
             $post->youtube_embed = $this->convertToEmbedUrl($request->youtube_url);
         }
 
-        // Multiple images
-        $imagePaths = [];
-        if ($request->hasFile('images')) {
-            foreach ($request->file('images') as $file) {
-                if ($file->isValid()) {
-                    $imagePaths[] = $file->store('posts', 'public');
-                }
-            }
-        }
-        $post->images = $imagePaths;
-
+        $post->images = $this->storeImages($request);
         $post->save();
 
         $this->logAudit('create_post', 'blog', $post->id, "Technician created post: {$post->title}");
 
         $post->load('technician.user');
-        $post->image_urls = $post->image_urls;
 
-        return $this->created($post, 'Post created successfully.');
+        return $this->created($this->withImageUrls($post), 'Post created successfully.');
     }
 
     /**
-     * TECHNICIAN or ADMIN/MANAGER: Update a post.
-     * - You can send new images (they will replace the old ones)
-     * - Or send an empty images array / omit it to keep existing images
-     * - content is still taken exactly from the text editor
+     * Update a post (owner, ADMINISTRATOR or MANAGER).
+     *
+     * Images:
+     *  - app sends `images_managed=1` + `keep_images[]` → keep exactly those,
+     *    delete the other old files, add any newly uploaded ones
+     *  - app sends only new `images[]` → keep none of the old ones is NOT assumed;
+     *    old ones are kept unless listed otherwise, so we treat that as "add"
+     *  - app sends neither → images untouched
      */
     public function update(Request $request, $id)
     {
         $post = Post::findOrFail($id);
         $user = $request->user();
 
-        $isTech = $user->technician && $user->technician->id == $post->technician_id;
-        if (!($isTech || $user->hasAnyRole(['ADMINISTRATOR', 'MANAGER']))) {
+        $isOwner = $user->technician && $user->technician->id == $post->technician_id;
+        if (!($isOwner || $user->hasAnyRole(['ADMINISTRATOR', 'MANAGER']))) {
             return $this->forbidden('Unauthorized.');
         }
 
         $data = $request->validate([
-            'title'        => 'sometimes|string|max:255',
-            'content'      => 'sometimes|string',
-            'images'       => 'nullable|array|max:10',
-            'images.*'     => 'image|mimes:jpg,jpeg,png,webp|max:2048',
-            'youtube_url'  => 'nullable|string|max:500',
+            'title'          => 'sometimes|required|string|max:255',
+            'content'        => 'sometimes|required|string',
+            'images'         => 'nullable|array|max:' . self::MAX_IMAGES,
+            'images.*'       => 'image|mimes:jpg,jpeg,png,webp|max:5120',
+            'keep_images'    => 'nullable|array',
+            'keep_images.*'  => 'string',
+            'images_managed' => 'nullable|boolean',
+            'youtube_url'    => 'nullable|string|max:500',
         ]);
+
+        // Snapshot BEFORE any change, so the audit log shows a real diff
+        $old = $post->toArray();
 
         if ($request->has('title')) {
             $post->title = $data['title'];
         }
         if ($request->has('content')) {
-            $post->content = $data['content'];   // keep text-editor content as-is
+            $post->content = $data['content'];
         }
 
-        // YouTube
         if ($request->has('youtube_url')) {
             if (empty($request->youtube_url)) {
                 $post->youtube_url   = null;
@@ -149,84 +135,88 @@ class PostController extends BaseApiController
             }
         }
 
-        // Handle images – only replace if new files are uploaded
-        if ($request->hasFile('images')) {
-            // Delete old physical files
-            if (!empty($post->images) && is_array($post->images)) {
-                foreach ($post->images as $oldPath) {
-                    if ($oldPath && Storage::disk('public')->exists($oldPath)) {
-                        Storage::disk('public')->delete($oldPath);
-                    }
-                }
+        // ── Images ──────────────────────────────────────────────
+        $current     = is_array($post->images) ? $post->images : [];
+        $hasUploads  = $request->hasFile('images');
+        $isManaged   = $request->boolean('images_managed');
+        $toDelete    = [];
+
+        if ($isManaged || $hasUploads) {
+            if ($isManaged) {
+                $requested = array_map(
+                    fn ($p) => $this->normalizeStoragePath((string) $p),
+                    (array) $request->input('keep_images', [])
+                );
+                // Only paths this post really owns can be kept
+                $keep = array_values(array_intersect($current, $requested));
+            } else {
+                $keep = $current; // uploads only → add to existing
             }
 
-            $imagePaths = [];
-            foreach ($request->file('images') as $file) {
-                if ($file->isValid()) {
-                    $imagePaths[] = $file->store('posts', 'public');
-                }
+            $incoming = $hasUploads ? count($request->file('images')) : 0;
+            if (count($keep) + $incoming > self::MAX_IMAGES) {
+                return $this->errorResponse('A post can have at most ' . self::MAX_IMAGES . ' images.', 422);
             }
-            $post->images = $imagePaths;
+
+            $newPaths = $this->storeImages($request);
+            $toDelete = array_diff($current, $keep);
+            $post->images = array_merge($keep, $newPaths);
         }
 
-        $old = $post->toArray();
         $post->save();
+
+        // Delete removed files only after the save succeeded
+        foreach ($toDelete as $path) {
+            if ($path && Storage::disk('public')->exists($path)) {
+                Storage::disk('public')->delete($path);
+            }
+        }
+
         $post->refresh();
-        $new = $post->toArray();
 
-        $this->logAudit('update_post', 'blog', $id, "Post #{$id} updated", $old, $new);
+        $this->logAudit('update_post', 'blog', $id, "Post #{$id} updated", $old, $post->toArray());
 
-        $post->image_urls = $post->image_urls;
-
-        return $this->successResponse($post, 'Post updated.');
+        return $this->successResponse($this->withImageUrls($post), 'Post updated.');
     }
 
-    /**
-     * TECHNICIAN or ADMIN/MANAGER: Delete a post.
-     * (Physical image files are automatically deleted by the model boot method)
-     */
+    /** Delete a post (owner, ADMINISTRATOR or MANAGER). Image files are removed by the model. */
     public function destroy(Request $request, $id)
     {
         $post = Post::findOrFail($id);
         $user = $request->user();
 
-        $isTech = $user->technician && $user->technician->id == $post->technician_id;
-        if (!($isTech || $user->hasAnyRole(['ADMINISTRATOR', 'MANAGER']))) {
+        $isOwner = $user->technician && $user->technician->id == $post->technician_id;
+        if (!($isOwner || $user->hasAnyRole(['ADMINISTRATOR', 'MANAGER']))) {
             return $this->forbidden('Unauthorized.');
         }
 
-        $post->delete();   // model boot takes care of deleting image files
+        $post->delete();
         $this->logAudit('delete_post', 'blog', $id, "Post #{$id} deleted");
 
         return $this->successResponse(null, 'Post deleted.');
     }
 
-    // ---------------------- Technician-specific methods ----------------------
-
+    /** The logged-in technician's own posts. */
     public function myPosts(Request $request)
     {
-        $user = $request->user();
-        $technician = $user->technician;
+        $technician = $request->user()->technician;
         if (!$technician) {
             return $this->forbidden('Only technicians can view their own posts.');
         }
 
-        $posts = Post::with([
-            'technician.user',
-            'comments.user',
-            'likes.user'
-        ])->withCount(['comments', 'likes'])
-          ->where('technician_id', $technician->id)
-          ->orderBy('created_at', 'desc')
-          ->get();
-
-        $posts->transform(function ($post) {
-            $post->image_urls = $post->image_urls;
-            return $post;
-        });
+        $posts = Post::with(['technician.user', 'comments.user', 'likes.user'])
+            ->withCount(['comments', 'likes'])
+            ->where('technician_id', $technician->id)
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(fn ($post) => $this->withImageUrls($post));
 
         return $this->successResponse($posts);
     }
+
+    // ============================================================
+    //  ADMIN / MANAGER
+    // ============================================================
 
     public function allWithDetails(Request $request)
     {
@@ -234,57 +224,86 @@ class PostController extends BaseApiController
             return $this->forbidden('Unauthorized.');
         }
 
-        $query = Post::with([
-            'technician.user',
-            'comments.user',
-            'likes.user'
-        ])->withCount(['comments', 'likes'])
-          ->orderBy('created_at', 'desc');
+        $query = Post::with(['technician.user', 'comments.user', 'likes.user'])
+            ->withCount(['comments', 'likes'])
+            ->orderBy('created_at', 'desc');
 
-        if ($request->has('technician_id')) {
+        if ($request->filled('technician_id')) {
             $query->where('technician_id', $request->technician_id);
         }
 
         $posts = $query->paginate(15);
-
-        $posts->getCollection()->transform(function ($post) {
-            $post->image_urls = $post->image_urls;
-            return $post;
-        });
+        $posts->getCollection()->transform(fn ($post) => $this->withImageUrls($post));
 
         return $this->successResponse($posts);
     }
 
     // ============================================================
-    //  HELPER METHODS
+    //  HELPERS
     // ============================================================
 
-    private function convertToEmbedUrl($url)
+    /** Attach the `image_urls` accessor value to the JSON output. */
+    private function withImageUrls(Post $post): Post
     {
-        if (strpos($url, 'youtu.be') !== false) {
-            $videoId = $this->extractVideoId($url);
-            if ($videoId) {
-                return "https://www.youtube.com/embed/{$videoId}";
-            }
-        }
-
-        if (strpos($url, 'youtube.com/watch') !== false) {
-            parse_str(parse_url($url, PHP_URL_QUERY), $params);
-            if (isset($params['v'])) {
-                return "https://www.youtube.com/embed/{$params['v']}";
-            }
-        }
-
-        if (strpos($url, 'youtube.com/embed') !== false) {
-            return $url;
-        }
-
-        return $url;
+        $post->image_urls = $post->image_urls;
+        return $post;
     }
 
-    private function extractVideoId($url)
+    /** Store uploaded `images[]` on the public disk and return their relative paths. */
+    private function storeImages(Request $request): array
     {
-        preg_match('/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([^&\n?#]+)/', $url, $matches);
+        $paths = [];
+
+        if ($request->hasFile('images')) {
+            foreach ($request->file('images') as $file) {
+                if ($file->isValid()) {
+                    $paths[] = $file->store('posts', 'public');
+                }
+            }
+        }
+
+        return $paths;
+    }
+
+    /** "http://host/storage/posts/a.jpg" or "/storage/posts/a.jpg" → "posts/a.jpg" */
+    private function normalizeStoragePath(string $value): string
+    {
+        $marker = '/storage/';
+        $pos    = strpos($value, $marker);
+        $path   = $pos === false ? $value : substr($value, $pos + strlen($marker));
+
+        return ltrim($path, '/');
+    }
+
+    /**
+     * Turn a YouTube link, youtu.be link, Shorts link or pasted <iframe>
+     * into a clean embed URL. Unknown input is returned unchanged.
+     */
+    private function convertToEmbedUrl(?string $input): ?string
+    {
+        $input = trim((string) $input);
+        if ($input === '') {
+            return null;
+        }
+
+        if (stripos($input, '<iframe') !== false
+            && preg_match('/src=["\']([^"\']+)["\']/i', $input, $m)) {
+            $input = $m[1];
+        }
+
+        $videoId = $this->extractVideoId($input);
+
+        return $videoId ? "https://www.youtube.com/embed/{$videoId}" : $input;
+    }
+
+    private function extractVideoId(string $url): ?string
+    {
+        preg_match(
+            '/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:embed\/|v\/|shorts\/|watch\?(?:.*&)?v=))([\w-]{11})/i',
+            $url,
+            $matches
+        );
+
         return $matches[1] ?? null;
     }
 }

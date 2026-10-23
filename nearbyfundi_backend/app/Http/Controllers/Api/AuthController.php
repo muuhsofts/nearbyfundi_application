@@ -10,7 +10,6 @@ use App\Models\Technician;
 use App\Traits\Auditable;
 use App\Services\OtpDeliveryService;
 use App\Services\GeocodingService;
-use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
@@ -150,17 +149,25 @@ class AuthController extends BaseApiController
     {
         $this->ensureNotRateLimited('resend-otp:' . $request->ip(), 3, 60);
 
-        $request->validate(['email' => 'required|email|exists:users,email']);
+        $request->validate([
+            'identifier' => 'required_without:email|string',
+            'email'      => 'required_without:identifier|string',
+        ]);
 
-        $user = User::where('email', $request->email)->firstOrFail();
+        $identifier = $request->input('identifier', $request->input('email'));
+        $user = User::where('email', $identifier)->orWhere('phone', $identifier)->first();
+
+        // Same response whether or not the user exists (no account enumeration)
+        if (!$user) {
+            return $this->successResponse(null, 'If the account exists, a new OTP was sent.');
+        }
 
         if ($user->email_verified_at) {
             return $this->errorResponse('Account is already verified.', 422);
         }
 
-        $recent = Otp::where('email', $user->email)
-            ->where('type', Otp::TYPE_EMAIL_VERIFICATION)
-            ->where('created_at', '>', now()->subMinutes(1))
+        $recent = $this->verificationOtps($user)
+            ->where('created_at', '>', now()->subMinute())
             ->exists();
 
         if ($recent) {
@@ -169,11 +176,10 @@ class AuthController extends BaseApiController
 
         $delivery = $this->issueVerificationOtp($user, $request, $otpDelivery);
 
-        $this->logAudit('resend_otp', 'auth', $user->id, "OTP resent to {$user->email}");
+        $this->logAudit('resend_otp', 'auth', $user->id, 'OTP resent');
 
         return $this->successResponse([
-            'email'       => $user->email,
-            'otp_channel' => $delivery['channel'] ?? 'email',
+            'otp_channel' => $delivery['channel'] ?? 'sms',
         ], 'OTP resent successfully.');
     }
 
@@ -182,18 +188,25 @@ class AuthController extends BaseApiController
         $this->ensureNotRateLimited('verify-otp:' . $request->ip(), 10, 60);
 
         $request->validate([
-            'email' => 'required|email',
-            'otp'   => 'required|string|size:6',
+            'identifier' => 'required_without:email|string',
+            'email'      => 'required_without:identifier|string',
+            'otp'        => 'required|string|size:6',
         ]);
 
-        $otpRecord = Otp::where('email', $request->email)
-            ->where('type', Otp::TYPE_EMAIL_VERIFICATION)
+        $identifier = $request->input('identifier', $request->input('email'));
+
+        $user = User::where('email', $identifier)->orWhere('phone', $identifier)->first();
+        if (!$user) {
+            return $this->errorResponse('Invalid or expired OTP code.', 422);
+        }
+
+        $otpRecord = $this->verificationOtps($user)
             ->where('is_used', false)
             ->where('expires_at', '>', now())
             ->latest()
             ->first();
 
-        if (!$otpRecord || !Hash::check($request->otp, $otpRecord->otp)) {
+        if (!$otpRecord || !$this->otpMatches($request->otp, $otpRecord->otp)) {
             if ($otpRecord) {
                 $otpRecord->increment('attempts');
                 if ($otpRecord->attempts >= 5) {
@@ -205,14 +218,12 @@ class AuthController extends BaseApiController
 
         $otpRecord->update(['is_used' => true, 'attempts' => $otpRecord->attempts + 1]);
 
-        $user = User::where('email', $request->email)->firstOrFail();
-
         $isFundi = $user->hasRole('FUNDI');
 
         $user->update([
             'status'            => $isFundi ? 'pending' : 'active',
             'is_active'         => !$isFundi,
-            'email_verified_at' => now(),
+            'email_verified_at' => now(), // also set for phone verification; login() checks this column
         ]);
 
         $token = null;
@@ -221,16 +232,12 @@ class AuthController extends BaseApiController
             $this->createSession($user, $request, $token);
         }
 
-        $response = [
+        return $this->successResponse([
             'user'  => $user->load('roles'),
             'token' => $token,
-        ];
-
-        $message = $isFundi
-            ? 'Email verified. Please wait for admin approval.'
-            : 'Account verified and activated successfully.';
-
-        return $this->successResponse($response, $message);
+        ], $isFundi
+            ? 'Verified. Please complete registration and wait for admin approval.'
+            : 'Account verified and activated successfully.');
     }
 
     public function verifyToken(Request $request)
@@ -329,7 +336,7 @@ class AuthController extends BaseApiController
         }
 
         if (is_null($user->email_verified_at)) {
-            return $this->forbidden('Please verify your email first.');
+            return $this->forbidden('Please verify your account first.');
         }
 
         if (!$user->is_active || $user->status !== 'active') {
@@ -355,7 +362,7 @@ class AuthController extends BaseApiController
             $this->storeFcmToken($user, $request->fcm_token);
         }
 
-        $this->logAudit('login', 'auth', $user->id, "User logged in: {$user->email}");
+        $this->logAudit('login', 'auth', $user->id, 'User logged in: ' . ($user->email ?? $user->phone));
 
         return $this->successResponse([
             'user'  => $user->only(['id', 'name', 'email', 'phone', 'locale', 'fcm_device_token']),
@@ -528,7 +535,7 @@ class AuthController extends BaseApiController
             ->where('token', $tokenId)
             ->update(['is_active' => false]);
 
-        $this->logAudit('logout', 'auth', $user->id, "User logged out: {$user->email}");
+        $this->logAudit('logout', 'auth', $user->id, 'User logged out: ' . ($user->email ?? $user->phone));
 
         return $this->successResponse(null, 'Logged out.');
     }
@@ -540,7 +547,7 @@ class AuthController extends BaseApiController
         $user->tokens()->delete();
         UserSession::where('user_id', $user->id)->update(['is_active' => false]);
 
-        $this->logAudit('logout_all', 'auth', $user->id, "User logged out from all devices: {$user->email}");
+        $this->logAudit('logout_all', 'auth', $user->id, 'User logged out from all devices: ' . ($user->email ?? $user->phone));
 
         return $this->successResponse(null, 'Logged out from all devices.');
     }
@@ -639,7 +646,7 @@ class AuthController extends BaseApiController
             ->latest()
             ->first();
 
-        if (!$otp || !Hash::check($request->otp, $otp->otp)) {
+        if (!$otp || !$this->otpMatches($request->otp, $otp->otp)) {
             if ($otp) {
                 $otp->increment('attempts');
                 if ($otp->attempts >= 5) {
@@ -689,7 +696,7 @@ class AuthController extends BaseApiController
             ->where('token', '!=', $currentTokenId)
             ->update(['is_active' => false]);
 
-        $this->logAudit('change_password', 'auth', $user->id, "Password changed for {$user->email}");
+        $this->logAudit('change_password', 'auth', $user->id, 'Password changed for ' . ($user->email ?? $user->phone));
 
         return $this->successResponse(null, 'Password changed successfully.');
     }
@@ -725,7 +732,7 @@ class AuthController extends BaseApiController
         $user->fcm_device_token = $request->token;
         $user->save();
 
-        $this->logAudit('update_device_token', 'user', $user->id, "FCM token updated for {$user->email}");
+        $this->logAudit('update_device_token', 'user', $user->id, 'FCM token updated for ' . ($user->email ?? $user->phone));
 
         return $this->successResponse([
             'message' => 'Device token updated successfully.',
@@ -748,7 +755,7 @@ class AuthController extends BaseApiController
         $user->fcm_device_token = null;
         $user->save();
 
-        $this->logAudit('delete_device_token', 'user', $user->id, "FCM token deleted for {$user->email}");
+        $this->logAudit('delete_device_token', 'user', $user->id, 'FCM token deleted for ' . ($user->email ?? $user->phone));
 
         return $this->successResponse(null, 'Device token deleted.');
     }
@@ -819,16 +826,54 @@ class AuthController extends BaseApiController
     // PRIVATE HELPERS
     // ──────────────────────────────────────────────
 
+    /**
+     * Verification OTPs belonging to THIS user only (by phone and/or email).
+     * Null phone/email are skipped so we never match other users' null rows.
+     */
+    private function verificationOtps(User $user)
+    {
+        $query = Otp::where('type', Otp::TYPE_EMAIL_VERIFICATION);
+
+        if (empty($user->phone) && empty($user->email)) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->where(function ($q) use ($user) {
+            if (!empty($user->phone)) {
+                $q->where('phone', $user->phone);
+            }
+            if (!empty($user->email)) {
+                $q->orWhere('email', $user->email);
+            }
+        });
+    }
+
+    /**
+     * Safe OTP check. Old rows stored as plain text would make Hash::check()
+     * throw "This password does not use the Bcrypt algorithm"; treat as no match.
+     */
+    private function otpMatches(string $plain, ?string $stored): bool
+    {
+        if (empty($stored)) {
+            return false;
+        }
+
+        try {
+            return Hash::check($plain, $stored);
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
     private function issueVerificationOtp(User $user, Request $request, OtpDeliveryService $otpDelivery): array
     {
-        Otp::where('email', $user->email)
-            ->where('type', Otp::TYPE_EMAIL_VERIFICATION)
-            ->delete();
+        $this->verificationOtps($user)->delete();
 
         $plainOtp = Otp::generateOtp();
 
         $otp = Otp::create([
             'email'      => $user->email,
+            'phone'      => $user->phone,
             'otp'        => Hash::make($plainOtp),
             'token'      => Otp::generateToken(),
             'type'       => Otp::TYPE_EMAIL_VERIFICATION,

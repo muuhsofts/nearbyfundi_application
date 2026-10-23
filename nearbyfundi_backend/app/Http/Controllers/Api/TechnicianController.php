@@ -9,16 +9,14 @@ use App\Models\Subscription;
 use App\Models\RateCard;
 use App\Models\Otp;
 use App\Models\ServiceRequest;
-use App\Mail\OtpMail;
-use App\Notifications\NewActivityNotification;
 use App\Services\GeocodingService;
 use App\Services\SmsNotificationService;
 use App\Traits\Auditable;
-use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Role;
 
@@ -31,99 +29,114 @@ class TechnicianController extends BaseApiController
     // ──────────────────────────────────────────────
 
     /**
-     * Step 1: Personal Information
+     * Step 1: Personal information.
+     * Email is optional (stored only). The verification OTP is sent by SMS.
      */
-    /**
- * Step 1: Personal Information
- * Email is now OPTIONAL.
- */
-public function registerStep1(Request $request)
-{
-    $data = $request->validate([
-        'name'          => 'required|string|max:255',
-        'email'         => 'nullable|email|unique:users,email',   // ← optional
-        'password'      => 'required|string|min:8|confirmed',
-        'phone'         => 'required|string|max:20|unique:users,phone', // phone required when email is optional
-        'profile_photo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-    ]);
-
-    DB::beginTransaction();
-    try {
-        $role = Role::where('name', 'FUNDI')->firstOrFail();
-
-        $user = User::create([
-            'name'      => $data['name'],
-            'email'     => $data['email'] ?? null,          // ← can be null
-            'password'  => Hash::make($data['password']),
-            'phone'     => $data['phone'],
-            'status'    => 'pending',
-            'is_active' => false,
-            'locale'    => 'en',
+        /**
+     * Step 1: Personal information.
+     * Email optional. OTP is sent by SMS always, and by email too when an email is given.
+     */
+    public function registerStep1(Request $request, SmsNotificationService $smsService)
+    {
+        $data = $request->validate([
+            'name'          => 'required|string|max:255',
+            'email'         => 'nullable|email|unique:users,email',
+            'password'      => 'required|string|min:8|confirmed',
+            'phone'         => 'required|string|max:20|unique:users,phone',
+            'profile_photo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
 
-        $user->assignRole($role);
+        $plainOtp = Otp::generateOtp();
 
-        $technicianData = [
-            'user_id'                => $user->id,
-            'registration_step'      => 1,
-            'registration_completed' => false,
-            'verified'               => false,
-            'verification_status'    => 'pending',
-            'is_online'              => false,
-        ];
+        DB::beginTransaction();
+        try {
+            $role = Role::where('name', 'FUNDI')->firstOrFail();
 
-        if ($request->hasFile('profile_photo')) {
-            $path = $request->file('profile_photo')->store('technicians', 'public');
-            $technicianData['profile_photo'] = $path;
-        }
+            $user = User::create([
+                'name'      => $data['name'],
+                'email'     => $data['email'] ?? null,
+                'password'  => Hash::make($data['password']),
+                'phone'     => $data['phone'],
+                'status'    => 'pending',
+                'is_active' => false,
+                'locale'    => 'en',
+            ]);
 
-        $technician = Technician::create($technicianData);
+            $user->assignRole($role);
 
-        // Only create & send OTP when email is provided
-        if (!empty($user->email)) {
-            $otp = Otp::create([
+            $technicianData = [
+                'user_id'                => $user->id,
+                'registration_step'      => 1,
+                'registration_completed' => false,
+                'verified'               => false,
+                'verification_status'    => 'pending',
+                'is_online'              => false,
+            ];
+
+            if ($request->hasFile('profile_photo')) {
+                $technicianData['profile_photo'] = $request->file('profile_photo')->store('technicians', 'public');
+            }
+
+            $technician = Technician::create($technicianData);
+
+            Otp::create([
                 'email'      => $user->email,
-                'otp'        => Otp::generateOtp(),
+                'phone'      => $user->phone,
+                'otp'        => Hash::make($plainOtp),
                 'token'      => Otp::generateToken(),
                 'type'       => Otp::TYPE_EMAIL_VERIFICATION,
                 'name'       => $user->name,
-                'expires_at' => Carbon::now()->addMinutes(10),
+                'expires_at' => now()->addMinutes(10),
                 'is_used'    => false,
+                'attempts'   => 0,
                 'ip_address' => $request->ip(),
                 'user_agent' => $request->userAgent(),
             ]);
 
-            Mail::to($user->email)->send(
-                new OtpMail(
-                    $otp->otp,
-                    $user->email,
-                    $user->name,
-                    Otp::TYPE_EMAIL_VERIFICATION,
-                    $otp->getVerificationUrl()
-                )
-            );
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error('Technician step 1 failed', ['error' => $e->getMessage()]);
+            return $this->serverError('Step 1 failed. Please try again.');
         }
 
-        DB::commit();
+        // After commit: a failed SMS/email must never roll back the account
+        $smsSent = false;
+        try {
+            $smsSent = (bool) ($smsService->notifyUserOtp($user, $plainOtp)['success'] ?? false);
+        } catch (\Throwable $e) {
+            Log::error('OTP SMS failed', ['user_id' => $user->id, 'error' => $e->getMessage()]);
+        }
+
+        $emailSent = false;
+        if (!empty($user->email)) {
+            try {
+                Mail::raw(
+                    "Your Nearbyfundi verification code is {$plainOtp}. It expires in 10 minutes. Do not share it with anyone.",
+                    fn ($m) => $m->to($user->email)->subject('Nearbyfundi verification code')
+                );
+                $emailSent = true;
+            } catch (\Throwable $e) {
+                Log::error('OTP email failed', ['user_id' => $user->id, 'error' => $e->getMessage()]);
+            }
+        }
 
         $this->logAudit(
             'register_step1',
             'technician',
             $technician->id,
-            "Technician Step 1 completed for " . ($user->email ?? $user->phone)
+            'Technician Step 1 completed for ' . ($user->email ?? $user->phone)
         );
 
         return $this->successResponse([
             'technician_id' => $technician->id,
             'user'          => $user->only(['id', 'name', 'email', 'phone']),
             'step'          => 1,
-            'email_required_for_otp' => !empty($user->email), // frontend can use this
-        ], 'Step 1 completed. Proceed to identification.');
-    } catch (\Exception $e) {
-        DB::rollBack();
-        return $this->serverError('Step 1 failed: ' . $e->getMessage());
+            'identifier'    => $user->phone,
+            'otp_sent_sms'  => $smsSent,
+            'otp_sent_email'=> $emailSent,
+        ], 'Step 1 completed. Enter the verification code sent to your phone' . ($emailSent ? ' and email.' : '.'));
     }
-}
 
     /**
      * Step 2: Identification Information
@@ -275,6 +288,10 @@ public function registerStep1(Request $request)
      * Final Submit Registration
      * → Sends SMS notification to all ADMINISTRATOR users with fundi name + email
      */
+        /**
+     * Final Submit Registration
+     * → SMS to all active ADMINISTRATOR users with fundi name + contact
+     */
     public function submitRegistration(Request $request, SmsNotificationService $smsService)
     {
         $request->validate([
@@ -295,19 +312,32 @@ public function registerStep1(Request $request)
             return $this->errorResponse('You must select at least one service with a price range.', 422);
         }
 
-        $technician->update([
-            'registration_completed' => true,
-            'verification_status'    => 'pending',
-            'verified'               => false,
-        ]);
+        DB::beginTransaction();
+        try {
+            $technician->update([
+                'registration_completed' => true,
+                'verification_status'    => 'pending',
+                'verified'               => false,
+            ]);
 
-        $technician->user->update(['status' => 'pending']);
+            $technician->user->update(['status' => 'pending']);
 
-        // ── Notify all ADMINISTRATOR users via SMS ──
-        $fundiName  = $technician->user->name  ?? 'Unknown';
-        $fundiEmail = $technician->user->email ?? 'N/A';
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error('Submit registration failed', ['technician_id' => $technician->id, 'error' => $e->getMessage()]);
+            return $this->serverError('Submission failed. Please try again.');
+        }
 
-        $smsService->notifyAdminsNewFundiRegistration($fundiName, $fundiEmail, $technician->id);
+        // After commit: an SMS problem must never fail the registration
+        try {
+            $fundiName    = $technician->user->name ?? 'Unknown';
+            $fundiContact = $technician->user->email ?: $technician->user->phone;
+
+            $smsService->notifyAdminsNewFundiRegistration($fundiName, $fundiContact, $technician->id);
+        } catch (\Throwable $e) {
+            Log::error('Admin SMS notification failed', ['technician_id' => $technician->id, 'error' => $e->getMessage()]);
+        }
 
         $this->logAudit('submit_registration', 'technician', $technician->id, 'Technician submitted registration for approval.');
 
@@ -672,37 +702,7 @@ public function registerStep1(Request $request)
         $query->having('distance', '<=', $radius);
         $query->orderBy('distance', 'asc');
 
-        $technicians = $query->get();
-
-        $formatted = $technicians->map(function ($tech) {
-            return [
-                'id'             => $tech->id,
-                'user_id'        => $tech->user_id,
-                'name'           => $tech->user->name ?? 'Unknown',
-                'email'          => $tech->user->email ?? '',
-                'phone'          => $tech->user->phone ?? '',
-                'profile_photo'  => $tech->profile_photo ? url('storage/' . $tech->profile_photo) : null,
-                'bio'            => $tech->bio,
-                'area'           => $tech->area,
-                'latitude'       => $tech->latitude ? (float) $tech->latitude : null,
-                'longitude'      => $tech->longitude ? (float) $tech->longitude : null,
-                'hourly_rate'    => $tech->hourly_rate ? (float) $tech->hourly_rate : null,
-                'experience'     => (int) ($tech->experience ?? 0),
-                'rating'         => (float) ($tech->rating ?? 0),
-                'is_online'      => (bool) $tech->is_online,
-                'verified'       => (bool) $tech->verified,
-                'distance'       => isset($tech->distance) ? (float) round($tech->distance, 2) : null,
-                'services'       => $tech->services->pluck('name')->toArray(),
-                'service_prices' => $tech->servicePrices->map(function ($service) {
-                    return [
-                        'id'        => $service->id,
-                        'name'      => $service->name,
-                        'min_price' => (float) $service->pivot->min_price,
-                        'max_price' => (float) $service->pivot->max_price,
-                    ];
-                })->values()->toArray(),
-            ];
-        });
+        $formatted = $query->get()->map(fn($tech) => $this->formatTechnician($tech));
 
         return $this->successResponse([
             'technicians' => $formatted,
@@ -789,37 +789,7 @@ public function registerStep1(Request $request)
             $query->where('area', 'like', "%{$place}%");
         }
 
-        $technicians = $query->get();
-
-        $formatted = $technicians->map(function ($tech) {
-            return [
-                'id'             => $tech->id,
-                'user_id'        => $tech->user_id,
-                'name'           => $tech->user->name ?? 'Unknown',
-                'email'          => $tech->user->email ?? '',
-                'phone'          => $tech->user->phone ?? '',
-                'profile_photo'  => $tech->profile_photo ? url('storage/' . $tech->profile_photo) : null,
-                'bio'            => $tech->bio,
-                'area'           => $tech->area,
-                'latitude'       => $tech->latitude ? (float) $tech->latitude : null,
-                'longitude'      => $tech->longitude ? (float) $tech->longitude : null,
-                'hourly_rate'    => $tech->hourly_rate ? (float) $tech->hourly_rate : null,
-                'experience'     => (int) ($tech->experience ?? 0),
-                'rating'         => (float) ($tech->rating ?? 0),
-                'is_online'      => (bool) $tech->is_online,
-                'verified'       => (bool) $tech->verified,
-                'distance'       => isset($tech->distance) ? (float) round($tech->distance, 2) : null,
-                'services'       => $tech->services->pluck('name')->toArray(),
-                'service_prices' => $tech->servicePrices->map(function ($service) {
-                    return [
-                        'id'        => $service->id,
-                        'name'      => $service->name,
-                        'min_price' => (float) $service->pivot->min_price,
-                        'max_price' => (float) $service->pivot->max_price,
-                    ];
-                })->values()->toArray(),
-            ];
-        });
+        $formatted = $query->get()->map(fn($tech) => $this->formatTechnician($tech));
 
         return $this->successResponse([
             'technicians' => $formatted,
@@ -1023,6 +993,38 @@ public function registerStep1(Request $request)
     // PRIVATE HELPERS
     // ──────────────────────────────────────────────
 
+    /** Shared response shape for nearby() and nearbyByPlace(). */
+    private function formatTechnician(Technician $tech): array
+    {
+        return [
+            'id'             => $tech->id,
+            'user_id'        => $tech->user_id,
+            'name'           => $tech->user->name ?? 'Unknown',
+            'email'          => $tech->user->email ?? '',
+            'phone'          => $tech->user->phone ?? '',
+            'profile_photo'  => $tech->profile_photo ? url('storage/' . $tech->profile_photo) : null,
+            'bio'            => $tech->bio,
+            'area'           => $tech->area,
+            'latitude'       => $tech->latitude ? (float) $tech->latitude : null,
+            'longitude'      => $tech->longitude ? (float) $tech->longitude : null,
+            'hourly_rate'    => $tech->hourly_rate ? (float) $tech->hourly_rate : null,
+            'experience'     => (int) ($tech->experience ?? 0),
+            'rating'         => (float) ($tech->rating ?? 0),
+            'is_online'      => (bool) $tech->is_online,
+            'verified'       => (bool) $tech->verified,
+            'distance'       => isset($tech->distance) ? (float) round($tech->distance, 2) : null,
+            'services'       => $tech->services->pluck('name')->toArray(),
+            'service_prices' => $tech->servicePrices->map(function ($service) {
+                return [
+                    'id'        => $service->id,
+                    'name'      => $service->name,
+                    'min_price' => (float) $service->pivot->min_price,
+                    'max_price' => (float) $service->pivot->max_price,
+                ];
+            })->values()->toArray(),
+        ];
+    }
+
     private function validateAndGeocodeArea(string $area, ?float $lat, ?float $lng, GeocodingService $geocoder): array
     {
         if ($lat !== null && $lng !== null) {
@@ -1064,9 +1066,8 @@ public function registerStep1(Request $request)
 
             app(\App\Services\FcmService::class)
                 ->sendFromNotification($notification->fresh('user'));
-
         } catch (\Throwable $e) {
-            \Log::error('Failed to create notification: ' . $e->getMessage());
+            Log::error('Failed to create notification: ' . $e->getMessage());
         }
     }
 
