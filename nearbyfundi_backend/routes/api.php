@@ -39,6 +39,7 @@ use App\Http\Controllers\Api\FeedbackController;
 use App\Http\Controllers\Api\SmsLogController;
 use App\Http\Controllers\Api\MiniAppController;
 use App\Http\Controllers\Api\MiniAppQrController;
+use App\Http\Controllers\Api\BannerController;
 
 
 Route::get('/health', fn() => response()->json(['status' => 'ok', 'timestamp' => now()]));
@@ -653,6 +654,27 @@ Route::prefix('v24')->group(function () {
             ->middleware('permission:miniapp-qrs.update');
         Route::delete('mini-app-qrs/{id}', [MiniAppQrController::class, 'destroy'])
             ->middleware('permission:miniapp-qrs.delete');
+    });
+});
+
+
+// =============================================
+// V25 – BANNERS
+// =============================================
+Route::prefix('v25')->group(function () {
+
+    // Public – only active + not expired banners
+    Route::get('banners', [BannerController::class, 'publicIndex']);
+
+    // Admin
+    Route::middleware(['auth:sanctum', 'active.session'])->prefix('admin')->group(function () {
+        Route::get('banners', [BannerController::class, 'index']);
+        Route::get('banners/{id}', [BannerController::class, 'show']);
+        Route::post('banners', [BannerController::class, 'store']);
+        Route::put('banners/{id}', [BannerController::class, 'update']);
+        Route::post('banners/{id}', [BannerController::class, 'update']); // for multipart form-data
+        Route::delete('banners/{id}', [BannerController::class, 'destroy']);
+        Route::patch('banners/{id}/status', [BannerController::class, 'updateStatus']);
     });
 });
 
