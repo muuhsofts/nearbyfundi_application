@@ -14,6 +14,7 @@ import {
   AttachMoney as FinanceIcon,
   Sms as SmsIcon,
   QrCode2 as QrCodeIcon,
+  Image as BannersIcon,          // ← ADDED
 } from '@mui/icons-material';
 
 import { identityT } from './components/Sidebar/sidebarTranslations';
@@ -236,6 +237,17 @@ export function getSidebarStructure(hasPermission, t = identityT) {
     });
   }
 
+  // ----- Banners (right after Subscriptions) -----
+  if (hasPermission('banners.view') || hasPermission('dashboard.view')) {
+    structure.push({
+      id: 15,
+      label: t('sidebar.banners') || 'Banners',
+      link: '/app/banners',
+      icon: <BannersIcon />,
+      ...THEME_TOKENS,
+    });
+  }
+
   // ----- Settings -----
   const settingsChildren = [
     ...addIf(hasPermission('users.view'), {
@@ -269,7 +281,7 @@ export function getSidebarStructure(hasPermission, t = identityT) {
       ...THEME_TOKENS,
     }),
 
-    // 👇 CHANGED PERMISSION STRING HERE TO MATCH BACKEND 👇
+    // Mini App QR
     ...addIf(hasPermission('miniapp-qrs.view'), {
       label: t('sidebar.miniAppQr') || 'Mini App QR',
       link: '/app/miniappqr',
