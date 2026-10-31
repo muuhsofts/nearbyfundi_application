@@ -3,32 +3,32 @@ import api from './api';
 
 /**
  * Build a FormData payload for create/update, supporting multiple images
- * and `keep_images[]` on update (Laravel expects method spoofing).
+ * and a single video file.
  */
 const buildPostFormData = (data = {}, isUpdate = false) => {
     const form = new FormData();
     if (isUpdate) form.append('_method', 'PUT');
 
-    if (data.title !== undefined) form.append('title', data.title ?? '');
-    if (data.content !== undefined) form.append('content', data.content ?? '');
-    if (data.youtube_url !== undefined) {
-        form.append('youtube_url', data.youtube_url ?? '');
+    // Handle Video
+    if (data.video) {
+        if (data.video instanceof File || data.video instanceof Blob) {
+            form.append('video', data.video);
+        }
     }
 
-    // Keep existing images (update only) — list of URLs from the server.
+    if (isUpdate && data.remove_video) {
+        form.append('remove_video', '1');
+    }
+
+    // Handle Images
     if (isUpdate && Array.isArray(data.keep_images)) {
         data.keep_images.forEach((url) => {
             if (url) form.append('keep_images[]', String(url));
         });
+        form.append('images_managed', '1');
     }
 
-    // New images: `data.images` may be a list of Files/Blobs.
-    // Fallback to single `image` (File/Blob) for backward compatibility.
-    const newFiles = Array.isArray(data.images)
-        ? data.images
-        : data.image
-            ? [data.image]
-            : [];
+    const newFiles = Array.isArray(data.images) ? data.images : [];
 
     newFiles.forEach((file) => {
         if (file instanceof File || file instanceof Blob) {
@@ -50,7 +50,7 @@ export const postService = {
     // ===== LIKES & COMMENTS =====
     likePost: (postId) => api.post(`/v5/posts/${postId}/like`),
     commentOnPost: (postId, comment) =>
-        api.post(`/v5/posts/${postId}/comments`, { comment }),
+        api.post(`/v5/posts/${postId}/comments`, { content: comment }),
     deleteComment: (id) => api.delete(`/v5/comments/${id}`),
 
     // ===== TECHNICIAN (Authenticated) =====
@@ -60,8 +60,6 @@ export const postService = {
         api.post(
             '/v5/posts',
             isFormData(data) ? data : buildPostFormData(data, false),
-            // Let axios set multipart boundaries automatically:
-            // omit explicit Content-Type.
             { headers: { 'Content-Type': undefined } }
         ),
 

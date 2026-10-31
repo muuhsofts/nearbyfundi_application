@@ -1,10 +1,10 @@
 // src/pages/services/ServicesList.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     Box, Paper, Typography, Button, TextField, InputAdornment, IconButton,
     Menu, MenuItem, Dialog, DialogTitle, DialogContent, DialogActions,
-    CircularProgress, useMediaQuery, useTheme, Card, CardContent, Grid,
-    Chip, Stack, alpha, Alert,
+    CircularProgress, useMediaQuery, useTheme, Card, CardContent,
+    Chip, Stack, alpha, Alert, TablePagination,
 } from '@mui/material';
 import {
     Add as AddIcon, Search as SearchIcon, Refresh as RefreshIcon,
@@ -23,12 +23,24 @@ import appConfig from '../../config';
 
 const colors = appConfig.app.colors;
 
+/** CSS-grid helper (does not depend on the MUI Grid version). */
+const gridSx = (columns, gap = 2) => ({
+    display: 'grid',
+    gap,
+    gridTemplateColumns: columns,
+});
+
 const ServicesList = () => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
     const { language } = useLanguage();
     const t = (key, replacements) => tService(language, key, replacements);
+    /** translate, but use `fallback` when the key has no translation (translator returns the key). */
+    const tr = (key, fallback, replacements) => {
+        const v = t(key, replacements);
+        return !v || v === key ? fallback : v;
+    };
 
     const [groupedData, setGroupedData] = useState([]);
     const [filteredData, setFilteredData] = useState([]);
@@ -50,6 +62,11 @@ const ServicesList = () => {
     });
 
     const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+
+    // pagination (by category — each page shows N category sections)
+    const [page, setPage] = useState(0);
+    const [rowsPerPage, setRowsPerPage] = useState(5);
 
     const canView = can('services.view');
     const canCreate = can('services.create');
@@ -65,10 +82,8 @@ const ServicesList = () => {
             if (response?.data?.status === 'success') {
                 const data = response.data.data || [];
                 setGroupedData(data);
-                setFilteredData(data);
             } else {
                 setGroupedData([]);
-                setFilteredData([]);
             }
         } catch (err) {
             console.error('Grouped services error:', err);
@@ -80,14 +95,24 @@ const ServicesList = () => {
 
     useEffect(() => {
         if (canView) loadGroupedServices();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [canView]);
 
+    // debounce the search box so we don't re-filter on every keystroke
     useEffect(() => {
-        if (!search.trim()) {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(search.trim());
+            setPage(0);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [search]);
+
+    useEffect(() => {
+        if (!debouncedSearch) {
             setFilteredData(groupedData);
             return;
         }
-        const lowerSearch = search.toLowerCase();
+        const lowerSearch = debouncedSearch.toLowerCase();
         const filtered = groupedData
             .map(category => ({
                 ...category,
@@ -99,7 +124,19 @@ const ServicesList = () => {
             }))
             .filter(category => category.services.length > 0);
         setFilteredData(filtered);
-    }, [search, groupedData]);
+    }, [debouncedSearch, groupedData]);
+
+    // keep the page valid when data shrinks (after delete / refresh / search)
+    useEffect(() => {
+        const lastPage = Math.max(0, Math.ceil(filteredData.length / rowsPerPage) - 1);
+        if (page > lastPage) setPage(lastPage);
+    }, [filteredData, rowsPerPage, page]);
+
+    // only the categories on the current page are rendered
+    const pagedData = useMemo(
+        () => filteredData.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
+        [filteredData, page, rowsPerPage]
+    );
 
     const handleMenuOpen = (event, service) => {
         setSelectedService(service);
@@ -151,6 +188,11 @@ const ServicesList = () => {
             showSnackbar({ type: 'error', message: t('service.list.loadDetailsFailed') });
         }
         handleMenuClose();
+    };
+
+    const handlePageChange = (_, newPage) => {
+        setPage(newPage);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     if (!canView) {
@@ -276,33 +318,34 @@ const ServicesList = () => {
 
                 {/* SUMMARY CARDS */}
                 <Box sx={{ px: { xs: 2, sm: 3 }, pt: 2.5, pb: 1 }}>
-                    <Grid container spacing={2}>
+                    <Box sx={gridSx({ xs: 'repeat(2, 1fr)', sm: 'repeat(2, 1fr)' })}>
                         {[
                             { label: t('service.list.stat.totalServices'), value: totalServices, color: '#3b82f6', icon: <BuildIcon sx={{ fontSize: 18 }} /> },
                             { label: t('service.list.stat.categories'), value: totalCategories, color: '#8b5cf6', icon: <CategoryIcon sx={{ fontSize: 18 }} /> },
-                            { label: t('service.list.stat.technicians'), value: new Set(groupedData.flatMap(cat => cat.services.flatMap(s => s.technicians?.map(tc => tc.id) || []))).size, color: '#10b981', icon: <PeopleIcon sx={{ fontSize: 18 }} /> },
                         ].map((item, idx) => (
-                            <Grid item xs={6} sm={4} key={idx}>
-                                <Card elevation={0} sx={{
+                            <Card
+                                key={idx}
+                                elevation={0}
+                                sx={{
                                     borderRadius: 2, border: '1px solid', borderColor: 'divider',
-                                    bgcolor: 'background.paper', // ✅ Theme aware
+                                    bgcolor: 'background.paper',
                                     height: '100%',
-                                }}>
-                                    <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                                        <Box display="flex" alignItems="center" justifyContent="space-between">
-                                            <Typography variant="caption" sx={{ color: item.color, fontWeight: 600 }}>
-                                                {item.label}
-                                            </Typography>
-                                            {item.icon}
-                                        </Box>
-                                        <Typography variant="h4" sx={{ color: item.color, fontWeight: 700 }}>
-                                            {item.value}
+                                }}
+                            >
+                                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                                    <Box display="flex" alignItems="center" justifyContent="space-between" gap={1}>
+                                        <Typography variant="caption" sx={{ color: item.color, fontWeight: 600 }}>
+                                            {item.label}
                                         </Typography>
-                                    </CardContent>
-                                </Card>
-                            </Grid>
+                                        {item.icon}
+                                    </Box>
+                                    <Typography variant="h4" sx={{ color: item.color, fontWeight: 700 }}>
+                                        {item.value}
+                                    </Typography>
+                                </CardContent>
+                            </Card>
                         ))}
-                    </Grid>
+                    </Box>
                 </Box>
 
                 {/* SERVICES GRID */}
@@ -327,14 +370,14 @@ const ServicesList = () => {
                             )}
                         </Paper>
                     ) : (
-                        filteredData.map((category) => (
+                        pagedData.map((category) => (
                             <Paper
                                 key={category.category_id}
                                 elevation={0}
                                 sx={{
                                     mb: 3, p: { xs: 2, sm: 3 }, borderRadius: 2.5,
                                     border: '1px solid', borderColor: 'divider',
-                                    bgcolor: 'action.hover', // ✅ Theme aware (replaces alpha(colors.sea, 0.02))
+                                    bgcolor: 'action.hover',
                                 }}
                             >
                                 <Stack direction="row" justifyContent="space-between" alignItems="center"
@@ -354,80 +397,99 @@ const ServicesList = () => {
                                     </Typography>
                                 </Stack>
 
-                                <Grid container spacing={2.5}>
+                                <Box sx={gridSx({ xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' }, 2.5)}>
                                     {category.services.map((service) => (
-                                        <Grid item xs={12} sm={6} md={4} key={service.id}>
-                                            <Card
-                                                elevation={0}
-                                                sx={{
-                                                    height: '100%', borderRadius: 2.5,
-                                                    border: '1px solid', borderColor: 'divider',
-                                                    bgcolor: 'background.paper', // ✅ Theme aware
-                                                    transition: 'all 0.25s ease',
-                                                    '&:hover': {
-                                                        borderColor: colors.sea,
-                                                        boxShadow: '0 8px 24px rgba(0,0,0,0.06)',
-                                                        transform: 'translateY(-2px)',
-                                                    },
-                                                    display: 'flex', flexDirection: 'column',
-                                                }}
-                                            >
-                                                <CardContent sx={{ p: 2.5, flex: 1, display: 'flex', flexDirection: 'column' }}>
-                                                    <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={1.5}>
-                                                        <Typography variant="subtitle1" fontWeight={700} color="text.primary">
-                                                            {service.name}
-                                                        </Typography>
-                                                        <IconButton
-                                                            size="small"
-                                                            onClick={(e) => handleMenuOpen(e, service)}
-                                                            sx={{
-                                                                color: 'text.secondary',
-                                                                '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
-                                                            }}
-                                                        >
-                                                            <MoreVertIcon fontSize="small" />
-                                                        </IconButton>
-                                                    </Stack>
-
-                                                    {service.swahili_name && (
-                                                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                                                            {service.swahili_name}
-                                                        </Typography>
-                                                    )}
-
-                                                    <Box display="flex" alignItems="center" gap={0.5} sx={{ mb: 1.5, mt: 'auto' }}>
-                                                        <PeopleIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-                                                        <Typography variant="body2" fontWeight={500} color="text.primary">
-                                                            {t('service.list.techniciansCount', {
-                                                                n: service.technicians_count || 0,
-                                                                s: service.technicians_count !== 1 ? 's' : '',
-                                                            })}
-                                                        </Typography>
-                                                    </Box>
-
-                                                    <Button
-                                                        variant="outlined" size="small" fullWidth
-                                                        onClick={() => handleViewTechnicians(service.id, service.name)}
+                                        <Card
+                                            key={service.id}
+                                            elevation={0}
+                                            sx={{
+                                                height: '100%', borderRadius: 2.5,
+                                                border: '1px solid', borderColor: 'divider',
+                                                bgcolor: 'background.paper',
+                                                transition: 'all 0.25s ease',
+                                                '&:hover': {
+                                                    borderColor: colors.sea,
+                                                    boxShadow: '0 8px 24px rgba(0,0,0,0.06)',
+                                                    transform: 'translateY(-2px)',
+                                                },
+                                                display: 'flex', flexDirection: 'column',
+                                            }}
+                                        >
+                                            <CardContent sx={{ p: 2.5, flex: 1, display: 'flex', flexDirection: 'column' }}>
+                                                <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={1.5}>
+                                                    <Typography variant="subtitle1" fontWeight={700} color="text.primary">
+                                                        {service.name}
+                                                    </Typography>
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={(e) => handleMenuOpen(e, service)}
                                                         sx={{
-                                                            borderRadius: 2, textTransform: 'none', fontWeight: 600,
-                                                            borderColor: 'divider', color: colors.sea || '#0f766e',
-                                                            '&:hover': {
-                                                                borderColor: colors.sea || '#0f766e',
-                                                                bgcolor: alpha(colors.sea, 0.06),
-                                                            },
+                                                            color: 'text.secondary',
+                                                            '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
                                                         }}
                                                     >
-                                                        {t('service.list.viewTechnicians')}
-                                                    </Button>
-                                                </CardContent>
-                                            </Card>
-                                        </Grid>
+                                                        <MoreVertIcon fontSize="small" />
+                                                    </IconButton>
+                                                </Stack>
+
+                                                {service.swahili_name && (
+                                                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                                                        {service.swahili_name}
+                                                    </Typography>
+                                                )}
+
+                                                <Box display="flex" alignItems="center" gap={0.5} sx={{ mb: 1.5, mt: 'auto' }}>
+                                                    <PeopleIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                                                    <Typography variant="body2" fontWeight={500} color="text.primary">
+                                                        {t('service.list.techniciansCount', {
+                                                            n: service.technicians_count || 0,
+                                                            s: service.technicians_count !== 1 ? 's' : '',
+                                                        })}
+                                                    </Typography>
+                                                </Box>
+
+                                                <Button
+                                                    variant="outlined" size="small" fullWidth
+                                                    onClick={() => handleViewTechnicians(service.id, service.name)}
+                                                    sx={{
+                                                        borderRadius: 2, textTransform: 'none', fontWeight: 600,
+                                                        borderColor: 'divider', color: colors.sea || '#0f766e',
+                                                        '&:hover': {
+                                                            borderColor: colors.sea || '#0f766e',
+                                                            bgcolor: alpha(colors.sea, 0.06),
+                                                        },
+                                                    }}
+                                                >
+                                                    {t('service.list.viewTechnicians')}
+                                                </Button>
+                                            </CardContent>
+                                        </Card>
                                     ))}
-                                </Grid>
+                                </Box>
                             </Paper>
                         ))
                     )}
                 </Box>
+
+                {/* PAGINATION */}
+                {!loading && filteredData.length > 0 && (
+                    <Box sx={{ borderTop: '1px solid', borderColor: 'divider', bgcolor: 'action.hover' }}>
+                        <TablePagination
+                            component="div"
+                            rowsPerPageOptions={[3, 5, 10, 20]}
+                            count={filteredData.length}
+                            rowsPerPage={rowsPerPage}
+                            page={page}
+                            onPageChange={handlePageChange}
+                            onRowsPerPageChange={(e) => {
+                                setRowsPerPage(parseInt(e.target.value, 10));
+                                setPage(0);
+                            }}
+                            labelRowsPerPage={tr('service.list.categoriesPerPage', 'Categories per page:')}
+                            sx={{ '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': { fontWeight: 500 } }}
+                        />
+                    </Box>
+                )}
             </Paper>
 
             {/* ACTION MENU */}

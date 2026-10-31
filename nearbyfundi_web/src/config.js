@@ -1,5 +1,5 @@
 // src/config.js
-const baseURLApi = "http://172.18.5.135:8000/api";
+const baseURLApi = "http://192.168.100.144:8000/api";
 const redirectUrl = typeof window !== "undefined"
     ? window.location.origin
     : "https://yourdomain.com";
