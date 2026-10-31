@@ -95,7 +95,7 @@ const ServicesList = () => {
 
     useEffect(() => {
         if (canView) loadGroupedServices();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+
     }, [canView]);
 
     // debounce the search box so we don't re-filter on every keystroke
