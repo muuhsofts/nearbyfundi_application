@@ -6,113 +6,80 @@ use App\Models\Portfolio;
 use App\Models\Technician;
 use App\Traits\Auditable;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class PortfolioController extends BaseApiController
 {
     use Auditable;
 
-    /**
-     * Get ALL portfolios with technician details (Paginated)
-     * GET /v3/portfolios
-     */
+    /** GET /v1/portfolios  |  GET /v3/portfolios */
     public function index(Request $request)
     {
-        $query = Portfolio::with('technician.user', 'technician.services')
-            ->orderBy('created_at', 'desc');
+        $query = Portfolio::with('images', 'technician.user')
+            ->orderByDesc('created_at');
 
         if ($request->filled('technician_id')) {
-            $query->where('technician_id', $request->technician_id);
+            $query->where('technician_id', $request->integer('technician_id'));
         }
 
-        $portfolios = $query->paginate($request->input('per_page', 20));
+        if ($request->filled('search')) {
+            $s = trim($request->input('search'));
+            $query->where(function ($q) use ($s) {
+                $q->whereHas('technician.user', fn ($u) => $u->where('name', 'like', "%{$s}%"));
+                if (is_numeric($s)) {
+                    $q->orWhere('portfolios.id', (int) $s);
+                }
+            });
+        }
 
-        $data = $portfolios->map(function ($portfolio) {
-            return [
-                'id'          => $portfolio->id,
-                'image'       => $portfolio->image ? url('storage/' . $portfolio->image) : null,
-                'description' => $portfolio->description,
-                'created_at'  => $portfolio->created_at,
-                'social_links' => [
-                    'instagram' => $portfolio->instagram,
-                    'facebook'  => $portfolio->facebook,
-                    'tiktok'    => $portfolio->tiktok,
-                    'twitter'   => $portfolio->twitter,
-                    'telegram'  => $portfolio->telegram,
-                ],
-                'technician' => $portfolio->technician ? [
-                    'id'            => $portfolio->technician->id,
-                    'name'          => $portfolio->technician->user->name ?? null,
-                    'email'         => $portfolio->technician->user->email ?? null,
-                    'phone'         => $portfolio->technician->user->phone ?? null,
-                    'profile_photo' => $portfolio->technician->profile_photo
-                        ? url($portfolio->technician->profile_photo)
-                        : null,
-                    'area'          => $portfolio->technician->area,
-                    'rating'        => (float) ($portfolio->technician->rating ?? 0),
-                    'is_online'     => (bool) ($portfolio->technician->is_online ?? false),
-                    'verified'      => (bool) ($portfolio->technician->verified ?? false),
-                    'services'      => $portfolio->technician->services->pluck('name')->toArray(),
-                ] : null,
-            ];
-        });
+        $perPage = min(100, max(1, $request->integer('per_page', 10)));
+        $page = $query->paginate($perPage);
 
         return $this->successResponse([
-            'data'       => $data,
+            'data'       => $page->getCollection()->map(fn ($p) => $this->serialize($p))->values(),
             'pagination' => [
-                'total'        => $portfolios->total(),
-                'per_page'     => $portfolios->perPage(),
-                'current_page' => $portfolios->currentPage(),
-                'last_page'    => $portfolios->lastPage(),
+                'total'        => $page->total(),
+                'per_page'     => $page->perPage(),
+                'current_page' => $page->currentPage(),
+                'last_page'    => $page->lastPage(),
             ],
         ], 'Portfolios retrieved successfully');
     }
 
-    /**
-     * Get portfolios by technician ID
-     * GET /v3/portfolios/technician/{technicianId}
-     */
+    /** GET /v1/portfolios/{technicianId}  |  GET /v3/portfolios/technician/{id} */
     public function getByTechnician($technicianId)
     {
-        $technician = Technician::with('user', 'services')->findOrFail($technicianId);
+        $technician = Technician::with('user', 'services')->find($technicianId);
+        if (!$technician) {
+            return $this->notFound('Technician not found.');
+        }
 
-        $portfolios = Portfolio::where('technician_id', $technicianId)
-            ->orderBy('created_at', 'desc')
+        $portfolios = Portfolio::with('images')
+            ->where('technician_id', $technician->id)
+            ->orderByDesc('created_at')
             ->get()
-            ->map(function ($portfolio) {
-                return [
-                    'id'          => $portfolio->id,
-                    'image'       => $portfolio->image ? url('storage/' . $portfolio->image) : null,
-                    'description' => $portfolio->description,
-                    'created_at'  => $portfolio->created_at,
-                    'social_links' => [
-                        'instagram' => $portfolio->instagram,
-                        'facebook'  => $portfolio->facebook,
-                        'tiktok'    => $portfolio->tiktok,
-                        'twitter'   => $portfolio->twitter,
-                        'telegram'  => $portfolio->telegram,
-                    ],
-                ];
-            });
+            ->map(fn ($p) => [
+                'id'         => $p->id,
+                'images'     => $this->serializeImages($p),
+                'created_at' => $p->created_at,
+            ]);
 
         return $this->successResponse([
             'technician' => [
                 'id'            => $technician->id,
                 'name'          => $technician->user->name ?? null,
-                'profile_photo' => $technician->profile_photo ? url($technician->profile_photo) : null,
+                'profile_photo' => $this->fileUrl($technician->profile_photo),
                 'area'          => $technician->area,
                 'rating'        => (float) ($technician->rating ?? 0),
-                'is_online'     => (bool) ($technician->is_online ?? false),
-                'verified'      => (bool) ($technician->verified ?? false),
-                'services'      => $technician->services->pluck('name')->toArray(),
+                'is_online'     => (bool) $technician->is_online,
+                'verified'      => (bool) $technician->verified,
+                'services'      => $technician->services->pluck('name'),
             ],
             'portfolios' => $portfolios,
         ], 'Portfolios retrieved successfully');
     }
 
-    /**
-     * Create portfolio (Technician only)
-     * POST /v3/portfolios
-     */
+    /** POST /v3/portfolios */
     public function store(Request $request)
     {
         $technician = $request->user()->technician;
@@ -120,117 +87,106 @@ class PortfolioController extends BaseApiController
             return $this->forbidden('Only technicians can add portfolio items.');
         }
 
-        $data = $request->validate([
-            'image'       => 'required|image|mimes:jpg,jpeg,png,webp|max:2048',
-            'description' => 'nullable|string|max:255',
-            'instagram'   => 'nullable|string|max:255',
-            'facebook'    => 'nullable|string|max:255',
-            'tiktok'      => 'nullable|string|max:255',
-            'twitter'     => 'nullable|string|max:255',
-            'telegram'    => 'nullable|string|max:255',
+        $request->validate([
+            'images'   => 'required|array|min:1|max:10',
+            'images.*' => 'image|mimes:jpg,jpeg,png,webp|max:5120',
         ]);
 
-        $path = $request->file('image')->store('portfolios', 'public');
-        $portfolio = Portfolio::create([
-            'technician_id' => $technician->id,
-            'image'         => $path,
-            'description'   => $data['description'] ?? null,
-            'instagram'     => $data['instagram'] ?? null,
-            'facebook'      => $data['facebook'] ?? null,
-            'tiktok'        => $data['tiktok'] ?? null,
-            'twitter'       => $data['twitter'] ?? null,
-            'telegram'      => $data['telegram'] ?? null,
-        ]);
+        $portfolio = Portfolio::create(['technician_id' => $technician->id]);
 
-        $this->logAudit('create_portfolio', 'portfolio', $portfolio->id, 'Added portfolio item');
+        foreach ($request->file('images') as $file) {
+            $path = $file->store('portfolios', 'public');
+            $portfolio->images()->create(['image' => $path]);
+        }
 
-        return $this->created($portfolio, 'Portfolio item added.');
+        $this->logAudit(
+            'create_portfolio', 'portfolio', $portfolio->id,
+            'Added portfolio with ' . count($request->file('images')) . ' images'
+        );
+
+        return $this->created(
+            $this->serialize($portfolio->load('images', 'technician.user')),
+            'Portfolio post created successfully.'
+        );
     }
 
     /**
-     * Update portfolio (Owner only)
      * PUT /v3/portfolios/{id}
+     * NOTE: PHP does not parse multipart bodies on real PUT requests, so the client
+     * must send POST + `_method=PUT` (Laravel method spoofing) when uploading files.
      */
     public function update(Request $request, $id)
     {
-        $portfolio = Portfolio::findOrFail($id);
+        $portfolio = Portfolio::with('images')->findOrFail($id);
         $technician = $request->user()->technician;
 
         if (!$technician || $technician->id != $portfolio->technician_id) {
             return $this->forbidden('Unauthorized.');
         }
 
-        $data = $request->validate([
-            'description' => 'nullable|string|max:255',
-            'image'       => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-            'instagram'   => 'nullable|string|max:255',
-            'facebook'    => 'nullable|string|max:255',
-            'tiktok'      => 'nullable|string|max:255',
-            'twitter'     => 'nullable|string|max:255',
-            'telegram'    => 'nullable|string|max:255',
+        $request->validate([
+            'images'             => 'nullable|array|max:10',
+            'images.*'           => 'image|mimes:jpg,jpeg,png,webp|max:5120',
+            'delete_image_ids'   => 'nullable|array',
+            'delete_image_ids.*' => 'integer',
         ]);
 
-        if ($request->hasFile('image')) {
-            if ($portfolio->image && file_exists(public_path($portfolio->image))) {
-                unlink(public_path($portfolio->image));
+        if ($request->filled('delete_image_ids')) {
+            $toDelete = $portfolio->images()->whereIn('id', $request->input('delete_image_ids'))->get();
+            foreach ($toDelete as $img) {
+                if (Storage::disk('public')->exists($img->image)) {
+                    Storage::disk('public')->delete($img->image);
+                }
+                $img->delete();
             }
-            $data['image'] = $request->file('image')->store('portfolios', 'public');
         }
 
-        $old = $portfolio->toArray();
-        $portfolio->update($data);
-        $new = $portfolio->fresh()->toArray();
+        if ($request->hasFile('images')) {
+            foreach ($request->file('images') as $file) {
+                $path = $file->store('portfolios', 'public');
+                $portfolio->images()->create(['image' => $path]);
+            }
+        }
 
-        $this->logAudit('update_portfolio', 'portfolio', $id, 'Updated portfolio item', $old, $new);
+        $this->logAudit('update_portfolio', 'portfolio', $portfolio->id, 'Updated portfolio');
 
-        return $this->successResponse($portfolio, 'Portfolio updated.');
+        return $this->successResponse(
+            $this->serialize($portfolio->fresh(['images', 'technician.user'])),
+            'Portfolio post updated successfully.'
+        );
     }
 
-    /**
-     * Delete portfolio (Owner only)
-     * DELETE /v3/portfolios/{id}
-     */
+    /** DELETE /v3/portfolios/{id} */
     public function destroy(Request $request, $id)
     {
-        $portfolio = Portfolio::findOrFail($id);
+        $portfolio = Portfolio::with('images')->findOrFail($id);
         $technician = $request->user()->technician;
 
         if (!$technician || $technician->id != $portfolio->technician_id) {
             return $this->forbidden('Unauthorized.');
         }
 
-        if ($portfolio->image && file_exists(public_path($portfolio->image))) {
-            unlink(public_path($portfolio->image));
-        }
+        $this->deleteFiles($portfolio);
         $portfolio->delete();
 
-        $this->logAudit('delete_portfolio', 'portfolio', $id, 'Deleted portfolio item');
+        $this->logAudit('delete_portfolio', 'portfolio', $id, 'Deleted portfolio');
 
-        return $this->successResponse(null, 'Portfolio item deleted.');
+        return $this->successResponse(null, 'Portfolio post deleted.');
     }
 
-    /**
-     * Admin delete any portfolio
-     * DELETE /v3/admin/portfolios/{id}
-     */
+    /** DELETE /v3/admin/portfolios/{id} */
     public function destroyAdmin($id)
     {
-        $portfolio = Portfolio::findOrFail($id);
-
-        if ($portfolio->image && file_exists(public_path($portfolio->image))) {
-            unlink(public_path($portfolio->image));
-        }
+        $portfolio = Portfolio::with('images')->findOrFail($id);
+        $this->deleteFiles($portfolio);
         $portfolio->delete();
 
-        $this->logAudit('delete_portfolio_admin', 'portfolio', $id, 'Admin deleted portfolio item');
+        $this->logAudit('delete_portfolio_admin', 'portfolio', $id, 'Deleted portfolio (admin)');
 
-        return $this->successResponse(null, 'Portfolio item deleted by admin.');
+        return $this->successResponse(null, 'Portfolio post deleted by admin.');
     }
 
-    /**
-     * Get portfolios for the authenticated technician
-     * GET /v3/portfolios/my
-     */
+    /** GET /v3/portfolios/my */
     public function myPortfolios(Request $request)
     {
         $technician = $request->user()->technician;
@@ -238,32 +194,17 @@ class PortfolioController extends BaseApiController
             return $this->forbidden('Only technicians can view their own portfolios.');
         }
 
-        $portfolios = Portfolio::where('technician_id', $technician->id)
-            ->orderBy('created_at', 'desc')
+        $list = Portfolio::with('images', 'technician.user')
+            ->where('technician_id', $technician->id)
+            ->orderByDesc('created_at')
             ->get()
-            ->map(function ($portfolio) {
-                return [
-                    'id'          => $portfolio->id,
-                    'image'       => $portfolio->image ? url('storage/' . $portfolio->image) : null,
-                    'description' => $portfolio->description,
-                    'created_at'  => $portfolio->created_at,
-                    'social_links' => [
-                        'instagram' => $portfolio->instagram,
-                        'facebook'  => $portfolio->facebook,
-                        'tiktok'    => $portfolio->tiktok,
-                        'twitter'   => $portfolio->twitter,
-                        'telegram'  => $portfolio->telegram,
-                    ],
-                ];
-            });
+            ->map(fn ($p) => $this->serialize($p))
+            ->values();
 
-        return $this->successResponse($portfolios, 'Portfolios retrieved successfully');
+        return $this->successResponse($list, 'Portfolios retrieved successfully');
     }
 
-    /**
-     * Update only social links of a specific portfolio (Owner only)
-     * PUT /v3/portfolios/{id}/social-links
-     */
+    /** PUT /v3/portfolios/{id}/social-links */
     public function updateSocialLinks(Request $request, $id)
     {
         $portfolio = Portfolio::findOrFail($id);
@@ -273,22 +214,64 @@ class PortfolioController extends BaseApiController
             return $this->forbidden('Unauthorized.');
         }
 
-        $validated = $request->validate([
-            'instagram' => 'nullable|string|max:255',
-            'facebook'  => 'nullable|string|max:255',
-            'tiktok'    => 'nullable|string|max:255',
-            'twitter'   => 'nullable|string|max:255',
-            'telegram'  => 'nullable|string|max:255',
-        ]);
+        $request->validate(['social_links' => 'nullable|array']);
+        $portfolio->update(['social_links' => $request->input('social_links', [])]);
 
-        $old = $portfolio->only(['instagram', 'facebook', 'tiktok', 'twitter', 'telegram']);
-        $portfolio->update($validated);
-        $new = $portfolio->fresh()->only(['instagram', 'facebook', 'tiktok', 'twitter', 'telegram']);
+        return $this->successResponse($portfolio, 'Social links updated.');
+    }
 
-        $this->logAudit('update_portfolio_social_links', 'portfolio', $id, 'Updated social links', $old, $new);
+    /* ---------------- private helpers ---------------- */
 
-        return $this->successResponse([
-            'social_links' => $new,
-        ], 'Social links updated successfully.');
+    /**
+     * Build a URL from the *current request host* instead of APP_URL.
+     * Storage::url() uses APP_URL, which is often "http://localhost" in .env and
+     * makes every image URL point to the wrong host (browser can't load them).
+     * Requires: php artisan storage:link
+     */
+    private function fileUrl(?string $path): ?string
+    {
+        if (!$path) {
+            return null;
+        }
+        if (preg_match('#^https?://#i', $path)) {
+            return $path;
+        }
+        return url('storage/' . ltrim($path, '/'));
+    }
+
+    private function serializeImages(Portfolio $p)
+    {
+        return $p->images->map(fn ($i) => [
+            'id'  => $i->id,
+            'url' => $this->fileUrl($i->image),
+        ])->values();
+    }
+
+    private function serialize(Portfolio $p): array
+    {
+        return [
+            'id'          => $p->id,
+            'images'      => $this->serializeImages($p),
+            'image_count' => $p->images->count(),
+            'created_at'  => $p->created_at,
+            'technician'  => $p->technician ? [
+                'id'            => $p->technician->id,
+                'name'          => $p->technician->user->name ?? null,
+                'profile_photo' => $this->fileUrl($p->technician->profile_photo),
+                'area'          => $p->technician->area,
+                'rating'        => (float) ($p->technician->rating ?? 0),
+                'is_online'     => (bool) $p->technician->is_online,
+                'verified'      => (bool) $p->technician->verified,
+            ] : null,
+        ];
+    }
+
+    private function deleteFiles(Portfolio $p): void
+    {
+        foreach ($p->images as $img) {
+            if (Storage::disk('public')->exists($img->image)) {
+                Storage::disk('public')->delete($img->image);
+            }
+        }
     }
 }

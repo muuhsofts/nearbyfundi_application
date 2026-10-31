@@ -2,97 +2,130 @@
 
 namespace App\Models;
 
+use App\Casts\EncryptedOrPlaintext;
 use Illuminate\Database\Eloquent\Model;
-use Carbon\Carbon;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Technician extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
-        'user_id', 'profile_photo', 'bio', 'nida', 'experience', 'rating',
-        'latitude', 'longitude', 'area', 'verified',
-        'last_activity_at', 'is_online', 'hourly_rate',
-        'location_updated_at',
-        // FOR 4-STEP REGISTRATION
-        'verification_status',
+        'user_id',
+        'profile_photo',
+
+        // Identity
+        'nida',
+        'nida_hash',
         'id_document_type',
         'id_document_image',
-        'completed_jobs_count',
+
+        // Professional
+        'experience',
+        'hourly_rate',
+        'area',
+        'latitude',
+        'longitude',
+
+        // Verification
+        'rating',
+        'verified',
+        'verification_status',
+
+        // Activity
+        'last_activity_at',
+        'location_updated_at',
+        'is_online',
+
+        // Registration
         'registration_step',
         'registration_completed',
-    ];
 
-    protected $casts = [
-        'verified'            => 'boolean',
-        'rating'              => 'float',
-        'is_online'           => 'boolean',
-        'last_activity_at'    => 'datetime',
-        'location_updated_at' => 'datetime',
-        'hourly_rate'         => 'decimal:2',
-        'completed_jobs_count'=> 'integer',
-        'registration_completed' => 'boolean',
+        // Biometrics
+        'fingerprint_enrolled',
+        'face_enrolled',
+        'fingerprint_data',
+        'face_data',
+
+        // Next of Kin
+        'next_of_kin_name',
+        'next_of_kin_phone',
+        'next_of_kin_relationship',
     ];
 
     protected $hidden = [
-        'nida', // sensitive — hidden from public JSON
+        'nida',
+        'nida_hash',
+        'id_document_image',
+        'fingerprint_data',
+        'face_data',
     ];
 
-    // ─── Relationships ──────────────────────────────────────────────
-    public function user()
+    protected function casts(): array
     {
-        return $this->belongsTo(User::class);
+        return [
+            // ← tolerate plaintext AND encrypted reads; always write encrypted
+            'nida'             => EncryptedOrPlaintext::class,
+            'fingerprint_data' => EncryptedOrPlaintext::class,
+            'face_data'        => EncryptedOrPlaintext::class,
+
+            'verified'               => 'boolean',
+            'registration_completed' => 'boolean',
+            'fingerprint_enrolled'   => 'boolean',
+            'face_enrolled'          => 'boolean',
+            'is_online'              => 'boolean',
+
+            'rating'      => 'float',
+            'hourly_rate' => 'decimal:2',
+
+            'latitude'  => 'float',
+            'longitude' => 'float',
+
+            'registration_step' => 'integer',
+
+            'last_activity_at'    => 'datetime',
+            'location_updated_at' => 'datetime',
+            'fingerprint_captured_at' => 'datetime',
+            'face_captured_at'        => 'datetime',
+        ];
     }
 
-    public function services()
+    protected static function booted(): void
     {
-        return $this->belongsToMany(Service::class, 'technician_services');
+        static::saving(function (Technician $tech) {
+            if ($tech->isDirty('nida')) {
+                $plain = $tech->nida;              // decrypted by cast
+                $tech->nida_hash = empty($plain)
+                    ? null
+                    : hash('sha256', trim((string) $plain));
+            }
+        });
     }
 
-    /**
-     * Service prices pivot with min/max
-     */
-    public function servicePrices()
+    public static function nidaHash(string $plain): string
     {
-        return $this->belongsToMany(Service::class, 'technician_services')
-                    ->withPivot('min_price', 'max_price')
-                    ->withTimestamps();
+        return hash('sha256', trim($plain));
     }
 
-    public function portfolios()
+    // ── Relationships ─────────────────────────────────────
+    public function user(): BelongsTo { return $this->belongsTo(User::class); }
+
+    public function services(): BelongsToMany
     {
-        return $this->hasMany(Portfolio::class);
+        return $this->belongsToMany(Service::class, 'technician_services')->withTimestamps();
     }
 
-    public function posts()
-    {
-        return $this->hasMany(Post::class);
-    }
+    public function portfolios(): HasMany { return $this->hasMany(Portfolio::class); }
+    public function reviews(): HasMany    { return $this->hasMany(Review::class); }
 
-    public function requests()
-    {
-        return $this->hasMany(ServiceRequest::class);
-    }
-
-    public function reviews()
-    {
-        return $this->hasMany(Review::class);
-    }
-
-    public function locationHistory()
-    {
-        return $this->hasMany(TechnicianLocationHistory::class);
-    }
-
-    // ─── Heartbeat (kept — used by nearby search / monitoring) ──────
-    // NOTE: getComputedOnlineAttribute() + ONLINE_THRESHOLD_MINUTES
-    // removed — they were never appended to JSON output, so nothing
-    // in the app was actually reading them. Raw `is_online` still
-    // drives the profile screen's badge (now removed client-side)
-    // and remains available for admin monitoring / nearby search,
-    // which likely depend on it directly.
+    // ── Activity tracking ─────────────────────────────────
     public function recordHeartbeat(?float $lat = null, ?float $lng = null): void
     {
-        $this->is_online        = true;
         $this->last_activity_at = now();
+        $this->is_online        = true;
 
         if ($lat !== null && $lng !== null) {
             $this->latitude            = $lat;
@@ -101,24 +134,5 @@ class Technician extends Model
         }
 
         $this->save();
-    }
-
-    // ─── Rating Recalculation ──────────────────────────────────────
-    public function recalculateRating(): void
-    {
-        $avg = $this->reviews()->avg('rating') ?? 0.0;
-        $this->rating = round($avg, 1);
-        $this->save();
-    }
-
-    public function incrementCompletedJobs(): void
-    {
-        $this->increment('completed_jobs_count');
-    }
-
-    // ─── Accessors ──────────────────────────────────────────────────
-    public function getDisplayNameAttribute(): string
-    {
-        return $this->user->name ?? 'Unknown Technician';
     }
 }

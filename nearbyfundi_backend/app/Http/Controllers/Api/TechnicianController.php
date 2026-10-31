@@ -2,21 +2,26 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Models\User;
-use App\Models\Technician;
-use App\Models\Notification;
-use App\Models\Subscription;
-use App\Models\RateCard;
+use App\Jobs\SendAdminNotificationJob;
 use App\Models\Otp;
+use App\Models\RateCard;
+use App\Models\RegistrationDraft;
 use App\Models\ServiceRequest;
+use App\Models\Subscription;
+use App\Models\Technician;
+use App\Models\User;
+use App\Services\ApprovalNotificationService;
 use App\Services\GeocodingService;
+use App\Services\OtpDeliveryService;
 use App\Services\SmsNotificationService;
 use App\Traits\Auditable;
+use Illuminate\Database\QueryException;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Role;
 
@@ -24,416 +29,586 @@ class TechnicianController extends BaseApiController
 {
     use Auditable;
 
-    // ──────────────────────────────────────────────
-    // 4-STEP REGISTRATION
-    // ──────────────────────────────────────────────
-
-    /**
-     * Step 1: Personal information.
-     * Email is optional (stored only). The verification OTP is sent by SMS.
-     */
-        /**
-     * Step 1: Personal information.
-     * Email optional. OTP is sent by SMS always, and by email too when an email is given.
-     */
-    public function registerStep1(Request $request, SmsNotificationService $smsService)
-    {
-        $data = $request->validate([
-            'name'          => 'required|string|max:255',
-            'email'         => 'nullable|email|unique:users,email',
-            'password'      => 'required|string|min:8|confirmed',
-            'phone'         => 'required|string|max:20|unique:users,phone',
-            'profile_photo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+    // ═══════════════════════════════════════════════════════
+    // STEP 1 — create draft + send OTP (NO User row)
+    // Requires: name, email/phone, password, area, service_ids
+    // ═══════════════════════════════════════════════════════
+    public function registerStep1(
+        Request $request,
+        OtpDeliveryService $otpDelivery,
+        GeocodingService $geocoder
+    ) {
+        $email = strtolower(trim((string) $request->input('email', '')));
+        $request->merge([
+            'phone' => $this->normalizePhone((string) $request->input('phone', '')),
+            'email' => $email !== '' ? $email : null,
         ]);
 
-        $plainOtp = Otp::generateOtp();
+        $data = $request->validate([
+            'name'             => 'required|string|min:2|max:255',
+            'email'            => 'nullable|email:rfc|max:255',
+            'password'         => 'required|string|min:8|confirmed',
+            'phone'            => [
+                'required', 'string',
+                function ($attr, $value, $fail) {
+                    if (!$this->isValidPhone($value)) {
+                        $fail('Enter a valid phone number.');
+                    }
+                },
+            ],
+            'profile_photo'    => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'fcm_device_token' => 'nullable|string|max:4096',
+
+            // Location
+            'area'             => 'required|string|max:255',
+            'latitude'         => 'nullable|numeric|between:-90,90',
+            'longitude'        => 'nullable|numeric|between:-180,180',
+
+            // Services the fundi offers — must pick at least one
+            'service_ids'      => 'required|array|min:1',
+            'service_ids.*'    => 'integer|exists:services,id',
+        ]);
+
+        $email = $data['email'] ?? null;
+
+        if (User::whereIn('phone', $this->phoneVariants($data['phone']))->exists()) {
+            return $this->errorResponse('This phone number is already registered.', 422);
+        }
+        if ($email && User::where('email', $email)->exists()) {
+            return $this->errorResponse('This email is already registered.', 422);
+        }
+
+        $coords = $this->validateAndGeocodeArea(
+            $data['area'],
+            isset($data['latitude'])  ? (float) $data['latitude']  : null,
+            isset($data['longitude']) ? (float) $data['longitude'] : null,
+            $geocoder
+        );
+
+        // Deduplicate and cast to int
+        $serviceIds = collect($data['service_ids'])
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        RegistrationDraft::discardFor($data['phone'], $email);
+
+        $fcmToken = filled($data['fcm_device_token'] ?? null) ? $data['fcm_device_token'] : null;
 
         DB::beginTransaction();
         try {
-            $role = Role::where('name', 'FUNDI')->firstOrFail();
+            $draft = RegistrationDraft::create([
+                'name'              => $data['name'],
+                'email'             => $email,
+                'password'          => Hash::make($data['password']),
+                'phone'             => $data['phone'],
+                'fcm_device_token'  => $fcmToken,
+                'locale'            => 'en',
+                'profile_photo'     => $request->hasFile('profile_photo')
+                    ? $request->file('profile_photo')->store('technician_drafts', 'public')
+                    : null,
+                'registration_step' => 1,
 
-            $user = User::create([
-                'name'      => $data['name'],
-                'email'     => $data['email'] ?? null,
-                'password'  => Hash::make($data['password']),
-                'phone'     => $data['phone'],
-                'status'    => 'pending',
-                'is_active' => false,
-                'locale'    => 'en',
+                'area'        => $data['area'],
+                'latitude'    => $coords['lat'],
+                'longitude'   => $coords['lng'],
+                'service_ids' => $serviceIds,
             ]);
 
-            $user->assignRole($role);
-
-            $technicianData = [
-                'user_id'                => $user->id,
-                'registration_step'      => 1,
-                'registration_completed' => false,
-                'verified'               => false,
-                'verification_status'    => 'pending',
-                'is_online'              => false,
-            ];
-
-            if ($request->hasFile('profile_photo')) {
-                $technicianData['profile_photo'] = $request->file('profile_photo')->store('technicians', 'public');
-            }
-
-            $technician = Technician::create($technicianData);
-
-            Otp::create([
-                'email'      => $user->email,
-                'phone'      => $user->phone,
-                'otp'        => Hash::make($plainOtp),
-                'token'      => Otp::generateToken(),
-                'type'       => Otp::TYPE_EMAIL_VERIFICATION,
-                'name'       => $user->name,
-                'expires_at' => now()->addMinutes(10),
-                'is_used'    => false,
-                'attempts'   => 0,
-                'ip_address' => $request->ip(),
-                'user_agent' => $request->userAgent(),
-            ]);
+            $plainOtp = Otp::generateOtp();
+            $otp      = $this->createVerificationOtpForDraft($draft, $plainOtp, $request);
 
             DB::commit();
         } catch (\Throwable $e) {
             DB::rollBack();
-            Log::error('Technician step 1 failed', ['error' => $e->getMessage()]);
+            Log::error('Technician draft step 1 failed', ['error' => $e->getMessage()]);
             return $this->serverError('Step 1 failed. Please try again.');
         }
 
-        // After commit: a failed SMS/email must never roll back the account
-        $smsSent = false;
-        try {
-            $smsSent = (bool) ($smsService->notifyUserOtp($user, $plainOtp)['success'] ?? false);
-        } catch (\Throwable $e) {
-            Log::error('OTP SMS failed', ['user_id' => $user->id, 'error' => $e->getMessage()]);
-        }
-
-        $emailSent = false;
-        if (!empty($user->email)) {
-            try {
-                Mail::raw(
-                    "Your Nearbyfundi verification code is {$plainOtp}. It expires in 10 minutes. Do not share it with anyone.",
-                    fn ($m) => $m->to($user->email)->subject('Nearbyfundi verification code')
-                );
-                $emailSent = true;
-            } catch (\Throwable $e) {
-                Log::error('OTP email failed', ['user_id' => $user->id, 'error' => $e->getMessage()]);
-            }
-        }
-
-        $this->logAudit(
-            'register_step1',
-            'technician',
-            $technician->id,
-            'Technician Step 1 completed for ' . ($user->email ?? $user->phone)
-        );
+        $delivery = $this->deliverVerificationOtpForDraft($draft, $otp, $plainOtp, $otpDelivery);
 
         return $this->successResponse([
-            'technician_id' => $technician->id,
-            'user'          => $user->only(['id', 'name', 'email', 'phone']),
-            'step'          => 1,
-            'identifier'    => $user->phone,
-            'otp_sent_sms'  => $smsSent,
-            'otp_sent_email'=> $emailSent,
-        ], 'Step 1 completed. Enter the verification code sent to your phone' . ($emailSent ? ' and email.' : '.'));
+            'draft_id'       => $draft->id,
+            'step'           => 1,
+            'identifier'     => $draft->phone,
+            'otp_channel'    => $delivery['primary_channel'],
+            'sent_to'        => $delivery['primary_sent_to'],
+            'otp_sent_sms'   => $delivery['sms_sent'],
+            'otp_sent_email' => $delivery['email_sent'],
+            'fcm_stored'     => !empty($fcmToken),
+            'area'           => $draft->area,
+            'latitude'       => $draft->latitude,
+            'longitude'      => $draft->longitude,
+            'service_ids'    => $draft->service_ids,
+        ], $delivery['message']);
     }
 
-    /**
-     * Step 2: Identification Information
-     */
+    // ═══════════════════════════════════════════════════════
+    // VERIFY OTP
+    // ═══════════════════════════════════════════════════════
+    public function verifyDraftOtp(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'identifier'       => 'required|string|max:255',
+            'otp'              => 'required|digits:6',
+            'draft_id'         => 'nullable|integer',
+            'fcm_device_token' => 'nullable|string|max:512',
+        ]);
+
+        $draft = $this->resolveDraft($data['identifier'], $data['draft_id'] ?? null);
+
+        if (!$draft) {
+            return $this->errorResponse('Registration session not found.', 404);
+        }
+        if (!$draft->canProceed()) {
+            return $this->errorResponse('Registration session expired or already submitted.', 422);
+        }
+
+        $otp = Otp::query()
+            ->where('type', Otp::TYPE_EMAIL_VERIFICATION)
+            ->where('phone', $draft->phone)
+            ->latest()
+            ->first();
+
+        if (!$otp || !$otp->isValid()) {
+            return $this->errorResponse('Code expired. Please request a new one.', 422);
+        }
+        if (!Hash::check($data['otp'], $otp->otp)) {
+            $otp->recordFailedAttempt();
+            return $this->errorResponse('Invalid code.', 422);
+        }
+
+        $otp->markAsUsed();
+
+        $draft->otp_verified_at ??= now();
+        if (!empty($data['fcm_device_token'])) {
+            $draft->fcm_device_token = $data['fcm_device_token'];
+        }
+        $draft->save();
+
+        return $this->issueDraftToken($draft, 'Verified. Continue with your registration.');
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // RESEND OTP
+    // ═══════════════════════════════════════════════════════
+    public function resendDraftOtp(Request $request, OtpDeliveryService $otpDelivery): JsonResponse
+    {
+        $data = $request->validate([
+            'identifier' => 'required|string|max:255',
+            'draft_id'   => 'nullable|integer',
+        ]);
+
+        $draft = $this->resolveDraft($data['identifier'], $data['draft_id'] ?? null);
+
+        if (!$draft) {
+            return $this->errorResponse('Registration session not found.', 404);
+        }
+        if (!$draft->canProceed()) {
+            return $this->errorResponse('Registration session expired or already submitted.', 422);
+        }
+
+        $last = Otp::where('type', Otp::TYPE_EMAIL_VERIFICATION)
+            ->where('phone', $draft->phone)
+            ->latest()
+            ->first();
+
+        if ($last && $last->created_at && $last->created_at->gt(now()->subSeconds(60))) {
+            return $this->errorResponse('Please wait a minute before requesting another code.', 429);
+        }
+
+        $plainOtp = Otp::generateOtp();
+        $otp      = $this->createVerificationOtpForDraft($draft, $plainOtp, $request);
+        $delivery = $this->deliverVerificationOtpForDraft($draft, $otp, $plainOtp, $otpDelivery);
+
+        return $this->successResponse([
+            'draft_id'    => $draft->id,
+            'otp_channel' => $delivery['primary_channel'],
+            'sent_to'     => $delivery['primary_sent_to'],
+        ], $delivery['message']);
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // STEP 2 — Identity
+    // ═══════════════════════════════════════════════════════
     public function registerStep2(Request $request)
     {
-        $request->validate([
-            'technician_id'     => 'required|exists:technicians,id',
-            'id_document_type'  => 'required|in:nida,drivers_license,voter_id',
-            'id_document_image' => 'required|image|mimes:jpg,jpeg,png,webp|max:5120',
+        $draft = $this->draftOrFail($request);
+
+        abort_if($draft->registration_step < 1, 422, 'Complete step 1 first.');
+
+        $request->merge([
+            'nida' => preg_replace('/\D+/', '', (string) $request->input('nida', '')),
         ]);
 
-        $technician = Technician::findOrFail($request->technician_id);
+        $nidaRule = match ($request->input('id_document_type')) {
+            'nida'     => 'digits:20',
+            'voter_id' => 'digits:12',
+            default    => 'digits_between:10,20',
+        };
 
-        if ($technician->registration_completed) {
-            return $this->errorResponse('Registration already completed.', 422);
-        }
+        $request->validate([
+            'id_document_type'  => 'required|in:nida,drivers_license,voter_id',
+            'id_document_image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
+            'nida'              => [
+                'required', $nidaRule,
+                function ($attr, $value, $fail) {
+                    if (Technician::withTrashed()->where('nida_hash', Technician::nidaHash($value))->exists()) {
+                        $fail('This ID number has already been registered.');
+                    }
+                },
+            ],
+        ]);
 
-        switch ($request->id_document_type) {
-            case 'nida':
-                $request->validate(['nida' => 'required|string|size:20|unique:technicians,nida']);
-                break;
-            case 'voter_id':
-                $request->validate(['nida' => 'required|string|size:12|unique:technicians,nida']);
-                break;
-            case 'drivers_license':
-                $request->validate(['nida' => 'required|string|min:10|unique:technicians,nida']);
-                break;
-        }
-
-        $path = $request->file('id_document_image')->store('technician_ids', 'public');
-
-        $technician->update([
+        $update = [
             'nida'              => $request->nida,
             'id_document_type'  => $request->id_document_type,
-            'id_document_image' => $path,
-            'registration_step' => 2,
-        ]);
+            'registration_step' => max((int) $draft->registration_step, 2),
+        ];
 
-        $this->logAudit('register_step2', 'technician', $technician->id, 'Technician Step 2 completed');
-
-        return $this->successResponse(['step' => 2], 'Step 2 completed. Proceed to working area.');
-    }
-
-    /**
-     * Step 3: Working Area
-     */
-    public function registerStep3(Request $request, GeocodingService $geocoder)
-    {
-        $request->validate([
-            'technician_id' => 'required|exists:technicians,id',
-            'area'          => 'required|string|max:255',
-            'latitude'      => 'nullable|numeric|between:-90,90',
-            'longitude'     => 'nullable|numeric|between:-180,180',
-        ]);
-
-        $technician = Technician::findOrFail($request->technician_id);
-
-        if ($technician->registration_completed) {
-            return $this->errorResponse('Registration already completed.', 422);
-        }
-
-        $lat = $request->latitude;
-        $lng = $request->longitude;
-
-        if ($lat === null || $lng === null) {
-            $coords = $geocoder->geocode($request->area);
-            if (!$coords) {
-                return $this->errorResponse("We couldn't locate '{$request->area}'. Please check spelling or use the map picker.", 422);
+        if ($request->hasFile('id_document_image')) {
+            if ($draft->id_document_image && Storage::disk('public')->exists($draft->id_document_image)) {
+                Storage::disk('public')->delete($draft->id_document_image);
             }
-            $lat = $coords['lat'];
-            $lng = $coords['lng'];
+            $update['id_document_image'] = $request->file('id_document_image')
+                ->store('technician_drafts', 'public');
         }
 
-        $technician->update([
-            'area'                => $request->area,
-            'latitude'            => $lat,
-            'longitude'           => $lng,
-            'location_updated_at' => now(),
-            'registration_step'   => 3,
-        ]);
+        $draft->update($update);
 
-        $this->logAudit('register_step3', 'technician', $technician->id, "Technician Step 3 completed. Area: {$request->area}");
-
-        return $this->successResponse(['step' => 3], 'Step 3 completed. Proceed to services & pricing.');
+        return $this->successResponse(['step' => 2], 'Identity saved. Proceed to fingerprint capture.');
     }
 
-    /**
-     * Step 4: Services & Pricing
-     */
+    // ═══════════════════════════════════════════════════════
+    // STEP 3 — Fingerprint
+    // ═══════════════════════════════════════════════════════
+    public function registerStep3(Request $request)
+    {
+        $draft = $this->draftOrFail($request);
+
+        abort_if($draft->registration_step < 2, 422, 'Complete identity verification first.');
+
+        $request->validate(['fingerprint_data' => 'required|string|max:200000']);
+
+        $draft->update([
+            'fingerprint_data'     => $request->fingerprint_data,
+            'fingerprint_enrolled' => true,
+            'registration_step'    => max((int) $draft->registration_step, 3),
+        ]);
+
+        return $this->successResponse(['step' => 3], 'Fingerprint captured. Proceed to face capture.');
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // STEP 4 — Face
+    // ═══════════════════════════════════════════════════════
     public function registerStep4(Request $request)
     {
-        $request->validate([
-            'technician_id'         => 'required|exists:technicians,id',
-            'services'              => 'required|array|min:1',
-            'services.*.service_id' => 'required|exists:services,id',
-            'services.*.min_price'  => 'required|numeric|min:0',
-            'services.*.max_price'  => 'required|numeric|min:0|gte:services.*.min_price',
+        $draft = $this->draftOrFail($request);
+
+        abort_if($draft->registration_step < 3, 422, 'Complete fingerprint capture first.');
+
+        $request->validate(['face_data' => 'required|string|max:6000000']);
+
+        $draft->update([
+            'face_data'         => $request->face_data,
+            'face_enrolled'     => true,
+            'registration_step' => max((int) $draft->registration_step, 4),
         ]);
 
-        $technician = Technician::findOrFail($request->technician_id);
+        return $this->successResponse(['step' => 4], 'Face captured. Proceed to emergency contact.');
+    }
 
-        if ($technician->registration_completed) {
-            return $this->errorResponse('Registration already completed.', 422);
+    // ═══════════════════════════════════════════════════════
+    // STEP 5 — Next of kin
+    // ═══════════════════════════════════════════════════════
+    public function registerStep5(Request $request)
+    {
+        $draft = $this->draftOrFail($request);
+
+        abort_if($draft->registration_step < 4, 422, 'Complete face capture first.');
+
+        $request->validate([
+            'next_of_kin_name'         => 'required|string|max:255',
+            'next_of_kin_phone'        => 'required|string|max:20',
+            'next_of_kin_relationship' => 'required|string|max:100',
+        ]);
+
+        $draft->update([
+            'next_of_kin_name'         => $request->next_of_kin_name,
+            'next_of_kin_phone'        => $request->next_of_kin_phone,
+            'next_of_kin_relationship' => $request->next_of_kin_relationship,
+            'registration_step'        => max((int) $draft->registration_step, 5),
+        ]);
+
+        return $this->successResponse(['step' => 5], 'Emergency contact saved. Proceed to review & submit.');
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // STEP 6 — Creates User + Technician + services atomically
+    // ═══════════════════════════════════════════════════════
+    public function registerStep6(Request $request)
+    {
+        $draft = $this->draftOrFail($request);
+
+        $request->validate(['fcm_device_token' => 'nullable|string|max:4096']);
+
+        $fcmToken = filled($request->input('fcm_device_token'))
+            ? $request->input('fcm_device_token')
+            : $draft->fcm_device_token;
+
+        if ($draft->registration_step < 5 || empty($draft->nida) || empty($draft->id_document_type)) {
+            return $this->errorResponse('Please complete all registration steps before submitting.', 422);
+        }
+        if (!$draft->hasCompletedLocation()) {
+            return $this->errorResponse('Service area, latitude and longitude are required. Please update step 1.', 422);
+        }
+        if (!$draft->hasCompletedServices()) {
+            return $this->errorResponse('Select at least one service you offer. Please update step 1.', 422);
+        }
+        if (!$draft->hasCompletedBiometrics()) {
+            return $this->errorResponse('Biometrics incomplete. Please complete fingerprint and face capture.', 422);
+        }
+        if (!$draft->hasCompletedNextOfKin()) {
+            return $this->errorResponse('Next of kin details are required.', 422);
+        }
+
+        if (User::whereIn('phone', $this->phoneVariants($draft->phone))->exists()) {
+            return $this->errorResponse('Phone number already registered.', 422);
+        }
+        if ($draft->email && User::where('email', $draft->email)->exists()) {
+            return $this->errorResponse('Email already registered.', 422);
+        }
+        if (Technician::withTrashed()->where('nida_hash', Technician::nidaHash($draft->nida))->exists()) {
+            return $this->errorResponse('This ID number has already been registered.', 422);
         }
 
         DB::beginTransaction();
         try {
-            $syncData = [];
-            foreach ($request->services as $service) {
-                $syncData[$service['service_id']] = [
-                    'min_price' => $service['min_price'],
-                    'max_price' => $service['max_price'],
-                ];
+            $fundiRole = Role::where('name', 'FUNDI')->where('guard_name', 'web')->first();
+            if (!$fundiRole) {
+                throw new \RuntimeException('The FUNDI role is missing.');
             }
 
-            $technician->servicePrices()->sync($syncData);
-            $technician->update(['registration_step' => 4]);
+            $user = new User();
+            $user->forceFill([
+                'name'              => $draft->name,
+                'email'             => $draft->email,
+                'password'          => $draft->password,
+                'phone'             => $draft->phone,
+                'status'            => 'pending',
+                'is_active'         => false,
+                'locale'            => $draft->locale ?: 'en',
+                'fcm_device_token'  => $fcmToken,
+                'email_verified_at' => null,
+                'phone_verified_at' => $draft->otp_verified_at ?? now(),
+            ])->save();
+
+            $user->assignRole($fundiRole);
+
+            $technician = Technician::create([
+                'user_id'                  => $user->id,
+                'profile_photo'            => $draft->profile_photo,
+                'nida'                     => $draft->nida,
+                'id_document_type'         => $draft->id_document_type,
+                'id_document_image'        => $draft->id_document_image,
+                'fingerprint_data'         => $draft->fingerprint_data,
+                'fingerprint_enrolled'     => true,
+                'face_data'                => $draft->face_data,
+                'face_enrolled'            => true,
+                'next_of_kin_name'         => $draft->next_of_kin_name,
+                'next_of_kin_phone'        => $draft->next_of_kin_phone,
+                'next_of_kin_relationship' => $draft->next_of_kin_relationship,
+                'registration_step'        => 6,
+                'registration_completed'   => true,
+                'verified'                 => false,
+                'verification_status'      => 'pending',
+                'area'                     => $draft->area,
+                'latitude'                 => $draft->latitude,
+                'longitude'                => $draft->longitude,
+                'is_online'                => false,
+            ]);
+
+            // Attach chosen services to the technician_services pivot
+            $technician->services()->sync($draft->service_ids);
+
+            $authToken = $user->createToken('mobile')->plainTextToken;
+
+            $draft->tokens()->delete();
+            $draft->forceDelete();
 
             DB::commit();
-
-            $this->logAudit('register_step4', 'technician', $technician->id, 'Technician Step 4 completed. Services synced.');
-
-            return $this->successResponse(['step' => 4], 'Step 4 completed. You may now submit your registration.');
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             DB::rollBack();
-            return $this->serverError('Step 4 failed: ' . $e->getMessage());
+
+            Log::error('Submit registration failed', [
+                'draft_id' => $draft->id,
+                'error'    => $e->getMessage(),
+                'at'       => $e->getFile() . ':' . $e->getLine(),
+            ]);
+
+            if ($e instanceof QueryException && str_contains($e->getMessage(), 'Duplicate entry')) {
+                $msg = $e->getMessage();
+                return match (true) {
+                    str_contains($msg, 'nida_hash') => $this->errorResponse('This ID number has already been registered.', 422),
+                    str_contains($msg, 'phone')     => $this->errorResponse('Phone number already registered.', 422),
+                    str_contains($msg, 'email')     => $this->errorResponse('Email already registered.', 422),
+                    default                         => $this->errorResponse('This registration already exists.', 422),
+                };
+            }
+
+            return $this->serverError(
+                config('app.debug')
+                    ? 'Submission failed: ' . $e->getMessage()
+                    : 'Submission failed. Please try again.'
+            );
         }
+
+        try {
+            SendAdminNotificationJob::dispatch(
+                $user->name ?? 'Unknown',
+                $user->email ?: $user->phone,
+                $technician->id
+            );
+            $this->logAudit('register_step6', 'technician', $technician->id, 'Registration submitted for admin approval');
+        } catch (\Throwable $e) {
+            Log::warning('Post-registration side effects failed', ['error' => $e->getMessage()]);
+        }
+
+        return $this->successResponse([
+            'user'           => $user->only(['id', 'name', 'email', 'phone', 'status']),
+            'technician_id'  => $technician->id,
+            'token'          => $authToken,
+            'status'         => 'pending_verification',
+            'phone_verified' => true,
+            'fcm_registered' => !empty($fcmToken),
+            'area'           => $technician->area,
+            'latitude'       => $technician->latitude,
+            'longitude'      => $technician->longitude,
+            'services'       => $technician->services()->get(['services.id', 'services.name']),
+        ], 'Registration submitted. Waiting for admin approval.');
     }
 
-    /**
-     * Get registration step (public)
-     */
+    // ═══════════════════════════════════════════════════════
+    // STATUS — drafts (public)
+    // ═══════════════════════════════════════════════════════
     public function registrationStatus($id)
     {
-        $technician = Technician::find($id);
-        if (!$technician) {
-            return $this->notFound('Technician not found.');
+        $draft = RegistrationDraft::find($id);
+
+        if (!$draft) {
+            return $this->notFound('Registration not found.');
         }
 
         return $this->successResponse([
-            'registration_step'      => $technician->registration_step,
-            'registration_completed' => $technician->registration_completed,
-            'technician_id'          => $technician->id,
+            'draft_id'               => $draft->id,
+            'registration_step'      => (int) $draft->registration_step,
+            'registration_completed' => false,
+            'can_proceed'            => $draft->canProceed(),
+            'otp_verified'           => $draft->isOtpVerified(),
+            'fingerprint_enrolled'   => (bool) $draft->fingerprint_enrolled,
+            'face_enrolled'          => (bool) $draft->face_enrolled,
+            'area'                   => $draft->area,
+            'latitude'               => $draft->latitude,
+            'longitude'              => $draft->longitude,
+            'service_ids'            => $draft->service_ids ?? [],
         ]);
     }
 
-    /**
-     * Final Submit Registration
-     * → Sends SMS notification to all ADMINISTRATOR users with fundi name + email
-     */
-        /**
-     * Final Submit Registration
-     * → SMS to all active ADMINISTRATOR users with fundi name + contact
-     */
-    public function submitRegistration(Request $request, SmsNotificationService $smsService)
+    // ═══════════════════════════════════════════════════════
+    // STATUS — authenticated technician
+    // ═══════════════════════════════════════════════════════
+    public function myRegistrationStatus(Request $request)
     {
-        $request->validate([
-            'technician_id' => 'required|exists:technicians,id',
-        ]);
+        $user = $request->user();
 
-        $technician = Technician::with(['servicePrices', 'user'])->findOrFail($request->technician_id);
-
-        if ($technician->registration_step < 4) {
-            return $this->errorResponse('Please complete all 4 registration steps first.', 422);
+        if (!$user instanceof User) {
+            return $this->unauthorized('A user session is required.');
         }
 
-        if ($technician->registration_completed) {
-            return $this->errorResponse('Registration already submitted.', 422);
-        }
+        $technician = $user->technician;
 
-        if ($technician->servicePrices->isEmpty()) {
-            return $this->errorResponse('You must select at least one service with a price range.', 422);
-        }
-
-        DB::beginTransaction();
-        try {
-            $technician->update([
-                'registration_completed' => true,
-                'verification_status'    => 'pending',
-                'verified'               => false,
-            ]);
-
-            $technician->user->update(['status' => 'pending']);
-
-            DB::commit();
-        } catch (\Throwable $e) {
-            DB::rollBack();
-            Log::error('Submit registration failed', ['technician_id' => $technician->id, 'error' => $e->getMessage()]);
-            return $this->serverError('Submission failed. Please try again.');
-        }
-
-        // After commit: an SMS problem must never fail the registration
-        try {
-            $fundiName    = $technician->user->name ?? 'Unknown';
-            $fundiContact = $technician->user->email ?: $technician->user->phone;
-
-            $smsService->notifyAdminsNewFundiRegistration($fundiName, $fundiContact, $technician->id);
-        } catch (\Throwable $e) {
-            Log::error('Admin SMS notification failed', ['technician_id' => $technician->id, 'error' => $e->getMessage()]);
-        }
-
-        $this->logAudit('submit_registration', 'technician', $technician->id, 'Technician submitted registration for approval.');
-
-        return $this->successResponse([
-            'message' => 'Registration submitted. Please wait for admin verification.',
-            'status'  => 'pending_verification',
-        ], 'Registration submitted successfully.');
-    }
-
-    // ──────────────────────────────────────────────
-    // ADMIN: APPROVE TECHNICIAN (1-day free trial)
-    // ──────────────────────────────────────────────
-
-    public function approve($id)
-    {
-        $technician = Technician::findOrFail($id);
-
-        if (!$technician->registration_completed) {
-            return $this->errorResponse('Technician has not completed registration.', 422);
-        }
-
-        DB::beginTransaction();
-        try {
-            $technician->verification_status = 'approved';
-            $technician->verified = true;
-            $technician->save();
-
-            $user = $technician->user;
-            $user->update([
-                'status'    => 'active',
-                'is_active' => true,
-            ]);
-
-            $freeTrialRate = RateCard::where('slug', 'free-trial')->first();
-            if (!$freeTrialRate) {
-                $freeTrialRate = RateCard::create([
-                    'name'          => 'Free Trial',
-                    'slug'          => 'free-trial',
-                    'price'         => 0,
-                    'duration_days' => 1,
-                    'currency'      => 'TZS',
-                    'description'   => '1-day free trial after verification',
-                    'is_active'     => true,
-                    'display_order' => 0,
-                ]);
-            }
-
-            $subscription = Subscription::create([
-                'user_id'        => $user->id,
-                'rate_card_id'   => $freeTrialRate->id,
-                'status'         => Subscription::STATUS_ACTIVE,
-                'start_date'     => now(),
-                'expiry_date'    => now()->addDay(),
-                'amount_paid'    => 0,
-                'currency'       => 'TZS',
-                'payment_method' => 'Free Trial',
-                'approved_at'    => now(),
-                'approved_by'    => auth()->id(),
-            ]);
-
-            $user->activateSubscription($subscription);
-
-            $this->createNotification(
-                $user,
-                'Account Approved 🎉',
-                'Your fundi account has been approved! You now have a 1-day free trial.',
-                'technician_approved',
-                [
-                    'technician_id' => $technician->id,
-                    'trial_expires' => $subscription->expiry_date->toIso8601String(),
-                ]
-            );
-
-            DB::commit();
-
-            $this->logAudit('approve_technician', 'technician', $technician->id, "Technician #{$id} approved and free trial activated");
-
-            return $this->successResponse($technician, 'Technician approved and free trial activated.');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return $this->serverError('Approval failed: ' . $e->getMessage());
-        }
-    }
-
-    // ──────────────────────────────────────────────
-    // PROFILE MANAGEMENT
-    // ──────────────────────────────────────────────
-
-    public function getOwnProfile(Request $request)
-    {
-        $technician = $request->user()->technician()->with('servicePrices', 'portfolios', 'user')->first();
         if (!$technician) {
             return $this->notFound('Technician profile not found.');
         }
 
-        $technician->makeVisible('nida');
+        return $this->successResponse([
+            'user_id'                => $user->id,
+            'technician_id'          => $technician->id,
+            'registration_step'      => (int) $technician->registration_step,
+            'registration_completed' => (bool) $technician->registration_completed,
+            'verification_status'    => $technician->verification_status,
+            'verified'               => (bool) $technician->verified,
+            'phone_verified'         => !empty($user->phone_verified_at),
+            'email_verified'         => !empty($user->email_verified_at),
+            'account_status'         => $user->status,
+            'is_active'              => (bool) $user->is_active,
+            'approval_pending'       => $technician->registration_completed
+                && $technician->verification_status === 'pending',
+            'area'                   => $technician->area,
+            'latitude'               => $technician->latitude,
+            'longitude'              => $technician->longitude,
+            'services'               => $technician->services()->get(['services.id', 'services.name']),
+        ], 'Registration status retrieved.');
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // FCM DEVICE TOKEN
+    // ═══════════════════════════════════════════════════════
+    public function updateFcmToken(Request $request)
+    {
+        $request->validate(['fcm_device_token' => 'required|string|max:4096']);
+
+        $user = $request->user();
+        if (!$user instanceof User) {
+            return $this->unauthorized('A user session is required.');
+        }
+
+        $user->update(['fcm_device_token' => $request->fcm_device_token]);
+
+        $this->logAudit('update_fcm_token', 'user', $user->id, 'FCM token refreshed');
+
+        return $this->successResponse(null, 'FCM device token saved.');
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // ADMIN: APPROVE / VERIFY
+    // ═══════════════════════════════════════════════════════
+    public function approve($id, ApprovalNotificationService $notifier, SmsNotificationService $sms)
+    {
+        return $this->approveTechnician(
+            $id, $notifier, $sms,
+            requireCompleted: true,
+            event: 'approved',
+            message: 'Technician approved and free trial activated.'
+        );
+    }
+
+    public function verify($id, ApprovalNotificationService $notifier, SmsNotificationService $sms)
+    {
+        return $this->approveTechnician(
+            $id, $notifier, $sms,
+            requireCompleted: false,
+            event: 'verified',
+            message: 'Technician verified successfully and free trial activated.'
+        );
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // PROFILE MANAGEMENT
+    // ═══════════════════════════════════════════════════════
+    public function getOwnProfile(Request $request)
+    {
+        $technician = $request->user()->technician()
+            ->with('services', 'portfolios', 'user')
+            ->first();
+
+        if (!$technician) {
+            return $this->notFound('Technician profile not found.');
+        }
+
+        $technician->makeVisible(['nida', 'next_of_kin_name', 'next_of_kin_phone', 'next_of_kin_relationship']);
 
         return $this->successResponse($technician);
     }
@@ -441,30 +616,34 @@ class TechnicianController extends BaseApiController
     public function updateProfile(Request $request, GeocodingService $geocoder)
     {
         $technician = $request->user()->technician;
+
         if (!$technician) {
             return $this->notFound('Technician profile not found.');
         }
 
         $request->validate([
-            'bio'         => 'nullable|string',
             'hourly_rate' => 'nullable|numeric|min:0|max:999999.99',
             'area'        => 'nullable|string|max:255',
             'latitude'    => 'nullable|numeric|between:-90,90',
             'longitude'   => 'nullable|numeric|between:-180,180',
         ]);
 
-        $updateData = $request->only(['bio', 'hourly_rate', 'area', 'latitude', 'longitude']);
+        $updateData = $request->only(['hourly_rate', 'area', 'latitude', 'longitude']);
 
-        if ($request->has('area') && !$request->has('latitude') && !$request->has('longitude')) {
-            $coords = $this->validateAndGeocodeArea($request->area, null, null, $geocoder);
+        if ($request->filled('area') && !$request->has('latitude') && !$request->has('longitude')) {
+            $coords = $geocoder->geocode($request->area);
+            if (!$coords) {
+                abort(422, "We couldn't locate '{$request->area}'. Please check the spelling or enter a more specific location.");
+            }
             $updateData['latitude']  = $coords['lat'];
             $updateData['longitude'] = $coords['lng'];
         }
 
         $technician->update($updateData);
+
         $this->logAudit('update_technician_profile', 'technician', $technician->id, 'Profile updated');
 
-        return $this->successResponse($technician->load('servicePrices'), 'Profile updated.');
+        return $this->successResponse($technician->load('services'), 'Profile updated.');
     }
 
     public function uploadProfilePhoto(Request $request)
@@ -474,6 +653,7 @@ class TechnicianController extends BaseApiController
         ]);
 
         $technician = $request->user()->technician;
+
         if (!$technician) {
             return $this->notFound('Technician profile not found.');
         }
@@ -492,42 +672,29 @@ class TechnicianController extends BaseApiController
         ], 'Profile photo updated successfully.');
     }
 
-    public function updateServicePrices(Request $request)
+    public function updateServices(Request $request)
     {
         $technician = $request->user()->technician;
+
         if (!$technician) {
             return $this->notFound('Technician not found.');
         }
 
         $data = $request->validate([
-            'prices'              => 'required|array',
-            'prices.*.service_id' => 'required|exists:services,id',
-            'prices.*.min_price'  => 'required|numeric|min:0',
-            'prices.*.max_price'  => 'required|numeric|min:0|gte:prices.*.min_price',
+            'services'   => 'required|array|min:1',
+            'services.*' => 'exists:services,id',
         ]);
 
-        $syncData = [];
-        foreach ($data['prices'] as $price) {
-            $syncData[$price['service_id']] = [
-                'min_price' => $price['min_price'],
-                'max_price' => $price['max_price'],
-            ];
-        }
+        $technician->services()->sync($data['services']);
 
-        $technician->servicePrices()->sync($syncData);
+        $this->logAudit('update_technician_services', 'technician', $technician->id, 'Services updated');
 
-        $this->logAudit('update_service_prices', 'technician', $technician->id, 'Updated service prices');
-
-        return $this->successResponse(
-            $technician->load('servicePrices'),
-            'Prices updated successfully.'
-        );
+        return $this->successResponse($technician->load('services'), 'Services updated successfully.');
     }
 
-    // ──────────────────────────────────────────────
-    // LOCATION & ONLINE STATUS
-    // ──────────────────────────────────────────────
-
+    // ═══════════════════════════════════════════════════════
+    // LOCATION
+    // ═══════════════════════════════════════════════════════
     public function updateLocation(Request $request)
     {
         $request->validate([
@@ -536,6 +703,7 @@ class TechnicianController extends BaseApiController
         ]);
 
         $technician = $request->user()->technician;
+
         if (!$technician) {
             return $this->notFound('Technician profile not found.');
         }
@@ -549,27 +717,10 @@ class TechnicianController extends BaseApiController
         return $this->successResponse(null, 'Location updated.');
     }
 
-    public function toggleOnline(Request $request)
-    {
-        $request->validate(['is_online' => 'required|boolean']);
-
-        $technician = $request->user()->technician;
-        if (!$technician) {
-            return $this->notFound('Technician profile not found.');
-        }
-
-        $technician->is_online = $request->is_online;
-        if ($request->is_online) {
-            $technician->last_activity_at = now();
-        }
-        $technician->save();
-
-        return $this->successResponse(['is_online' => $technician->is_online], 'Online status updated.');
-    }
-
     public function heartbeat(Request $request)
     {
         $technician = $request->user()->technician;
+
         if (!$technician) {
             return $this->notFound('Technician profile not found.');
         }
@@ -582,25 +733,24 @@ class TechnicianController extends BaseApiController
         return $this->successResponse(null, 'Heartbeat recorded.');
     }
 
-    // ──────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════
     // PUBLIC ENDPOINTS
-    // ──────────────────────────────────────────────
-
+    // ═══════════════════════════════════════════════════════
     public function publicIndex(Request $request)
     {
-        $query = Technician::with(['user', 'services', 'servicePrices', 'portfolios'])
+        $query = Technician::with(['user', 'services', 'portfolios'])
             ->where('verified', true)
-            ->whereHas('user', fn($q) => $q->where('is_active', true));
+            ->whereHas('user', fn ($q) => $q->where('is_active', true));
 
         if ($request->filled('service_id')) {
-            $query->whereHas('services', fn($q) => $q->where('services.id', $request->service_id));
+            $query->whereHas('services', fn ($q) => $q->where('services.id', $request->service_id));
         }
 
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('area', 'LIKE', "%{$search}%")
-                  ->orWhereHas('user', fn($uq) => $uq->where('name', 'LIKE', "%{$search}%"))
+                  ->orWhereHas('user', fn ($uq) => $uq->where('name', 'LIKE', "%{$search}%"))
                   ->orWhereHas('services', function ($sq) use ($search) {
                       $sq->where('name', 'LIKE', "%{$search}%")
                          ->orWhere('swahili_name', 'LIKE', "%{$search}%");
@@ -608,26 +758,26 @@ class TechnicianController extends BaseApiController
             });
         }
 
-        $technicians = $query->paginate($request->input('per_page', 15));
-
-        return $this->successResponse($technicians);
+        return $this->successResponse($query->paginate($request->input('per_page', 15)));
     }
 
     public function show($id)
     {
-        $technician = Technician::with([
-            'user',
-            'services',
-            'servicePrices',
-            'portfolios',
-            'user.subscriptions.rateCard',
-        ])->find($id);
+        $viewer       = auth('sanctum')->user();
+        $isPrivileged = $viewer instanceof User && $viewer->can('technicians.view');
+
+        $relations = ['user', 'services', 'portfolios'];
+        if ($isPrivileged) {
+            $relations[] = 'user.subscriptions.rateCard';
+        }
+
+        $technician = Technician::with($relations)->find($id);
 
         if (!$technician) {
             return $this->notFound('Technician not found.');
         }
 
-        if (auth()->user() && auth()->user()->can('technicians.view')) {
+        if ($isPrivileged) {
             $technician->makeVisible([
                 'nida',
                 'id_document_type',
@@ -636,7 +786,6 @@ class TechnicianController extends BaseApiController
                 'registration_completed',
                 'verification_status',
                 'verified',
-                'is_online',
                 'last_activity_at',
                 'location_updated_at',
             ]);
@@ -645,174 +794,9 @@ class TechnicianController extends BaseApiController
         return $this->successResponse($technician);
     }
 
-    // ──────────────────────────────────────────────
-    // NEARBY & SEARCH
-    // ──────────────────────────────────────────────
-
-    public function nearby(Request $request)
-    {
-        $request->validate([
-            'lat'         => 'required|numeric|between:-90,90',
-            'lng'         => 'required|numeric|between:-180,180',
-            'radius'      => 'nullable|integer|min:1|max:100',
-            'service_id'  => 'nullable|exists:services,id',
-            'category_id' => 'nullable|exists:service_categories,service_categoryID',
-            'search'      => 'nullable|string|max:255',
-        ]);
-
-        $lat        = (float) $request->input('lat');
-        $lng        = (float) $request->input('lng');
-        $radius     = (int) $request->input('radius', 10);
-        $serviceId  = $request->input('service_id');
-        $categoryId = $request->input('category_id');
-        $searchText = $request->input('search');
-
-        $query = Technician::with(['user', 'services.categories'])
-            ->where('verified', true)
-            ->whereHas('user', fn($q) => $q->where('is_active', true));
-
-        if ($searchText) {
-            $query->whereHas('services', function ($q) use ($searchText) {
-                $q->where('name', 'LIKE', "%{$searchText}%")
-                  ->orWhere('swahili_name', 'LIKE', "%{$searchText}%");
-            });
-        }
-
-        if ($serviceId) {
-            $query->whereHas('services', fn($q) => $q->where('services.id', $serviceId));
-        }
-
-        if ($categoryId) {
-            $query->whereHas('services.categories', function ($q) use ($categoryId) {
-                $q->where('service_categories.service_categoryID', $categoryId);
-            });
-        }
-
-        $query->selectRaw("
-            technicians.*,
-            (
-                6371 * acos(
-                    cos(radians(?)) * cos(radians(latitude)) *
-                    cos(radians(longitude) - radians(?)) +
-                    sin(radians(?)) * sin(radians(latitude))
-                )
-            ) AS distance
-        ", [$lat, $lng, $lat]);
-
-        $query->having('distance', '<=', $radius);
-        $query->orderBy('distance', 'asc');
-
-        $formatted = $query->get()->map(fn($tech) => $this->formatTechnician($tech));
-
-        return $this->successResponse([
-            'technicians' => $formatted,
-            'search' => [
-                'latitude'  => $lat,
-                'longitude' => $lng,
-                'radius'    => $radius,
-            ],
-            'filters' => [
-                'service_id'  => $serviceId,
-                'category_id' => $categoryId,
-            ],
-            'meta' => [
-                'total_found' => $formatted->count(),
-                'has_filters' => !empty($serviceId) || !empty($categoryId),
-            ],
-        ], $formatted->isEmpty() ? 'No technicians found within radius.' : 'Technicians found within radius.');
-    }
-
-    public function nearbyByPlace(Request $request, GeocodingService $geocoder)
-    {
-        $request->validate([
-            'place'       => 'required|string|max:255',
-            'service_id'  => 'nullable|exists:services,id',
-            'category_id' => 'nullable|exists:service_categories,service_categoryID',
-            'radius'      => 'nullable|integer|min:1|max:100',
-            'search'      => 'nullable|string|max:255',
-        ]);
-
-        $place      = trim($request->input('place'));
-        $radius     = $request->input('radius', 20);
-        $serviceId  = $request->input('service_id');
-        $categoryId = $request->input('category_id');
-        $searchText = $request->input('search');
-
-        $coords = $geocoder->geocode($place);
-
-        $query = Technician::with(['user', 'services.categories'])
-            ->where('verified', true)
-            ->whereHas('user', fn($q) => $q->where('is_active', true));
-
-        if ($searchText) {
-            $query->whereHas('services', function ($q) use ($searchText) {
-                $q->where('name', 'LIKE', "%{$searchText}%")
-                  ->orWhere('swahili_name', 'LIKE', "%{$searchText}%");
-            });
-        }
-
-        if ($serviceId) {
-            $query->whereHas('services', fn($q) => $q->where('services.id', $serviceId));
-        }
-
-        if ($categoryId) {
-            $query->whereHas('services.categories', function ($q) use ($categoryId) {
-                $q->where('service_categories.service_categoryID', $categoryId);
-            });
-        }
-
-        if ($coords) {
-            $query->selectRaw("
-                technicians.*,
-                (
-                    6371 * acos(
-                        cos(radians(?)) * cos(radians(latitude)) *
-                        cos(radians(longitude) - radians(?)) +
-                        sin(radians(?)) * sin(radians(latitude))
-                    )
-                ) AS distance
-            ", [$coords['lat'], $coords['lng'], $coords['lat']]);
-
-            $query->where(function ($q) use ($place, $radius, $coords) {
-                $q->where('area', 'like', "%{$place}%")
-                  ->orWhereRaw("
-                        (6371 * acos(
-                            cos(radians(?)) * cos(radians(latitude)) *
-                            cos(radians(longitude) - radians(?)) +
-                            sin(radians(?)) * sin(radians(latitude))
-                        )) <= ?
-                    ", [$coords['lat'], $coords['lng'], $coords['lat'], $radius]);
-            });
-
-            $query->orderBy('distance', 'asc');
-        } else {
-            $query->where('area', 'like', "%{$place}%");
-        }
-
-        $formatted = $query->get()->map(fn($tech) => $this->formatTechnician($tech));
-
-        return $this->successResponse([
-            'technicians' => $formatted,
-            'search' => [
-                'place'     => $place,
-                'latitude'  => $coords['lat'] ?? null,
-                'longitude' => $coords['lng'] ?? null,
-            ],
-            'filters' => [
-                'service_id'  => $serviceId,
-                'category_id' => $categoryId,
-            ],
-            'meta' => [
-                'total_found' => $formatted->count(),
-                'has_filters' => !empty($serviceId) || !empty($categoryId),
-            ],
-        ], $formatted->isEmpty() ? 'No technicians found.' : 'Technicians found.');
-    }
-
-    // ──────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════
     // TRACKING
-    // ──────────────────────────────────────────────
-
+    // ═══════════════════════════════════════════════════════
     public function getTrackingData(Request $request, $requestId)
     {
         $requestModel = ServiceRequest::with(['technician', 'customer'])->findOrFail($requestId);
@@ -840,34 +824,437 @@ class TechnicianController extends BaseApiController
 
         $distance   = $this->haversineGreatCircleDistance($techLat, $techLng, $custLat, $custLng);
         $etaMinutes = $distance > 0 ? ($distance / 30) * 60 : 0;
-        $etaTime    = now()->addMinutes($etaMinutes);
 
         return $this->successResponse([
-            'technician_location' => [
-                'lat' => (float) $techLat,
-                'lng' => (float) $techLng,
-            ],
-            'customer_location' => [
-                'lat' => (float) $custLat,
-                'lng' => (float) $custLng,
-            ],
-            'distance_km' => round($distance, 2),
-            'eta'         => $etaTime->toIso8601String(),
+            'technician_location' => ['lat' => (float) $techLat, 'lng' => (float) $techLng],
+            'customer_location'   => ['lat' => (float) $custLat, 'lng' => (float) $custLng],
+            'distance_km'         => round($distance, 2),
+            'eta'                 => now()->addMinutes($etaMinutes)->toIso8601String(),
         ], 'Tracking data retrieved.');
     }
 
-    // ──────────────────────────────────────────────
-    // ADMIN: VERIFY TECHNICIAN
-    // ──────────────────────────────────────────────
-
-    public function verify($id)
+    // ═══════════════════════════════════════════════════════
+    // ADMIN — single list (legacy)
+    // ═══════════════════════════════════════════════════════
+    public function adminIndex(Request $request)
     {
-        $technician = Technician::with('user')->find($id);
+        $this->checkPermission('technicians.view');
+
+        $query = Technician::with(['user', 'services', 'portfolios']);
+
+        $this->applyAdminSearch($query, $request->input('search'));
+
+        return $this->successResponse($query->paginate((int) $request->input('per_page', 15)));
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // ADMIN — split lists
+    // ═══════════════════════════════════════════════════════
+    public function adminPendingIndex(Request $request)
+    {
+        $this->checkPermission('technicians.view');
+
+        $query = Technician::with(['user', 'services', 'portfolios'])
+            ->where(function ($q) {
+                $q->where('verified', false)
+                  ->orWhere('verification_status', '!=', 'approved')
+                  ->orWhereNull('verification_status');
+            });
+
+        $this->applyAdminSearch($query, $request->input('search'));
+
+        return $this->successResponse(
+            $query->latest('created_at')->paginate((int) $request->input('per_page', 15))
+        );
+    }
+
+    public function adminApprovedIndex(Request $request)
+    {
+        $this->checkPermission('technicians.view');
+
+        $query = Technician::with(['user.subscriptions.rateCard', 'services', 'portfolios'])
+            ->where('verified', true)
+            ->where('verification_status', 'approved');
+
+        $this->applyAdminSearch($query, $request->input('search'));
+
+        return $this->successResponse(
+            $query->latest('created_at')->paginate((int) $request->input('per_page', 15))
+        );
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // ADMIN — biometrics
+    // ═══════════════════════════════════════════════════════
+    public function adminBiometrics($id)
+    {
+        $this->checkPermission('technicians.view');
+
+        $technician = Technician::with(['user', 'services'])->find($id);
 
         if (!$technician) {
             return $this->notFound('Technician not found.');
         }
 
+        $technician->makeVisible([
+            'nida',
+            'fingerprint_data',
+            'face_data',
+            'id_document_image',
+        ]);
+
+        $idDocUrl = $technician->id_document_image
+            ? url('storage/' . ltrim($technician->id_document_image, '/'))
+            : null;
+
+        $profilePhotoUrl = $technician->profile_photo
+            ? url('storage/' . ltrim($technician->profile_photo, '/'))
+            : null;
+
+        return $this->successResponse([
+            'technician_id'         => $technician->id,
+            'user'                  => $technician->user?->only(['id', 'name', 'email', 'phone']),
+            'profile_photo_url'     => $profilePhotoUrl,
+
+            'nida'                  => $technician->nida,
+            'id_document_type'      => $technician->id_document_type,
+            'id_document_image_url' => $idDocUrl,
+
+            'fingerprint_enrolled'    => (bool) $technician->fingerprint_enrolled,
+            'fingerprint_data'        => $technician->fingerprint_data,
+            'fingerprint_captured_at' => $technician->fingerprint_captured_at,
+            'fingerprint_hash'        => $technician->fingerprint_hash,
+            'fingerprint_template'    => $technician->fingerprint_template,
+
+            'face_enrolled'    => (bool) $technician->face_enrolled,
+            'face_data'        => $technician->face_data,
+            'face_captured_at' => $technician->face_captured_at,
+
+            'next_of_kin_name'         => $technician->next_of_kin_name,
+            'next_of_kin_phone'        => $technician->next_of_kin_phone,
+            'next_of_kin_relationship' => $technician->next_of_kin_relationship,
+
+            'area'      => $technician->area,
+            'latitude'  => $technician->latitude,
+            'longitude' => $technician->longitude,
+
+            'services'  => $technician->services->map(fn ($s) => [
+                'id'   => $s->id,
+                'name' => $s->name,
+            ])->values(),
+
+            'registration_step'      => (int) $technician->registration_step,
+            'registration_completed' => (bool) $technician->registration_completed,
+            'verification_status'    => $technician->verification_status,
+            'verified'               => (bool) $technician->verified,
+        ]);
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // PRIVATE — shared admin search
+    // ═══════════════════════════════════════════════════════
+    private function applyAdminSearch($query, ?string $search): void
+    {
+        if (!$search) {
+            return;
+        }
+
+        $query->where(function ($q) use ($search) {
+            $q->where('area', 'LIKE', "%{$search}%")
+              ->orWhereHas('user', function ($uq) use ($search) {
+                  $uq->where('name', 'LIKE', "%{$search}%")
+                     ->orWhere('email', 'LIKE', "%{$search}%")
+                     ->orWhere('phone', 'LIKE', "%{$search}%");
+              })
+              ->orWhereHas('services', function ($sq) use ($search) {
+                  $sq->where('name', 'LIKE', "%{$search}%")
+                     ->orWhere('swahili_name', 'LIKE', "%{$search}%");
+              });
+        });
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // PRIVATE — phone / email helpers
+    // ═══════════════════════════════════════════════════════
+    private function normalizePhone(string $raw): string
+    {
+        $digits = preg_replace('/\D+/', '', $raw) ?? '';
+
+        if (str_starts_with($digits, '00')) {
+            return substr($digits, 2);
+        }
+        if (str_starts_with($digits, '0')) {
+            return '255' . substr($digits, 1);
+        }
+
+        return $digits;
+    }
+
+    private function isValidPhone(string $normalized): bool
+    {
+        if (!preg_match('/^\d{9,15}$/', $normalized)) {
+            return false;
+        }
+        if (str_starts_with($normalized, '255')) {
+            return (bool) preg_match('/^255[67]\d{8}$/', $normalized);
+        }
+        return true;
+    }
+
+    private function phoneVariants(string $phone): array
+    {
+        $n        = $this->normalizePhone($phone);
+        $variants = [$n, '+' . $n];
+
+        if (str_starts_with($n, '255')) {
+            $variants[] = '0' . substr($n, 3);
+        }
+
+        return array_values(array_unique($variants));
+    }
+
+    private function resolveDraft(string $identifier, ?int $draftId): ?RegistrationDraft
+    {
+        $identifier = trim($identifier);
+        $query      = RegistrationDraft::query();
+
+        if ($draftId) {
+            $query->whereKey($draftId);
+        }
+
+        if (filter_var($identifier, FILTER_VALIDATE_EMAIL)) {
+            $query->where('email', strtolower($identifier));
+        } else {
+            $query->whereIn('phone', $this->phoneVariants($identifier));
+        }
+
+        return $query->latest('id')->first();
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // PRIVATE — draft helpers
+    // ═══════════════════════════════════════════════════════
+    private function draftOrFail(Request $request): RegistrationDraft
+    {
+        $subject = $request->user();
+
+        abort_unless(
+            $subject instanceof RegistrationDraft,
+            403,
+            'A registration session token is required.'
+        );
+
+        abort_if(
+            !$subject->canProceed(),
+            422,
+            'Registration session expired or already submitted.'
+        );
+
+        abort_unless(
+            $subject->isOtpVerified(),
+            403,
+            'Verify your phone/email with OTP before continuing registration.'
+        );
+
+        return $subject;
+    }
+
+    private function issueDraftToken(RegistrationDraft $draft, string $message): JsonResponse
+    {
+        $draft->tokens()->delete();
+        $token = $draft->createToken('registration')->plainTextToken;
+
+        return $this->successResponse([
+            'draft_id'           => $draft->id,
+            'registration_token' => $token,
+            'step'               => $draft->registration_step,
+        ], $message);
+    }
+
+    private function createVerificationOtpForDraft(
+        RegistrationDraft $draft,
+        string $plainOtp,
+        Request $request
+    ): Otp {
+        Otp::where('type', Otp::TYPE_EMAIL_VERIFICATION)
+            ->where('phone', $draft->phone)
+            ->delete();
+
+        $otp = Otp::create([
+            'email'      => $draft->email,
+            'phone'      => $draft->phone,
+            'otp'        => Hash::make($plainOtp),
+            'token'      => Otp::generateToken(),
+            'type'       => Otp::TYPE_EMAIL_VERIFICATION,
+            'name'       => $draft->name,
+            'expires_at' => now()->addMinutes(10),
+            'is_used'    => false,
+            'attempts'   => 0,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
+
+        $otp->plain_otp = $plainOtp;
+
+        return $otp;
+    }
+
+    private function deliverVerificationOtpForDraft(
+        RegistrationDraft $draft,
+        Otp $otp,
+        string $plainOtp,
+        OtpDeliveryService $otpDelivery
+    ): array {
+        $transient = new User([
+            'name'  => $draft->name,
+            'email' => $draft->email,
+            'phone' => $draft->phone,
+        ]);
+        $transient->id = null;
+
+        return $this->deliverVerificationOtp($transient, $otp, $plainOtp, $otpDelivery);
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // PRIVATE — OTP delivery
+    // ═══════════════════════════════════════════════════════
+    private function deliverVerificationOtp(
+        User $user,
+        Otp $otp,
+        string $plainOtp,
+        OtpDeliveryService $otpDelivery
+    ): array {
+        $smsSent        = false;
+        $primaryChannel = 'none';
+        $primarySentTo  = null;
+
+        if (!empty($user->phone)) {
+            try {
+                $result = $otpDelivery->deliver(
+                    $user,
+                    $otp,
+                    method_exists($otp, 'getVerificationUrl') ? $otp->getVerificationUrl() : null
+                );
+
+                $reported = $result['channel'] ?? 'sms';
+
+                if ($reported === 'sms') {
+                    $smsSent        = true;
+                    $primaryChannel = 'sms';
+                    $primarySentTo  = $result['otp_sent_to'] ?? $user->phone;
+                } elseif ($reported === 'email') {
+                    $primaryChannel = 'email';
+                    $primarySentTo  = $result['otp_sent_to'] ?? $user->email;
+                }
+            } catch (\Throwable $e) {
+                Log::warning('SMS OTP delivery failed', [
+                    'phone' => $user->phone,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        $emailSent = false;
+        if (!empty($user->email) && $primaryChannel !== 'email') {
+            try {
+                $this->sendOtpEmail($user, $plainOtp);
+                $emailSent = true;
+
+                if ($primaryChannel === 'none') {
+                    $primaryChannel = 'email';
+                    $primarySentTo  = $user->email;
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Email OTP delivery failed', [
+                    'email' => $user->email,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        } elseif ($primaryChannel === 'email') {
+            $emailSent = true;
+        }
+
+        return [
+            'sms_sent'        => $smsSent,
+            'email_sent'      => $emailSent,
+            'primary_channel' => $primaryChannel,
+            'primary_sent_to' => $primarySentTo,
+            'message'         => $this->buildOtpMessage($user, $smsSent, $emailSent),
+        ];
+    }
+
+    private function sendOtpEmail(User $user, string $plainOtp): void
+    {
+        Mail::raw(
+            "Your Nearby Fundi verification code is: {$plainOtp}\n\n"
+            . "This code expires in 10 minutes.\n"
+            . "If you didn't request it, please ignore this email.",
+            function ($message) use ($user) {
+                $message->to($user->email)->subject('Your Nearby Fundi Verification Code');
+            }
+        );
+    }
+
+    private function buildOtpMessage(User $user, bool $sms, bool $email): string
+    {
+        if ($sms && $email) {
+            return 'A verification code has been sent to your phone and email.';
+        }
+        if ($sms) {
+            return "A verification code has been sent via SMS to {$user->phone}.";
+        }
+        if ($email) {
+            return "A verification code has been sent to your email ({$user->email}).";
+        }
+
+        return 'We could not deliver the verification code. Please use the resend option.';
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // PRIVATE — approval
+    // ═══════════════════════════════════════════════════════
+    private function approveTechnician(
+        $id,
+        ApprovalNotificationService $notifier,
+        SmsNotificationService $sms,
+        bool $requireCompleted,
+        string $event,
+        string $message
+    ): JsonResponse {
+        $technician = Technician::with('user')->find($id);
+
+        if (!$technician) {
+            return $this->notFound('Technician not found.');
+        }
+        if ($requireCompleted && !$technician->registration_completed) {
+            return $this->errorResponse('Technician has not completed registration.', 422);
+        }
+        if ($technician->verified && $technician->verification_status === 'approved') {
+            return $this->errorResponse('Technician is already approved.', 422);
+        }
+        if (!$technician->user) {
+            return $this->errorResponse('Technician has no user account.', 422);
+        }
+
+        try {
+            $subscription = $this->activateApprovedTechnician($technician);
+        } catch (\Throwable $e) {
+            Log::error('Technician approval failed', ['technician_id' => $id, 'error' => $e->getMessage()]);
+            return $this->serverError('Approval failed: ' . $e->getMessage());
+        }
+
+        $notifier->notifyApproved($technician->user, $subscription, $technician->id, $event);
+
+        $trialDays = max(1, (int) ($subscription->rateCard->duration_days ?? 1));
+        $sms->notifyFundiApproved($technician->user, $trialDays);
+
+        $this->logAudit("{$event}_technician", 'technician', $technician->id, "Technician #{$technician->id} {$event}");
+
+        return $this->successResponse($technician->fresh()->load('user'), $message);
+    }
+
+    private function activateApprovedTechnician(Technician $technician): Subscription
+    {
         DB::beginTransaction();
         try {
             $technician->update([
@@ -876,33 +1263,27 @@ class TechnicianController extends BaseApiController
             ]);
 
             $user = $technician->user;
-            if ($user) {
-                $user->update([
-                    'status'    => 'active',
-                    'is_active' => true,
-                ]);
-            }
+            $user->update(['status' => 'active', 'is_active' => true]);
 
-            $freeTrialRate = RateCard::where('slug', 'free-trial')->first();
-            if (!$freeTrialRate) {
-                $freeTrialRate = RateCard::create([
+            $freeTrialRate = RateCard::firstOrCreate(
+                ['slug' => 'free-trial'],
+                [
                     'name'          => 'Free Trial',
-                    'slug'          => 'free-trial',
                     'price'         => 0,
                     'duration_days' => 1,
                     'currency'      => 'TZS',
                     'description'   => '1-day free trial after verification',
                     'is_active'     => true,
                     'display_order' => 0,
-                ]);
-            }
+                ]
+            );
 
             $subscription = Subscription::create([
                 'user_id'        => $user->id,
                 'rate_card_id'   => $freeTrialRate->id,
                 'status'         => Subscription::STATUS_ACTIVE,
                 'start_date'     => now(),
-                'expiry_date'    => now()->addDay(),
+                'expiry_date'    => now()->addDays(max(1, (int) $freeTrialRate->duration_days)),
                 'amount_paid'    => 0,
                 'currency'       => 'TZS',
                 'payment_method' => 'Free Trial',
@@ -912,167 +1293,19 @@ class TechnicianController extends BaseApiController
 
             $user->activateSubscription($subscription);
 
-            $this->createNotification(
-                $user,
-                'Account Verified 🎉',
-                'Your fundi account has been verified! You now have a 1-day free trial.',
-                'technician_verified',
-                [
-                    'technician_id' => $technician->id,
-                    'trial_expires' => $subscription->expiry_date->toIso8601String(),
-                ]
-            );
-
             DB::commit();
-
-            $this->logAudit('verify_technician', 'technician', $technician->id, "Technician #{$technician->id} verified and free trial activated");
-
-            return $this->successResponse(
-                $technician->fresh()->load('user'),
-                'Technician verified successfully and free trial activated.'
-            );
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return $this->serverError('Verification failed: ' . $e->getMessage());
-        }
-    }
-
-    // ──────────────────────────────────────────────
-    // ADMIN: UPDATE SERVICES (legacy)
-    // ──────────────────────────────────────────────
-
-    public function updateServices(Request $request)
-    {
-        $technician = $request->user()->technician;
-
-        if (!$technician) {
-            return $this->notFound('Technician not found.');
-        }
-
-        $data = $request->validate([
-            'services'   => 'required|array|min:1',
-            'services.*' => 'exists:services,id',
-        ]);
-
-        $technician->services()->sync($data['services']);
-
-        $this->logAudit('update_technician_services', 'technician', $technician->id, 'Technician services updated');
-
-        return $this->successResponse(
-            $technician->load('services'),
-            'Services updated successfully.'
-        );
-    }
-
-    /**
-     * Admin: List all technicians
-     */
-    public function adminIndex(Request $request)
-    {
-        $this->checkPermission('technicians.view');
-
-        $query = Technician::with(['user', 'services', 'servicePrices', 'portfolios']);
-
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q->where('area', 'LIKE', "%{$search}%")
-                  ->orWhereHas('user', function ($uq) use ($search) {
-                      $uq->where('name', 'LIKE', "%{$search}%")
-                         ->orWhere('email', 'LIKE', "%{$search}%");
-                  });
-            });
-        }
-
-        $technicians = $query->paginate($request->input('per_page', 15));
-
-        return $this->successResponse($technicians);
-    }
-
-    // ──────────────────────────────────────────────
-    // PRIVATE HELPERS
-    // ──────────────────────────────────────────────
-
-    /** Shared response shape for nearby() and nearbyByPlace(). */
-    private function formatTechnician(Technician $tech): array
-    {
-        return [
-            'id'             => $tech->id,
-            'user_id'        => $tech->user_id,
-            'name'           => $tech->user->name ?? 'Unknown',
-            'email'          => $tech->user->email ?? '',
-            'phone'          => $tech->user->phone ?? '',
-            'profile_photo'  => $tech->profile_photo ? url('storage/' . $tech->profile_photo) : null,
-            'bio'            => $tech->bio,
-            'area'           => $tech->area,
-            'latitude'       => $tech->latitude ? (float) $tech->latitude : null,
-            'longitude'      => $tech->longitude ? (float) $tech->longitude : null,
-            'hourly_rate'    => $tech->hourly_rate ? (float) $tech->hourly_rate : null,
-            'experience'     => (int) ($tech->experience ?? 0),
-            'rating'         => (float) ($tech->rating ?? 0),
-            'is_online'      => (bool) $tech->is_online,
-            'verified'       => (bool) $tech->verified,
-            'distance'       => isset($tech->distance) ? (float) round($tech->distance, 2) : null,
-            'services'       => $tech->services->pluck('name')->toArray(),
-            'service_prices' => $tech->servicePrices->map(function ($service) {
-                return [
-                    'id'        => $service->id,
-                    'name'      => $service->name,
-                    'min_price' => (float) $service->pivot->min_price,
-                    'max_price' => (float) $service->pivot->max_price,
-                ];
-            })->values()->toArray(),
-        ];
-    }
-
-    private function validateAndGeocodeArea(string $area, ?float $lat, ?float $lng, GeocodingService $geocoder): array
-    {
-        if ($lat !== null && $lng !== null) {
-            if ($lat < -90 || $lat > 90 || $lng < -180 || $lng > 180) {
-                abort(422, 'Invalid coordinates provided.');
-            }
-            return ['lat' => $lat, 'lng' => $lng];
-        }
-
-        $coords = $geocoder->geocode($area);
-        if (!$coords) {
-            abort(422, "We couldn't locate '{$area}' in OpenStreetMap. Please check the spelling or enter a more specific location.");
-        }
-
-        return $coords;
-    }
-
-    /**
-     * Create a clean notification (DB + FCM)
-     * Title & body are always sanitized – never empty or numeric.
-     */
-    private function createNotification(User $user, string $title, string $body, string $type, array $data = []): void
-    {
-        try {
-            $cleanTitle = (trim($title) !== '' && !is_numeric($title))
-                ? trim($title) : config('app.name', 'NearbyFundi');
-
-            $cleanBody = (trim($body) !== '' && !is_numeric($body))
-                ? trim($body) : 'You have a new update';
-
-            $notification = Notification::create([
-                'user_id' => $user->id,
-                'title'   => $cleanTitle,
-                'body'    => $cleanBody,
-                'type'    => $type,
-                'data'    => json_encode($data),
-                'is_read' => false,
-            ]);
-
-            app(\App\Services\FcmService::class)
-                ->sendFromNotification($notification->fresh('user'));
+            return $subscription;
         } catch (\Throwable $e) {
-            Log::error('Failed to create notification: ' . $e->getMessage());
+            DB::rollBack();
+            throw $e;
         }
     }
 
-    private function haversineGreatCircleDistance($latitudeFrom, $longitudeFrom, $latitudeTo, $longitudeTo, $earthRadius = 6371)
-    {
+    private function haversineGreatCircleDistance(
+        $latitudeFrom, $longitudeFrom,
+        $latitudeTo,   $longitudeTo,
+        $earthRadius = 6371
+    ) {
         $latFrom = deg2rad($latitudeFrom);
         $lonFrom = deg2rad($longitudeFrom);
         $latTo   = deg2rad($latitudeTo);
@@ -1089,12 +1322,24 @@ class TechnicianController extends BaseApiController
         return $angle * $earthRadius;
     }
 
-    public function uploadImage($file)
-    {
-        if (!$file || !$file->isValid()) {
-            return null;
+    // ═══════════════════════════════════════════════════════
+    // PRIVATE — geocoding helper (used by registerStep1)
+    // ═══════════════════════════════════════════════════════
+    private function validateAndGeocodeArea(
+        string $area,
+        ?float $lat,
+        ?float $lng,
+        GeocodingService $geocoder
+    ): array {
+        if ($lat !== null && $lng !== null) {
+            return ['lat' => $lat, 'lng' => $lng];
         }
 
-        return $file->store('technicians', 'public');
+        $coords = $geocoder->geocode($area);
+        if (!$coords) {
+            abort(422, "Could not locate the area '{$area}'. Please check the spelling or provide latitude/longitude.");
+        }
+
+        return $coords;
     }
 }

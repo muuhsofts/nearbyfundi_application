@@ -162,7 +162,8 @@ class AuthController extends BaseApiController
             return $this->successResponse(null, 'If the account exists, a new OTP was sent.');
         }
 
-        if ($user->email_verified_at) {
+        // ✅ FIX: Check both email and phone verified status
+        if ($user->email_verified_at || $user->phone_verified_at) {
             return $this->errorResponse('Account is already verified.', 422);
         }
 
@@ -191,6 +192,7 @@ class AuthController extends BaseApiController
             'identifier' => 'required_without:email|string',
             'email'      => 'required_without:identifier|string',
             'otp'        => 'required|string|size:6',
+            'fcm_token'  => 'nullable|string|max:255',
         ]);
 
         $identifier = $request->input('identifier', $request->input('email'));
@@ -220,11 +222,26 @@ class AuthController extends BaseApiController
 
         $isFundi = $user->hasRole('FUNDI');
 
-        $user->update([
-            'status'            => $isFundi ? 'pending' : 'active',
-            'is_active'         => !$isFundi,
-            'email_verified_at' => now(), // also set for phone verification; login() checks this column
-        ]);
+        // ✅ FIX: Detect if identifier was an email or phone and update the correct column
+        $isEmail = filter_var($identifier, FILTER_VALIDATE_EMAIL) || $identifier === $user->email;
+
+        $updateData = [
+            'status'    => $isFundi ? 'pending' : 'active',
+            'is_active' => !$isFundi,
+        ];
+
+        if ($isEmail) {
+            $updateData['email_verified_at'] = now();
+        } else {
+            $updateData['phone_verified_at'] = now();
+        }
+
+        $user->update($updateData);
+
+        // Persist FCM token arriving with verification
+        if ($request->filled('fcm_token') && empty($user->fcm_device_token)) {
+            $user->update(['fcm_device_token' => $request->fcm_token]);
+        }
 
         $token = null;
         if (!$isFundi) {
@@ -335,7 +352,8 @@ class AuthController extends BaseApiController
             $user->update(['locked_until' => null]);
         }
 
-        if (is_null($user->email_verified_at)) {
+        // ✅ FIX: Allow login if EITHER email OR phone is verified
+        if (is_null($user->email_verified_at) && is_null($user->phone_verified_at)) {
             return $this->forbidden('Please verify your account first.');
         }
 

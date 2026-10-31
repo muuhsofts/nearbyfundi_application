@@ -9,73 +9,30 @@ class Post extends Model
 {
     protected $fillable = [
         'technician_id',
-        'title',
-        'content',
-        'images',          // ← now an array
-        'youtube_url',
-        'youtube_embed',
+        'images',
+        'video',
     ];
 
     protected $casts = [
-        'images' => 'array',   // automatically converts JSON ↔ PHP array
+        'images' => 'array',
     ];
 
-    // Full public URLs for all images (ready for the frontend)
+    // Full public URLs for all images
     public function getImageUrlsAttribute(): array
     {
         if (empty($this->images) || !is_array($this->images)) {
             return [];
         }
-
-        return array_map(function ($path) {
-            return $path ? url('storage/' . $path) : null;
-        }, $this->images);
+        return array_map(fn($path) => $path ? url('storage/' . $path) : null, $this->images);
     }
 
-    // Keep YouTube helpers exactly as they were
-    public function getYoutubeEmbedAttribute($value)
+    // Full public URL for the video
+    public function getVideoUrlAttribute(): ?string
     {
-        if ($value) {
-            return $value;
-        }
-
-        if ($this->youtube_url) {
-            return $this->convertToEmbedUrl($this->youtube_url);
-        }
-
-        return null;
+        return $this->video ? url('storage/' . $this->video) : null;
     }
 
-    public function convertToEmbedUrl($url)
-    {
-        if (strpos($url, 'youtu.be') !== false) {
-            $videoId = $this->extractVideoId($url);
-            if ($videoId) {
-                return "https://www.youtube.com/embed/{$videoId}";
-            }
-        }
-
-        if (strpos($url, 'youtube.com/watch') !== false) {
-            parse_str(parse_url($url, PHP_URL_QUERY), $params);
-            if (isset($params['v'])) {
-                return "https://www.youtube.com/embed/{$params['v']}";
-            }
-        }
-
-        if (strpos($url, 'youtube.com/embed') !== false) {
-            return $url;
-        }
-
-        return $url;
-    }
-
-    private function extractVideoId($url)
-    {
-        preg_match('/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([^&\n?#]+)/', $url, $matches);
-        return $matches[1] ?? null;
-    }
-
-    // Delete all physical files when the post is deleted
+    // Delete physical files when post is deleted
     protected static function booted()
     {
         static::deleting(function (Post $post) {
@@ -85,6 +42,9 @@ class Post extends Model
                         Storage::disk('public')->delete($path);
                     }
                 }
+            }
+            if ($post->video && Storage::disk('public')->exists($post->video)) {
+                Storage::disk('public')->delete($post->video);
             }
         });
     }
