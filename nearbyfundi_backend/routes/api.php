@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\PortfolioController;
 use App\Http\Controllers\Api\RequestController;
 use App\Http\Controllers\Api\JobController;
+use App\Http\Controllers\Api\TicketController;
 use App\Http\Controllers\Api\PostController;
 use App\Http\Controllers\Api\CommentController;
 use App\Http\Controllers\Api\LikeController;
@@ -162,7 +163,7 @@ Route::prefix('v3')->middleware(['auth:sanctum', 'active.session'])->group(funct
 });
 
 // =============================================
-// V4 – REQUESTS, JOBS & MONITORING
+// V4 – REQUESTS, JOBS, TICKETS & MONITORING
 //   requests.status: pending | accepted | cancelled | rejected
 //     pending -> accepted/rejected (fundi) | pending -> cancelled (customer)
 //     accepted / cancelled / rejected are LOCKED
@@ -192,6 +193,10 @@ Route::prefix('v4')->middleware(['auth:sanctum', 'active.session'])->group(funct
         ->whereNumber('id')->middleware('throttle:6,1');
     Route::post('jobs/{id}/verify-completion', [JobController::class, 'verifyCompletion'])
         ->whereNumber('id')->middleware('throttle:10,1');
+
+    // ── TICKETS (NEW: read-only, for FUNDI & CUSTOMER) ──────────────────
+    Route::get('tickets', [TicketController::class, 'index']);
+    Route::get('tickets/{id}', [TicketController::class, 'show'])->whereNumber('id');
 
     // Admin (static paths BEFORE {id})
     Route::get('admin/requests/stats', [RequestController::class, 'stats']);
