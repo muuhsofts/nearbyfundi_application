@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Str;
 
 class Ticket extends Model
 {
@@ -18,6 +19,7 @@ class Ticket extends Model
     ];
 
     protected $fillable = [
+        'ticket_number',
         'job_id',
         'status',
         'title',
@@ -33,6 +35,13 @@ class Ticket extends Model
 
     protected static function booted(): void
     {
+        // ticket number is generated automatically
+        static::creating(function (Ticket $ticket) {
+            if (empty($ticket->ticket_number)) {
+                $ticket->ticket_number = self::generateTicketNumber();
+            }
+        });
+
         static::updated(function (Ticket $ticket) {
             if ($ticket->wasChanged('status') && $ticket->status === self::STATUS_COMPLETED) {
 
@@ -51,11 +60,20 @@ class Ticket extends Model
                     if (!$hasOpen) {
                         $job->status       = Job::STATUS_COMPLETED;
                         $job->completed_at = now();
-                        $job->save(); // triggers Job::updated → cascades back
+                        $job->save(); // Job::updated completes any other open ticket
                     }
                 }
             }
         });
+    }
+
+    public static function generateTicketNumber(): string
+    {
+        do {
+            $number = 'TKT-' . now()->format('Ymd') . '-' . strtoupper(Str::random(6));
+        } while (self::where('ticket_number', $number)->exists());
+
+        return $number;
     }
 
     // ── Relationships ─────────────────────────────────────

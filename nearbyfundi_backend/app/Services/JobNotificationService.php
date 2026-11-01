@@ -3,20 +3,16 @@
 namespace App\Services;
 
 use App\Models\Job;
+use App\Models\Notification;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
-/**
- * Notifications for the job lifecycle.
- *
- * WIRE-UP: I could not see RequestNotificationService / SmsNotificationService,
- * so each method below logs and then calls deliver(). Make deliver() use the
- * same in-app + push + SMS channels your RequestNotificationService uses.
- * Suggested in-app notification types (the Flutter app routes on these):
- *   job_started, job_completion_code, job_completed
- */
 class JobNotificationService
 {
-    /** Customer marked an accepted request as a job → tell the fundi. */
+    public function __construct(
+        protected SmsNotificationService $smsNotificationService
+    ) {}
+
     public function jobStarted(Job $job): void
     {
         $job->loadMissing(['technician.user', 'customer', 'request.service']);
@@ -30,35 +26,36 @@ class JobNotificationService
         );
     }
 
-    /**
-     * Customer pressed "Mark Complete". The code goes to the FUNDI (never to
-     * the customer): the fundi reads it out once the work is truly finished and
-     * the customer types it in. This proves both sides agree the job is done.
-     */
-    public function completionCode(Job $job, string $plainOtp): void
+    /** Sends 6-digit OTP via SMS with customer name and service name */
+    public function completionCode(Job $job, string $plainOtp): bool
     {
-        $job->loadMissing(['technician.user']);
+        $job->loadMissing(['customer', 'request.service']);
 
-        $this->deliver(
-            $job->technician?->user?->id,
+        $customerName = $job->customer->name ?? 'Customer';
+        $serviceName  = $job->request->service->name ?? 'Service';
+        $jobNumber    = $job->job_number;
+
+        $message = "NearbyFundi: Verification code for {$customerName} and service {$serviceName} (Job #{$jobNumber}) is {$plainOtp}. Valid for 10 minutes. Provide it to your customer for mark job as completed.";
+
+        return $this->deliver(
+            $job->customer_id,
             'job_completion_code',
             'Job completion code',
-            "Code to close job {$job->job_number}: {$plainOtp}. Share it with the customer only when the work is done.",
+            $message,
             $job,
             sendSms: true
         );
     }
 
-    /** OTP verified → job + ticket completed → tell both sides. */
     public function jobCompleted(Job $job): void
     {
-        $job->loadMissing(['technician.user', 'customer']);
+        $job->loadMissing(['technician.user', 'customer', 'request.service']);
 
         $this->deliver(
             $job->technician?->user?->id,
             'job_completed',
             'Job completed',
-            "Job {$job->job_number} was confirmed as completed.",
+            "Job {$job->job_number} has been marked as completed.",
             $job
         );
 
@@ -66,20 +63,53 @@ class JobNotificationService
             $job->customer_id,
             'job_completed',
             'Job completed',
-            "Job {$job->job_number} is now completed.",
+            "Job {$job->job_number} has been confirmed complete.",
             $job
         );
     }
 
-    private function deliver(?int $userId, string $type, string $title, string $body, Job $job, bool $sendSms = false): void
+    private function deliver(?int $userId, string $type, string $title, string $body, Job $job, bool $sendSms = false): bool
     {
         if (!$userId) {
-            return;
+            return false;
         }
 
-        // TODO: replace with the project's real channel(s), e.g.
-        //   NotificationService::send($userId, $type, $title, $body, ['job_id' => $job->id]);
-        //   if ($sendSms) { app(SmsNotificationService::class)->send(...); }
-        Log::info('[JobNotification]', compact('userId', 'type', 'title', 'sendSms') + ['job_id' => $job->id]);
+        $success = true;
+
+        try {
+            $notification = Notification::create([
+                'user_id' => $userId,
+                'title'   => $title,
+                'body'    => $body,
+                'type'    => $type,
+                'data'    => json_encode(['job_id' => $job->id, 'job_number' => $job->job_number]),
+                'is_read' => false,
+            ]);
+
+            app(FcmService::class)->sendFromNotification($notification->fresh('user'));
+        } catch (Throwable $e) {
+            Log::error('Job in-app/FCM notification failed safely', [
+                'user_id' => $userId,
+                'error'   => $e->getMessage(),
+            ]);
+        }
+
+        if ($sendSms) {
+            try {
+                $user = \App\Models\User::find($userId);
+                if ($user) {
+                    $smsResult = $this->smsNotificationService->notifyJobCompletionCode($user, $job, $body);
+                    $success = (bool) ($smsResult['success'] ?? false);
+                }
+            } catch (Throwable $e) {
+                Log::error('Job SMS notification dispatch failed', [
+                    'user_id' => $userId,
+                    'error'   => $e->getMessage(),
+                ]);
+                $success = false;
+            }
+        }
+
+        return $success;
     }
 }

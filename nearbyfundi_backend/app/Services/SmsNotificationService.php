@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Job;
 use App\Models\ServiceRequest;
 use App\Models\SmsLog;
 use App\Models\Technician;
@@ -22,6 +23,15 @@ class SmsNotificationService
                  . "It expires in {$validMinutes} minutes. Never share it with anyone.";
 
         return $this->sendSms($user, $message, 'registration_otp', ['user_id' => $user->id]);
+    }
+
+    /** Send the job completion OTP code by SMS to the user/fundi. */
+    public function notifyJobCompletionCode(User $user, Job $job, string $message): array
+    {
+        return $this->sendSms($user, $message, 'job_completion_code', [
+            'job_id'     => $job->id,
+            'job_number' => $job->job_number,
+        ]);
     }
 
     /**
@@ -162,7 +172,7 @@ class SmsNotificationService
             return ['success' => false, 'error' => 'User has no phone number', 'type' => $type];
         }
 
-        $logMessage = $type === 'registration_otp' ? 'Nearbyfundi: [OTP hidden]' : $message;
+        $logMessage = in_array($type, ['registration_otp', 'job_completion_code']) ? 'Nearbyfundi: [OTP hidden]' : $message;
 
         try {
             $result = $this->smsService->sendSms($user->phone, $message);

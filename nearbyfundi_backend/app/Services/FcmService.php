@@ -56,10 +56,6 @@ class FcmService
         return $this->enabled && $this->messaging !== null;
     }
 
-    // ============================================================
-    // PREFERRED ENTRY POINT
-    // ============================================================
-
     public function sendFromNotification(NotificationModel $notification): bool
     {
         $user = $notification->user;
@@ -105,10 +101,6 @@ class FcmService
 
         return $this->sendVisible($token, $title, $body, $data, $this->unreadCountFor($user));
     }
-
-    // ============================================================
-    // SENDERS — kreait/firebase-php v7/v8 API
-    // ============================================================
 
     protected function sendVisible(
         string $deviceToken,
@@ -160,7 +152,7 @@ class FcmService
 
         $message = CloudMessage::new()
             ->withToken($deviceToken)
-            ->withAndroidConfig(['priority' => 'high']) // no 'notification' key → nothing in the tray
+            ->withAndroidConfig(['priority' => 'high'])
             ->withApnsConfig([
                 'headers' => [
                     'apns-priority'  => '5',
@@ -180,27 +172,14 @@ class FcmService
             return false;
         }
 
-        if (!is_object($sender) || !is_object($message)) {
-            Log::error('sendChatNotification() requires model objects', [
-                'sender_type'  => get_debug_type($sender),
-                'message_type' => get_debug_type($message),
-            ]);
-            return false;
-        }
-
         $token = $this->getUserToken($receiver);
         if (!$token) {
-            Log::info("Receiver #{$receiver->id} has no FCM token");
             return false;
         }
 
         $senderName = trim((string) ($sender->name ?? ''));
         $title      = $senderName !== '' ? $senderName : 'New Message';
-
-        $body = trim($this->getNotificationBody($message));
-        if (!$this->isValidText($body)) {
-            $body = 'New message';
-        }
+        $body       = trim($this->getNotificationBody($message));
 
         $data = [
             'type'            => 'chat_message',
@@ -210,24 +189,14 @@ class FcmService
             'message_id'      => (string) ($message->id ?? ''),
             'sender_id'       => (string) ($sender->id ?? ''),
             'sender_name'     => $senderName !== '' ? $senderName : 'Unknown',
-            'message_type'    => $message->message_type ?? 'text',
+            'msg_type'        => $message->message_type ?? 'text', // 👈 FIXED: Renamed from reserved 'message_type' to 'msg_type'
             'unread_count'    => (string) ($this->unreadCountFor($receiver) + 1),
             'timestamp'       => now()->toIso8601String(),
             'priority'        => 'high',
         ];
 
-        if (!empty($message->file_path)) {
-            $data['file_url']  = asset('storage/' . $message->file_path);
-            $data['file_name'] = $message->file_name ?? 'attachment';
-            $data['file_type'] = $message->file_mime_type ?? 'unknown';
-        }
-
         return $this->sendSilentDataToDevice($token, $data);
     }
-
-    // ============================================================
-    // HELPERS
-    // ============================================================
 
     protected function dispatch(CloudMessage $message, string $deviceToken): bool
     {
@@ -235,7 +204,6 @@ class FcmService
             $this->messaging->send($message);
             return true;
         } catch (NotFound $e) {
-            // Token is unregistered / app uninstalled — stop using it.
             Log::warning('FCM token is no longer valid — clearing it.');
             User::where('fcm_device_token', $deviceToken)->update(['fcm_device_token' => null]);
             return false;
@@ -286,12 +254,6 @@ class FcmService
         if (!$user) return null;
         if (!empty($user->fcm_device_token)) return $user->fcm_device_token;
         if (!empty($user->device_token)) return $user->device_token;
-
-        if (method_exists($user, 'deviceTokens')) {
-            $latest = $user->deviceTokens()->latest()->first();
-            if ($latest) return $latest->token;
-        }
-
         return null;
     }
 
@@ -300,28 +262,6 @@ class FcmService
         if (empty($message) || !is_object($message)) {
             return 'New message';
         }
-
-        if (($message->message_type ?? 'text') === 'text') {
-            $content = trim((string) ($message->content ?? ''));
-            return $content !== '' ? $content : 'New message';
-        }
-
-        $labels = [
-            'image' => '📷 Image',
-            'video' => '🎬 Video',
-            'voice' => '🎤 Voice Message',
-            'file'  => '📎 File',
-        ];
-
-        $label = $labels[$message->message_type] ?? '📎 Attachment';
-
-        if (!empty($message->file_name)) {
-            $label .= ': ' . $message->file_name;
-        }
-        if (!empty($message->content)) {
-            $label .= ' - ' . mb_substr($message->content, 0, 50);
-        }
-
-        return $label;
+        return trim((string) ($message->content ?? 'New message'));
     }
 }

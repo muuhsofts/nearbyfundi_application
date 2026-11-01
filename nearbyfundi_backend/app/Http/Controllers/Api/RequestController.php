@@ -12,7 +12,6 @@ use App\Services\RequestNotificationService;
 use App\Traits\Auditable;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
-use App\Models\Job;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -25,6 +24,10 @@ use Illuminate\Validation\ValidationException;
  *   pending  → cancelled  (the customer who created it)
  *   accepted / cancelled / rejected are LOCKED:
  *      an accepted request can no longer be cancelled or rejected.
+ *
+ * on-progress / completed belong to the JOB and its TICKET (see JobController):
+ *   accepted request --[Mark as Job]--> job + ticket (on-progress)
+ *   job --[SMS OTP confirmed]--> job + ticket completed
  */
 class RequestController extends BaseApiController
 {
@@ -321,7 +324,7 @@ class RequestController extends BaseApiController
 
             DB::commit();
 
-            $serviceRequest->load(['customer', 'technician.user', 'service', 'category']);
+            $serviceRequest->load(['customer', 'technician.user', 'service', 'category', 'job']);
 
             try {
                 event(new RequestCreated($serviceRequest));
@@ -370,7 +373,7 @@ class RequestController extends BaseApiController
             $this->applyTransition($serviceRequest, $newStatus, $user, $request->ip());
 
             return $this->successResponse(
-                $this->formatSingleRequest($serviceRequest->fresh(['customer', 'technician.user', 'service', 'category'])),
+                $this->formatSingleRequest($serviceRequest->fresh(['customer', 'technician.user', 'service', 'category', 'job'])),
                 'Status updated successfully.'
             );
         } catch (ValidationException $e) {
@@ -401,7 +404,7 @@ class RequestController extends BaseApiController
             $this->applyTransition($serviceRequest, ServiceRequest::STATUS_CANCELLED, $user, $request->ip());
 
             return $this->successResponse(
-                $this->formatSingleRequest($serviceRequest->fresh(['customer', 'technician.user', 'service', 'category'])),
+                $this->formatSingleRequest($serviceRequest->fresh(['customer', 'technician.user', 'service', 'category', 'job'])),
                 'Request cancelled successfully.'
             );
         } catch (ModelNotFoundException $e) {
@@ -427,7 +430,7 @@ class RequestController extends BaseApiController
             $perPage = (int) $request->input('per_page', 50);
 
             if ($user->hasRole('CUSTOMER')) {
-                $requests = ServiceRequest::with(['technician.user', 'service', 'category'])
+                $requests = ServiceRequest::with(['technician.user', 'service', 'category', 'job'])
                     ->where('customer_id', $user->id)
                     ->latest()->paginate($perPage);
             } elseif ($user->hasRole('FUNDI')) {
@@ -435,14 +438,14 @@ class RequestController extends BaseApiController
                 if (!$technician) {
                     return $this->successResponse($this->emptyPage($perPage), 'No requests found');
                 }
-                $requests = ServiceRequest::with(['customer', 'service', 'category'])
+                $requests = ServiceRequest::with(['customer', 'service', 'category', 'job'])
                     ->where('technician_id', $technician->id)
                     ->latest()->paginate($perPage);
             } else {
                 if (!$user->can('requests.view')) {
                     return $this->forbidden('Unauthorized. You need requests.view permission.');
                 }
-                $requests = ServiceRequest::with(['customer', 'technician.user', 'service', 'category'])
+                $requests = ServiceRequest::with(['customer', 'technician.user', 'service', 'category', 'job'])
                     ->latest()->paginate($perPage);
             }
 
@@ -461,7 +464,7 @@ class RequestController extends BaseApiController
                 return $this->forbidden('Only customers can view their requests.');
             }
 
-            $query = ServiceRequest::with(['technician.user', 'service', 'category'])
+            $query = ServiceRequest::with(['technician.user', 'service', 'category', 'job'])
                 ->where('customer_id', $user->id);
 
             if ($request->filled('status') && in_array($request->status, ServiceRequest::STATUSES, true)) {
@@ -492,7 +495,7 @@ class RequestController extends BaseApiController
                 return $this->successResponse($this->emptyPage($perPage), 'No requests found');
             }
 
-            $query = ServiceRequest::with(['customer', 'service', 'category'])
+            $query = ServiceRequest::with(['customer', 'service', 'category', 'job'])
                 ->where('technician_id', $technician->id);
 
             if ($request->filled('status') && in_array($request->status, ServiceRequest::STATUSES, true)) {
@@ -520,7 +523,7 @@ class RequestController extends BaseApiController
             }
 
             $query = ServiceRequest::with([
-                'customer', 'technician.user', 'service', 'category',
+                'customer', 'technician.user', 'service', 'category', 'job',
                 'logs' => fn ($q) => $q->latest()->limit(5),
             ]);
 
@@ -567,7 +570,7 @@ class RequestController extends BaseApiController
             }
 
             $serviceRequest = ServiceRequest::with([
-                'customer', 'technician.user', 'service', 'category', 'logs.user',
+                'customer', 'technician.user', 'service', 'category', 'job', 'logs.user',
             ])->findOrFail($id);
 
             return $this->successResponse($this->formatSingleRequest($serviceRequest), 'Request retrieved successfully');
@@ -757,8 +760,11 @@ class RequestController extends BaseApiController
 
     private function formatSingleRequest($request): array
     {
+        $request->loadMissing('job');
+
         $tech     = $request->technician;
         $accepted = $request->status === ServiceRequest::STATUS_ACCEPTED;
+        $job      = $request->job;
 
         return [
             'id'          => $request->id,
@@ -766,6 +772,14 @@ class RequestController extends BaseApiController
             'status'      => $request->status,
             // only a pending request can still be cancelled / accepted / rejected
             'can_cancel'  => $request->status === ServiceRequest::STATUS_PENDING,
+            // an accepted request can become a job, once
+            'can_mark_as_job' => $accepted && !$job,
+            'has_job'     => (bool) $job,
+            'job'         => $job ? [
+                'id'         => $job->id,
+                'job_number' => $job->job_number,
+                'status'     => $job->status, // pending | on-progress | completed
+            ] : null,
             'created_at'  => $request->created_at,
             'updated_at'  => $request->updated_at,
             'customer'    => $request->customer ? [

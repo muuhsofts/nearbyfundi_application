@@ -9,12 +9,15 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
- * requests.status: pending | accepted | in_progress | cancelled | rejected
+ * requests.status: pending | accepted | cancelled | rejected
  *
- *   pending     → accepted | rejected   (assigned fundi)
- *   pending     → cancelled             (the customer)
- *   accepted    → in_progress           (customer taps "Mark as Job")
- *   Anything other than pending is locked for accept / reject / cancel.
+ *   pending  → accepted | rejected   (assigned fundi)
+ *   pending  → cancelled             (the customer)
+ *   Anything other than pending is LOCKED for accept / reject / cancel.
+ *
+ * Work progress (on-progress / completed) lives on the JOB and its TICKET,
+ * never on the request. An accepted request that has a job is simply
+ * "accepted" + job.
  */
 class ServiceRequest extends Model
 {
@@ -22,16 +25,14 @@ class ServiceRequest extends Model
 
     protected $table = 'requests';
 
-    public const STATUS_PENDING     = 'pending';
-    public const STATUS_ACCEPTED    = 'accepted';
-    public const STATUS_IN_PROGRESS = 'in_progress';
-    public const STATUS_CANCELLED   = 'cancelled';
-    public const STATUS_REJECTED    = 'rejected';
+    public const STATUS_PENDING   = 'pending';
+    public const STATUS_ACCEPTED  = 'accepted';
+    public const STATUS_CANCELLED = 'cancelled';
+    public const STATUS_REJECTED  = 'rejected';
 
     public const STATUSES = [
         self::STATUS_PENDING,
         self::STATUS_ACCEPTED,
-        self::STATUS_IN_PROGRESS,
         self::STATUS_CANCELLED,
         self::STATUS_REJECTED,
     ];
@@ -64,13 +65,17 @@ class ServiceRequest extends Model
     public function job(): HasOne { return $this->hasOne(Job::class, 'request_id'); }
 
     // ── State helpers ─────────────────────────────────────
-    public function isPending(): bool    { return $this->status === self::STATUS_PENDING; }
-    public function isAccepted(): bool   { return $this->status === self::STATUS_ACCEPTED; }
-    public function isInProgress(): bool { return $this->status === self::STATUS_IN_PROGRESS; }
+    public function isPending(): bool   { return $this->status === self::STATUS_PENDING; }
+    public function isAccepted(): bool  { return $this->status === self::STATUS_ACCEPTED; }
+    public function isCancelled(): bool { return $this->status === self::STATUS_CANCELLED; }
+    public function isRejected(): bool  { return $this->status === self::STATUS_REJECTED; }
 
     /** Accept / reject / cancel are possible only while pending. */
     public function canChange(): bool { return $this->isPending(); }
 
-    /** The customer can turn an accepted request into a job. */
-    public function canBeMarkedAsJob(): bool { return $this->isAccepted(); }
+    /** The customer can turn an accepted request into a job — once. */
+    public function canBeMarkedAsJob(): bool
+    {
+        return $this->isAccepted() && !$this->job()->exists();
+    }
 }

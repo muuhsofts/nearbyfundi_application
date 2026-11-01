@@ -34,15 +34,23 @@ class Job extends Model
         'notes',
     ];
 
-    protected $casts = [
-        'other_documents' => 'array',
-        'started_at'      => 'datetime',
-        'completed_at'    => 'datetime',
-        'created_at'      => 'datetime',
-        'updated_at'      => 'datetime',
+    protected $hidden = [
+        'completion_otp',
+        'completion_otp_expires_at',
+        'completion_otp_attempts',
     ];
 
-    // ── Boot: auto-generate job_number + cascade completion ──
+    protected $casts = [
+        'other_documents'           => 'array',
+        'started_at'                => 'datetime',
+        'completed_at'              => 'datetime',
+        'completion_otp_expires_at' => 'datetime',
+        'completion_otp_attempts'   => 'integer',
+        'created_at'                => 'datetime',
+        'updated_at'                => 'datetime',
+    ];
+
+    // ── Boot: auto-generate job_number + cascade completion to tickets ──
     protected static function booted(): void
     {
         static::creating(function (Job $job) {
@@ -52,7 +60,7 @@ class Job extends Model
         });
 
         static::updated(function (Job $job) {
-            // If job becomes completed → complete all still-open tickets
+            // Job becomes completed → complete all still-open tickets
             if ($job->wasChanged('status') && $job->status === self::STATUS_COMPLETED) {
                 $job->tickets()
                     ->where('status', Ticket::STATUS_ON_PROGRESS)

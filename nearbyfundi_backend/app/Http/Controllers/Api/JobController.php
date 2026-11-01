@@ -8,6 +8,7 @@ use App\Models\ServiceRequest;
 use App\Models\Ticket;
 use App\Services\JobNotificationService;
 use App\Traits\Auditable;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -17,12 +18,12 @@ use Illuminate\Validation\ValidationException;
 /**
  * Customer journey after a request is accepted:
  *
- *   accepted ──[Mark as Job]──▶ request: in_progress
- *                               + Job (on-progress) + Ticket (on-progress)
- *   [Mark Complete] ──▶ 6-digit OTP generated (sent to the fundi)
+ *   request (accepted) ──[Mark as Job]──▶ Job (on-progress) + Ticket (on-progress, auto number)
+ *                                         (the request status does NOT change)
+ *   [Mark Complete] ──▶ 6-digit OTP generated and SMS-ed to the CUSTOMER
  *   [Enter OTP]     ──▶ Job completed + Ticket completed
  *
- * No phone numbers or emails are ever returned from here. Chat is opened with
+ * No phone numbers or emails are returned from here. Chat is opened with
  * technician.user_id.
  */
 class JobController extends BaseApiController
@@ -76,7 +77,7 @@ class JobController extends BaseApiController
     }
 
     // ============================================================
-    // MARK AS JOB  (customer, request must be accepted)
+    // MARK AS JOB  (customer, request must be accepted, once)
     // ============================================================
 
     public function markAsJob(Request $request, $requestId)
@@ -94,16 +95,11 @@ class JobController extends BaseApiController
                 if ((int) $sr->customer_id !== (int) $user->id) {
                     throw new \DomainException('You can only manage your own requests.', 403);
                 }
-                if (!$sr->isAccepted()) {
-                    throw new \DomainException(
-                        $sr->isInProgress()
-                            ? 'This request is already a job.'
-                            : 'Only an accepted request can be marked as a job.',
-                        422
-                    );
-                }
                 if (Job::where('request_id', $sr->id)->exists()) {
-                    throw new \DomainException('A job already exists for this request.', 422);
+                    throw new \DomainException('This request is already a job.', 422);
+                }
+                if (!$sr->isAccepted()) {
+                    throw new \DomainException('Only an accepted request can be marked as a job.', 422);
                 }
 
                 $job = Job::create([
@@ -121,20 +117,23 @@ class JobController extends BaseApiController
                     'description' => $sr->description,
                 ]);
 
-                $sr->status = ServiceRequest::STATUS_IN_PROGRESS;
-                $sr->save();
-
-                $this->logRequestAction($sr->id, $user->id, 'marked_as_job', ServiceRequest::STATUS_ACCEPTED,
-                    ServiceRequest::STATUS_IN_PROGRESS, "Job {$job->job_number} created", $request->ip());
+                $this->logRequestAction(
+                    $sr->id,
+                    $user->id,
+                    'marked_as_job',
+                    $sr->status,
+                    $sr->status,
+                    "Job {$job->job_number} created",
+                    $request->ip()
+                );
 
                 return $job;
             });
         } catch (\DomainException $e) {
             return $this->domainError($e);
+        } catch (ModelNotFoundException $e) {
+            return $this->notFound('Request not found.');
         } catch (\Throwable $e) {
-            if ($e instanceof \Illuminate\Database\Eloquent\ModelNotFoundException) {
-                return $this->notFound('Request not found.');
-            }
             Log::error('markAsJob failed: ' . $e->getMessage());
             return $this->errorResponse('Failed to create the job. Please try again.', 500);
         }
@@ -153,7 +152,7 @@ class JobController extends BaseApiController
     }
 
     // ============================================================
-    // MARK COMPLETE → generates the OTP
+    // MARK COMPLETE → validates phone country code & enforces SMS
     // ============================================================
 
     public function requestCompletion(Request $request, $id)
@@ -167,7 +166,16 @@ class JobController extends BaseApiController
             return $this->errorResponse('Only a job that is in progress can be completed.', 422);
         }
 
-        // A code sent < 60s ago is reused, so closing the dialog and tapping again is harmless.
+        $customer = $job->customer;
+        $phone    = $customer ? $customer->phone : null;
+
+        if (!$phone || !$this->isValidCountryCodePhone($phone)) {
+            return $this->errorResponse(
+                'A valid phone number with a valid country code format (e.g. 255XXXXXXXXX or +255XXXXXXXXX) is mandatory to receive the SMS verification code.',
+                422
+            );
+        }
+
         $sentAt = $job->completion_otp_expires_at?->copy()->subMinutes(self::OTP_TTL_MINUTES);
         if ($sentAt && $sentAt->gt(now()->subSeconds(self::OTP_RESEND_SECS))) {
             return $this->successResponse($this->otpPayload($job, alreadySent: true), 'A code was just sent.');
@@ -181,13 +189,24 @@ class JobController extends BaseApiController
             'completion_otp_attempts'   => 0,
         ])->save();
 
+        $sent = false;
         try {
-            $this->notifier->completionCode($job, $plain);
+            $sent = $this->notifier->completionCode($job, $plain);
         } catch (\Throwable $e) {
             Log::error('completionCode notification failed: ' . $e->getMessage());
         }
 
-        return $this->successResponse($this->otpPayload($job), 'Completion code sent. Enter it to finish the job.');
+        if (!$sent) {
+            $job->forceFill([
+                'completion_otp'            => null,
+                'completion_otp_expires_at' => null,
+                'completion_otp_attempts'   => 0,
+            ])->save();
+
+            return $this->errorResponse('Mandatory SMS delivery failed. Please check your country code phone format and try again.', 502);
+        }
+
+        return $this->successResponse($this->otpPayload($job), 'Completion code sent by SMS. Enter it to finish the job.');
     }
 
     // ============================================================
@@ -202,7 +221,8 @@ class JobController extends BaseApiController
             return $this->validationError($e->errors());
         }
 
-        $job = $this->findForUser($request, $id, customerOnly: true);
+        $user = $request->user();
+        $job  = $this->findForUser($request, $id, customerOnly: true);
 
         if (!$job) {
             return $this->notFound('Job not found.');
@@ -227,18 +247,33 @@ class JobController extends BaseApiController
             return $this->errorResponse("Invalid code. {$left} attempt(s) left.", 422);
         }
 
-        DB::transaction(function () use ($job) {
-            // Job::updated cascades: every open ticket becomes completed too.
-            $job->forceFill([
-                'status'                    => Job::STATUS_COMPLETED,
-                'completed_at'              => now(),
-                'completion_otp'            => null,
-                'completion_otp_expires_at' => null,
-                'completion_otp_attempts'   => 0,
-            ])->save();
+        try {
+            DB::transaction(function () use ($job, $request, $user) {
+                $job->forceFill([
+                    'status'                    => Job::STATUS_COMPLETED,
+                    'completed_at'              => now(),
+                    'completion_otp'            => null,
+                    'completion_otp_expires_at' => null,
+                    'completion_otp_attempts'   => 0,
+                ])->save();
 
-            $job->technician?->increment('completed_jobs_count');
-        });
+                $job->technician?->increment('completed_jobs_count');
+
+                $sr = $job->request;
+                $this->logRequestAction(
+                    $job->request_id,
+                    $user->id,
+                    'job_completed',
+                    $sr?->status,
+                    $sr?->status ?? ServiceRequest::STATUS_ACCEPTED,
+                    "Job {$job->job_number} completed with OTP",
+                    $request->ip()
+                );
+            });
+        } catch (\Throwable $e) {
+            Log::error('verifyCompletion failed: ' . $e->getMessage());
+            return $this->errorResponse('Failed to complete the job. Please try again.', 500);
+        }
 
         $job->load(self::WITH);
 
@@ -256,6 +291,13 @@ class JobController extends BaseApiController
     // ============================================================
     // HELPERS
     // ============================================================
+
+    private function isValidCountryCodePhone(string $phone): bool
+    {
+        $cleanPhone = preg_replace('/[^0-9+]/', '', trim($phone));
+
+        return preg_match('/^\+?[1-9]\d{6,14}$/', $cleanPhone) === 1;
+    }
 
     private function findForUser(Request $request, $id, bool $customerOnly = false): ?Job
     {
@@ -282,6 +324,7 @@ class JobController extends BaseApiController
         return [
             'job_id'       => $job->id,
             'already_sent' => $alreadySent,
+            'channel'      => 'sms',
             'expires_at'   => $job->completion_otp_expires_at?->toIso8601String(),
             'ttl_seconds'  => self::OTP_TTL_MINUTES * 60,
             'resend_after' => self::OTP_RESEND_SECS,
@@ -312,7 +355,6 @@ class JobController extends BaseApiController
         }
     }
 
-    /** No phone, no email. technician.user_id is what the chat uses. */
     private function format(Job $job): array
     {
         $tech   = $job->technician;
@@ -346,11 +388,12 @@ class JobController extends BaseApiController
             ] : null,
             'customer'     => $job->customer ? ['id' => $job->customer->id, 'name' => $job->customer->name] : null,
             'ticket'       => $ticket ? [
-                'id'           => $ticket->id,
-                'status'       => $ticket->status,
-                'title'        => $ticket->title,
-                'description'  => $ticket->description,
-                'completed_at' => $ticket->completed_at,
+                'id'            => $ticket->id,
+                'ticket_number' => $ticket->ticket_number,
+                'status'        => $ticket->status,
+                'title'         => $ticket->title,
+                'description'   => $ticket->description,
+                'completed_at'  => $ticket->completed_at,
             ] : null,
         ];
     }

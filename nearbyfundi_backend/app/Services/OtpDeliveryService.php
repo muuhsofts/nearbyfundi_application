@@ -148,39 +148,37 @@ class OtpDeliveryService
     }
 
     protected function formatPhoneNumber(?string $phone): ?string
-    {
-        if (empty($phone)) {
-            return null;
-        }
-
-        $phone = preg_replace('/[^0-9+]/', '', $phone);
-        $phone = ltrim($phone, '+');
-
-        if (str_starts_with($phone, '0')) {
-            $phone = '255' . substr($phone, 1);
-        }
-
-        if (!str_starts_with($phone, '255')) {
-            $phone = '255' . $phone;
-        }
-
-        if (strlen($phone) !== 12) {
-            Log::warning('Invalid phone number length after formatting', [
-                'phone'  => $phone,
-                'length' => strlen($phone),
-            ]);
-            return null;
-        }
-
-        return $phone;
+{
+    if (empty($phone)) {
+        return null;
     }
 
-    protected function sendEmail(User $user, Otp $otp): void
-    {
-        if ($otp->type === Otp::TYPE_PASSWORD_RESET) {
-            Mail::to($user->email)->send(new PasswordResetOtpMail($user, $otp));
-        } else {
-            Mail::to($user->email)->send(new OtpVerificationMail($user, $otp));
-        }
+    // 1. Strip spaces, dashes, parentheses, keeping digits and leading '+'
+    $phone = preg_replace('/[^0-9+]/', '', trim($phone));
+
+    // 2. Remove leading '+' for clean manipulation
+    $cleanPhone = ltrim($phone, '+');
+
+    // 3. Handle local Tanzanian numbers starting with local '0' (e.g. 0679117297 -> 255679117297)
+    if (str_starts_with($cleanPhone, '0')) {
+        $cleanPhone = '255' . substr($cleanPhone, 1);
+    } 
+    // 4. Handle raw local subscriber numbers missing '255' (e.g. 679117297 -> 255679117297)
+    elseif (strlen($cleanPhone) === 9 && (str_starts_with($cleanPhone, '6') || str_starts_with($cleanPhone, '7'))) {
+        $cleanPhone = '255' . $cleanPhone;
     }
+
+    // 5. E.164 Validation: Must be 7 to 15 digits long globally (covers all country codes worldwide)
+    if (strlen($cleanPhone) < 7 || strlen($cleanPhone) > 15) {
+        Log::warning('Invalid international phone number length', [
+            'original' => $phone,
+            'formatted' => $cleanPhone,
+            'length'   => strlen($cleanPhone),
+        ]);
+        return null;
+    }
+
+    // Return pure digits (e.g., 255679117297 or 14155552671 for US) suitable for SMS gateways
+    return $cleanPhone;
+}
 }

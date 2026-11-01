@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\SearchNearbyFundiController;
 use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\PortfolioController;
 use App\Http\Controllers\Api\RequestController;
+use App\Http\Controllers\Api\JobController;
 use App\Http\Controllers\Api\PostController;
 use App\Http\Controllers\Api\CommentController;
 use App\Http\Controllers\Api\LikeController;
@@ -161,10 +162,15 @@ Route::prefix('v3')->middleware(['auth:sanctum', 'active.session'])->group(funct
 });
 
 // =============================================
-// V4 – REQUESTS & MONITORING
-//   statuses: pending | accepted | cancelled | rejected
-//   pending -> accepted/rejected (fundi) | pending -> cancelled (customer)
-//   accepted / cancelled / rejected are LOCKED
+// V4 – REQUESTS, JOBS & MONITORING
+//   requests.status: pending | accepted | cancelled | rejected
+//     pending -> accepted/rejected (fundi) | pending -> cancelled (customer)
+//     accepted / cancelled / rejected are LOCKED
+//   jobs.status:    pending | on-progress | completed
+//   tickets.status: on-progress | completed
+//     accepted request --[mark-as-job]--> job + ticket (on-progress)
+//     job --[request-completion]--> OTP by SMS to the customer
+//     job --[verify-completion]--> job + ticket completed
 // =============================================
 Route::prefix('v4')->middleware(['auth:sanctum', 'active.session'])->group(function () {
     Route::get('request-services', [RequestController::class, 'getServicesWithCategories']);
@@ -177,11 +183,15 @@ Route::prefix('v4')->middleware(['auth:sanctum', 'active.session'])->group(funct
     Route::get('requests/{id}/tracking', [RequestController::class, 'trackingData']);
     Route::get('my-requests', [RequestController::class, 'myRequests']);
 
-    // ── JOBS (new) ──────────────────────────────────────────────────────
-    Route::get('jobs', [RequestController::class, 'myJobs']);
-    Route::post('requests/{requestId}/mark-as-job', [RequestController::class, 'markAsJob']);
-    Route::post('jobs/{jobId}/request-completion', [RequestController::class, 'requestCompletion']);
-    Route::post('jobs/{jobId}/verify-completion', [RequestController::class, 'verifyCompletion']);
+    // ── JOBS ────────────────────────────────────────────────────────────
+    Route::get('jobs', [JobController::class, 'index']);
+    Route::get('jobs/{id}', [JobController::class, 'show'])->whereNumber('id');
+    Route::post('requests/{requestId}/mark-as-job', [JobController::class, 'markAsJob'])
+        ->whereNumber('requestId');
+    Route::post('jobs/{id}/request-completion', [JobController::class, 'requestCompletion'])
+        ->whereNumber('id')->middleware('throttle:6,1');
+    Route::post('jobs/{id}/verify-completion', [JobController::class, 'verifyCompletion'])
+        ->whereNumber('id')->middleware('throttle:10,1');
 
     // Admin (static paths BEFORE {id})
     Route::get('admin/requests/stats', [RequestController::class, 'stats']);

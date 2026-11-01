@@ -26,7 +26,7 @@ class User extends Authenticatable
         'last_login_at',
         'locale',
         'email_verified_at',
-        'phone_verified_at',          // <-- ADDED
+        'phone_verified_at',          
         'subscription_status',
         'subscription_expires_at',
         'current_subscription_id',
