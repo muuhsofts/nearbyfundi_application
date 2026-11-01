@@ -35,7 +35,7 @@ class SmsNotificationService
             ->whereNotNull('phone')
             ->where('phone', '!=', '')
             ->get()
-            ->unique('phone'); // avoid duplicate SMS to the same number
+            ->unique('phone');
 
         if ($admins->isEmpty()) {
             Log::warning('No active administrators with a phone number to notify', [
@@ -69,6 +69,7 @@ class SmsNotificationService
         return $this->sendSms($user, $message, 'fundi_approved', ['user_id' => $user->id]);
     }
 
+    /** Customer sent a request → SMS to the fundi. */
     public function notifyTechnicianNewRequest(ServiceRequest $request, Technician $technician): array
     {
         $customerName = $request->customer->name ?? 'Customer';
@@ -85,6 +86,7 @@ class SmsNotificationService
         ]);
     }
 
+    /** Fundi accepted → SMS to the customer. */
     public function notifyCustomerRequestAccepted(ServiceRequest $request, Technician $technician): array
     {
         $customer       = $request->customer;
@@ -100,6 +102,42 @@ class SmsNotificationService
             'customer_id'     => $customer->id ?? null,
             'technician_name' => $technicianName,
             'service_name'    => $serviceName,
+        ]);
+    }
+
+    /** Fundi rejected → SMS to the customer. */
+    public function notifyCustomerRequestRejected(ServiceRequest $request, Technician $technician): array
+    {
+        $customer       = $request->customer;
+        $technicianName = $technician->user->name ?? 'The fundi';
+        $serviceName    = $request->service->name ?? 'your service';
+
+        $message = "Nearbyfundi: {$technicianName} could not take your {$serviceName} request. "
+                 . "Open the app to choose another fundi.";
+
+        return $this->sendSms($customer, $message, 'request_rejected', [
+            'request_id'      => $request->id,
+            'technician_id'   => $technician->id,
+            'customer_id'     => $customer->id ?? null,
+            'technician_name' => $technicianName,
+            'service_name'    => $serviceName,
+        ]);
+    }
+
+    /** Customer cancelled a pending request → SMS to the fundi. */
+    public function notifyTechnicianRequestCancelled(ServiceRequest $request, Technician $technician): array
+    {
+        $customerName = $request->customer->name ?? 'The customer';
+        $serviceName  = $request->service->name ?? 'a service';
+
+        $message = "Nearbyfundi: {$customerName} cancelled the {$serviceName} request. "
+                 . "No action is needed.";
+
+        return $this->sendSms($technician->user, $message, 'request_cancelled', [
+            'request_id'    => $request->id,
+            'technician_id' => $technician->id,
+            'customer_id'   => $request->customer->id ?? null,
+            'service_name'  => $serviceName,
         ]);
     }
 

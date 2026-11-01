@@ -95,8 +95,15 @@ Route::prefix('v1')->group(function () {
 
     // Public
     Route::get('services', [ServiceController::class, 'index']);
+
+    // Nearby search (whole Tanzania) — MUST be before technicians/{id}
+    Route::get('technicians/nearby', [SearchNearbyFundiController::class, 'nearby'])
+        ->middleware('throttle:60,1');
+    Route::get('technicians/nearby-by-place', [SearchNearbyFundiController::class, 'nearbyByPlace'])
+        ->middleware('throttle:30,1');
+
     Route::get('technicians', [TechnicianController::class, 'publicIndex']);
-    Route::get('technicians/{id}', [TechnicianController::class, 'show']);
+    Route::get('technicians/{id}', [TechnicianController::class, 'show'])->whereNumber('id');
     Route::get('portfolios/{technicianId}', [PortfolioController::class, 'index']);
     Route::get('posts', [PostController::class, 'index']);
     Route::get('posts/{id}', [PostController::class, 'show']);
@@ -114,7 +121,7 @@ Route::prefix('v1')->group(function () {
 });
 
 // =============================================
-// NEARBY SEARCH
+// NEARBY SEARCH (legacy prefix, kept for old clients)
 // =============================================
 Route::prefix('fundis')->group(function () {
     Route::get('nearby', [SearchNearbyFundiController::class, 'nearby']);
@@ -155,30 +162,36 @@ Route::prefix('v3')->middleware(['auth:sanctum', 'active.session'])->group(funct
 
 // =============================================
 // V4 – REQUESTS & MONITORING
+//   statuses: pending | accepted | cancelled | rejected
+//   pending -> accepted/rejected (fundi) | pending -> cancelled (customer)
+//   accepted / cancelled / rejected are LOCKED
 // =============================================
 Route::prefix('v4')->middleware(['auth:sanctum', 'active.session'])->group(function () {
     Route::get('request-services', [RequestController::class, 'getServicesWithCategories']);
     Route::get('technicians/by-service-category', [RequestController::class, 'getTechniciansByServiceCategory']);
 
     Route::post('requests', [RequestController::class, 'store']);
-    Route::patch('requests/{id}/status', [RequestController::class, 'updateStatus']);
-    Route::delete('requests/{id}/cancel', [RequestController::class, 'cancel']);
+    Route::patch('requests/{id}/status', [RequestController::class, 'updateStatus']);      // accepted | rejected | cancelled
+    Route::delete('requests/{id}/cancel', [RequestController::class, 'cancel']);           // customer, pending only (sets status = cancelled)
+    Route::patch('requests/{id}/location', [RequestController::class, 'updateLocation']);
+    Route::get('requests/{id}/tracking', [RequestController::class, 'trackingData']);
     Route::get('my-requests', [RequestController::class, 'myRequests']);
 
-    // Admin
-    Route::get('admin/requests', [RequestController::class, 'index']);
-    Route::get('admin/requests/{id}', [RequestController::class, 'show']);
-    Route::delete('admin/requests/{id}', [RequestController::class, 'destroy']);
-    Route::get('admin/request-logs/{requestId}', [RequestController::class, 'logs']);
+    // ── JOBS (new) ──────────────────────────────────────────────────────
+    Route::get('jobs', [RequestController::class, 'myJobs']);
+    Route::post('requests/{requestId}/mark-as-job', [RequestController::class, 'markAsJob']);
+    Route::post('jobs/{jobId}/request-completion', [RequestController::class, 'requestCompletion']);
+    Route::post('jobs/{jobId}/verify-completion', [RequestController::class, 'verifyCompletion']);
+
+    // Admin (static paths BEFORE {id})
     Route::get('admin/requests/stats', [RequestController::class, 'stats']);
+    Route::get('admin/requests', [RequestController::class, 'index']);
+    Route::get('admin/requests/{id}', [RequestController::class, 'show'])->whereNumber('id');
+    Route::delete('admin/requests/{id}', [RequestController::class, 'destroy'])->whereNumber('id');
+    Route::get('admin/request-logs/{requestId}', [RequestController::class, 'logs']);
 
     Route::get('customer/requests', [RequestController::class, 'customerRequests']);
     Route::get('technician/requests', [RequestController::class, 'technicianRequests']);
-
-    // Tracking
-    Route::patch('requests/{id}/on-the-way', [RequestController::class, 'markOnTheWay']);
-    Route::patch('requests/{id}/arrive', [RequestController::class, 'markArrived']);
-    Route::get('requests/{id}/tracking', [RequestController::class, 'trackingData']);
 
     // Monitoring
     Route::prefix('monitoring')->group(function () {
@@ -247,13 +260,15 @@ Route::prefix('v7')->middleware(['auth:sanctum', 'active.session'])->group(funct
 // V8 – USER MANAGEMENT
 // =============================================
 Route::prefix('v8')->middleware(['auth:sanctum', 'active.session'])->group(function () {
+    // static paths BEFORE /users/{id}
+    Route::get('/users/trashed', [UserManagementController::class, 'trashed']);
+
     Route::get('/users', [UserManagementController::class, 'index']);
     Route::get('/users/{id}', [UserManagementController::class, 'show']);
     Route::post('/users', [UserManagementController::class, 'store']);
     Route::put('/users/{id}', [UserManagementController::class, 'update']);
     Route::delete('/users/{id}', [UserManagementController::class, 'destroy']);
 
-    Route::get('/users/trashed', [UserManagementController::class, 'trashed']);
     Route::post('/users/{id}/restore', [UserManagementController::class, 'restore']);
     Route::delete('/users/{id}/force', [UserManagementController::class, 'forceDelete']);
 
@@ -396,10 +411,10 @@ Route::prefix('v15')->middleware(['auth:sanctum', 'active.session'])->group(func
     Route::prefix('notifications')->group(function () {
         Route::get('/', [NotificationController::class, 'index']);
         Route::get('/unread-count', [NotificationController::class, 'unreadCount']);
-        Route::put('/{id}/read', [NotificationController::class, 'markAsRead']);
         Route::put('/read-all', [NotificationController::class, 'markAllAsRead']);
-        Route::delete('/{id}', [NotificationController::class, 'destroy']);
         Route::delete('/clear', [NotificationController::class, 'clearAll']);
+        Route::put('/{id}/read', [NotificationController::class, 'markAsRead']);
+        Route::delete('/{id}', [NotificationController::class, 'destroy']);
     });
 });
 
@@ -424,16 +439,16 @@ Route::prefix('v16')->group(function () {
         Route::put('rate-cards/{id}', [RateCardController::class, 'update']);
         Route::delete('rate-cards/{id}', [RateCardController::class, 'destroy']);
 
+        Route::get('payment-methods/dropdown', [PaymentMethodController::class, 'dropdown']);
         Route::get('payment-methods', [PaymentMethodController::class, 'index']);
         Route::post('payment-methods', [PaymentMethodController::class, 'store']);
         Route::get('payment-methods/{id}', [PaymentMethodController::class, 'show']);
         Route::put('payment-methods/{id}', [PaymentMethodController::class, 'update']);
         Route::delete('payment-methods/{id}', [PaymentMethodController::class, 'destroy']);
-        Route::get('payment-methods/dropdown', [PaymentMethodController::class, 'dropdown']);
         Route::patch('payment-methods/{id}/toggle', [PaymentMethodController::class, 'toggle']);
 
-        Route::get('subscriptions', [SubscriptionController::class, 'adminIndex']);
         Route::get('subscriptions/stats', [SubscriptionController::class, 'stats']);
+        Route::get('subscriptions', [SubscriptionController::class, 'adminIndex']);
         Route::post('subscriptions/{id}/approve', [SubscriptionController::class, 'approve']);
         Route::post('subscriptions/{id}/reject', [SubscriptionController::class, 'reject']);
         Route::get('invoices/{id}/download', [SubscriptionController::class, 'downloadInvoicePdf']);
@@ -445,19 +460,22 @@ Route::prefix('v16')->group(function () {
 // =============================================
 Route::prefix('v17')->group(function () {
     Route::get('service-categories', [ServiceCategoryController::class, 'index']);
-    Route::get('service-categories/{id}', [ServiceCategoryController::class, 'show']);
     Route::get('service-categories/slug/{slug}', [ServiceCategoryController::class, 'showBySlug']);
     Route::get('service-categories/dropdown/by-id', [ServiceCategoryController::class, 'dropdownById']);
     Route::get('service-categories/dropdown/active', [ServiceCategoryController::class, 'dropdownActive']);
     Route::get('service-categories/dropdown/paginated', [ServiceCategoryController::class, 'dropdownPaginated']);
 
     Route::middleware(['auth:sanctum', 'active.session'])->group(function () {
+        // static paths BEFORE {id}
+        Route::get('service-categories/stats', [ServiceCategoryController::class, 'stats']);
+        Route::delete('service-categories/bulk-delete', [ServiceCategoryController::class, 'bulkDelete']);
+
         Route::post('service-categories', [ServiceCategoryController::class, 'store']);
         Route::put('service-categories/{id}', [ServiceCategoryController::class, 'update']);
         Route::delete('service-categories/{id}', [ServiceCategoryController::class, 'destroy']);
-        Route::delete('service-categories/bulk-delete', [ServiceCategoryController::class, 'bulkDelete']);
-        Route::get('service-categories/stats', [ServiceCategoryController::class, 'stats']);
     });
+
+    Route::get('service-categories/{id}', [ServiceCategoryController::class, 'show'])->whereNumber('id');
 });
 
 // =============================================
@@ -477,12 +495,8 @@ Route::prefix('v18')->group(function () {
     });
 });
 
-
 // =============================================
 // V19 – TECHNICIAN 6-STEP REGISTRATION (draft-based)
-//  • step1 / verify-otp / resend-otp / status — PUBLIC (throttled)
-//  • steps 2–6 — draft token (auth:sanctum only; draft tokens have no User,
-//    so `active.session` must NOT be applied here)
 // =============================================
 Route::prefix('v19')->group(function () {
 
@@ -496,7 +510,7 @@ Route::prefix('v19')->group(function () {
     Route::get('technicians/register/status/{id}', [TechnicianController::class, 'registrationStatus'])
         ->whereNumber('id');
 
-    // ── Draft-authenticated: steps 2–6 ──
+    // ── Draft-authenticated: steps 2–6 (no active.session: drafts have no User) ──
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('technicians/register/step2', [TechnicianController::class, 'registerStep2']);
         Route::post('technicians/register/step3', [TechnicianController::class, 'registerStep3']);
@@ -521,14 +535,12 @@ Route::prefix('v19')->group(function () {
     });
 });
 
-
 // =============================================
 // V20 – ADMIN TECHNICIANS
 // =============================================
 Route::prefix('v20')->middleware(['auth:sanctum', 'active.session'])->group(function () {
 
-    // Split lists (define static paths BEFORE {id} to avoid capture)
-    Route::get('admin/technicians/pending',  [TechnicianController::class, 'adminPendingIndex'])
+    Route::get('admin/technicians/pending', [TechnicianController::class, 'adminPendingIndex'])
         ->middleware('permission:technicians.view');
     Route::get('admin/technicians/approved', [TechnicianController::class, 'adminApprovedIndex'])
         ->middleware('permission:technicians.view');
@@ -536,7 +548,6 @@ Route::prefix('v20')->middleware(['auth:sanctum', 'active.session'])->group(func
     Route::get('admin/technicians', [TechnicianController::class, 'adminIndex'])
         ->middleware('permission:technicians.view');
 
-    // Biometrics — only for admin
     Route::get('admin/technicians/{id}/biometrics', [TechnicianController::class, 'adminBiometrics'])
         ->whereNumber('id')
         ->middleware('permission:technicians.view');
@@ -609,8 +620,8 @@ Route::prefix('v23')->group(function () {
 
     Route::middleware(['auth:sanctum', 'active.session'])->prefix('admin')->group(function () {
         Route::middleware('permission:feedback.view')->group(function () {
-            Route::get('feedback', [FeedbackController::class, 'index']);
             Route::get('feedback/stats', [FeedbackController::class, 'stats']);
+            Route::get('feedback', [FeedbackController::class, 'index']);
             Route::get('feedback/{id}', [FeedbackController::class, 'show']);
         });
 

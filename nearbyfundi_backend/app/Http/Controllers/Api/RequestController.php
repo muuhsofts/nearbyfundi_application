@@ -2,37 +2,36 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Models\ServiceRequest;
-use App\Models\RequestLog;
-use App\Models\Notification;
-use App\Models\Service;
-use App\Models\ServiceCategory;
-use App\Models\User;
 use App\Events\RequestCreated;
 use App\Events\RequestStatusUpdated;
-use App\Mail\RequestAcceptedMail;
-use App\Mail\RequestCreatedMail;
-use App\Mail\RequestCompletedMail;
-use App\Notifications\NewActivityNotification;
-use App\Services\FcmService;
-use App\Services\SmsNotificationService;
+use App\Models\RequestLog;
+use App\Models\Service;
+use App\Models\ServiceRequest;
+use App\Models\Technician;
+use App\Services\RequestNotificationService;
 use App\Traits\Auditable;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Mail;
+use App\Models\Job;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
+/**
+ * requests.status enum: pending | accepted | cancelled | rejected
+ *
+ *   pending  → accepted   (assigned fundi)
+ *   pending  → rejected   (assigned fundi)
+ *   pending  → cancelled  (the customer who created it)
+ *   accepted / cancelled / rejected are LOCKED:
+ *      an accepted request can no longer be cancelled or rejected.
+ */
 class RequestController extends BaseApiController
 {
     use Auditable;
 
-    protected FcmService $fcm;
-    protected SmsNotificationService $smsService;
-
-    public function __construct(FcmService $fcm, SmsNotificationService $smsService)
+    public function __construct(protected RequestNotificationService $notifier)
     {
-        $this->fcm = $fcm;
-        $this->smsService = $smsService;
     }
 
     // ============================================================
@@ -58,125 +57,21 @@ class RequestController extends BaseApiController
                 'notes'      => $notes,
                 'ip_address' => $ip ?? request()->ip(),
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('Failed to log request action: ' . $e->getMessage());
         }
     }
 
-
-
-    private function createNotification(int $userId, string $title, string $body, string $type, array $data = []): void
-{
-    try {
-        $user = User::find($userId);
-        if (!$user) {
-            Log::warning('createNotification: user not found', ['user_id' => $userId]);
-            return;
-        }
-
-        $cleanTitle = (trim($title) !== '' && !is_numeric($title))
-            ? trim($title) : config('app.name', 'NearbyFundi');
-
-        $cleanBody = (trim($body) !== '' && !is_numeric($body))
-            ? trim($body) : 'You have a new update';
-
-        // 1. DB row
-        $notification = Notification::create([
-            'user_id' => $userId,
-            'title'   => $cleanTitle,
-            'body'    => $cleanBody,
-            'type'    => $type,
-            'data'    => $this->sanitizeData($data),
-            'is_read' => false,
-        ]);
-
-        // 2. FCM push (data-only for chat, visible otherwise)
-        app(FcmService::class)->sendFromNotification($notification->fresh('user'));
-
-    } catch (\Throwable $e) {
-        Log::error('Failed to create notification: ' . $e->getMessage());
-    }
-}
-
-    private function sanitizeData(array $data): array
+    /** Runs after the HTTP response is sent, so SMS/email latency never slows the app. */
+    private function afterResponse(callable $callback): void
     {
-        $sanitized = [];
-        foreach ($data as $key => $value) {
-            if ($value === null) {
-                $sanitized[$key] = '';
-            } elseif (is_int($value) || is_float($value)) {
-                $sanitized[$key] = (string) $value;
-            } elseif (is_bool($value)) {
-                $sanitized[$key] = $value ? 'true' : 'false';
-            } elseif (is_array($value) || is_object($value)) {
-                $sanitized[$key] = json_encode($value);
-            } else {
-                $sanitized[$key] = (string) $value;
+        app()->terminating(function () use ($callback) {
+            try {
+                $callback();
+            } catch (\Throwable $e) {
+                Log::error('After-response task failed: ' . $e->getMessage());
             }
-        }
-        return $sanitized;
-    }
-
-    /**
-     * Send DB notification to customer about request status change.
-     * FCM is handled by NewActivityNotification.
-     */
-    private function notifyCustomer(ServiceRequest $request, string $event, ?string $customTitle = null, ?string $customBody = null): void
-    {
-        $titles = [
-            'on_the_way'  => 'Technician On The Way',
-            'arrived'     => 'Technician Arrived',
-            'accepted'    => 'Request Accepted',
-            'rejected'    => 'Request Rejected',
-            'in_progress' => 'Request In Progress',
-            'completed'   => 'Request Completed',
-            'cancelled'   => 'Request Cancelled',
-        ];
-
-        $bodies = [
-            'on_the_way'  => 'Your fundi is on the way to your location.',
-            'arrived'     => 'Your fundi has arrived at your location.',
-            'accepted'    => 'Your request has been accepted.',
-            'rejected'    => 'Sorry, your request has been rejected.',
-            'in_progress' => 'Your request is now in progress.',
-            'completed'   => 'Your request has been completed.',
-            'cancelled'   => 'Your request has been cancelled.',
-        ];
-
-        $title = $customTitle ?? ($titles[$event] ?? 'Request Update');
-        $body  = $customBody  ?? ($bodies[$event]  ?? "Your request #{$request->id} is now: " . str_replace('_', ' ', $event));
-
-        $data = [
-            'request_id' => $request->id,
-            'status'     => $event,
-            'type'       => 'request_' . $event,
-        ];
-
-        try {
-            if ($request->customer) {
-                $this->createNotification(
-                    $request->customer_id,
-                    $title,
-                    $body,
-                    'request_' . $event,
-                    $data
-                );
-            }
-        } catch (\Exception $e) {
-            Log::error('Failed to notify customer: ' . $e->getMessage());
-        }
-    }
-
-    private function haversineDistance($lat1, $lon1, $lat2, $lon2): float
-    {
-        $earthRadius = 6371;
-        $dLat = deg2rad($lat2 - $lat1);
-        $dLon = deg2rad($lon2 - $lon1);
-        $a = sin($dLat / 2) * sin($dLat / 2) +
-             cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
-             sin($dLon / 2) * sin($dLon / 2);
-        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
-        return $earthRadius * $c;
+        });
     }
 
     private function isAssignedFundi($user, ServiceRequest $serviceRequest): bool
@@ -187,8 +82,100 @@ class RequestController extends BaseApiController
             && (int) $user->technician->id === (int) $serviceRequest->technician_id;
     }
 
+    private function haversineDistance($lat1, $lon1, $lat2, $lon2): float
+    {
+        $r    = 6371;
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLon = deg2rad($lon2 - $lon1);
+        $a    = sin($dLat / 2) ** 2 + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLon / 2) ** 2;
+
+        return $r * 2 * atan2(sqrt($a), sqrt(1 - $a));
+    }
+
+    /**
+     * Returns null when the change is allowed, otherwise [httpCode, message].
+     */
+    private function transitionError($user, ServiceRequest $sr, string $new): ?array
+    {
+        if (!$user) {
+            return [403, 'User not authenticated.'];
+        }
+
+        // LOCK: only a pending request can change
+        if ($sr->status !== ServiceRequest::STATUS_PENDING) {
+            return $sr->status === ServiceRequest::STATUS_ACCEPTED
+                ? [422, 'An accepted request can no longer be cancelled or rejected.']
+                : [422, "This request is already {$sr->status} and can no longer be changed."];
+        }
+
+        if ($new === ServiceRequest::STATUS_PENDING) {
+            return [422, 'A request cannot be moved back to pending.'];
+        }
+
+        if ($user->hasRole('FUNDI')) {
+            if (!$this->isAssignedFundi($user, $sr)) {
+                return [403, 'This request belongs to another fundi.'];
+            }
+            return in_array($new, [ServiceRequest::STATUS_ACCEPTED, ServiceRequest::STATUS_REJECTED], true)
+                ? null
+                : [403, 'A fundi can only accept or reject a pending request.'];
+        }
+
+        if ($user->hasRole('CUSTOMER')) {
+            if ((int) $user->id !== (int) $sr->customer_id) {
+                return [403, 'You can only manage your own requests.'];
+            }
+            return $new === ServiceRequest::STATUS_CANCELLED
+                ? null
+                : [403, 'A customer can only cancel a pending request.'];
+        }
+
+        if ($user->can('requests.status.update')) {
+            return null;
+        }
+
+        return [403, 'You are not allowed to change this request.'];
+    }
+
+    /** Applies the status change + logs + events + notifications. */
+    private function applyTransition(ServiceRequest $sr, string $new, $user, ?string $ip): void
+    {
+        $old = $sr->status;
+
+        DB::beginTransaction();
+        try {
+            $sr->status = $new;
+            $sr->save();
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            throw $e;
+        }
+
+        try {
+            event(new RequestStatusUpdated($sr));
+        } catch (\Throwable $e) {
+            Log::error('RequestStatusUpdated event failed: ' . $e->getMessage());
+        }
+
+        $this->logRequestAction(
+            $sr->id, $user->id, $new, $old, $new,
+            "Status changed from {$old} to {$new}", $ip
+        );
+
+        // in-app + push, SMS, email — after the response is sent
+        match ($new) {
+            ServiceRequest::STATUS_ACCEPTED  => $this->afterResponse(fn () => $this->notifier->notifyCustomerAccepted($sr)),
+            ServiceRequest::STATUS_REJECTED  => $this->afterResponse(fn () => $this->notifier->notifyCustomerRejected($sr)),
+            ServiceRequest::STATUS_CANCELLED => $this->afterResponse(fn () => $this->notifier->notifyFundiCancelled($sr)),
+            default                          => null,
+        };
+
+        $this->logAudit('update_request_status', 'request', $sr->id, "Status changed to {$new}");
+    }
+
     // ============================================================
-    // PUBLIC METHODS
+    // LOOKUPS
     // ============================================================
 
     public function getServicesWithCategories(Request $request)
@@ -198,23 +185,21 @@ class RequestController extends BaseApiController
                 $query->select('service_categories.service_categoryID', 'category_name', 'slug')
                       ->orderBy('category_name', 'asc');
             }])
-            ->select('id', 'name')
+            ->select('id', 'name', 'swahili_name')
             ->orderBy('name', 'asc')
             ->get();
 
-            $data = $services->map(function ($service) {
-                return [
-                    'id'   => $service->id,
-                    'name' => $service->name,
-                    'categories' => $service->categories->map(function ($category) {
-                        return [
-                            'id'   => $category->service_categoryID,
-                            'name' => $category->category_name,
-                            'slug' => $category->slug,
-                        ];
-                    }),
-                ];
-            });
+            $data = $services->map(fn ($service) => [
+                'id'      => $service->id,
+                'name'    => $service->name,
+                'name_en' => $service->name,
+                'name_sw' => $service->swahili_name,
+                'categories' => $service->categories->map(fn ($c) => [
+                    'id'   => $c->service_categoryID,
+                    'name' => $c->category_name,
+                    'slug' => $c->slug,
+                ]),
+            ]);
 
             return $this->successResponse($data, 'Services with categories retrieved successfully');
         } catch (\Exception $e) {
@@ -231,51 +216,38 @@ class RequestController extends BaseApiController
                 'category_id' => 'nullable|exists:service_categories,service_categoryID',
             ]);
 
-            $query = \App\Models\Technician::with(['user', 'services'])
-                ->whereHas('user', function ($q) {
-                    $q->where('is_active', true);
-                })
-                ->where('verified', true);
-
-            $query->whereHas('services', function ($q) use ($validated) {
-                $q->where('service_id', $validated['service_id']);
-            });
+            $query = Technician::with(['user', 'services'])
+                ->whereHas('user', fn ($q) => $q->where('is_active', true))
+                ->where('verified', true)
+                ->whereHas('services', fn ($q) => $q->where('services.id', $validated['service_id']));
 
             if (!empty($validated['category_id'])) {
-                $query->whereHas('services.categories', function ($q) use ($validated) {
-                    $q->where('service_categoryID', $validated['category_id']);
-                });
+                $query->whereHas('services.categories', fn ($q) =>
+                    $q->where('service_categoryID', $validated['category_id'])
+                );
             }
 
-            $technicians = $query->get();
-
-            $data = $technicians->map(function ($technician) {
-                return [
-                    'id'            => $technician->id,
-                    'name'          => $technician->user->name ?? 'Unknown',
-                    'email'         => $technician->user->email ?? null,
-                    'phone'         => $technician->user->phone ?? null,
-                    'profile_photo' => $technician->profile_photo ? url($technician->profile_photo) : null,
-                    'area'          => $technician->area,
-                    'rating'        => (float) ($technician->rating ?? 0),
-                    'is_online'     => (bool) ($technician->is_online ?? false),
-                    'services'      => $technician->services->map(function ($service) {
-                        return [
-                            'id'   => $service->id,
-                            'name' => $service->name,
-                        ];
-                    }),
-                ];
-            });
+            $data = $query->get()->map(fn ($t) => [
+                'id'            => $t->id,
+                'name'          => $t->user->name ?? 'Unknown',
+                'profile_photo' => $t->profile_photo ? url('storage/' . ltrim($t->profile_photo, '/')) : null,
+                'area'          => $t->area,
+                'rating'        => (float) ($t->rating ?? 0),
+                'services'      => $t->services->map(fn ($s) => ['id' => $s->id, 'name' => $s->name]),
+            ]);
 
             return $this->successResponse($data, 'Technicians retrieved successfully');
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             return $this->validationError($e->errors());
         } catch (\Exception $e) {
             Log::error('Error fetching technicians by service/category: ' . $e->getMessage());
             return $this->errorResponse('Failed to fetch technicians. Please try again.', 500);
         }
     }
+
+    // ============================================================
+    // CREATE (customer → pending) — notifies the fundi: in-app + SMS + email
+    // ============================================================
 
     public function store(Request $request)
     {
@@ -290,36 +262,41 @@ class RequestController extends BaseApiController
                 'technician_id' => 'required|exists:technicians,id',
                 'service_id'    => 'required|exists:services,id',
                 'category_id'   => 'nullable|exists:service_categories,service_categoryID',
-                'description'   => 'required|string|min:5',
+                'description'   => 'required|string|min:5|max:1000',
+                'latitude'      => 'nullable|numeric|between:-90,90',
+                'longitude'     => 'nullable|numeric|between:-180,180',
             ]);
 
-            Log::info('Request creation data received:', $data);
+            $technician = Technician::with('user')->findOrFail($data['technician_id']);
+
+            if (!$technician->verified || !$technician->user || !$technician->user->is_active) {
+                return $this->errorResponse('This fundi is not available right now.', 422);
+            }
+
+            if ((int) $technician->user_id === (int) $user->id) {
+                return $this->errorResponse('You cannot send a request to yourself.', 422);
+            }
+
+            if (!$technician->services()->where('services.id', $data['service_id'])->exists()) {
+                return $this->errorResponse('This fundi does not offer the selected service.', 422);
+            }
 
             if (!empty($data['category_id'])) {
                 $service = Service::find($data['service_id']);
-                if (!$service) {
-                    return $this->errorResponse('Service not found.', 404);
-                }
-                if (!$service->hasCategory($data['category_id'])) {
-                    Log::warning('Category not associated with service', [
-                        'service_id'  => $data['service_id'],
-                        'category_id' => $data['category_id'],
-                    ]);
-                    return $this->errorResponse(
-                        'The selected category is not associated with this service.',
-                        422
-                    );
+                if (!$service || !$service->hasCategory($data['category_id'])) {
+                    return $this->errorResponse('The selected category is not associated with this service.', 422);
                 }
             }
 
-            $existing = ServiceRequest::where('customer_id', $user->id)
-                ->where('technician_id', $data['technician_id'])
-                ->whereIn('status', ['pending', 'accepted', 'on_the_way', 'arrived', 'in_progress'])
-                ->first();
+            // Only a PENDING request blocks another one to the same fundi.
+            $alreadyPending = ServiceRequest::where('customer_id', $user->id)
+                ->where('technician_id', $technician->id)
+                ->where('status', ServiceRequest::STATUS_PENDING)
+                ->exists();
 
-            if ($existing) {
+            if ($alreadyPending) {
                 return $this->errorResponse(
-                    'You already have an active request with this fundi. Wait for a response or cancel it first.',
+                    'You already have a pending request with this fundi. Wait for a response or cancel it first.',
                     422
                 );
             }
@@ -328,514 +305,212 @@ class RequestController extends BaseApiController
 
             $serviceRequest = ServiceRequest::create([
                 'customer_id'   => $user->id,
-                'technician_id' => $data['technician_id'],
+                'technician_id' => $technician->id,
                 'service_id'    => $data['service_id'],
                 'category_id'   => $data['category_id'] ?? null,
                 'description'   => $data['description'],
-                'status'        => 'pending',
+                'latitude'      => $data['latitude'] ?? null,
+                'longitude'     => $data['longitude'] ?? null,
+                'status'        => ServiceRequest::STATUS_PENDING,
             ]);
 
-            Log::info('Request created successfully:', ['request_id' => $serviceRequest->id]);
-
-            $serviceRequest->load(['customer', 'technician.user', 'service', 'category']);
+            $this->logRequestAction(
+                $serviceRequest->id, $user->id, 'created', null, ServiceRequest::STATUS_PENDING,
+                "Request created by customer {$user->id}"
+            );
 
             DB::commit();
 
-            // SMS to technician
-            try {
-                $technician = $serviceRequest->technician;
-                if ($technician && $technician->user && !empty($technician->user->phone)) {
-                    $smsResult = $this->smsService->notifyTechnicianNewRequest($serviceRequest, $technician);
-
-                    Log::info('SMS notification sent to technician', [
-                        'request_id'    => $serviceRequest->id,
-                        'technician_id' => $technician->id,
-                        'phone'         => $technician->user->phone,
-                        'sms_success'   => $smsResult['success'] ?? false,
-                    ]);
-                } else {
-                    Log::warning('Technician has no phone number, SMS not sent', [
-                        'request_id'    => $serviceRequest->id,
-                        'technician_id' => $data['technician_id'],
-                    ]);
-                }
-            } catch (\Exception $e) {
-                Log::error('Failed to send SMS to technician: ' . $e->getMessage(), [
-                    'request_id'    => $serviceRequest->id,
-                    'technician_id' => $data['technician_id'],
-                ]);
-            }
+            $serviceRequest->load(['customer', 'technician.user', 'service', 'category']);
 
             try {
                 event(new RequestCreated($serviceRequest));
-            } catch (\Exception $e) {
-                Log::error('Failed to dispatch RequestCreated event: ' . $e->getMessage());
+            } catch (\Throwable $e) {
+                Log::error('RequestCreated event failed: ' . $e->getMessage());
             }
 
-            try {
-                if ($serviceRequest->technician &&
-                    $serviceRequest->technician->user &&
-                    $serviceRequest->technician->user->email) {
-                    Mail::to($serviceRequest->technician->user->email)
-                        ->send(new RequestCreatedMail($serviceRequest));
-                }
-            } catch (\Exception $e) {
-                Log::error('Failed to send request created email: ' . $e->getMessage());
-            }
-
-            // Notify technician about new request
-            try {
-                if ($serviceRequest->technician && $serviceRequest->technician->user) {
-                    $technicianUser = $serviceRequest->technician->user;
-                    $serviceName    = $serviceRequest->service->name ?? 'Service';
-                    $categoryName   = $serviceRequest->category->category_name ?? '';
-
-                    $this->createNotification(
-                        $technicianUser->id,
-                        'New Service Request',
-                        "You have a new request for {$serviceName}"
-                            . ($categoryName ? " ({$categoryName})" : '')
-                            . " from {$user->name}",
-                        'new_request',
-                        [
-                            'request_id'    => $serviceRequest->id,
-                            'customer_id'   => $user->id,
-                            'customer_name' => $user->name,
-                            'service_name'  => $serviceName,
-                            'category_name' => $categoryName,
-                            'description'   => $serviceRequest->description,
-                        ]
-                    );
-                }
-            } catch (\Exception $e) {
-                Log::error('Failed to send FCM notification: ' . $e->getMessage());
-            }
-
-            $this->logRequestAction(
-                $serviceRequest->id,
-                $user->id,
-                'created',
-                null,
-                'pending',
-                "Request created by customer {$user->id}"
-            );
+            // in-app + push, SMS and email to the fundi
+            $this->afterResponse(fn () => $this->notifier->notifyFundiNewRequest($serviceRequest));
 
             $this->logAudit('create_request', 'request', $serviceRequest->id, "Customer {$user->id} created request");
 
             return $this->created($this->formatSingleRequest($serviceRequest), 'Request submitted successfully.');
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             return $this->validationError($e->errors());
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Error creating request: ' . $e->getMessage(), [
-                'user_id' => $request->user()->id ?? 'unknown',
-                'data'    => $request->all(),
-            ]);
+        } catch (ModelNotFoundException $e) {
+            return $this->notFound('Fundi not found.');
+        } catch (\Throwable $e) {
+            if (DB::transactionLevel() > 0) {
+                DB::rollBack();
+            }
+            Log::error('Error creating request: ' . $e->getMessage(), ['user_id' => $request->user()->id ?? 'unknown']);
             return $this->errorResponse('Failed to create request. Please try again.', 500);
         }
     }
 
+    // ============================================================
+    // STATUS: accepted | rejected (fundi) · cancelled (customer) — pending only
+    // ============================================================
+
     public function updateStatus(Request $request, $id)
     {
         try {
-            $serviceRequest = ServiceRequest::with(['technician.user', 'customer', 'service'])->findOrFail($id);
+            $newStatus = $request->validate([
+                'status' => 'required|string|in:' . implode(',', ServiceRequest::STATUSES),
+            ])['status'];
+
+            $serviceRequest = ServiceRequest::with(['technician.user', 'customer', 'service', 'category'])->findOrFail($id);
             $user           = $request->user();
-            $newStatus      = $request->input('status') ?? $request->status;
-            $oldStatus      = $serviceRequest->status;
 
-            if (!$user) {
-                return $this->forbidden('User not authenticated.');
+            if ($error = $this->transitionError($user, $serviceRequest, $newStatus)) {
+                [$code, $message] = $error;
+                return $code === 403 ? $this->forbidden($message) : $this->errorResponse($message, $code);
             }
 
-            if (empty($newStatus)) {
-                return $this->errorResponse('Status is required.', 422);
-            }
-
-            $allowed = false;
-
-            if ($user->hasRole('FUNDI')) {
-                if (!$this->isAssignedFundi($user, $serviceRequest)) {
-                    return $this->forbidden(
-                        'You are not assigned to this request. This request belongs to another fundi.'
-                    );
-                }
-
-                if (in_array($newStatus, ['accepted', 'rejected']) && $oldStatus === 'pending') {
-                    $allowed = true;
-                }
-                if ($newStatus === 'on_the_way' && $oldStatus === 'accepted') {
-                    $allowed = true;
-                }
-                if ($newStatus === 'arrived' && $oldStatus === 'on_the_way') {
-                    $allowed = true;
-                }
-                if ($newStatus === 'in_progress' && in_array($oldStatus, ['accepted', 'on_the_way', 'arrived'])) {
-                    $allowed = true;
-                }
-                if ($newStatus === 'completed' && in_array($oldStatus, ['accepted', 'on_the_way', 'arrived', 'in_progress'])) {
-                    $allowed = true;
-                }
-            } elseif ($user->hasRole('CUSTOMER') && $newStatus === 'cancelled' && $oldStatus === 'pending') {
-                if ((int) $user->id !== (int) $serviceRequest->customer_id) {
-                    return $this->forbidden('You can only cancel your own requests.');
-                }
-                $allowed = true;
-            } elseif ($user->can('requests.status.update')) {
-                $allowed = true;
-            }
-
-            if (!$allowed) {
-                Log::warning('Invalid status change attempt', [
-                    'user_id'       => $user->id,
-                    'roles'         => $user->getRoleNames()->toArray(),
-                    'request_id'    => $id,
-                    'old_status'    => $oldStatus,
-                    'new_status'    => $newStatus,
-                    'technician_id' => $serviceRequest->technician_id,
-                ]);
-
-                return $this->forbidden(
-                    "Invalid status change. Current status is '{$oldStatus}'. You cannot change it to '{$newStatus}'."
-                );
-            }
-
-            DB::beginTransaction();
-
-            $serviceRequest->status = $newStatus;
-            $serviceRequest->save();
-
-            DB::commit();
-
-            try {
-                event(new RequestStatusUpdated($serviceRequest));
-            } catch (\Exception $e) {
-                Log::error('Failed to dispatch RequestStatusUpdated event: ' . $e->getMessage());
-            }
-
-            $this->logRequestAction(
-                $serviceRequest->id,
-                $user->id,
-                $newStatus,
-                $oldStatus,
-                $newStatus,
-                "Status changed from {$oldStatus} to {$newStatus}",
-                $request->ip()
-            );
-
-            $this->handleStatusChange($serviceRequest, $newStatus);
-            $this->logAudit('update_request_status', 'request', $id, "Status changed to {$newStatus}");
+            $this->applyTransition($serviceRequest, $newStatus, $user, $request->ip());
 
             return $this->successResponse(
                 $this->formatSingleRequest($serviceRequest->fresh(['customer', 'technician.user', 'service', 'category'])),
                 'Status updated successfully.'
             );
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+        } catch (ValidationException $e) {
+            return $this->validationError($e->errors());
+        } catch (ModelNotFoundException $e) {
             return $this->notFound('Request not found.');
-        } catch (\Exception $e) {
-            DB::rollBack();
+        } catch (\Throwable $e) {
             Log::error('Error updating request status: ' . $e->getMessage());
             return $this->errorResponse('Failed to update status. Please try again.', 500);
         }
     }
 
-    private function handleStatusChange(ServiceRequest $serviceRequest, string $newStatus): void
-    {
-        try {
-            switch ($newStatus) {
-                case 'accepted':    $this->handleAccepted($serviceRequest);    break;
-                case 'rejected':    $this->handleRejected($serviceRequest);    break;
-                case 'cancelled':   $this->handleCancelled($serviceRequest);   break;
-                case 'in_progress': $this->handleInProgress($serviceRequest);  break;
-                case 'completed':   $this->handleCompleted($serviceRequest);   break;
-                case 'on_the_way':  $this->handleOnTheWay($serviceRequest);    break;
-                case 'arrived':     $this->handleArrived($serviceRequest);     break;
-                default: break;
-            }
-        } catch (\Exception $e) {
-            Log::error('Error handling status change: ' . $e->getMessage());
-        }
-    }
-
-    // ----- Individual status handlers -----
-
-    private function handleAccepted(ServiceRequest $serviceRequest): void
-    {
-        try {
-            if ($serviceRequest->customer && $serviceRequest->customer->email) {
-                Mail::to($serviceRequest->customer->email)->send(new RequestAcceptedMail($serviceRequest));
-            }
-        } catch (\Exception $e) {
-            Log::error('Failed to send accepted email: ' . $e->getMessage());
-        }
-
-        try {
-            $technician = $serviceRequest->technician;
-            $customer   = $serviceRequest->customer;
-
-            if ($technician && $customer && !empty($customer->phone)) {
-                if (!$serviceRequest->relationLoaded('service')) {
-                    $serviceRequest->load('service');
-                }
-
-                $smsResult = $this->smsService->notifyCustomerRequestAccepted($serviceRequest, $technician);
-
-                Log::info('SMS notification sent to customer about acceptance', [
-                    'request_id'  => $serviceRequest->id,
-                    'customer_id' => $customer->id,
-                    'phone'       => $customer->phone,
-                    'sms_success' => $smsResult['success'] ?? false,
-                ]);
-            } else {
-                Log::warning('Customer has no phone number, SMS not sent', [
-                    'request_id'  => $serviceRequest->id,
-                    'customer_id' => $serviceRequest->customer_id,
-                ]);
-            }
-        } catch (\Exception $e) {
-            Log::error('Failed to send SMS to customer about acceptance: ' . $e->getMessage(), [
-                'request_id'  => $serviceRequest->id,
-                'customer_id' => $serviceRequest->customer_id,
-            ]);
-        }
-
-        try {
-            $techName = $serviceRequest->technician->user->name ?? 'the fundi';
-            if ($serviceRequest->customer) {
-                $this->createNotification(
-                    $serviceRequest->customer_id,
-                    'Request Accepted',
-                    "Your request has been accepted by {$techName}.",
-                    'request_accepted',
-                    [
-                        'request_id'      => $serviceRequest->id,
-                        'technician_id'   => $serviceRequest->technician_id,
-                        'technician_name' => $techName,
-                    ]
-                );
-            }
-        } catch (\Exception $e) {
-            Log::error('Failed to send accepted notification: ' . $e->getMessage());
-        }
-    }
-
-    private function handleRejected(ServiceRequest $serviceRequest): void
-    {
-        try {
-            if ($serviceRequest->customer) {
-                $this->createNotification(
-                    $serviceRequest->customer_id,
-                    'Request Rejected',
-                    'Sorry, your request has been rejected.',
-                    'request_rejected',
-                    ['request_id' => $serviceRequest->id]
-                );
-            }
-        } catch (\Exception $e) {
-            Log::error('Failed to send rejected notification: ' . $e->getMessage());
-        }
-    }
-
-    private function handleCancelled(ServiceRequest $serviceRequest): void
-    {
-        try {
-            if ($serviceRequest->technician && $serviceRequest->technician->user) {
-                $techUser = $serviceRequest->technician->user;
-
-                $this->createNotification(
-                    $techUser->id,
-                    'Request Cancelled',
-                    "Customer cancelled request #{$serviceRequest->id}.",
-                    'request_cancelled',
-                    [
-                        'request_id'    => $serviceRequest->id,
-                        'customer_name' => $serviceRequest->customer->name ?? 'Customer',
-                    ]
-                );
-            }
-        } catch (\Exception $e) {
-            Log::error('Failed to send cancelled notification: ' . $e->getMessage());
-        }
-    }
-
-    private function handleInProgress(ServiceRequest $serviceRequest): void
-    {
-        try {
-            if ($serviceRequest->customer) {
-                $this->createNotification(
-                    $serviceRequest->customer_id,
-                    'Request In Progress',
-                    'Your request is now in progress.',
-                    'request_in_progress',
-                    ['request_id' => $serviceRequest->id]
-                );
-            }
-        } catch (\Exception $e) {
-            Log::error('Failed to send in_progress notification: ' . $e->getMessage());
-        }
-    }
-
-    private function handleCompleted(ServiceRequest $serviceRequest): void
-    {
-        try {
-            if ($serviceRequest->customer && $serviceRequest->customer->email) {
-                Mail::to($serviceRequest->customer->email)->send(new RequestCompletedMail($serviceRequest));
-            }
-        } catch (\Exception $e) {
-            Log::error('Failed to send completed email: ' . $e->getMessage());
-        }
-
-        try {
-            $techName = $serviceRequest->technician->user->name ?? 'the fundi';
-            if ($serviceRequest->customer) {
-                $this->createNotification(
-                    $serviceRequest->customer_id,
-                    'Request Completed',
-                    "Your request has been completed by {$techName}.",
-                    'request_completed',
-                    [
-                        'request_id'      => $serviceRequest->id,
-                        'technician_id'   => $serviceRequest->technician_id,
-                        'technician_name' => $techName,
-                    ]
-                );
-            }
-        } catch (\Exception $e) {
-            Log::error('Failed to send completed notification: ' . $e->getMessage());
-        }
-    }
-
-    private function handleOnTheWay(ServiceRequest $serviceRequest): void
-    {
-        $techName = $serviceRequest->technician->user->name ?? 'Your fundi';
-        $this->notifyCustomer(
-            $serviceRequest,
-            'on_the_way',
-            'Technician On The Way',
-            "{$techName} is on the way to your location."
-        );
-    }
-
-    private function handleArrived(ServiceRequest $serviceRequest): void
-    {
-        $techName = $serviceRequest->technician->user->name ?? 'Your fundi';
-        $this->notifyCustomer(
-            $serviceRequest,
-            'arrived',
-            'Technician Arrived',
-            "{$techName} has arrived at your location."
-        );
-    }
+    // ============================================================
+    // CANCEL (customer, pending only → status = cancelled)
+    // ============================================================
 
     public function cancel($id, Request $request)
     {
         try {
-            $serviceRequest = ServiceRequest::with(['technician.user', 'customer'])->findOrFail($id);
+            $serviceRequest = ServiceRequest::with(['technician.user', 'customer', 'service', 'category'])->findOrFail($id);
             $user           = $request->user();
 
-            if (!$user) {
-                return $this->forbidden('User not authenticated.');
+            if ($error = $this->transitionError($user, $serviceRequest, ServiceRequest::STATUS_CANCELLED)) {
+                [$code, $message] = $error;
+                return $code === 403 ? $this->forbidden($message) : $this->errorResponse($message, $code);
             }
 
-            if ($user->id !== $serviceRequest->customer_id || $serviceRequest->status !== 'pending') {
-                return $this->forbidden('Cannot cancel this request.');
-            }
-
-            DB::beginTransaction();
-
-            $oldStatus              = $serviceRequest->status;
-            $serviceRequest->status = 'cancelled';
-            $serviceRequest->save();
-
-            DB::commit();
-
-            try {
-                event(new RequestStatusUpdated($serviceRequest));
-            } catch (\Exception $e) {
-                Log::error('Failed to dispatch RequestStatusUpdated event: ' . $e->getMessage());
-            }
-
-            $this->logRequestAction(
-                $serviceRequest->id,
-                $user->id,
-                'cancelled',
-                $oldStatus,
-                'cancelled',
-                'Customer cancelled request'
-            );
-
-            $this->handleCancelled($serviceRequest);
-            $this->logAudit('cancel_request', 'request', $id, 'Request cancelled by customer');
+            $this->applyTransition($serviceRequest, ServiceRequest::STATUS_CANCELLED, $user, $request->ip());
 
             return $this->successResponse(
-                $this->formatSingleRequest($serviceRequest),
+                $this->formatSingleRequest($serviceRequest->fresh(['customer', 'technician.user', 'service', 'category'])),
                 'Request cancelled successfully.'
             );
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+        } catch (ModelNotFoundException $e) {
             return $this->notFound('Request not found.');
-        } catch (\Exception $e) {
-            DB::rollBack();
+        } catch (\Throwable $e) {
             Log::error('Error cancelling request: ' . $e->getMessage());
             return $this->errorResponse('Failed to cancel request. Please try again.', 500);
         }
     }
 
+    // ============================================================
+    // LISTS
+    // ============================================================
+
     public function myRequests(Request $request)
     {
         try {
             $user = $request->user();
-
             if (!$user) {
                 return $this->forbidden('User not authenticated.');
             }
 
-            $perPage = $request->input('per_page', 15);
+            $perPage = (int) $request->input('per_page', 50);
 
             if ($user->hasRole('CUSTOMER')) {
-                $requests = ServiceRequest::with([
-                    'technician.user',
-                    'service',
-                    'category',
-                    'review',
-                ])
+                $requests = ServiceRequest::with(['technician.user', 'service', 'category'])
                     ->where('customer_id', $user->id)
-                    ->latest()
-                    ->paginate($perPage);
-                $data = $this->formatRequests($requests, $user->id);
+                    ->latest()->paginate($perPage);
             } elseif ($user->hasRole('FUNDI')) {
                 $technician = $user->technician;
                 if (!$technician) {
-                    return $this->successResponse([
-                        'data'       => [],
-                        'pagination' => [
-                            'total'        => 0,
-                            'per_page'     => $perPage,
-                            'current_page' => 1,
-                            'last_page'    => 1,
-                        ],
-                    ], 'No requests found');
+                    return $this->successResponse($this->emptyPage($perPage), 'No requests found');
                 }
-
                 $requests = ServiceRequest::with(['customer', 'service', 'category'])
                     ->where('technician_id', $technician->id)
-                    ->latest()
-                    ->paginate($perPage);
-                $data = $this->formatRequests($requests);
+                    ->latest()->paginate($perPage);
             } else {
                 if (!$user->can('requests.view')) {
                     return $this->forbidden('Unauthorized. You need requests.view permission.');
                 }
                 $requests = ServiceRequest::with(['customer', 'technician.user', 'service', 'category'])
-                    ->latest()
-                    ->paginate($perPage);
-                $data = $this->formatRequests($requests);
+                    ->latest()->paginate($perPage);
             }
 
-            return $this->successResponse($data, 'Requests retrieved successfully');
-        } catch (\Exception $e) {
+            return $this->successResponse($this->formatRequests($requests), 'Requests retrieved successfully');
+        } catch (\Throwable $e) {
             Log::error('Error fetching my requests: ' . $e->getMessage());
             return $this->errorResponse('Failed to fetch requests. Please try again.', 500);
         }
     }
+
+    public function customerRequests(Request $request)
+    {
+        try {
+            $user = $request->user();
+            if (!$user || !$user->hasRole('CUSTOMER')) {
+                return $this->forbidden('Only customers can view their requests.');
+            }
+
+            $query = ServiceRequest::with(['technician.user', 'service', 'category'])
+                ->where('customer_id', $user->id);
+
+            if ($request->filled('status') && in_array($request->status, ServiceRequest::STATUSES, true)) {
+                $query->where('status', $request->status);
+            }
+
+            $requests = $query->latest()->paginate((int) $request->input('per_page', 15));
+
+            return $this->successResponse($this->formatRequests($requests), 'Customer requests retrieved successfully');
+        } catch (\Throwable $e) {
+            Log::error('Error fetching customer requests: ' . $e->getMessage());
+            return $this->errorResponse('Failed to fetch requests. Please try again.', 500);
+        }
+    }
+
+    public function technicianRequests(Request $request)
+    {
+        try {
+            $user = $request->user();
+            if (!$user || !$user->hasRole('FUNDI')) {
+                return $this->forbidden('Only technicians can view their requests.');
+            }
+
+            $perPage    = (int) $request->input('per_page', 15);
+            $technician = $user->technician;
+
+            if (!$technician) {
+                return $this->successResponse($this->emptyPage($perPage), 'No requests found');
+            }
+
+            $query = ServiceRequest::with(['customer', 'service', 'category'])
+                ->where('technician_id', $technician->id);
+
+            if ($request->filled('status') && in_array($request->status, ServiceRequest::STATUSES, true)) {
+                $query->where('status', $request->status);
+            }
+
+            $requests = $query->latest()->paginate($perPage);
+
+            return $this->successResponse($this->formatRequests($requests), 'Technician requests retrieved successfully');
+        } catch (\Throwable $e) {
+            Log::error('Error fetching technician requests: ' . $e->getMessage());
+            return $this->errorResponse('Failed to fetch requests. Please try again.', 500);
+        }
+    }
+
+    // ============================================================
+    // ADMIN
+    // ============================================================
 
     public function index(Request $request)
     {
@@ -845,54 +520,40 @@ class RequestController extends BaseApiController
             }
 
             $query = ServiceRequest::with([
-                'customer',
-                'technician.user',
-                'service',
-                'category',
-                'logs' => function ($q) {
-                    $q->latest()->limit(5);
-                },
+                'customer', 'technician.user', 'service', 'category',
+                'logs' => fn ($q) => $q->latest()->limit(5),
             ]);
 
-            if ($request->filled('status'))         $query->where('status', $request->status);
-            if ($request->filled('customer_id'))    $query->where('customer_id', $request->customer_id);
-            if ($request->filled('technician_id'))  $query->where('technician_id', $request->technician_id);
-            if ($request->filled('service_id'))     $query->where('service_id', $request->service_id);
-            if ($request->filled('category_id'))    $query->where('category_id', $request->category_id);
-            if ($request->filled('date_from'))      $query->whereDate('created_at', '>=', $request->date_from);
-            if ($request->filled('date_to'))        $query->whereDate('created_at', '<=', $request->date_to);
+            if ($request->filled('status'))        $query->where('status', $request->status);
+            if ($request->filled('customer_id'))   $query->where('customer_id', $request->customer_id);
+            if ($request->filled('technician_id')) $query->where('technician_id', $request->technician_id);
+            if ($request->filled('service_id'))    $query->where('service_id', $request->service_id);
+            if ($request->filled('category_id'))   $query->where('category_id', $request->category_id);
+            if ($request->filled('date_from'))     $query->whereDate('created_at', '>=', $request->date_from);
+            if ($request->filled('date_to'))       $query->whereDate('created_at', '<=', $request->date_to);
 
             if ($request->filled('search')) {
                 $search = $request->search;
                 $query->where(function ($q) use ($search) {
                     $q->where('description', 'like', "%{$search}%")
-                      ->orWhereHas('customer', function ($cq) use ($search) {
-                          $cq->where('name', 'like', "%{$search}%")
-                            ->orWhere('email', 'like', "%{$search}%")
-                            ->orWhere('phone', 'like', "%{$search}%");
-                      })
-                      ->orWhereHas('technician.user', function ($tq) use ($search) {
-                          $tq->where('name', 'like', "%{$search}%")
-                            ->orWhere('email', 'like', "%{$search}%")
-                            ->orWhere('phone', 'like', "%{$search}%");
-                      });
+                      ->orWhereHas('customer', fn ($cq) => $cq->where('name', 'like', "%{$search}%")
+                          ->orWhere('email', 'like', "%{$search}%")
+                          ->orWhere('phone', 'like', "%{$search}%"))
+                      ->orWhereHas('technician.user', fn ($tq) => $tq->where('name', 'like', "%{$search}%")
+                          ->orWhere('email', 'like', "%{$search}%")
+                          ->orWhere('phone', 'like', "%{$search}%"));
                 });
             }
 
-            $sortField = $request->input('sort_by', 'created_at');
-            $sortOrder = $request->input('sort_order', 'desc');
-            $allowedSortFields = ['id', 'created_at', 'updated_at', 'status', 'customer_id', 'technician_id'];
-            if (!in_array($sortField, $allowedSortFields)) {
-                $sortField = 'created_at';
-            }
+            $sortField = in_array($request->input('sort_by'), ['id', 'created_at', 'updated_at', 'status', 'customer_id', 'technician_id'], true)
+                ? $request->input('sort_by') : 'created_at';
+            $sortOrder = $request->input('sort_order') === 'asc' ? 'asc' : 'desc';
             $query->orderBy($sortField, $sortOrder);
 
-            $perPage  = $request->input('per_page', 20);
-            $requests = $query->paginate($perPage);
-            $data     = $this->formatRequests($requests);
+            $requests = $query->paginate((int) $request->input('per_page', 20));
 
-            return $this->successResponse($data, 'Requests retrieved successfully');
-        } catch (\Exception $e) {
+            return $this->successResponse($this->formatRequests($requests), 'Requests retrieved successfully');
+        } catch (\Throwable $e) {
             Log::error('Error fetching requests: ' . $e->getMessage());
             return $this->errorResponse('Failed to fetch requests. Please try again.', 500);
         }
@@ -906,19 +567,13 @@ class RequestController extends BaseApiController
             }
 
             $serviceRequest = ServiceRequest::with([
-                'customer',
-                'technician.user',
-                'service',
-                'category',
-                'logs.user',
+                'customer', 'technician.user', 'service', 'category', 'logs.user',
             ])->findOrFail($id);
 
-            $data = $this->formatSingleRequest($serviceRequest);
-
-            return $this->successResponse($data, 'Request retrieved successfully');
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return $this->successResponse($this->formatSingleRequest($serviceRequest), 'Request retrieved successfully');
+        } catch (ModelNotFoundException $e) {
             return $this->notFound('Request not found.');
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('Error fetching request: ' . $e->getMessage());
             return $this->errorResponse('Failed to fetch request. Please try again.', 500);
         }
@@ -939,11 +594,14 @@ class RequestController extends BaseApiController
             DB::commit();
 
             $this->logAudit('delete_request', 'request', $id, "Deleted request ID: $id");
+
             return $this->successResponse(null, 'Request deleted successfully.');
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+        } catch (ModelNotFoundException $e) {
             return $this->notFound('Request not found.');
-        } catch (\Exception $e) {
-            DB::rollBack();
+        } catch (\Throwable $e) {
+            if (DB::transactionLevel() > 0) {
+                DB::rollBack();
+            }
             Log::error('Error deleting request: ' . $e->getMessage());
             return $this->errorResponse('Failed to delete request. Please try again.', 500);
         }
@@ -956,13 +614,10 @@ class RequestController extends BaseApiController
                 return $this->forbidden('Unauthorized. You need requests.view permission.');
             }
 
-            $logs = RequestLog::where('request_id', $requestId)
-                ->with('user')
-                ->orderBy('created_at', 'desc')
-                ->get();
+            $logs = RequestLog::where('request_id', $requestId)->with('user')->orderBy('created_at', 'desc')->get();
 
             return $this->successResponse($logs, 'Request logs retrieved successfully');
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('Error fetching request logs: ' . $e->getMessage());
             return $this->errorResponse('Failed to fetch logs. Please try again.', 500);
         }
@@ -975,226 +630,48 @@ class RequestController extends BaseApiController
                 return $this->forbidden('Unauthorized. You need requests.view permission.');
             }
 
-            $stats = [
-                'total'       => ServiceRequest::count(),
-                'pending'     => ServiceRequest::where('status', 'pending')->count(),
-                'accepted'    => ServiceRequest::where('status', 'accepted')->count(),
-                'on_the_way'  => ServiceRequest::where('status', 'on_the_way')->count(),
-                'arrived'     => ServiceRequest::where('status', 'arrived')->count(),
-                'in_progress' => ServiceRequest::where('status', 'in_progress')->count(),
-                'completed'   => ServiceRequest::where('status', 'completed')->count(),
-                'rejected'    => ServiceRequest::where('status', 'rejected')->count(),
-                'cancelled'   => ServiceRequest::where('status', 'cancelled')->count(),
-                'today'       => ServiceRequest::whereDate('created_at', today())->count(),
-                'this_week'   => ServiceRequest::whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()])->count(),
-                'this_month'  => ServiceRequest::whereMonth('created_at', now()->month)->count(),
-            ];
-
-            return $this->successResponse($stats, 'Request statistics retrieved successfully');
-        } catch (\Exception $e) {
+            return $this->successResponse([
+                'total'      => ServiceRequest::count(),
+                'pending'    => ServiceRequest::where('status', ServiceRequest::STATUS_PENDING)->count(),
+                'accepted'   => ServiceRequest::where('status', ServiceRequest::STATUS_ACCEPTED)->count(),
+                'cancelled'  => ServiceRequest::where('status', ServiceRequest::STATUS_CANCELLED)->count(),
+                'rejected'   => ServiceRequest::where('status', ServiceRequest::STATUS_REJECTED)->count(),
+                'today'      => ServiceRequest::whereDate('created_at', today())->count(),
+                'this_week'  => ServiceRequest::whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()])->count(),
+                'this_month' => ServiceRequest::whereYear('created_at', now()->year)->whereMonth('created_at', now()->month)->count(),
+            ], 'Request statistics retrieved successfully');
+        } catch (\Throwable $e) {
             Log::error('Error fetching request stats: ' . $e->getMessage());
             return $this->errorResponse('Failed to fetch statistics. Please try again.', 500);
         }
     }
 
-    public function customerRequests(Request $request)
-    {
-        try {
-            $user = $request->user();
-
-            if (!$user || !$user->hasRole('CUSTOMER')) {
-                return $this->forbidden('Only customers can view their requests.');
-            }
-
-            $perPage = $request->input('per_page', 15);
-            $status  = $request->input('status');
-
-            $query = ServiceRequest::with(['technician.user', 'service', 'category'])
-                ->where('customer_id', $user->id);
-
-            if ($status) {
-                $query->where('status', $status);
-            }
-
-            $requests = $query->latest()->paginate($perPage);
-            $data     = $this->formatRequests($requests, $user->id);
-
-            return $this->successResponse($data, 'Customer requests retrieved successfully');
-        } catch (\Exception $e) {
-            Log::error('Error fetching customer requests: ' . $e->getMessage());
-            return $this->errorResponse('Failed to fetch requests. Please try again.', 500);
-        }
-    }
-
-    public function technicianRequests(Request $request)
-    {
-        try {
-            $user = $request->user();
-
-            if (!$user || !$user->hasRole('FUNDI')) {
-                return $this->forbidden('Only technicians can view their requests.');
-            }
-
-            $technician = $user->technician;
-            if (!$technician) {
-                return $this->successResponse([
-                    'data'       => [],
-                    'pagination' => [
-                        'total'        => 0,
-                        'per_page'     => 15,
-                        'current_page' => 1,
-                        'last_page'    => 1,
-                    ],
-                ], 'No requests found');
-            }
-
-            $perPage = $request->input('per_page', 15);
-            $status  = $request->input('status');
-
-            $query = ServiceRequest::with(['customer', 'service', 'category'])
-                ->where('technician_id', $technician->id);
-
-            if ($status) {
-                $query->where('status', $status);
-            }
-
-            $requests = $query->latest()->paginate($perPage);
-            $data     = $this->formatRequests($requests);
-
-            return $this->successResponse($data, 'Technician requests retrieved successfully');
-        } catch (\Exception $e) {
-            Log::error('Error fetching technician requests: ' . $e->getMessage());
-            return $this->errorResponse('Failed to fetch requests. Please try again.', 500);
-        }
-    }
-
     // ============================================================
-    // TRACKING METHODS
+    // TRACKING / LOCATION
     // ============================================================
 
-    public function markOnTheWay(Request $request, $id)
+    public function trackingData(Request $request, $id)
     {
         try {
-            $serviceRequest = ServiceRequest::with(['technician.user', 'customer'])->findOrFail($id);
+            $serviceRequest = ServiceRequest::with('technician')->findOrFail($id);
             $user           = $request->user();
 
-            if (!$this->isAssignedFundi($user, $serviceRequest)) {
-                return $this->forbidden('You are not the technician assigned to this request.');
+            $isCustomer = $user && (int) $user->id === (int) $serviceRequest->customer_id;
+            if (!$isCustomer && !$this->isAssignedFundi($user, $serviceRequest) && !$user?->can('requests.view')) {
+                return $this->forbidden('You are not allowed to view this request.');
             }
 
-            if ($serviceRequest->status !== 'accepted') {
-                return $this->errorResponse('Request must be accepted first.', 422);
-            }
-
-            DB::beginTransaction();
-
-            $oldStatus              = $serviceRequest->status;
-            $serviceRequest->status = 'on_the_way';
-            $serviceRequest->save();
-
-            DB::commit();
-
-            try {
-                event(new RequestStatusUpdated($serviceRequest));
-            } catch (\Exception $e) {
-                Log::error('Failed to dispatch RequestStatusUpdated event: ' . $e->getMessage());
-            }
-
-            $this->handleOnTheWay($serviceRequest);
-
-            $this->logRequestAction(
-                $serviceRequest->id,
-                $user->id,
-                'on_the_way',
-                $oldStatus,
-                'on_the_way',
-                'Technician is on the way'
-            );
-            $this->logAudit('mark_on_the_way', 'request', $serviceRequest->id, 'Technician marked on the way');
-
-            return $this->successResponse(
-                $this->formatSingleRequest($serviceRequest->fresh(['customer', 'technician.user', 'service', 'category'])),
-                'Now on the way.'
-            );
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return $this->notFound('Request not found.');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Error marking on the way: ' . $e->getMessage());
-            return $this->errorResponse('Failed to update status. Please try again.', 500);
-        }
-    }
-
-    public function markArrived(Request $request, $id)
-    {
-        try {
-            $serviceRequest = ServiceRequest::with(['technician.user', 'customer'])->findOrFail($id);
-            $user           = $request->user();
-
-            if (!$this->isAssignedFundi($user, $serviceRequest)) {
-                return $this->forbidden('You are not the technician assigned to this request.');
-            }
-
-            if ($serviceRequest->status !== 'on_the_way') {
-                return $this->errorResponse('Must be on the way first.', 422);
-            }
-
-            DB::beginTransaction();
-
-            $oldStatus              = $serviceRequest->status;
-            $serviceRequest->status = 'arrived';
-            $serviceRequest->save();
-
-            DB::commit();
-
-            try {
-                event(new RequestStatusUpdated($serviceRequest));
-            } catch (\Exception $e) {
-                Log::error('Failed to dispatch RequestStatusUpdated event: ' . $e->getMessage());
-            }
-
-            $this->handleArrived($serviceRequest);
-
-            $this->logRequestAction(
-                $serviceRequest->id,
-                $user->id,
-                'arrived',
-                $oldStatus,
-                'arrived',
-                'Technician arrived'
-            );
-            $this->logAudit('mark_arrived', 'request', $serviceRequest->id, 'Technician marked arrived');
-
-            return $this->successResponse(
-                $this->formatSingleRequest($serviceRequest->fresh(['customer', 'technician.user', 'service', 'category'])),
-                'Arrived at location.'
-            );
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return $this->notFound('Request not found.');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Error marking arrived: ' . $e->getMessage());
-            return $this->errorResponse('Failed to update status. Please try again.', 500);
-        }
-    }
-
-    public function trackingData($id)
-    {
-        try {
-            $request = ServiceRequest::with('technician')->findOrFail($id);
-
-            $customerLat = $request->latitude ?? null;
-            $customerLng = $request->longitude ?? null;
-            $techLat     = $request->technician->latitude ?? null;
-            $techLng     = $request->technician->longitude ?? null;
+            $custLat = $serviceRequest->latitude;
+            $custLng = $serviceRequest->longitude;
+            $techLat = $serviceRequest->technician->latitude ?? null;
+            $techLng = $serviceRequest->technician->longitude ?? null;
 
             $distance = null;
             $eta      = null;
 
-            if ($customerLat && $customerLng && $techLat && $techLng) {
-                $distance   = $this->haversineDistance($customerLat, $customerLng, $techLat, $techLng);
-                $etaMinutes = $distance * 2;
-                $eta        = now()->addMinutes($etaMinutes)->toIso8601String();
+            if ($custLat && $custLng && $techLat && $techLng) {
+                $distance = $this->haversineDistance($custLat, $custLng, $techLat, $techLng);
+                $eta      = now()->addMinutes(($distance / 30) * 60)->toIso8601String(); // ~30 km/h
             }
 
             return $this->successResponse([
@@ -1203,17 +680,17 @@ class RequestController extends BaseApiController
                     'lng' => $techLng !== null ? (float) $techLng : null,
                 ],
                 'customer_location' => [
-                    'lat' => $customerLat !== null ? (float) $customerLat : null,
-                    'lng' => $customerLng !== null ? (float) $customerLng : null,
+                    'lat' => $custLat !== null ? (float) $custLat : null,
+                    'lng' => $custLng !== null ? (float) $custLng : null,
                 ],
-                'status'       => $request->status,
+                'status'       => $serviceRequest->status,
                 'distance_km'  => $distance !== null ? round($distance, 2) : null,
                 'eta'          => $eta,
-                'last_updated' => $request->technician->location_updated_at?->toIso8601String(),
+                'last_updated' => $serviceRequest->technician->location_updated_at?->toIso8601String(),
             ], 'Tracking data retrieved.');
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+        } catch (ModelNotFoundException $e) {
             return $this->notFound('Request not found.');
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('Error fetching tracking data: ' . $e->getMessage());
             return $this->errorResponse('Failed to fetch tracking data.', 500);
         }
@@ -1223,9 +700,9 @@ class RequestController extends BaseApiController
     {
         try {
             $serviceRequest = ServiceRequest::findOrFail($id);
-            $user = $request->user();
+            $user           = $request->user();
 
-            if (!$user || $user->id !== $serviceRequest->customer_id) {
+            if (!$user || (int) $user->id !== (int) $serviceRequest->customer_id) {
                 return $this->forbidden('You can only update location for your own requests.');
             }
 
@@ -1238,40 +715,37 @@ class RequestController extends BaseApiController
             $serviceRequest->longitude = $data['longitude'];
             $serviceRequest->save();
 
-            Log::info('Customer location updated for request', [
-                'request_id'  => $id,
-                'customer_id' => $user->id,
-                'latitude'    => $data['latitude'],
-                'longitude'   => $data['longitude'],
-            ]);
-
             return $this->successResponse([
-                'request_id' => $id,
+                'request_id' => (int) $id,
                 'latitude'   => (float) $serviceRequest->latitude,
                 'longitude'  => (float) $serviceRequest->longitude,
             ], 'Location updated successfully.');
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+        } catch (ModelNotFoundException $e) {
             return $this->notFound('Request not found.');
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             return $this->validationError($e->errors());
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('Error updating location: ' . $e->getMessage());
             return $this->errorResponse('Failed to update location. Please try again.', 500);
         }
     }
 
     // ============================================================
-    // PRIVATE FORMATTING HELPERS
+    // FORMATTERS
     // ============================================================
 
-    private function formatRequests($requests, ?int $userId = null): array
+    private function emptyPage(int $perPage): array
     {
-        $data = $requests->map(function ($request) use ($userId) {
-            return $this->formatSingleRequest($request, $userId);
-        });
-
         return [
-            'data'       => $data,
+            'data'       => [],
+            'pagination' => ['total' => 0, 'per_page' => $perPage, 'current_page' => 1, 'last_page' => 1],
+        ];
+    }
+
+    private function formatRequests($requests): array
+    {
+        return [
+            'data'       => $requests->map(fn ($r) => $this->formatSingleRequest($r)),
             'pagination' => [
                 'total'        => $requests->total(),
                 'per_page'     => $requests->perPage(),
@@ -1281,36 +755,38 @@ class RequestController extends BaseApiController
         ];
     }
 
-    private function formatSingleRequest($request, ?int $userId = null): array
+    private function formatSingleRequest($request): array
     {
-        $data = [
+        $tech     = $request->technician;
+        $accepted = $request->status === ServiceRequest::STATUS_ACCEPTED;
+
+        return [
             'id'          => $request->id,
             'description' => $request->description,
             'status'      => $request->status,
+            // only a pending request can still be cancelled / accepted / rejected
+            'can_cancel'  => $request->status === ServiceRequest::STATUS_PENDING,
             'created_at'  => $request->created_at,
             'updated_at'  => $request->updated_at,
             'customer'    => $request->customer ? [
                 'id'    => $request->customer->id,
                 'name'  => $request->customer->name,
                 'email' => $request->customer->email,
-                'phone' => $request->customer->phone,
+                // the customer's phone is shared with the fundi only after accepting
+                'phone' => $accepted ? $request->customer->phone : null,
             ] : null,
-            'technician'  => $request->technician ? [
-                'id'            => $request->technician->id,
-                'name'          => $request->technician->user->name ?? null,
-                'email'         => $request->technician->user->email ?? null,
-                'phone'         => $request->technician->user->phone ?? null,
-                'profile_photo' => $request->technician->profile_photo
-                    ? url($request->technician->profile_photo)
-                    : null,
-                'area'      => $request->technician->area,
-                'rating'    => (float) ($request->technician->rating ?? 0),
-                'is_online' => (bool) ($request->technician->is_online ?? false),
+            'technician_id' => $request->technician_id,
+            'technician'  => $tech ? [
+                'id'            => $tech->id,
+                'name'          => $tech->user->name ?? null,
+                'email'         => $tech->user->email ?? null,
+                // the fundi's phone is shared with the customer only after accepting
+                'phone'         => $accepted ? ($tech->user->phone ?? null) : null,
+                'profile_photo' => $tech->profile_photo ? url('storage/' . ltrim($tech->profile_photo, '/')) : null,
+                'area'          => $tech->area,
+                'rating'        => (float) ($tech->rating ?? 0),
             ] : null,
-            'service'     => $request->service ? [
-                'id'   => $request->service->id,
-                'name' => $request->service->name,
-            ] : null,
+            'service'     => $request->service ? ['id' => $request->service->id, 'name' => $request->service->name] : null,
             'category'    => $request->category ? [
                 'id'   => $request->category->service_categoryID,
                 'name' => $request->category->category_name,
@@ -1318,34 +794,17 @@ class RequestController extends BaseApiController
             ] : null,
             'latitude'    => $request->latitude ? (float) $request->latitude : null,
             'longitude'   => $request->longitude ? (float) $request->longitude : null,
-            'logs'        => $request->logs ? $request->logs->map(function ($log) {
-                return [
+            'logs'        => $request->relationLoaded('logs')
+                ? $request->logs->map(fn ($log) => [
                     'id'         => $log->id,
                     'action'     => $log->action,
                     'old_status' => $log->old_status,
                     'new_status' => $log->new_status,
                     'notes'      => $log->notes,
                     'created_at' => $log->created_at,
-                    'user'       => $log->user ? [
-                        'id'   => $log->user->id,
-                        'name' => $log->user->name,
-                    ] : null,
-                ];
-            }) : [],
+                    'user'       => $log->user ? ['id' => $log->user->id, 'name' => $log->user->name] : null,
+                ])
+                : [],
         ];
-
-        if ($userId !== null) {
-            $hasReview = $request->relationLoaded('review')
-                ? ($request->review !== null)
-                : $request->review()->where('customer_id', $userId)->exists();
-        } elseif (auth()->check()) {
-            $hasReview = $request->review()->where('customer_id', auth()->id())->exists();
-        } else {
-            $hasReview = false;
-        }
-
-        $data['has_review'] = $hasReview;
-
-        return $data;
     }
 }
