@@ -5,10 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Models\Job;
 use App\Models\RequestLog;
 use App\Models\ServiceRequest;
-use App\Models\Ticket;
 use App\Services\JobNotificationService;
 use App\Traits\Auditable;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -18,13 +16,16 @@ use Illuminate\Validation\ValidationException;
 /**
  * Customer journey after a request is accepted:
  *
- *   request (accepted) ──[Mark as Job]──▶ Job (on-progress) + Ticket (on-progress, auto number)
- *                                         (the request status does NOT change)
+ *   request accepted ──(automatic)──▶ Job (pending) + Ticket (pending, auto number)
+ *                                     customer is told by SMS to open the Jobs section
+ *   [Contact Fundi / Chat]  from the job
  *   [Mark Complete] ──▶ 6-digit OTP generated and SMS-ed to the CUSTOMER
  *   [Enter OTP]     ──▶ Job completed + Ticket completed
+ *   [Review]        ──▶ Customer rates (1-5) + remark, once per job (ReviewController)
  *
- * No phone numbers or emails are returned from here. Chat is opened with
- * technician.user_id.
+ * The technician's phone and email are returned in the job payload so the
+ * customer can use "Contact Fundi". Jobs are only visible to the customer or
+ * fundi that own them. Chat is opened with technician.user_id.
  */
 class JobController extends BaseApiController
 {
@@ -34,7 +35,14 @@ class JobController extends BaseApiController
     private const OTP_MAX_ATTEMPTS = 5;
     private const OTP_RESEND_SECS  = 60;
 
-    private const WITH = ['request.service', 'request.category', 'technician.user', 'customer', 'tickets'];
+    private const WITH = [
+        'request.service',
+        'request.category',
+        'technician.user',
+        'customer',
+        'tickets',
+        'review',
+    ];
 
     public function __construct(protected JobNotificationService $notifier)
     {
@@ -77,81 +85,6 @@ class JobController extends BaseApiController
     }
 
     // ============================================================
-    // MARK AS JOB  (customer, request must be accepted, once)
-    // ============================================================
-
-    public function markAsJob(Request $request, $requestId)
-    {
-        $user = $request->user();
-
-        if (!$user || !$user->hasRole('CUSTOMER')) {
-            return $this->forbidden('Only customers can mark a request as a job.');
-        }
-
-        try {
-            $job = DB::transaction(function () use ($user, $requestId, $request) {
-                $sr = ServiceRequest::with('service')->lockForUpdate()->findOrFail($requestId);
-
-                if ((int) $sr->customer_id !== (int) $user->id) {
-                    throw new \DomainException('You can only manage your own requests.', 403);
-                }
-                if (Job::where('request_id', $sr->id)->exists()) {
-                    throw new \DomainException('This request is already a job.', 422);
-                }
-                if (!$sr->isAccepted()) {
-                    throw new \DomainException('Only an accepted request can be marked as a job.', 422);
-                }
-
-                $job = Job::create([
-                    'request_id'    => $sr->id,
-                    'technician_id' => $sr->technician_id,
-                    'customer_id'   => $sr->customer_id,
-                    'status'        => Job::STATUS_ON_PROGRESS,
-                    'started_at'    => now(),
-                ]);
-
-                Ticket::create([
-                    'job_id'      => $job->id,
-                    'status'      => Ticket::STATUS_ON_PROGRESS,
-                    'title'       => ($sr->service->name ?? 'Service') . ' — ' . $job->job_number,
-                    'description' => $sr->description,
-                ]);
-
-                $this->logRequestAction(
-                    $sr->id,
-                    $user->id,
-                    'marked_as_job',
-                    $sr->status,
-                    $sr->status,
-                    "Job {$job->job_number} created",
-                    $request->ip()
-                );
-
-                return $job;
-            });
-        } catch (\DomainException $e) {
-            return $this->domainError($e);
-        } catch (ModelNotFoundException $e) {
-            return $this->notFound('Request not found.');
-        } catch (\Throwable $e) {
-            Log::error('markAsJob failed: ' . $e->getMessage());
-            return $this->errorResponse('Failed to create the job. Please try again.', 500);
-        }
-
-        $job->load(self::WITH);
-
-        try {
-            $this->notifier->jobStarted($job);
-        } catch (\Throwable $e) {
-            Log::error('jobStarted notification failed: ' . $e->getMessage());
-        }
-
-        $this->logAudit('mark_as_job', 'job', $job->id, "Job {$job->job_number} created from request {$job->request_id}");
-
-        return $this->created($this->format($job), 'Job created successfully.');
-    }
-
-    // ============================================================
     // MARK COMPLETE → validates phone country code & enforces SMS
     // ============================================================
 
@@ -162,8 +95,8 @@ class JobController extends BaseApiController
         if (!$job) {
             return $this->notFound('Job not found.');
         }
-        if (!$job->isOnProgress()) {
-            return $this->errorResponse('Only a job that is in progress can be completed.', 422);
+        if (!$job->canComplete()) {
+            return $this->errorResponse('This job can no longer be completed.', 422);
         }
 
         $customer = $job->customer;
@@ -210,7 +143,7 @@ class JobController extends BaseApiController
     }
 
     // ============================================================
-    // ENTER OTP → job + ticket completed
+    // ENTER OTP → job + ticket completed (then customer can review)
     // ============================================================
 
     public function verifyCompletion(Request $request, $id)
@@ -230,8 +163,8 @@ class JobController extends BaseApiController
         if ($job->isCompleted()) {
             return $this->errorResponse('This job is already completed.', 422);
         }
-        if (!$job->isOnProgress()) {
-            return $this->errorResponse('Only a job that is in progress can be completed.', 422);
+        if (!$job->canComplete()) {
+            return $this->errorResponse('This job can no longer be completed.', 422);
         }
         if (!$job->completion_otp || !$job->completion_otp_expires_at || $job->completion_otp_expires_at->isPast()) {
             return $this->errorResponse('The code expired. Tap Mark Complete to get a new one.', 422);
@@ -331,13 +264,6 @@ class JobController extends BaseApiController
         ];
     }
 
-    private function domainError(\DomainException $e)
-    {
-        return $e->getCode() === 403
-            ? $this->forbidden($e->getMessage())
-            : $this->errorResponse($e->getMessage(), 422);
-    }
-
     private function logRequestAction(int $requestId, int $userId, string $action, ?string $old, string $new, ?string $notes, ?string $ip): void
     {
         try {
@@ -360,6 +286,7 @@ class JobController extends BaseApiController
         $tech   = $job->technician;
         $sr     = $job->request;
         $ticket = $job->tickets->sortByDesc('id')->first();
+        $review = $job->review;
 
         return [
             'id'           => $job->id,
@@ -382,6 +309,8 @@ class JobController extends BaseApiController
                 'id'            => $tech->id,
                 'user_id'       => $tech->user_id,
                 'name'          => $tech->user->name ?? null,
+                'phone'         => $tech->user->phone ?? null,
+                'email'         => $tech->user->email ?? null,
                 'profile_photo' => $tech->profile_photo ? url('storage/' . ltrim($tech->profile_photo, '/')) : null,
                 'area'          => $tech->area,
                 'rating'        => (float) ($tech->rating ?? 0),
@@ -394,6 +323,12 @@ class JobController extends BaseApiController
                 'title'         => $ticket->title,
                 'description'   => $ticket->description,
                 'completed_at'  => $ticket->completed_at,
+            ] : null,
+            'review'       => $review ? [
+                'id'         => $review->id,
+                'rating'     => (float) $review->rating,
+                'comment'    => $review->comment,
+                'created_at' => $review->created_at?->toIso8601String(),
             ] : null,
         ];
     }

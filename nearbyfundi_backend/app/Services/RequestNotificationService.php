@@ -72,9 +72,12 @@ class RequestNotificationService
     // ──────────────────────────────────────────────
     // ACCEPTED → customer
     // ──────────────────────────────────────────────
+        // ──────────────────────────────────────────────
+    // ACCEPTED → customer
+    // ──────────────────────────────────────────────
     public function notifyCustomerAccepted(ServiceRequest $request): array
     {
-        $request->loadMissing(['customer', 'technician.user', 'service']);
+        $request->loadMissing(['customer', 'technician.user', 'service', 'job']);
 
         $customer = $request->customer;
         if (!$customer) {
@@ -83,12 +86,14 @@ class RequestNotificationService
 
         $techName = $request->technician->user->name ?? 'the fundi';
         $title    = 'Request Accepted';
-        $body     = "Your request has been accepted by {$techName}.";
+        $body     = "Your request has been accepted by {$techName}. "
+                  . "Open the Jobs section to contact the fundi or chat with them in the app.";
 
         return $this->send(
             $request, 'accepted', $customer, $title, $body, 'request_accepted',
             [
                 'request_id'      => $request->id,
+                'job_id'          => $request->job?->id,
                 'technician_id'   => $request->technician_id,
                 'technician_name' => $techName,
                 'status'          => $request->status,
@@ -99,6 +104,7 @@ class RequestNotificationService
             }
         );
     }
+   
 
     // ──────────────────────────────────────────────
     // REJECTED → customer

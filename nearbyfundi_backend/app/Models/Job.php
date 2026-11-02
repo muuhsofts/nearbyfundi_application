@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
 class Job extends Model
@@ -63,7 +64,7 @@ class Job extends Model
             // Job becomes completed → complete all still-open tickets
             if ($job->wasChanged('status') && $job->status === self::STATUS_COMPLETED) {
                 $job->tickets()
-                    ->where('status', Ticket::STATUS_ON_PROGRESS)
+                    ->whereIn('status', Ticket::OPEN_STATUSES)
                     ->update([
                         'status'       => Ticket::STATUS_COMPLETED,
                         'completed_at' => now(),
@@ -107,6 +108,11 @@ class Job extends Model
         return $this->hasMany(Ticket::class, 'job_id');
     }
 
+    public function review(): HasOne
+    {
+        return $this->hasOne(Review::class, 'job_id');
+    }
+
     // ── Scopes ────────────────────────────────────────────
     public function scopePending($q)    { return $q->where('status', self::STATUS_PENDING); }
     public function scopeOnProgress($q) { return $q->where('status', self::STATUS_ON_PROGRESS); }
@@ -116,4 +122,10 @@ class Job extends Model
     public function isPending(): bool    { return $this->status === self::STATUS_PENDING; }
     public function isOnProgress(): bool { return $this->status === self::STATUS_ON_PROGRESS; }
     public function isCompleted(): bool  { return $this->status === self::STATUS_COMPLETED; }
+
+    /** A job can be completed (OTP flow) while pending or on-progress. */
+    public function canComplete(): bool
+    {
+        return $this->isPending() || $this->isOnProgress();
+    }
 }

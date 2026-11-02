@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Events\RequestCreated;
 use App\Events\RequestStatusUpdated;
+use App\Models\Job;
 use App\Models\RequestLog;
 use App\Models\Service;
 use App\Models\ServiceRequest;
 use App\Models\Technician;
+use App\Models\Ticket;
 use App\Services\RequestNotificationService;
 use App\Traits\Auditable;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -19,15 +21,15 @@ use Illuminate\Validation\ValidationException;
 /**
  * requests.status enum: pending | accepted | cancelled | rejected
  *
- *   pending  → accepted   (assigned fundi)
+ *   pending  → accepted   (assigned fundi)  ──▶ Job (on-progress) + Ticket (on-progress) created automatically
  *   pending  → rejected   (assigned fundi)
  *   pending  → cancelled  (the customer who created it)
  *   accepted / cancelled / rejected are LOCKED:
  *      an accepted request can no longer be cancelled or rejected.
  *
- * on-progress / completed belong to the JOB and its TICKET (see JobController):
- *   accepted request --[Mark as Job]--> job + ticket (on-progress)
- *   job --[SMS OTP confirmed]--> job + ticket completed
+ * The customer is told (SMS + in-app) to open the Jobs section to contact /
+ * chat with the fundi, and later marks the job complete with an SMS OTP
+ * (see JobController).
  */
 class RequestController extends BaseApiController
 {
@@ -144,11 +146,18 @@ class RequestController extends BaseApiController
     private function applyTransition(ServiceRequest $sr, string $new, $user, ?string $ip): void
     {
         $old = $sr->status;
+        $job = null;
 
         DB::beginTransaction();
         try {
             $sr->status = $new;
             $sr->save();
+
+            // Accepting a request automatically creates its job + ticket (atomic).
+            if ($new === ServiceRequest::STATUS_ACCEPTED) {
+                $job = $this->createJobForAcceptedRequest($sr);
+            }
+
             DB::commit();
         } catch (\Throwable $e) {
             DB::rollBack();
@@ -166,7 +175,15 @@ class RequestController extends BaseApiController
             "Status changed from {$old} to {$new}", $ip
         );
 
+        if ($job) {
+            $this->logRequestAction(
+                $sr->id, $user->id, 'job_created', $new, $new,
+                "Job {$job->job_number} created automatically (on-progress)", $ip
+            );
+        }
+
         // in-app + push, SMS, email — after the response is sent
+        // (the accepted notification tells the customer to open the Jobs section)
         match ($new) {
             ServiceRequest::STATUS_ACCEPTED  => $this->afterResponse(fn () => $this->notifier->notifyCustomerAccepted($sr)),
             ServiceRequest::STATUS_REJECTED  => $this->afterResponse(fn () => $this->notifier->notifyCustomerRejected($sr)),
@@ -175,6 +192,32 @@ class RequestController extends BaseApiController
         };
 
         $this->logAudit('update_request_status', 'request', $sr->id, "Status changed to {$new}");
+    }
+
+    /** Creates the on-progress Job + on-progress Ticket for an accepted request (once). */
+    private function createJobForAcceptedRequest(ServiceRequest $sr): Job
+    {
+        $existing = Job::where('request_id', $sr->id)->first();
+        if ($existing) {
+            return $existing;
+        }
+
+        $job = Job::create([
+            'request_id'    => $sr->id,
+            'technician_id' => $sr->technician_id,
+            'customer_id'   => $sr->customer_id,
+            'status'        => Job::STATUS_ON_PROGRESS,
+            'started_at'    => now(),
+        ]);
+
+        Ticket::create([
+            'job_id'      => $job->id,
+            'status'      => Ticket::STATUS_ON_PROGRESS,
+            'title'       => ($sr->service->name ?? 'Service') . ' — ' . $job->job_number,
+            'description' => $sr->description,
+        ]);
+
+        return $job;
     }
 
     // ============================================================
@@ -353,6 +396,7 @@ class RequestController extends BaseApiController
 
     // ============================================================
     // STATUS: accepted | rejected (fundi) · cancelled (customer) — pending only
+    // accepted → also creates the Job + Ticket (on-progress) automatically
     // ============================================================
 
     public function updateStatus(Request $request, $id)
@@ -381,8 +425,17 @@ class RequestController extends BaseApiController
         } catch (ModelNotFoundException $e) {
             return $this->notFound('Request not found.');
         } catch (\Throwable $e) {
-            Log::error('Error updating request status: ' . $e->getMessage());
-            return $this->errorResponse('Failed to update status. Please try again.', 500);
+            Log::error('Error updating request status: ' . $e->getMessage(), [
+                'request_id' => $id,
+                'at'         => $e->getFile() . ':' . $e->getLine(),
+            ]);
+
+            return $this->errorResponse(
+                config('app.debug')
+                    ? 'Failed to update status: ' . $e->getMessage()
+                    : 'Failed to update status. Please try again.',
+                500
+            );
         }
     }
 
@@ -772,8 +825,7 @@ class RequestController extends BaseApiController
             'status'      => $request->status,
             // only a pending request can still be cancelled / accepted / rejected
             'can_cancel'  => $request->status === ServiceRequest::STATUS_PENDING,
-            // an accepted request can become a job, once
-            'can_mark_as_job' => $accepted && !$job,
+            // the job is created automatically when the request is accepted
             'has_job'     => (bool) $job,
             'job'         => $job ? [
                 'id'         => $job->id,

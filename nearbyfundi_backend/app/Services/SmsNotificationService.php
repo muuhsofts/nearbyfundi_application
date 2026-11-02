@@ -96,15 +96,20 @@ class SmsNotificationService
         ]);
     }
 
-    /** Fundi accepted → SMS to the customer. */
+    /**
+     * Fundi accepted → SMS to the customer.
+     * A Job is already created automatically, so we tell the customer where to
+     * find it: Jobs section → "Contact Fundi" or in-app chat.
+     */
     public function notifyCustomerRequestAccepted(ServiceRequest $request, Technician $technician): array
     {
         $customer       = $request->customer;
         $technicianName = $technician->user->name ?? 'Technician';
         $serviceName    = $request->service->name ?? 'your service';
 
-        $message = "Nearbyfundi: {$technicianName} accepted your {$serviceName} request "
-                 . "and will contact you shortly.";
+        $message = "Nearbyfundi: {$technicianName} accepted your {$serviceName} request. "
+                 . "Log in to the app, open the Jobs section and tap Contact Fundi, "
+                 . "or chat with the fundi inside the app.";
 
         return $this->sendSms($customer, $message, 'request_accepted', [
             'request_id'      => $request->id,

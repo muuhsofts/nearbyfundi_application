@@ -15,9 +15,9 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  *   pending  → cancelled             (the customer)
  *   Anything other than pending is LOCKED for accept / reject / cancel.
  *
- * Work progress (on-progress / completed) lives on the JOB and its TICKET,
- * never on the request. An accepted request that has a job is simply
- * "accepted" + job.
+ * When a request is ACCEPTED, a Job (pending) + Ticket (pending) are created
+ * automatically (see RequestController::applyTransition).
+ * Work progress lives on the JOB and its TICKET, never on the request.
  */
 class ServiceRequest extends Model
 {
@@ -61,7 +61,7 @@ class ServiceRequest extends Model
 
     public function logs(): HasMany { return $this->hasMany(RequestLog::class, 'request_id'); }
 
-    /** One request becomes at most one job. */
+    /** One request becomes at most one job (created automatically on accept). */
     public function job(): HasOne { return $this->hasOne(Job::class, 'request_id'); }
 
     // ── State helpers ─────────────────────────────────────
@@ -72,10 +72,4 @@ class ServiceRequest extends Model
 
     /** Accept / reject / cancel are possible only while pending. */
     public function canChange(): bool { return $this->isPending(); }
-
-    /** The customer can turn an accepted request into a job — once. */
-    public function canBeMarkedAsJob(): bool
-    {
-        return $this->isAccepted() && !$this->job()->exists();
-    }
 }

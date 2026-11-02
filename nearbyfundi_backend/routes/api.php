@@ -163,7 +163,7 @@ Route::prefix('v3')->middleware(['auth:sanctum', 'active.session'])->group(funct
 });
 
 // =============================================
-// V4 – REQUESTS, JOBS, TICKETS & MONITORING
+// V4 – REQUESTS, JOBS, TICKETS, REVIEWS & MONITORING
 //   requests.status: pending | accepted | cancelled | rejected
 //     pending -> accepted/rejected (fundi) | pending -> cancelled (customer)
 //     accepted / cancelled / rejected are LOCKED
@@ -172,6 +172,7 @@ Route::prefix('v3')->middleware(['auth:sanctum', 'active.session'])->group(funct
 //     accepted request --[mark-as-job]--> job + ticket (on-progress)
 //     job --[request-completion]--> OTP by SMS to the customer
 //     job --[verify-completion]--> job + ticket completed
+//     completed job --[review]--> customer rating (1-5) + remark, once per job
 // =============================================
 Route::prefix('v4')->middleware(['auth:sanctum', 'active.session'])->group(function () {
     Route::get('request-services', [RequestController::class, 'getServicesWithCategories']);
@@ -187,14 +188,18 @@ Route::prefix('v4')->middleware(['auth:sanctum', 'active.session'])->group(funct
     // ── JOBS ────────────────────────────────────────────────────────────
     Route::get('jobs', [JobController::class, 'index']);
     Route::get('jobs/{id}', [JobController::class, 'show'])->whereNumber('id');
-    Route::post('requests/{requestId}/mark-as-job', [JobController::class, 'markAsJob'])
-        ->whereNumber('requestId');
     Route::post('jobs/{id}/request-completion', [JobController::class, 'requestCompletion'])
         ->whereNumber('id')->middleware('throttle:6,1');
     Route::post('jobs/{id}/verify-completion', [JobController::class, 'verifyCompletion'])
         ->whereNumber('id')->middleware('throttle:10,1');
 
-    // ── TICKETS (NEW: read-only, for FUNDI & CUSTOMER) ──────────────────
+    // ── REVIEWS (customer reviews a COMPLETED job, once) ────────────────
+    Route::post('jobs/{id}/review', [ReviewController::class, 'store'])
+        ->whereNumber('id')->middleware('throttle:10,1');
+    Route::get('technicians/{id}/reviews', [ReviewController::class, 'technicianReviews'])
+        ->whereNumber('id');
+
+    // ── TICKETS (read-only, for FUNDI & CUSTOMER) ───────────────────────
     Route::get('tickets', [TicketController::class, 'index']);
     Route::get('tickets/{id}', [TicketController::class, 'show'])->whereNumber('id');
 

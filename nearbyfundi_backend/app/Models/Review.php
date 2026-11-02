@@ -8,8 +8,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Review extends Model
 {
     protected $fillable = [
-        'request_id',      // foreign key to service_requests
-        'customer_id',     // the user who wrote the review
+        'request_id',
+        'job_id',
+        'customer_id',
         'technician_id',
         'rating',
         'comment',
@@ -19,33 +20,34 @@ class Review extends Model
         'rating' => 'float',
     ];
 
-    // ─── Events ───────────────────────────────────────────────────────
-
+    // ─── Events ───────────────────────────────────────────
     protected static function booted()
     {
         static::saved(function ($review) {
-            $review->technician->recalculateRating();
+            $review->technician?->recalculateRating();
         });
 
         static::deleted(function ($review) {
-            $review->technician->recalculateRating();
+            $review->technician?->recalculateRating();
         });
     }
 
-    // ─── Relationships ──────────────────────────────────────────────
-
+    // ─── Relationships ────────────────────────────────────
     public function technician(): BelongsTo
     {
         return $this->belongsTo(Technician::class);
     }
 
-    // The customer who wrote the review (aliased as 'customer')
     public function customer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'customer_id');
     }
 
-    // The service request being reviewed
+    public function job(): BelongsTo
+    {
+        return $this->belongsTo(Job::class, 'job_id');
+    }
+
     public function serviceRequest(): BelongsTo
     {
         return $this->belongsTo(ServiceRequest::class, 'request_id');

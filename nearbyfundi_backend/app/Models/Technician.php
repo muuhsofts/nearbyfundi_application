@@ -49,6 +49,12 @@ class Technician extends Model
         'face_enrolled',
         'fingerprint_data',
         'face_data',
+        'fingerprint_template',
+        'fingerprint_hash',
+        'fingerprint_captured_at',
+        'face_image',
+        'face_embedding',
+        'face_captured_at',
 
         // Next of Kin
         'next_of_kin_name',
@@ -62,12 +68,16 @@ class Technician extends Model
         'id_document_image',
         'fingerprint_data',
         'face_data',
+        'fingerprint_template',
+        'fingerprint_hash',
+        'face_image',
+        'face_embedding',
     ];
 
     protected function casts(): array
     {
         return [
-            // ← tolerate plaintext AND encrypted reads; always write encrypted
+            // tolerate plaintext AND encrypted reads; always write encrypted
             'nida'             => EncryptedOrPlaintext::class,
             'fingerprint_data' => EncryptedOrPlaintext::class,
             'face_data'        => EncryptedOrPlaintext::class,
@@ -78,16 +88,17 @@ class Technician extends Model
             'face_enrolled'          => 'boolean',
             'is_online'              => 'boolean',
 
-            'rating'      => 'float',
-            'hourly_rate' => 'decimal:2',
+            'rating'                => 'float',
+            'completed_jobs_count'  => 'integer',
+            'hourly_rate'           => 'decimal:2',
 
             'latitude'  => 'float',
             'longitude' => 'float',
 
             'registration_step' => 'integer',
 
-            'last_activity_at'    => 'datetime',
-            'location_updated_at' => 'datetime',
+            'last_activity_at'        => 'datetime',
+            'location_updated_at'     => 'datetime',
             'fingerprint_captured_at' => 'datetime',
             'face_captured_at'        => 'datetime',
         ];
@@ -97,7 +108,7 @@ class Technician extends Model
     {
         static::saving(function (Technician $tech) {
             if ($tech->isDirty('nida')) {
-                $plain = $tech->nida;              // decrypted by cast
+                $plain = $tech->nida; // decrypted by cast
                 $tech->nida_hash = empty($plain)
                     ? null
                     : hash('sha256', trim((string) $plain));
@@ -111,15 +122,41 @@ class Technician extends Model
     }
 
     // ── Relationships ─────────────────────────────────────
-    public function user(): BelongsTo { return $this->belongsTo(User::class); }
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
 
     public function services(): BelongsToMany
     {
         return $this->belongsToMany(Service::class, 'technician_services')->withTimestamps();
     }
 
-    public function portfolios(): HasMany { return $this->hasMany(Portfolio::class); }
-    public function reviews(): HasMany    { return $this->hasMany(Review::class); }
+    public function portfolios(): HasMany
+    {
+        return $this->hasMany(Portfolio::class);
+    }
+
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(Review::class, 'technician_id');
+    }
+
+    public function jobs(): HasMany
+    {
+        return $this->hasMany(Job::class, 'technician_id');
+    }
+
+    // ── Rating ────────────────────────────────────────────
+    /** Average of all customer reviews. Called from Review::saved / deleted. */
+    public function recalculateRating(): void
+    {
+        $avg = $this->reviews()->avg('rating');
+
+        $this->forceFill([
+            'rating' => $avg === null ? 0 : round((float) $avg, 2),
+        ])->saveQuietly();
+    }
 
     // ── Activity tracking ─────────────────────────────────
     public function recordHeartbeat(?float $lat = null, ?float $lng = null): void

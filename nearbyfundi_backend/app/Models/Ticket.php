@@ -10,12 +10,20 @@ class Ticket extends Model
 {
     protected $table = 'tickets';
 
+    public const STATUS_PENDING     = 'pending';
     public const STATUS_ON_PROGRESS = 'on-progress';
     public const STATUS_COMPLETED   = 'completed';
 
     public const STATUSES = [
+        self::STATUS_PENDING,
         self::STATUS_ON_PROGRESS,
         self::STATUS_COMPLETED,
+    ];
+
+    /** Statuses that count as "still open". */
+    public const OPEN_STATUSES = [
+        self::STATUS_PENDING,
+        self::STATUS_ON_PROGRESS,
     ];
 
     protected $fillable = [
@@ -54,7 +62,7 @@ class Ticket extends Model
                 $job = $ticket->job;
                 if ($job && $job->status !== Job::STATUS_COMPLETED) {
                     $hasOpen = $job->tickets()
-                        ->where('status', self::STATUS_ON_PROGRESS)
+                        ->whereIn('status', self::OPEN_STATUSES)
                         ->exists();
 
                     if (!$hasOpen) {
@@ -83,5 +91,6 @@ class Ticket extends Model
     }
 
     // ── Helpers ───────────────────────────────────────────
+    public function isPending(): bool   { return $this->status === self::STATUS_PENDING; }
     public function isCompleted(): bool { return $this->status === self::STATUS_COMPLETED; }
 }
