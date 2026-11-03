@@ -5,99 +5,41 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\Conversation;
 use App\Models\Message;
-use App\Models\User;
+use App\Models\MessagePin;
 use App\Models\MessageReaction;
+use App\Models\MessageStar;
 use App\Models\Notification;
-use App\Events\NewMessage;
-use App\Events\MessageRead;
-use App\Events\UserTyping;
+use App\Models\User;
 use App\Services\FcmService;
-use App\Traits\Auditable;
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 
 class ChatController extends BaseApiController
 {
-    use Auditable;
+    private const MAX_IMAGE_KB = 5120;    // 5 MB
+    private const MAX_VIDEO_KB = 20480;   // 20 MB
+    private const MAX_FILE_KB  = 15360;   // 15 MB
+    private const MAX_PINS     = 3;
 
-    const ALLOWED_IMAGE_TYPES = [
-        'image/jpeg',
-        'image/png',
-        'image/gif',
-        'image/webp',
+    /** Any file is allowed except executables / scripts. Keep in sync with the app. */
+    private const BLOCKED_EXTENSIONS = [
+        'php', 'phtml', 'phar', 'exe', 'bat', 'cmd', 'com', 'sh', 'js',
+        'html', 'htm', 'svg', 'jar', 'apk', 'msi', 'dll', 'vbs', 'ps1', 'py',
     ];
 
-    const ALLOWED_DOCUMENT_TYPES = [
-        'application/pdf',
-        'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'application/vnd.ms-excel',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'text/plain',
-        'application/rtf',
+    private const IMAGE_MIMES = [
+        'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif',
     ];
 
-    const ALLOWED_AUDIO_TYPES = [
-        'audio/mpeg',
-        'audio/ogg',
-        'audio/wav',
-        'audio/webm',
-        'audio/mp4',
-        'audio/x-m4a',
-        'audio/aac',
-    ];
-
-    const ALLOWED_VIDEO_TYPES = [
-        'video/mp4',
-        'video/webm',
-        'video/ogg',
-    ];
-
-    const ALLOWED_ARCHIVE_TYPES = [
-        'application/zip',
-        'application/x-rar-compressed',
-    ];
-
-    const MAX_FILE_SIZE = 15 * 1024 * 1024;
-
-    protected FcmService $fcmService;
-
-    public function __construct(FcmService $fcmService)
+    public function __construct(protected FcmService $fcmService)
     {
-        $this->fcmService = $fcmService;
-    }
-
-    /**
-     * Create a chat notification row (DB only — no FCM push here).
-     * Chat pushes are handled separately by sendPushNotification() as
-     * silent data-only messages so they don't spam the system tray.
-     */
-    private function createNotification(int $userId, string $title, string $body, string $type, array $data = []): void
-    {
-        $sanitized = [];
-        foreach ($data as $key => $value) {
-            if ($value === null) {
-                $sanitized[$key] = '';
-            } elseif (is_bool($value)) {
-                $sanitized[$key] = $value ? 'true' : 'false';
-            } elseif (is_array($value) || is_object($value)) {
-                $sanitized[$key] = json_encode($value);
-            } else {
-                $sanitized[$key] = (string) $value;
-            }
-        }
-
-        Notification::create([
-            'user_id' => $userId,
-            'title'   => $title,
-            'body'    => $body,
-            'type'    => $type,
-            'data'    => $sanitized,
-            'is_read' => false,
-        ]);
     }
 
     // ============================================================
@@ -107,8 +49,8 @@ class ChatController extends BaseApiController
     public function getOrCreateConversation(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'customer_id' => 'required|exists:users,id',
-            'fundi_id'    => 'required|exists:users,id|different:customer_id',
+            'customer_id' => 'required|integer|exists:users,id',
+            'fundi_id'    => 'required|integer|exists:users,id|different:customer_id',
         ]);
 
         if ($validator->fails()) {
@@ -117,10 +59,9 @@ class ChatController extends BaseApiController
 
         $user = $request->user();
 
-        if ($user->id != $request->customer_id && $user->id != $request->fundi_id) {
+        if ((int) $user->id !== (int) $request->customer_id && (int) $user->id !== (int) $request->fundi_id) {
             return $this->forbidden('Unauthorized to access this conversation.');
         }
-
         if ($user->hasRole('CUSTOMER') && (int) $user->id !== (int) $request->customer_id) {
             return $this->forbidden('Customers can only open chats as the customer.');
         }
@@ -128,503 +69,319 @@ class ChatController extends BaseApiController
             return $this->forbidden('Fundis can only open chats as the fundi.');
         }
 
-        $conversation = Conversation::where('customer_id', $request->customer_id)
-            ->where('fundi_id', $request->fundi_id)
-            ->first();
+        $conversation = Conversation::firstOrCreate(
+            ['customer_id' => $request->customer_id, 'fundi_id' => $request->fundi_id],
+            ['is_active' => true]
+        );
+        $conversation->load(['customer:id,name,email,phone', 'fundi:id,name,email,phone']);
 
-        if (!$conversation) {
-            $conversation = Conversation::create([
-                'customer_id'     => $request->customer_id,
-                'fundi_id'        => $request->fundi_id,
-                'last_message_at' => now(),
-            ]);
-
-            $this->logAudit(
-                'create_conversation',
-                'chat',
-                $conversation->id,
-                "Conversation created between customer #{$request->customer_id} and fundi #{$request->fundi_id}"
-            );
-        }
-
-        $conversation->load(['customer', 'fundi']);
-
-        return $this->successResponse($conversation, 'Conversation retrieved.');
+        return $this->successResponse(
+            $this->presentConversation($conversation, $user),
+            'Conversation retrieved.'
+        );
     }
 
     public function getConversations(Request $request)
     {
         $user = $request->user();
 
-        $conversations = Conversation::where(function ($q) use ($user) {
-                $q->where('customer_id', $user->id)
-                  ->orWhere('fundi_id', $user->id);
-            })
-            ->with(['customer', 'fundi', 'lastMessage'])
-            ->withCount(['unreadMessages' => function ($query) use ($user) {
-                $query->where('receiver_id', $user->id);
-            }])
-            ->orderBy('last_message_at', 'desc')
+        $conversations = Conversation::forUser($user->id)
+            ->has('messages')
+            ->with(['customer:id,name,email,phone', 'fundi:id,name,email,phone'])
+            ->orderByDesc('last_message_at')
             ->get();
 
-        $conversations->each(function ($conversation) use ($user) {
-            $conversation->user_role = $conversation->customer_id == $user->id ? 'customer' : 'fundi';
-            $conversation->other_party = $conversation->user_role == 'customer'
-                ? $conversation->fundi
-                : $conversation->customer;
+        $ids = $conversations->pluck('id');
 
-            if ($conversation->lastMessage) {
-                $conversation->last_message_formatted = $conversation->lastMessage->getFormattedMessage();
-            }
+        $lastIds = Message::whereIn('conversation_id', $ids)
+            ->selectRaw('MAX(id) as id')
+            ->groupBy('conversation_id')
+            ->pluck('id');
 
-            unset($conversation->customer, $conversation->fundi, $conversation->lastMessage);
+        $lastMessages = Message::with('sender:id,name')
+            ->whereIn('id', $lastIds)
+            ->get()
+            ->keyBy('conversation_id');
+
+        $unread = Message::whereIn('conversation_id', $ids)
+            ->where('receiver_id', $user->id)
+            ->where('is_read', false)
+            ->selectRaw('conversation_id, COUNT(*) as c')
+            ->groupBy('conversation_id')
+            ->pluck('c', 'conversation_id');
+
+        $data = $conversations->map(fn ($c) => $this->presentConversation(
+            $c,
+            $user,
+            $lastMessages->get($c->id),
+            (int) ($unread[$c->id] ?? 0)
+        ))->values();
+
+        return $this->successResponse($data, 'Conversations retrieved.');
+    }
+
+    public function deleteConversation(Request $request, $conversationId)
+    {
+        $user         = $request->user();
+        $conversation = Conversation::find($conversationId);
+
+        if (!$conversation) {
+            return $this->notFound('Conversation not found.');
+        }
+        if (!$this->isParticipant($conversation, $user)) {
+            return $this->forbidden('Unauthorized to delete this conversation.');
+        }
+
+        DB::transaction(function () use ($conversation) {
+            $ids = Message::where('conversation_id', $conversation->id)->pluck('id');
+
+            Message::where('conversation_id', $conversation->id)
+                ->whereNotNull('file_path')
+                ->get()
+                ->each(fn ($m) => $this->deleteStoredFile($m->file_path));
+
+            MessagePin::where('conversation_id', $conversation->id)->delete();
+            MessageStar::whereIn('message_id', $ids)->delete();
+            MessageReaction::whereIn('message_id', $ids)->delete();
+
+            Message::where('conversation_id', $conversation->id)->delete();
+            $conversation->delete();
         });
 
-        return $this->successResponse($conversations, 'Conversations retrieved.');
+        return $this->successResponse(['conversation_id' => (int) $conversationId, 'deleted' => true], 'Conversation deleted.');
     }
 
     // ============================================================
     // MESSAGES
     // ============================================================
 
+    /**
+     * Query params:
+     *   after_id  -> only messages newer than this id (polling)
+     *   since     -> (with after_id) also return older messages whose reactions changed after this time
+     *   before_id -> older page (scroll up)
+     *   until_id  -> (with before_id) load EVERYTHING from until_id up to before_id (jump to a quoted message)
+     *   limit     -> page size (default 30, max 100)
+     * Messages are always returned oldest -> newest.
+     * Also returns: peer_typing, peer_read_upto, pins, updates, server_time.
+     */
     public function getMessages(Request $request, $conversationId)
     {
-        $user = $request->user();
+        $user         = $request->user();
         $conversation = Conversation::find($conversationId);
 
         if (!$conversation) {
             return $this->notFound('Conversation not found.');
         }
-
-        if ($user->id != $conversation->customer_id && $user->id != $conversation->fundi_id) {
+        if (!$this->isParticipant($conversation, $user)) {
             return $this->forbidden('Unauthorized to view this conversation.');
         }
 
-        $limit  = (int) $request->input('limit', 50);
-        $offset = (int) $request->input('offset', 0);
+        $meId  = (int) $user->id;
+        $limit = max(1, min((int) $request->input('limit', 30), 100));
 
-        $messages = Message::where('conversation_id', $conversationId)
-            ->with(['sender' => function ($query) {
-                $query->select('id', 'name', 'email', 'phone');
-            }])
-            ->orderBy('created_at', 'desc')
-            ->offset($offset)
-            ->limit($limit + 1)
-            ->get();
+        $query = Message::with(['sender:id,name', 'replyTo.sender:id,name'])
+            ->where('conversation_id', $conversation->id);
+        $hasMore = false;
 
-        $hasMore  = $messages->count() > $limit;
-        $messages = $messages->take($limit)->reverse()->values();
+        if ($request->filled('after_id')) {
+            $messages = $query->where('id', '>', (int) $request->after_id)
+                ->orderBy('id')->limit(100)->get();
+        } elseif ($request->filled('until_id') && $request->filled('before_id')) {
+            $messages = $query->where('id', '<', (int) $request->before_id)
+                ->where('id', '>=', (int) $request->until_id)
+                ->orderByDesc('id')->limit(500)->get()->reverse()->values();
 
-        $formattedMessages = $messages->map(function ($message) {
-            return $message->getFormattedMessage();
-        });
-
-        $unreadMessages = Message::where('conversation_id', $conversationId)
-            ->where('receiver_id', $user->id)
-            ->where('is_read', false)
-            ->get();
-
-        if ($unreadMessages->isNotEmpty()) {
-            foreach ($unreadMessages as $message) {
-                $message->markAsRead();
-                broadcast(new MessageRead($message->id, $message->sender_id));
+            $minId   = $messages->first()?->id ?? (int) $request->before_id;
+            $hasMore = Message::where('conversation_id', $conversation->id)->where('id', '<', $minId)->exists();
+        } else {
+            if ($request->filled('before_id')) {
+                $query->where('id', '<', (int) $request->before_id);
             }
-
-            $this->logAudit(
-                'read_messages',
-                'chat',
-                $conversationId,
-                "User #{$user->id} read messages in conversation #{$conversationId}"
-            );
+            $rows     = $query->orderByDesc('id')->limit($limit + 1)->get();
+            $hasMore  = $rows->count() > $limit;
+            $messages = $rows->take($limit)->reverse()->values();
         }
 
+        // Messages whose reactions changed since the last poll (older than after_id)
+        $updates = [];
+        if ($request->filled('after_id') && $request->filled('since')) {
+            try {
+                $since   = Carbon::parse($request->since);
+                $changed = Message::with(['sender:id,name', 'replyTo.sender:id,name'])
+                    ->where('conversation_id', $conversation->id)
+                    ->where('meta_updated_at', '>', $since)
+                    ->limit(100)->get();
+                $updates = $this->presentMany($changed, $meId, $conversation->id);
+            } catch (\Throwable $e) {
+                $updates = [];
+            }
+        }
+
+        // Everything the current user received is now read
+        Message::where('conversation_id', $conversation->id)
+            ->where('receiver_id', $user->id)
+            ->where('is_read', false)
+            ->update([
+                'is_read'      => true,
+                'read_at'      => now(),
+                'is_delivered' => true,
+                'delivered_at' => now(),
+            ]);
+
+        // Highest id of MY messages that the other person has read (for ✓✓)
+        $peerReadUpTo = (int) Message::where('conversation_id', $conversation->id)
+            ->where('sender_id', $user->id)
+            ->where('is_read', true)
+            ->max('id');
+
+        $peerId = (int) $conversation->customer_id === $meId
+            ? (int) $conversation->fundi_id
+            : (int) $conversation->customer_id;
+
         return $this->successResponse([
-            'messages'            => $formattedMessages,
-            'unread_marked_count' => $unreadMessages->count(),
-            'total'               => Message::where('conversation_id', $conversationId)->count(),
-            'has_more'            => $hasMore,
-            'offset'              => $offset,
-            'limit'               => $limit,
+            'messages'       => $this->presentMany($messages, $meId, $conversation->id),
+            'has_more'       => $hasMore,
+            'peer_read_upto' => $peerReadUpTo,
+            'peer_typing'    => Cache::has($this->typingKey($conversation->id, $peerId)),
+            'pins'           => $this->pinsFor($conversation, $meId),
+            'updates'        => $updates,
+            // 1s overlap so a change made during this request is never missed
+            'server_time'    => now()->subSecond()->toIso8601String(),
         ], 'Messages retrieved.');
     }
 
     public function sendMessage(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'conversation_id' => 'required|exists:conversations,id',
-            'content'         => 'required_without:file|string|max:5000',
-            'file'            => 'nullable|file|max:' . (self::MAX_FILE_SIZE / 1024),
-            'message_type'    => 'nullable|in:text,image,file,voice,video',
-            'voice_duration'  => 'nullable|integer|min:1|max:300',
+            'conversation_id' => 'required|integer|exists:conversations,id',
+            'content'         => 'nullable|string|max:2000',
+            'reply_to_id'     => 'nullable|integer',
+            'file'            => 'nullable|file|max:' . self::MAX_VIDEO_KB,
         ]);
 
         if ($validator->fails()) {
             return $this->errorResponse($validator->errors()->first(), 422);
         }
 
-        $user = $request->user();
+        $user         = $request->user();
         $conversation = Conversation::find($request->conversation_id);
 
-        if (!$conversation) {
-            return $this->notFound('Conversation not found.');
-        }
-
-        if ($user->id != $conversation->customer_id && $user->id != $conversation->fundi_id) {
+        if (!$conversation || !$this->isParticipant($conversation, $user)) {
             return $this->forbidden('Unauthorized to send messages.');
         }
 
-        $senderType = $user->id == $conversation->customer_id ? 'customer' : 'fundi';
-        $receiverId = $user->id == $conversation->customer_id
-            ? $conversation->fundi_id
-            : $conversation->customer_id;
+        $content = trim((string) $request->input('content', ''));
+        if ($content === '' && !$request->hasFile('file')) {
+            return $this->errorResponse('Write a message or attach a file.', 422);
+        }
 
-        DB::beginTransaction();
+        // Reply target must belong to the same conversation; otherwise it is ignored.
+        $replyToId = null;
+        if ($request->filled('reply_to_id')) {
+            $replyToId = Message::where('id', (int) $request->reply_to_id)
+                ->where('conversation_id', $conversation->id)
+                ->value('id');
+        }
+
+        $isCustomer = (int) $user->id === (int) $conversation->customer_id;
+        $receiverId = $isCustomer ? $conversation->fundi_id : $conversation->customer_id;
+
+        $type     = Message::TYPE_TEXT;
+        $fileData = [];
+
         try {
-            $messageData = [
-                'conversation_id' => $conversation->id,
-                'sender_id'       => $user->id,
-                'receiver_id'     => $receiverId,
-                'sender_type'     => $senderType,
-                'message_type'    => $request->input('message_type', 'text'),
-                'content'         => $request->input('content', ''),
-                'is_read'         => false,
-                'is_delivered'    => false,
-            ];
-
             if ($request->hasFile('file')) {
                 $file = $request->file('file');
-                $fileInfo = $this->processFileUpload($file);
-                $messageData = array_merge($messageData, $fileInfo);
-
-                if (!$request->has('message_type') || $request->message_type == 'text') {
-                    $messageData['message_type'] = $this->detectMessageType($file);
+                if (!$file->isValid()) {
+                    return $this->errorResponse('The upload failed. Please try again.', 422);
                 }
+                [$type, $fileData] = $this->storeUpload($file);
             }
 
-            if ($request->filled('voice_duration') && ($messageData['message_type'] ?? '') === 'voice') {
-                $messageData['voice_duration'] = (int) $request->voice_duration;
+            $message = DB::transaction(function () use ($conversation, $user, $receiverId, $isCustomer, $type, $content, $fileData, $replyToId) {
+                $message = Message::create(array_merge([
+                    'conversation_id' => $conversation->id,
+                    'reply_to_id'     => $replyToId,
+                    'sender_id'       => $user->id,
+                    'receiver_id'     => $receiverId,
+                    'sender_type'     => $isCustomer ? 'customer' : 'fundi',
+                    'message_type'    => $type,
+                    'content'         => $content,
+                    'is_read'         => false,
+                    'is_delivered'    => false,
+                ], $fileData));
+
+                $conversation->update(['last_message_at' => now()]);
+
+                return $message;
+            });
+        } catch (\InvalidArgumentException $e) {
+            return $this->errorResponse($e->getMessage(), 422);
+        } catch (\Throwable $e) {
+            if (!empty($fileData['file_path'])) {
+                $this->deleteStoredFile($fileData['file_path']);
             }
-
-            $message = Message::create($messageData);
-            $conversation->update(['last_message_at' => now()]);
-
-            $message->load(['sender' => function ($query) {
-                $query->select('id', 'name', 'email', 'phone', 'fcm_device_token');
-            }]);
-
-            broadcast(new NewMessage($message, $conversation->id));
-
-            // Silent FCM data push to receiver
-            $this->sendPushNotification($message, $conversation);
-
-            // DB notification row for the in-app notification list
-            $receiver = User::find($receiverId);
-            if ($receiver) {
-                $sender = $user;
-                $notificationBody = $message->content ?? 'You have a new message';
-
-                if ($message->message_type === 'image') {
-                    $notificationBody = '📷 Image sent';
-                } elseif ($message->message_type === 'file') {
-                    $notificationBody = '📎 File sent: ' . ($message->file_name ?? 'attachment');
-                } elseif ($message->message_type === 'voice') {
-                    $notificationBody = '🎤 Voice message sent';
-                } elseif ($message->message_type === 'video') {
-                    $notificationBody = '🎬 Video sent';
-                }
-
-                $this->createNotification(
-                    $receiverId,
-                    "New message from {$sender->name}",
-                    $notificationBody,
-                    'chat_message',
-                    [
-                        'conversation_id' => $conversation->id,
-                        'message_id'      => $message->id,
-                        'sender_id'       => $sender->id,
-                        'sender_name'     => $sender->name,
-                        'message_type'    => $message->message_type,
-                    ]
-                );
-            }
-
-            DB::commit();
-
-            $this->logAudit(
-                'send_message',
-                'chat',
-                $conversation->id,
-                "Message sent in conversation #{$conversation->id} by user #{$user->id}"
-            );
-
-            return $this->successResponse([
-                'message'         => $message->getFormattedMessage(),
-                'conversation_id' => $conversation->id,
-            ], 'Message sent.');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            \Log::error('Send message error: ' . $e->getMessage());
-            return $this->serverError('Failed to send message: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * Send silent data-only FCM push to the receiver.
-     * Chat pushes must NEVER appear in the system tray.
-     */
-    protected function sendPushNotification($message, $conversation)
-    {
-        try {
-            $receiver = User::find($message->receiver_id);
-
-            if (!$receiver) {
-                return;
-            }
-
-            $sender = $message->sender;
-            if (!$sender) {
-                return;
-            }
-
-            // Delegate to FcmService::sendChatNotification — handles token lookup,
-            // silent data-only payload, and all validation.
-            $this->fcmService->sendChatNotification(
-                $receiver,
-                $sender,
-                $message,
-                $conversation->id
-            );
-        } catch (\Exception $e) {
-            \Log::error('FCM notification error: ' . $e->getMessage());
-        }
-    }
-
-    protected function getNotificationBody($message)
-    {
-        if ($message->message_type === 'text') {
-            return $message->content ?? 'New message';
+            // If a reply fails, THIS line in storage/logs/laravel.log tells you the real SQL error
+            Log::error('Send message error: ' . $e->getMessage());
+            return $this->serverError('Failed to send message.');
         }
 
-        $fileTypeMap = [
-            'image' => '📷 Image',
-            'video' => '🎬 Video',
-            'voice' => '🎤 Voice Message',
-            'file'  => '📎 File',
-        ];
+        $message->setRelation('sender', $user);
 
-        $type = $fileTypeMap[$message->message_type] ?? '📎 Attachment';
+        // Sending a message ends "typing"
+        Cache::forget($this->typingKey($conversation->id, (int) $user->id));
 
-        if ($message->file_name) {
-            $type .= ': ' . $message->file_name;
-        }
-
-        if ($message->content) {
-            $type .= ' - ' . substr($message->content, 0, 50);
-        }
-
-        return $type;
-    }
-
-    // ============================================================
-    // FILE HANDLING
-    // ============================================================
-
-    private function processFileUpload($file)
-    {
-        $mimeType     = $file->getMimeType();
-        $extension    = strtolower($file->getClientOriginalExtension());
-        $size         = $file->getSize();
-        $originalName = $file->getClientOriginalName();
-
-        $allowedTypes = array_merge(
-            self::ALLOWED_IMAGE_TYPES,
-            self::ALLOWED_DOCUMENT_TYPES,
-            self::ALLOWED_AUDIO_TYPES,
-            self::ALLOWED_VIDEO_TYPES,
-            self::ALLOWED_ARCHIVE_TYPES
-        );
-
-        if (!in_array($mimeType, $allowedTypes)) {
-            throw new \Exception('File type not allowed.');
-        }
-
-        if (in_array($extension, ['svg', 'svgz'], true)) {
-            throw new \Exception('SVG files are not allowed.');
-        }
-
-        if ($size > self::MAX_FILE_SIZE) {
-            throw new \Exception('File too large. Max size: ' . (self::MAX_FILE_SIZE / 1024 / 1024) . 'MB');
-        }
-
-        $fileName = time() . '_' . Str::random(10) . '.' . $extension;
-        $path     = $file->storeAs('chat_files/' . date('Y/m/d'), $fileName, 'public');
-
-        $data = [
-            'file_name'      => $originalName,
-            'file_path'      => $path,
-            'file_size'      => $size,
-            'file_mime_type' => $mimeType,
-            'file_extension' => $extension,
-        ];
-
-        if (in_array($mimeType, self::ALLOWED_IMAGE_TYPES)) {
-            $thumbnail = $this->generateThumbnail($file, $path);
-            if ($thumbnail) {
-                $data['thumbnail_path'] = $thumbnail;
-            }
-        }
-
-        return $data;
-    }
-
-    private function generateThumbnail($file, $path)
-    {
-        try {
-            if (!extension_loaded('gd') && !extension_loaded('imagick')) {
-                return null;
-            }
-
-            $image    = null;
-            $mimeType = $file->getMimeType();
-
-            switch ($mimeType) {
-                case 'image/jpeg':
-                    $image = imagecreatefromjpeg($file);
-                    break;
-                case 'image/png':
-                    $image = imagecreatefrompng($file);
-                    break;
-                case 'image/gif':
-                    $image = imagecreatefromgif($file);
-                    break;
-                case 'image/webp':
-                    $image = imagecreatefromwebp($file);
-                    break;
-                default:
-                    return null;
-            }
-
-            if (!$image) {
-                return null;
-            }
-
-            $width   = imagesx($image);
-            $height  = imagesy($image);
-            $maxSize = 200;
-            $ratio   = min($maxSize / $width, $maxSize / $height);
-            $newWidth  = (int) ($width * $ratio);
-            $newHeight = (int) ($height * $ratio);
-
-            $thumbnail = imagecreatetruecolor($newWidth, $newHeight);
-            imagecopyresampled($thumbnail, $image, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
-
-            $thumbName = 'thumb_' . basename($path);
-            $thumbPath = 'chat_files/thumbnails/' . date('Y/m/d') . '/' . $thumbName;
-            $fullPath  = storage_path('app/public/' . $thumbPath);
-
-            if (!is_dir(dirname($fullPath))) {
-                mkdir(dirname($fullPath), 0755, true);
-            }
-
-            imagejpeg($thumbnail, $fullPath, 80);
-            imagedestroy($image);
-            imagedestroy($thumbnail);
-
-            return $thumbPath;
-        } catch (\Exception $e) {
-            \Log::error('Thumbnail generation error: ' . $e->getMessage());
-            return null;
-        }
-    }
-
-    private function detectMessageType($file)
-    {
-        $mimeType = $file->getMimeType();
-
-        if (in_array($mimeType, self::ALLOWED_IMAGE_TYPES)) {
-            return 'image';
-        }
-        if (in_array($mimeType, self::ALLOWED_VIDEO_TYPES)) {
-            return 'video';
-        }
-        if (in_array($mimeType, self::ALLOWED_AUDIO_TYPES)) {
-            return 'voice';
-        }
-        return 'file';
-    }
-
-    // ============================================================
-    // READ STATUS
-    // ============================================================
-
-    public function markMessageAsRead(Request $request, $messageId)
-    {
-        $user    = $request->user();
-        $message = Message::find($messageId);
-
-        if (!$message) {
-            return $this->notFound('Message not found.');
-        }
-
-        if ($message->receiver_id != $user->id) {
-            return $this->forbidden('Cannot mark this message as read.');
-        }
-
-        if (!$message->is_read) {
-            $message->markAsRead();
-            broadcast(new MessageRead($message->id, $message->sender_id));
-
-            $this->logAudit(
-                'mark_message_read',
-                'chat',
-                $message->id,
-                "Message #{$message->id} marked as read by user #{$user->id}"
-            );
-        }
+        // Push + in-app notification must never break sending
+        $this->notifyReceiver($message, $conversation, $user, (int) $receiverId);
 
         return $this->successResponse([
-            'message_id' => $message->id,
-            'is_read'    => $message->is_read,
-            'read_at'    => $message->read_at?->toDateTimeString(),
-        ], 'Message marked as read.');
+            'message'         => $this->presentOne($message, (int) $user->id),
+            'conversation_id' => $conversation->id,
+        ], 'Message sent.');
+    }
+
+    /** Lightweight "typing…" signal; auto-expires after 6 seconds. */
+    public function typing(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'conversation_id' => 'required|integer|exists:conversations,id',
+        ]);
+        if ($validator->fails()) {
+            return $this->errorResponse($validator->errors()->first(), 422);
+        }
+
+        $user         = $request->user();
+        $conversation = Conversation::find($request->conversation_id);
+
+        if (!$conversation || !$this->isParticipant($conversation, $user)) {
+            return $this->forbidden('Unauthorized.');
+        }
+
+        Cache::put($this->typingKey($conversation->id, (int) $user->id), 1, now()->addSeconds(6));
+
+        return $this->successResponse(null, 'ok');
     }
 
     public function markConversationAsRead(Request $request, $conversationId)
     {
-        $user = $request->user();
+        $user         = $request->user();
         $conversation = Conversation::find($conversationId);
 
         if (!$conversation) {
             return $this->notFound('Conversation not found.');
         }
-
-        if ($user->id != $conversation->customer_id && $user->id != $conversation->fundi_id) {
+        if (!$this->isParticipant($conversation, $user)) {
             return $this->forbidden('Unauthorized.');
         }
 
-        $unreadMessages = Message::where('conversation_id', $conversationId)
+        $count = Message::where('conversation_id', $conversation->id)
             ->where('receiver_id', $user->id)
             ->where('is_read', false)
-            ->get();
-
-        $count = 0;
-        if ($unreadMessages->isNotEmpty()) {
-            foreach ($unreadMessages as $message) {
-                $message->markAsRead();
-                broadcast(new MessageRead($message->id, $message->sender_id));
-                $count++;
-            }
-
-            $this->logAudit(
-                'mark_conversation_read',
-                'chat',
-                $conversationId,
-                "User #{$user->id} marked {$count} messages as read in conversation #{$conversationId}"
-            );
-        }
+            ->update(['is_read' => true, 'read_at' => now(), 'is_delivered' => true, 'delivered_at' => now()]);
 
         return $this->successResponse([
-            'conversation_id'   => $conversationId,
+            'conversation_id'   => (int) $conversationId,
             'marked_read_count' => $count,
         ], 'Conversation marked as read.');
     }
@@ -633,31 +390,18 @@ class ChatController extends BaseApiController
     {
         $user = $request->user();
 
-        $totalUnread = Message::where('receiver_id', $user->id)
-            ->where('is_read', false)
-            ->count();
-
         $perConversation = Message::where('receiver_id', $user->id)
             ->where('is_read', false)
-            ->select('conversation_id', \DB::raw('count(*) as count'))
+            ->selectRaw('conversation_id, COUNT(*) as c')
             ->groupBy('conversation_id')
             ->get()
-            ->map(function ($item) {
-                return [
-                    'conversation_id' => $item->conversation_id,
-                    'unread_count'    => $item->count,
-                ];
-            });
+            ->map(fn ($r) => ['conversation_id' => $r->conversation_id, 'unread_count' => (int) $r->c]);
 
         return $this->successResponse([
-            'total_unread'     => $totalUnread,
+            'total_unread'     => (int) $perConversation->sum('unread_count'),
             'per_conversation' => $perConversation,
         ], 'Unread count retrieved.');
     }
-
-    // ============================================================
-    // MESSAGE MANAGEMENT
-    // ============================================================
 
     public function deleteMessage(Request $request, $messageId)
     {
@@ -667,344 +411,590 @@ class ChatController extends BaseApiController
         if (!$message) {
             return $this->notFound('Message not found.');
         }
-
-        if ($message->sender_id != $user->id) {
-            return $this->forbidden('Can only delete your own messages.');
+        if ((int) $message->sender_id !== (int) $user->id) {
+            return $this->forbidden('You can only delete your own messages.');
         }
 
-        DB::beginTransaction();
-        try {
-            if ($message->file_path) {
-                Storage::disk('public')->delete($message->file_path);
-                if ($message->thumbnail_path) {
-                    Storage::disk('public')->delete($message->thumbnail_path);
-                }
-            }
+        $conversationId = $message->conversation_id;
 
-            MessageReaction::where('message_id', $messageId)->delete();
-            $conversationId = $message->conversation_id;
+        DB::transaction(function () use ($message, $conversationId) {
+            $this->deleteStoredFile($message->file_path);
+
+            MessagePin::where('message_id', $message->id)->delete();
+            MessageStar::where('message_id', $message->id)->delete();
+            MessageReaction::where('message_id', $message->id)->delete();
             $message->delete();
 
-            $lastMessage = Message::where('conversation_id', $conversationId)
-                ->orderBy('created_at', 'desc')
-                ->first();
+            $last = Message::where('conversation_id', $conversationId)->latest('id')->first();
+            Conversation::where('id', $conversationId)->update(['last_message_at' => $last?->created_at]);
+        });
 
-            Conversation::where('id', $conversationId)->update([
-                'last_message_at' => $lastMessage?->created_at,
-            ]);
-
-            DB::commit();
-
-            $this->logAudit(
-                'delete_message',
-                'chat',
-                $messageId,
-                "Message #{$messageId} deleted by user #{$user->id}"
-            );
-
-            return $this->successResponse([
-                'message_id' => $messageId,
-                'deleted'    => true,
-            ], 'Message deleted successfully.');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            \Log::error('Delete message error: ' . $e->getMessage());
-            return $this->serverError('Failed to delete message: ' . $e->getMessage());
-        }
+        return $this->successResponse(['message_id' => (int) $messageId, 'deleted' => true], 'Message deleted.');
     }
 
-    public function addReaction(Request $request, $messageId)
-    {
-        $validator = Validator::make($request->all(), [
-            'reaction' => 'required|string|max:10',
-        ]);
+    // ============================================================
+    // REACTIONS  (reaction = emoji, empty = remove mine)
+    // ============================================================
 
+    public function react(Request $request, $messageId)
+    {
+        $validator = Validator::make($request->all(), ['reaction' => 'nullable|string|max:16']);
         if ($validator->fails()) {
             return $this->errorResponse($validator->errors()->first(), 422);
         }
 
         $user    = $request->user();
-        $message = Message::find($messageId);
+        $message = Message::with('conversation')->find($messageId);
 
         if (!$message) {
             return $this->notFound('Message not found.');
         }
-
-        $conversation = $message->conversation;
-        if ($user->id != $conversation->customer_id && $user->id != $conversation->fundi_id) {
-            return $this->forbidden('Cannot react to this message.');
-        }
-
-        $reaction = MessageReaction::updateOrCreate(
-            [
-                'message_id' => $messageId,
-                'user_id'    => $user->id,
-            ],
-            ['reaction' => $request->reaction]
-        );
-
-        $this->logAudit(
-            'add_reaction',
-            'chat',
-            $messageId,
-            "User #{$user->id} added reaction to message #{$messageId}"
-        );
-
-        return $this->successResponse($reaction, 'Reaction added.');
-    }
-
-    public function removeReaction(Request $request, $messageId)
-    {
-        $user = $request->user();
-
-        $deleted = MessageReaction::where('message_id', $messageId)
-            ->where('user_id', $user->id)
-            ->delete();
-
-        if (!$deleted) {
-            return $this->notFound('Reaction not found.');
-        }
-
-        $this->logAudit(
-            'remove_reaction',
-            'chat',
-            $messageId,
-            "User #{$user->id} removed reaction from message #{$messageId}"
-        );
-
-        return $this->successResponse(null, 'Reaction removed.');
-    }
-
-    // ============================================================
-    // FILE DOWNLOAD & INFO
-    // ============================================================
-
-    public function downloadFile(Request $request, $messageId)
-    {
-        $user    = $request->user();
-        $message = Message::find($messageId);
-
-        if (!$message || !$message->file_path) {
-            return $this->notFound('File not found.');
-        }
-
-        $conversation = $message->conversation;
-        if ($user->id != $conversation->customer_id && $user->id != $conversation->fundi_id) {
-            return $this->forbidden('Unauthorized to download this file.');
-        }
-
-        $filePath = storage_path('app/public/' . $message->file_path);
-
-        if (!file_exists($filePath)) {
-            return $this->notFound('File not found on server.');
-        }
-
-        $this->logAudit(
-            'download_file',
-            'chat',
-            $messageId,
-            "File downloaded by user #{$user->id} for message #{$messageId}"
-        );
-
-        return response()->download($filePath, $message->file_name, [
-            'Content-Type'        => $message->file_mime_type ?? 'application/octet-stream',
-            'Cache-Control'       => 'private, max-age=86400',
-            'Content-Disposition' => 'attachment; filename="' . $message->file_name . '"',
-        ]);
-    }
-
-    public function getFileInfo(Request $request, $messageId)
-    {
-        $user    = $request->user();
-        $message = Message::find($messageId);
-
-        if (!$message || !$message->file_path) {
-            return $this->notFound('File not found.');
-        }
-
-        $conversation = $message->conversation;
-        if ($user->id != $conversation->customer_id && $user->id != $conversation->fundi_id) {
-            return $this->forbidden('Unauthorized to access this file.');
-        }
-
-        return $this->successResponse([
-            'message_id'      => $message->id,
-            'file_name'       => $message->file_name,
-            'file_size'       => $message->file_size,
-            'file_mime_type'  => $message->file_mime_type,
-            'file_extension'  => $message->file_extension,
-            'file_url'        => asset('storage/' . $message->file_path),
-            'thumbnail_url'   => $message->thumbnail_path
-                ? asset('storage/' . $message->thumbnail_path)
-                : null,
-            'created_at'      => $message->created_at,
-        ], 'File info retrieved.');
-    }
-
-    public function deleteFile(Request $request, $messageId)
-    {
-        $user    = $request->user();
-        $message = Message::find($messageId);
-
-        if (!$message) {
-            return $this->notFound('Message not found.');
-        }
-
-        if ($message->sender_id != $user->id) {
-            return $this->forbidden('Can only delete your own files.');
-        }
-
-        if (!$message->file_path) {
-            return $this->notFound('No file attached to this message.');
-        }
-
-        DB::beginTransaction();
-        try {
-            Storage::disk('public')->delete($message->file_path);
-            if ($message->thumbnail_path) {
-                Storage::disk('public')->delete($message->thumbnail_path);
-            }
-
-            $message->update([
-                'file_path'      => null,
-                'file_name'      => null,
-                'file_size'      => null,
-                'file_mime_type' => null,
-                'file_extension' => null,
-                'thumbnail_path' => null,
-                'message_type'   => 'text',
-                'content'        => $message->content ?? 'File removed',
-            ]);
-
-            DB::commit();
-
-            $this->logAudit(
-                'delete_file',
-                'chat',
-                $messageId,
-                "File deleted from message #{$messageId} by user #{$user->id}"
-            );
-
-            return $this->successResponse([
-                'message_id'   => $messageId,
-                'file_deleted' => true,
-            ], 'File deleted successfully.');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            \Log::error('Delete file error: ' . $e->getMessage());
-            return $this->serverError('Failed to delete file: ' . $e->getMessage());
-        }
-    }
-
-    public function uploadFile(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'file' => 'required|file|max:' . (self::MAX_FILE_SIZE / 1024),
-        ]);
-
-        if ($validator->fails()) {
-            return $this->errorResponse($validator->errors()->first(), 422);
-        }
-
-        try {
-            $fileInfo = $this->processFileUpload($request->file('file'));
-
-            return $this->successResponse([
-                'file' => $fileInfo,
-                'url'  => asset('storage/' . $fileInfo['file_path']),
-            ], 'File uploaded successfully.');
-        } catch (\Exception $e) {
-            \Log::error('Upload file error: ' . $e->getMessage());
-            return $this->serverError('Upload failed: ' . $e->getMessage());
-        }
-    }
-
-    // ============================================================
-    // TYPING & CONVERSATION MANAGEMENT
-    // ============================================================
-
-    public function setTypingStatus(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'conversation_id' => 'required|exists:conversations,id',
-            'is_typing'       => 'required|boolean',
-        ]);
-
-        if ($validator->fails()) {
-            return $this->errorResponse($validator->errors()->first(), 422);
-        }
-
-        $user           = $request->user();
-        $conversationId = $request->conversation_id;
-
-        $conversation = Conversation::find($conversationId);
-        if (!$conversation ||
-            ($user->id != $conversation->customer_id && $user->id != $conversation->fundi_id)) {
+        if (!$message->conversation || !$this->isParticipant($message->conversation, $user)) {
             return $this->forbidden('Unauthorized.');
         }
 
-        \DB::table('user_typing_status')->updateOrInsert(
-            [
-                'user_id'         => $user->id,
-                'conversation_id' => $conversationId,
-            ],
-            [
-                'is_typing'  => $request->is_typing,
-                'updated_at' => now(),
-            ]
+        $emoji = trim((string) $request->input('reaction', ''));
+
+        if ($emoji === '') {
+            MessageReaction::where('message_id', $message->id)->where('user_id', $user->id)->delete();
+        } else {
+            MessageReaction::updateOrCreate(
+                ['message_id' => $message->id, 'user_id' => $user->id],
+                ['reaction' => $emoji]
+            );
+        }
+
+        $message->forceFill(['meta_updated_at' => now()])->saveQuietly();
+
+        return $this->successResponse(
+            $this->presentOne($message, (int) $user->id),
+            'Reaction saved.'
         );
-
-        broadcast(new UserTyping($user->id, $conversationId, $request->is_typing));
-
-        return $this->successResponse(null, 'Typing status updated.');
     }
 
-    public function deleteConversation(Request $request, $conversationId)
+    // ============================================================
+    // STARS (private to each user)
+    // ============================================================
+
+    public function toggleStar(Request $request, $messageId)
     {
-        $user = $request->user();
+        $user    = $request->user();
+        $message = Message::with('conversation')->find($messageId);
+
+        if (!$message) {
+            return $this->notFound('Message not found.');
+        }
+        if (!$message->conversation || !$this->isParticipant($message->conversation, $user)) {
+            return $this->forbidden('Unauthorized.');
+        }
+
+        $star = MessageStar::where('user_id', $user->id)->where('message_id', $message->id)->first();
+        if ($star) {
+            $star->delete();
+            $starred = false;
+        } else {
+            MessageStar::create(['user_id' => $user->id, 'message_id' => $message->id]);
+            $starred = true;
+        }
+
+        return $this->successResponse(['message_id' => (int) $messageId, 'is_starred' => $starred], 'ok');
+    }
+
+    public function starred(Request $request, $conversationId)
+    {
+        $user         = $request->user();
         $conversation = Conversation::find($conversationId);
 
         if (!$conversation) {
             return $this->notFound('Conversation not found.');
         }
-
-        if ($user->id != $conversation->customer_id && $user->id != $conversation->fundi_id) {
-            return $this->forbidden('Unauthorized to delete this conversation.');
+        if (!$this->isParticipant($conversation, $user)) {
+            return $this->forbidden('Unauthorized.');
         }
 
-        DB::beginTransaction();
-        try {
-            $messages = Message::where('conversation_id', $conversationId)->get();
+        $ids = MessageStar::where('user_id', $user->id)->pluck('message_id');
 
-            foreach ($messages as $message) {
-                if ($message->file_path) {
-                    Storage::disk('public')->delete($message->file_path);
-                    if ($message->thumbnail_path) {
-                        Storage::disk('public')->delete($message->thumbnail_path);
+        $messages = Message::with(['sender:id,name', 'replyTo.sender:id,name'])
+            ->where('conversation_id', $conversation->id)
+            ->whereIn('id', $ids)
+            ->orderByDesc('id')
+            ->limit(200)
+            ->get();
+
+        return $this->successResponse(
+            $this->presentMany($messages, (int) $user->id, $conversation->id),
+            'Starred messages retrieved.'
+        );
+    }
+
+    // ============================================================
+    // PINS (shared by both people, max 3 per conversation)
+    // ============================================================
+
+    public function togglePin(Request $request, $messageId)
+    {
+        $user    = $request->user();
+        $message = Message::with('conversation')->find($messageId);
+
+        if (!$message) {
+            return $this->notFound('Message not found.');
+        }
+        $conversation = $message->conversation;
+        if (!$conversation || !$this->isParticipant($conversation, $user)) {
+            return $this->forbidden('Unauthorized.');
+        }
+
+        $pin = MessagePin::where('message_id', $message->id)->first();
+
+        if ($pin) {
+            $pin->delete();
+            $pinned = false;
+        } else {
+            if (MessagePin::where('conversation_id', $conversation->id)->count() >= self::MAX_PINS) {
+                return $this->errorResponse('You can pin up to ' . self::MAX_PINS . ' messages. Unpin one first.', 422);
+            }
+            MessagePin::create([
+                'conversation_id' => $conversation->id,
+                'message_id'      => $message->id,
+                'pinned_by'       => $user->id,
+            ]);
+            $pinned = true;
+        }
+
+        return $this->successResponse([
+            'message_id' => (int) $messageId,
+            'pinned'     => $pinned,
+            'pins'       => $this->pinsFor($conversation, (int) $user->id),
+        ], $pinned ? 'Message pinned.' : 'Message unpinned.');
+    }
+
+    public function pins(Request $request, $conversationId)
+    {
+        $user         = $request->user();
+        $conversation = Conversation::find($conversationId);
+
+        if (!$conversation) {
+            return $this->notFound('Conversation not found.');
+        }
+        if (!$this->isParticipant($conversation, $user)) {
+            return $this->forbidden('Unauthorized.');
+        }
+
+        return $this->successResponse($this->pinsFor($conversation, (int) $user->id), 'Pins retrieved.');
+    }
+
+    // ============================================================
+    // FORWARD (copies the message into other conversations you are in)
+    // ============================================================
+
+    public function forward(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'message_ids'        => 'required|array|min:1|max:20',
+            'message_ids.*'      => 'integer',
+            'conversation_ids'   => 'required|array|min:1|max:5',
+            'conversation_ids.*' => 'integer',
+        ]);
+        if ($validator->fails()) {
+            return $this->errorResponse($validator->errors()->first(), 422);
+        }
+
+        $user = $request->user();
+
+        $sources = Message::with('conversation')
+            ->whereIn('id', $request->message_ids)
+            ->orderBy('id')
+            ->get();
+
+        if ($sources->isEmpty()) {
+            return $this->notFound('Message not found.');
+        }
+        foreach ($sources as $s) {
+            if (!$s->conversation || !$this->isParticipant($s->conversation, $user)) {
+                return $this->forbidden('Unauthorized.');
+            }
+        }
+
+        $targetIds = array_values(array_unique(array_map('intval', $request->conversation_ids)));
+        $targets   = Conversation::whereIn('id', $targetIds)->get();
+
+        if ($targets->count() !== count($targetIds)) {
+            return $this->notFound('Conversation not found.');
+        }
+        foreach ($targets as $t) {
+            if (!$this->isParticipant($t, $user)) {
+                return $this->forbidden('Unauthorized.');
+            }
+        }
+
+        $created = [];
+        $copied  = [];
+
+        try {
+            DB::transaction(function () use ($targets, $sources, $user, &$created, &$copied) {
+                foreach ($targets as $t) {
+                    $isCustomer = (int) $user->id === (int) $t->customer_id;
+                    $receiverId = $isCustomer ? $t->fundi_id : $t->customer_id;
+
+                    foreach ($sources as $s) {
+                        $fileData = [];
+
+                        if ($s->file_path) {
+                            $newPath = $this->copyStoredFile($s->file_path, (string) $s->file_extension);
+                            if (!$newPath) {
+                                continue; // original file is gone
+                            }
+                            $copied[]  = $newPath;
+                            $fileData  = [
+                                'file_name'      => $s->file_name,
+                                'file_path'      => $newPath,
+                                'file_size'      => $s->file_size,
+                                'file_mime_type' => $s->file_mime_type,
+                                'file_extension' => $s->file_extension,
+                            ];
+                        }
+
+                        $created[] = Message::create(array_merge([
+                            'conversation_id' => $t->id,
+                            'sender_id'       => $user->id,
+                            'receiver_id'     => $receiverId,
+                            'sender_type'     => $isCustomer ? 'customer' : 'fundi',
+                            'message_type'    => $s->message_type,
+                            'content'         => $s->content,
+                            'is_forwarded'    => true,
+                            'is_read'         => false,
+                            'is_delivered'    => false,
+                        ], $fileData));
                     }
+
+                    $t->update(['last_message_at' => now()]);
                 }
+            });
+        } catch (\Throwable $e) {
+            foreach ($copied as $p) {
+                $this->deleteStoredFile($p);
+            }
+            Log::error('Forward error: ' . $e->getMessage());
+            return $this->serverError('Failed to forward.');
+        }
+
+        foreach ($created as $m) {
+            $m->setRelation('sender', $user);
+            $conv = $targets->firstWhere('id', $m->conversation_id);
+            if ($conv) {
+                $this->notifyReceiver($m, $conv, $user, (int) $m->receiver_id);
+            }
+        }
+
+        return $this->successResponse([
+            'forwarded'        => count($created),
+            'conversation_ids' => $targetIds,
+        ], 'Message forwarded.');
+    }
+
+    // ============================================================
+    // MESSAGE INFO
+    // ============================================================
+
+    public function info(Request $request, $messageId)
+    {
+        $user    = $request->user();
+        $message = Message::with(['conversation', 'reactions.user:id,name'])->find($messageId);
+
+        if (!$message) {
+            return $this->notFound('Message not found.');
+        }
+        if (!$message->conversation || !$this->isParticipant($message->conversation, $user)) {
+            return $this->forbidden('Unauthorized.');
+        }
+
+        return $this->successResponse([
+            'message_id'   => $message->id,
+            'is_mine'      => (int) $message->sender_id === (int) $user->id,
+            'sent_at'      => $message->created_at?->toIso8601String(),
+            'delivered_at' => $message->delivered_at?->toIso8601String(),
+            'read_at'      => $message->read_at?->toIso8601String(),
+            'reactions'    => $message->reactions->map(fn ($r) => [
+                'user_id'   => $r->user_id,
+                'user_name' => $r->user->name ?? 'Unknown',
+                'emoji'     => $r->reaction,
+            ])->values(),
+        ], 'Info retrieved.');
+    }
+
+    // ============================================================
+    // FILE VIEWING (inline, login required, supports HTTP Range)
+    // ============================================================
+
+    public function viewFile(Request $request, $messageId)
+    {
+        $user    = $request->user();
+        $message = Message::with('conversation')->find($messageId);
+
+        if (!$message || !$message->file_path) {
+            return $this->notFound('File not found.');
+        }
+        if (!$message->conversation || !$this->isParticipant($message->conversation, $user)) {
+            return $this->forbidden('Unauthorized to view this file.');
+        }
+
+        $fullPath = $this->resolveStoredPath($message->file_path);
+        if (!$fullPath) {
+            return $this->notFound('File not found on server.');
+        }
+
+        $inline   = in_array($message->message_type, ['image', 'video'], true);
+        $filename = preg_replace('/[^A-Za-z0-9._ -]/', '_', $message->file_name ?: basename($fullPath));
+
+        return response()->file($fullPath, [
+            'Content-Type'           => $message->file_mime_type ?: 'application/octet-stream',
+            'Content-Disposition'    => ($inline ? 'inline' : 'attachment') . '; filename="' . $filename . '"',
+            'X-Content-Type-Options' => 'nosniff',
+            'Accept-Ranges'          => 'bytes',
+            'Cache-Control'          => 'private, max-age=3600',
+        ]);
+    }
+
+    // ============================================================
+    // HELPERS
+    // ============================================================
+
+    private function typingKey(int $conversationId, int $userId): string
+    {
+        return "chat:typing:{$conversationId}:{$userId}";
+    }
+
+    /** Formatted message + the quoted (reply) message, if its relation is loaded. */
+    private function present(Message $m): array
+    {
+        $data  = $m->getFormattedMessage();
+        $reply = $m->relationLoaded('replyTo') ? $m->replyTo : null;
+
+        $data['reply_to'] = $reply ? [
+            'id'           => $reply->id,
+            'sender_id'    => $reply->sender_id,
+            'sender_name'  => $reply->sender?->name,
+            'message_type' => $reply->message_type,
+            'content'      => $reply->message_type === 'text' ? Str::limit((string) $reply->content, 120) : null,
+            'file_name'    => $reply->file_name,
+        ] : null;
+
+        return $data;
+    }
+
+    /** present() + reactions, my reaction, my star, pinned flag (3 queries for the whole list). */
+    private function presentMany(EloquentCollection $messages, int $meId, int $conversationId): array
+    {
+        if ($messages->isEmpty()) {
+            return [];
+        }
+
+        $messages->loadMissing(['sender:id,name', 'replyTo.sender:id,name']);
+        $ids = $messages->pluck('id');
+
+        $reactions = MessageReaction::whereIn('message_id', $ids)->get()->groupBy('message_id');
+        $starred   = MessageStar::where('user_id', $meId)->whereIn('message_id', $ids)->pluck('message_id')->flip();
+        $pinned    = MessagePin::where('conversation_id', $conversationId)->pluck('message_id')->flip();
+
+        return $messages->map(function (Message $m) use ($reactions, $starred, $pinned, $meId) {
+            $data = $this->present($m);
+            $rs   = $reactions->get($m->id, collect());
+
+            $data['reactions'] = $rs->groupBy('reaction')->map(fn ($g, $emoji) => [
+                'emoji' => (string) $emoji,
+                'count' => $g->count(),
+                'mine'  => $g->contains('user_id', $meId),
+            ])->values();
+            $data['my_reaction'] = $rs->firstWhere('user_id', $meId)?->reaction;
+            $data['is_starred']  = $starred->has($m->id);
+            $data['is_pinned']   = $pinned->has($m->id);
+
+            return $data;
+        })->values()->all();
+    }
+
+    private function presentOne(Message $m, int $meId): array
+    {
+        return $this->presentMany(new EloquentCollection([$m]), $meId, (int) $m->conversation_id)[0];
+    }
+
+    /** Pinned messages of a conversation, newest pin first. */
+    private function pinsFor(Conversation $c, int $meId): array
+    {
+        $ids = MessagePin::where('conversation_id', $c->id)->orderByDesc('id')->pluck('message_id');
+        if ($ids->isEmpty()) {
+            return [];
+        }
+
+        $msgs = Message::with(['sender:id,name', 'replyTo.sender:id,name'])
+            ->whereIn('id', $ids)
+            ->get()
+            ->sortBy(fn ($m) => $ids->search($m->id))
+            ->values();
+
+        return $this->presentMany(new EloquentCollection($msgs->all()), $meId, $c->id);
+    }
+
+    private function isParticipant(Conversation $conversation, User $user): bool
+    {
+        return (int) $user->id === (int) $conversation->customer_id
+            || (int) $user->id === (int) $conversation->fundi_id;
+    }
+
+    private function presentConversation(Conversation $c, User $me, ?Message $last = null, int $unread = 0): array
+    {
+        $isCustomer = (int) $c->customer_id === (int) $me->id;
+        $other      = $isCustomer ? $c->fundi : $c->customer;
+
+        return [
+            'id'              => $c->id,
+            'customer_id'     => $c->customer_id,
+            'fundi_id'        => $c->fundi_id,
+            'user_role'       => $isCustomer ? 'customer' : 'fundi',
+            'other_party'     => [
+                'id'    => $other->id ?? 0,
+                'name'  => $other->name ?? 'Unknown User',
+                'email' => $other->email ?? '',
+                'phone' => $other->phone ?? null,
+            ],
+            'last_message'    => $last ? $this->present($last) : null,
+            'unread_count'    => $unread,
+            'last_message_at' => $c->last_message_at?->toIso8601String(),
+            'is_active'       => (bool) $c->is_active,
+        ];
+    }
+
+    /** Validates and stores an upload. Returns [message_type, columns]. */
+    private function storeUpload($file): array
+    {
+        $ext = strtolower(preg_replace('/[^a-z0-9]/i', '', (string) $file->getClientOriginalExtension()));
+        if ($ext === '') {
+            $ext = strtolower((string) ($file->guessExtension() ?: 'bin'));
+        }
+        if (in_array($ext, self::BLOCKED_EXTENSIONS, true)) {
+            throw new \InvalidArgumentException('This file type is not allowed.');
+        }
+
+        $mime   = $file->getMimeType() ?: 'application/octet-stream';
+        $sizeKb = ($file->getSize() ?: 0) / 1024;
+
+        if (in_array($mime, self::IMAGE_MIMES, true)) {
+            $type = Message::TYPE_IMAGE;
+            if ($sizeKb > self::MAX_IMAGE_KB) {
+                throw new \InvalidArgumentException('Photos can be up to 5 MB.');
+            }
+        } elseif (str_starts_with($mime, 'video/')) {
+            $type = Message::TYPE_VIDEO;
+            if ($sizeKb > self::MAX_VIDEO_KB) {
+                throw new \InvalidArgumentException('Videos can be up to 20 MB. Please send a shorter clip.');
+            }
+        } else {
+            $type = Message::TYPE_FILE;
+            if ($sizeKb > self::MAX_FILE_KB) {
+                throw new \InvalidArgumentException('Files can be up to 15 MB.');
+            }
+        }
+
+        $path = $file->storeAs('chat/' . date('Y/m'), Str::random(40) . '.' . $ext, 'local');
+
+        return [$type, [
+            'file_name'      => Str::limit(basename((string) $file->getClientOriginalName()), 200, ''),
+            'file_path'      => $path,
+            'file_size'      => $file->getSize(),
+            'file_mime_type' => $mime,
+            'file_extension' => $ext,
+        ]];
+    }
+
+    /** New files are private ('local'); older chat files live on the 'public' disk. */
+    private function resolveStoredPath(string $relative): ?string
+    {
+        if (str_contains($relative, '..')) {
+            return null;
+        }
+        foreach (['local', 'public'] as $disk) {
+            if (Storage::disk($disk)->exists($relative)) {
+                return Storage::disk($disk)->path($relative);
+            }
+        }
+        return null;
+    }
+
+    /** Copies a stored chat file to a new private path (used by forward). */
+    private function copyStoredFile(string $relative, string $ext): ?string
+    {
+        if (str_contains($relative, '..')) {
+            return null;
+        }
+        $ext = strtolower(preg_replace('/[^a-z0-9]/i', '', $ext)) ?: 'bin';
+
+        foreach (['local', 'public'] as $disk) {
+            if (!Storage::disk($disk)->exists($relative)) {
+                continue;
+            }
+            $stream = Storage::disk($disk)->readStream($relative);
+            if (!$stream) {
+                return null;
+            }
+            $new = 'chat/' . date('Y/m') . '/' . Str::random(40) . '.' . $ext;
+            Storage::disk('local')->writeStream($new, $stream);
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+            return $new;
+        }
+        return null;
+    }
+
+    private function deleteStoredFile(?string $relative): void
+    {
+        if (!$relative || str_contains($relative, '..')) {
+            return;
+        }
+        foreach (['local', 'public'] as $disk) {
+            if (Storage::disk($disk)->exists($relative)) {
+                Storage::disk($disk)->delete($relative);
+            }
+        }
+    }
+
+    private function notifyReceiver(Message $message, Conversation $conversation, User $sender, int $receiverId): void
+    {
+        try {
+            $receiver = User::find($receiverId);
+            if (!$receiver) {
+                return;
             }
 
-            Message::where('conversation_id', $conversationId)->delete();
-            $conversation->delete();
+            $this->fcmService->sendChatNotification($receiver, $sender, $message, $conversation->id);
+        } catch (\Throwable $e) {
+            Log::warning('Chat FCM error: ' . $e->getMessage());
+        }
 
-            DB::commit();
+        try {
+            $body = match ($message->message_type) {
+                'image' => '📷 Photo',
+                'video' => '🎬 Video',
+                'file'  => '📎 ' . ($message->file_name ?: 'File'),
+                default => $message->content ?: 'New message',
+            };
 
-            $this->logAudit(
-                'delete_conversation',
-                'chat',
-                $conversationId,
-                "Conversation #{$conversationId} deleted by user #{$user->id}"
-            );
-
-            return $this->successResponse([
-                'conversation_id' => $conversationId,
-                'deleted'         => true,
-            ], 'Conversation deleted successfully.');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            \Log::error('Delete conversation error: ' . $e->getMessage());
-            return $this->serverError('Failed to delete conversation: ' . $e->getMessage());
+            Notification::create([
+                'user_id' => $receiverId,
+                'title'   => "New message from {$sender->name}",
+                'body'    => $body,
+                'type'    => 'chat_message',
+                'data'    => [
+                    'conversation_id' => (string) $conversation->id,
+                    'message_id'      => (string) $message->id,
+                    'sender_id'       => (string) $sender->id,
+                    'sender_name'     => (string) $sender->name,
+                    'message_type'    => (string) $message->message_type,
+                ],
+                'is_read' => false,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('Chat notification row error: ' . $e->getMessage());
         }
     }
 }

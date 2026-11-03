@@ -51,6 +51,10 @@ class PostController extends BaseApiController
             'video'    => 'nullable|file|mimes:mp4,mov,avi,webm|max:20480',
         ]);
 
+        if (!$request->hasFile('video') && !$request->hasFile('images')) {
+            return $this->errorResponse('Add at least one photo or a video.', 422);
+        }
+
         $post = new Post();
         $post->technician_id = $technician->id;
 
@@ -61,7 +65,7 @@ class PostController extends BaseApiController
         $post->images = $this->storeImages($request);
         $post->save();
 
-        $this->logAudit('create_post', 'blog', $post->id, "Technician created a new media post");
+        $this->logAudit('create_post', 'blog', $post->id, 'Technician created a new media post');
         $post->load('technician.user');
 
         return $this->created($this->withUrls($post), 'Post created successfully.');
@@ -87,20 +91,16 @@ class PostController extends BaseApiController
             'remove_video'   => 'nullable|boolean',
         ]);
 
-        // Handle Video
+        // ── Video ──────────────────────────────────────────────
         if ($request->boolean('remove_video') && $post->video) {
-            if (Storage::disk('public')->exists($post->video)) {
-                Storage::disk('public')->delete($post->video);
-            }
+            $this->deleteFile($post->video);
             $post->video = null;
         } elseif ($request->hasFile('video')) {
-            if ($post->video && Storage::disk('public')->exists($post->video)) {
-                Storage::disk('public')->delete($post->video);
-            }
+            $this->deleteFile($post->video);
             $post->video = $request->file('video')->store('posts', 'public');
         }
 
-        // Handle Images
+        // ── Images ─────────────────────────────────────────────
         $current    = is_array($post->images) ? $post->images : [];
         $hasUploads = $request->hasFile('images');
         $isManaged  = $request->boolean('images_managed');
@@ -108,7 +108,10 @@ class PostController extends BaseApiController
 
         if ($isManaged || $hasUploads) {
             if ($isManaged) {
-                $requested = array_map(fn ($p) => $this->normalizeStoragePath((string) $p), (array) $request->input('keep_images', []));
+                $requested = array_map(
+                    fn ($p) => $this->normalizeStoragePath((string) $p),
+                    (array) $request->input('keep_images', [])
+                );
                 $keep = array_values(array_intersect($current, $requested));
             } else {
                 $keep = $current;
@@ -124,12 +127,16 @@ class PostController extends BaseApiController
             $post->images = array_merge($keep, $newPaths);
         }
 
+        // A post must keep at least one piece of media
+        $hasImages = !empty($post->images);
+        if (!$hasImages && !$post->video) {
+            return $this->errorResponse('A post needs at least one photo or a video.', 422);
+        }
+
         $post->save();
 
         foreach ($toDelete as $path) {
-            if ($path && Storage::disk('public')->exists($path)) {
-                Storage::disk('public')->delete($path);
-            }
+            $this->deleteFile($path);
         }
 
         return $this->successResponse($this->withUrls($post->fresh()), 'Post updated.');
@@ -143,6 +150,12 @@ class PostController extends BaseApiController
         $isOwner = $user->technician && $user->technician->id == $post->technician_id;
         if (!($isOwner || $user->hasAnyRole(['ADMINISTRATOR', 'MANAGER']))) {
             return $this->forbidden('Unauthorized.');
+        }
+
+        // Clean up files from storage
+        $this->deleteFile($post->video);
+        foreach ((is_array($post->images) ? $post->images : []) as $path) {
+            $this->deleteFile($path);
         }
 
         $post->delete();
@@ -168,10 +181,36 @@ class PostController extends BaseApiController
         return $this->successResponse($posts);
     }
 
+    /** Admin/Manager: all posts with full details (route: v5/admin/posts/all). */
+    public function allWithDetails(Request $request)
+    {
+        if (!$request->user()->hasAnyRole(['ADMINISTRATOR', 'MANAGER'])) {
+            return $this->forbidden('Unauthorized.');
+        }
+
+        $posts = Post::with(['technician.user', 'comments.user', 'likes.user'])
+            ->withCount(['comments', 'likes'])
+            ->orderBy('created_at', 'desc')
+            ->paginate(30);
+
+        $posts->getCollection()->transform(fn ($post) => $this->withUrls($post));
+
+        return $this->successResponse($posts);
+    }
+
+    // ── Helpers ────────────────────────────────────────────────
+
     private function withUrls(Post $post): Post
     {
         $post->image_urls = $post->image_urls;
-        $post->video_url = $post->video_url;
+        $post->video_url  = $post->video_url;
+
+        // Range-capable streaming URL (required by iOS AVPlayer)
+        $post->setAttribute(
+            'video_stream_url',
+            $post->video ? url('/api/media/' . ltrim($post->video, '/')) : null
+        );
+
         return $post;
     }
 
@@ -186,6 +225,13 @@ class PostController extends BaseApiController
             }
         }
         return $paths;
+    }
+
+    private function deleteFile(?string $path): void
+    {
+        if ($path && Storage::disk('public')->exists($path)) {
+            Storage::disk('public')->delete($path);
+        }
     }
 
     private function normalizeStoragePath(string $value): string

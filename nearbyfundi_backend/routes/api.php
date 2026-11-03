@@ -43,9 +43,13 @@ use App\Http\Controllers\Api\SmsLogController;
 use App\Http\Controllers\Api\MiniAppController;
 use App\Http\Controllers\Api\MiniAppQrController;
 use App\Http\Controllers\Api\BannerController;
+use App\Http\Controllers\Api\MediaController;
 
 // Health check
 Route::get('/health', fn () => response()->json(['status' => 'ok', 'timestamp' => now()]));
+
+// Media streaming with HTTP Range support (iOS video)
+Route::get('/media/{path}', [MediaController::class, 'stream'])->where('path', '.*');
 
 // =============================================
 // V1 – AUTH & PUBLIC
@@ -408,18 +412,22 @@ Route::prefix('v14')->middleware(['auth:sanctum', 'active.session'])->group(func
         Route::post('conversation', [ChatController::class, 'getOrCreateConversation']);
         Route::get('conversations', [ChatController::class, 'getConversations']);
         Route::get('conversations/{id}/messages', [ChatController::class, 'getMessages']);
+        Route::get('conversations/{id}/starred', [ChatController::class, 'starred']);
+        Route::get('conversations/{id}/pins', [ChatController::class, 'pins']);
         Route::post('conversations/{id}/read', [ChatController::class, 'markConversationAsRead']);
         Route::delete('conversations/{id}', [ChatController::class, 'deleteConversation']);
+
         Route::post('send', [ChatController::class, 'sendMessage']);
-        Route::put('messages/{id}/read', [ChatController::class, 'markMessageAsRead']);
+        Route::post('typing', [ChatController::class, 'typing']);       // was missing -> 404 before
+        Route::post('forward', [ChatController::class, 'forward']);
+
         Route::delete('messages/{id}', [ChatController::class, 'deleteMessage']);
-        Route::post('messages/{id}/reaction', [ChatController::class, 'addReaction']);
-        Route::delete('messages/{id}/reaction', [ChatController::class, 'removeReaction']);
-        Route::post('upload', [ChatController::class, 'uploadFile']);
-        Route::get('files/{id}/download', [ChatController::class, 'downloadFile']);
-        Route::get('files/{id}/info', [ChatController::class, 'getFileInfo']);
-        Route::delete('files/{id}', [ChatController::class, 'deleteFile']);
-        Route::post('typing', [ChatController::class, 'setTypingStatus']);
+        Route::get('messages/{id}/file', [ChatController::class, 'viewFile']);
+        Route::get('messages/{id}/info', [ChatController::class, 'info']);
+        Route::post('messages/{id}/react', [ChatController::class, 'react']);
+        Route::post('messages/{id}/star', [ChatController::class, 'toggleStar']);
+        Route::post('messages/{id}/pin', [ChatController::class, 'togglePin']);
+
         Route::get('unread', [ChatController::class, 'getUnreadCount']);
     });
 });
