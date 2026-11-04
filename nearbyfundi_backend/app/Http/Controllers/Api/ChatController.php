@@ -1,15 +1,18 @@
 <?php
-// app/Http/Controllers/Api/ChatController.php
+// app/Http/Controllers/Api/ChatController.php  (COMPLETE – replaces the old file)
 
 namespace App\Http\Controllers\Api;
 
 use App\Models\Conversation;
+use App\Models\ConversationHistory;
+use App\Models\ConversationUserState;
 use App\Models\Message;
 use App\Models\MessagePin;
 use App\Models\MessageReaction;
 use App\Models\MessageStar;
 use App\Models\Notification;
 use App\Models\User;
+use App\Services\ConversationPresenter;
 use App\Services\FcmService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
@@ -38,8 +41,10 @@ class ChatController extends BaseApiController
         'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif',
     ];
 
-    public function __construct(protected FcmService $fcmService)
-    {
+    public function __construct(
+        protected FcmService $fcmService,
+        protected ConversationPresenter $presenter
+    ) {
     }
 
     // ============================================================
@@ -73,10 +78,9 @@ class ChatController extends BaseApiController
             ['customer_id' => $request->customer_id, 'fundi_id' => $request->fundi_id],
             ['is_active' => true]
         );
-        $conversation->load(['customer:id,name,email,phone', 'fundi:id,name,email,phone']);
 
         return $this->successResponse(
-            $this->presentConversation($conversation, $user),
+            $this->presenter->present(collect([$conversation]), $user)[0],
             'Conversation retrieved.'
         );
     }
@@ -87,37 +91,12 @@ class ChatController extends BaseApiController
 
         $conversations = Conversation::forUser($user->id)
             ->has('messages')
-            ->with(['customer:id,name,email,phone', 'fundi:id,name,email,phone'])
-            ->orderByDesc('last_message_at')
             ->get();
 
-        $ids = $conversations->pluck('id');
-
-        $lastIds = Message::whereIn('conversation_id', $ids)
-            ->selectRaw('MAX(id) as id')
-            ->groupBy('conversation_id')
-            ->pluck('id');
-
-        $lastMessages = Message::with('sender:id,name')
-            ->whereIn('id', $lastIds)
-            ->get()
-            ->keyBy('conversation_id');
-
-        $unread = Message::whereIn('conversation_id', $ids)
-            ->where('receiver_id', $user->id)
-            ->where('is_read', false)
-            ->selectRaw('conversation_id, COUNT(*) as c')
-            ->groupBy('conversation_id')
-            ->pluck('c', 'conversation_id');
-
-        $data = $conversations->map(fn ($c) => $this->presentConversation(
-            $c,
-            $user,
-            $lastMessages->get($c->id),
-            (int) ($unread[$c->id] ?? 0)
-        ))->values();
-
-        return $this->successResponse($data, 'Conversations retrieved.');
+        return $this->successResponse(
+            $this->presenter->present($conversations, $user),
+            'Conversations retrieved.'
+        );
     }
 
     public function deleteConversation(Request $request, $conversationId)
@@ -132,7 +111,26 @@ class ChatController extends BaseApiController
             return $this->forbidden('Unauthorized to delete this conversation.');
         }
 
-        DB::transaction(function () use ($conversation) {
+        DB::transaction(function () use ($conversation, $user, $request) {
+            $q = Message::where('conversation_id', $conversation->id);
+
+            // Audit row first (metadata only, never message content)
+            ConversationHistory::create([
+                'conversation_id'         => $conversation->id,
+                'customer_id'             => $conversation->customer_id,
+                'fundi_id'                => $conversation->fundi_id,
+                'deleted_by'              => $user->id,
+                'deleted_by_role'         => (int) $user->id === (int) $conversation->customer_id ? 'customer' : 'fundi',
+                'message_count'           => (clone $q)->count(),
+                'media_count'             => (clone $q)->whereIn('message_type', ['image', 'video', 'file'])->count(),
+                'first_message_at'        => (clone $q)->min('created_at'),
+                'last_message_at'         => $conversation->last_message_at,
+                'conversation_created_at' => $conversation->created_at,
+                'deleted_at'              => now(),
+                'ip_address'              => $request->ip(),
+                'user_agent'              => Str::limit((string) $request->userAgent(), 250, ''),
+            ]);
+
             $ids = Message::where('conversation_id', $conversation->id)->pluck('id');
 
             Message::where('conversation_id', $conversation->id)
@@ -140,6 +138,7 @@ class ChatController extends BaseApiController
                 ->get()
                 ->each(fn ($m) => $this->deleteStoredFile($m->file_path));
 
+            ConversationUserState::where('conversation_id', $conversation->id)->delete();
             MessagePin::where('conversation_id', $conversation->id)->delete();
             MessageStar::whereIn('message_id', $ids)->delete();
             MessageReaction::whereIn('message_id', $ids)->delete();
@@ -158,9 +157,10 @@ class ChatController extends BaseApiController
     /**
      * Query params:
      *   after_id  -> only messages newer than this id (polling)
-     *   since     -> (with after_id) also return older messages whose reactions changed after this time
+     *   since     -> (with after_id) also return older messages changed after this time
+     *                (reactions, delete-for-everyone)
      *   before_id -> older page (scroll up)
-     *   until_id  -> (with before_id) load EVERYTHING from until_id up to before_id (jump to a quoted message)
+     *   until_id  -> (with before_id) load EVERYTHING from until_id up to before_id
      *   limit     -> page size (default 30, max 100)
      * Messages are always returned oldest -> newest.
      * Also returns: peer_typing, peer_read_upto, pins, updates, server_time.
@@ -181,7 +181,8 @@ class ChatController extends BaseApiController
         $limit = max(1, min((int) $request->input('limit', 30), 100));
 
         $query = Message::with(['sender:id,name', 'replyTo.sender:id,name'])
-            ->where('conversation_id', $conversation->id);
+            ->where('conversation_id', $conversation->id)
+            ->visibleTo($meId); // hides messages I deleted "for me"
         $hasMore = false;
 
         if ($request->filled('after_id')) {
@@ -193,7 +194,9 @@ class ChatController extends BaseApiController
                 ->orderByDesc('id')->limit(500)->get()->reverse()->values();
 
             $minId   = $messages->first()?->id ?? (int) $request->before_id;
-            $hasMore = Message::where('conversation_id', $conversation->id)->where('id', '<', $minId)->exists();
+            $hasMore = Message::where('conversation_id', $conversation->id)
+                ->visibleTo($meId)
+                ->where('id', '<', $minId)->exists();
         } else {
             if ($request->filled('before_id')) {
                 $query->where('id', '<', (int) $request->before_id);
@@ -203,13 +206,14 @@ class ChatController extends BaseApiController
             $messages = $rows->take($limit)->reverse()->values();
         }
 
-        // Messages whose reactions changed since the last poll (older than after_id)
+        // Older messages that changed since the last poll (reactions / deleted for everyone)
         $updates = [];
         if ($request->filled('after_id') && $request->filled('since')) {
             try {
                 $since   = Carbon::parse($request->since);
                 $changed = Message::with(['sender:id,name', 'replyTo.sender:id,name'])
                     ->where('conversation_id', $conversation->id)
+                    ->visibleTo($meId)
                     ->where('meta_updated_at', '>', $since)
                     ->limit(100)->get();
                 $updates = $this->presentMany($changed, $meId, $conversation->id);
@@ -253,9 +257,12 @@ class ChatController extends BaseApiController
 
     public function sendMessage(Request $request)
     {
+        $encrypted = $request->boolean('is_encrypted');
+
         $validator = Validator::make($request->all(), [
             'conversation_id' => 'required|integer|exists:conversations,id',
-            'content'         => 'nullable|string|max:2000',
+            'content'         => 'nullable|string|max:' . ($encrypted ? 8000 : 2000),
+            'is_encrypted'    => 'nullable|boolean',
             'reply_to_id'     => 'nullable|integer',
             'file'            => 'nullable|file|max:' . self::MAX_VIDEO_KB,
         ]);
@@ -276,11 +283,12 @@ class ChatController extends BaseApiController
             return $this->errorResponse('Write a message or attach a file.', 422);
         }
 
-        // Reply target must belong to the same conversation; otherwise it is ignored.
+        // Reply target must belong to the same conversation and must not be deleted.
         $replyToId = null;
         if ($request->filled('reply_to_id')) {
             $replyToId = Message::where('id', (int) $request->reply_to_id)
                 ->where('conversation_id', $conversation->id)
+                ->whereNull('deleted_for_everyone_at')
                 ->value('id');
         }
 
@@ -299,17 +307,20 @@ class ChatController extends BaseApiController
                 [$type, $fileData] = $this->storeUpload($file);
             }
 
-            $message = DB::transaction(function () use ($conversation, $user, $receiverId, $isCustomer, $type, $content, $fileData, $replyToId) {
+            $message = DB::transaction(function () use ($conversation, $user, $receiverId, $isCustomer, $type, $content, $fileData, $replyToId, $encrypted) {
                 $message = Message::create(array_merge([
-                    'conversation_id' => $conversation->id,
-                    'reply_to_id'     => $replyToId,
-                    'sender_id'       => $user->id,
-                    'receiver_id'     => $receiverId,
-                    'sender_type'     => $isCustomer ? 'customer' : 'fundi',
-                    'message_type'    => $type,
-                    'content'         => $content,
-                    'is_read'         => false,
-                    'is_delivered'    => false,
+                    'conversation_id'    => $conversation->id,
+                    'reply_to_id'        => $replyToId,
+                    'sender_id'          => $user->id,
+                    'receiver_id'        => $receiverId,
+                    'sender_type'        => $isCustomer ? 'customer' : 'fundi',
+                    'message_type'       => $type,
+                    'content'            => $content,
+                    'has_link'           => !$encrypted && Message::containsLink($content),
+                    'is_encrypted'       => $encrypted,
+                    'encryption_version' => $encrypted ? 1 : null,
+                    'is_read'            => false,
+                    'is_delivered'       => false,
                 ], $fileData));
 
                 $conversation->update(['last_message_at' => now()]);
@@ -322,7 +333,7 @@ class ChatController extends BaseApiController
             if (!empty($fileData['file_path'])) {
                 $this->deleteStoredFile($fileData['file_path']);
             }
-            // If a reply fails, THIS line in storage/logs/laravel.log tells you the real SQL error
+            // If a send fails, THIS line in storage/logs/laravel.log tells you the real SQL error
             Log::error('Send message error: ' . $e->getMessage());
             return $this->serverError('Failed to send message.');
         }
@@ -392,6 +403,8 @@ class ChatController extends BaseApiController
 
         $perConversation = Message::where('receiver_id', $user->id)
             ->where('is_read', false)
+            ->whereNull('deleted_for_everyone_at')
+            ->visibleTo($user->id)
             ->selectRaw('conversation_id, COUNT(*) as c')
             ->groupBy('conversation_id')
             ->get()
@@ -403,33 +416,15 @@ class ChatController extends BaseApiController
         ], 'Unread count retrieved.');
     }
 
+    /**
+     * Legacy route DELETE messages/{id}  ==  "delete for everyone" (tombstone).
+     * New clients use POST messages/delete (ChatExtrasController) with scope me|everyone.
+     */
     public function deleteMessage(Request $request, $messageId)
     {
-        $user    = $request->user();
-        $message = Message::find($messageId);
+        $request->merge(['message_ids' => [(int) $messageId], 'scope' => 'everyone']);
 
-        if (!$message) {
-            return $this->notFound('Message not found.');
-        }
-        if ((int) $message->sender_id !== (int) $user->id) {
-            return $this->forbidden('You can only delete your own messages.');
-        }
-
-        $conversationId = $message->conversation_id;
-
-        DB::transaction(function () use ($message, $conversationId) {
-            $this->deleteStoredFile($message->file_path);
-
-            MessagePin::where('message_id', $message->id)->delete();
-            MessageStar::where('message_id', $message->id)->delete();
-            MessageReaction::where('message_id', $message->id)->delete();
-            $message->delete();
-
-            $last = Message::where('conversation_id', $conversationId)->latest('id')->first();
-            Conversation::where('id', $conversationId)->update(['last_message_at' => $last?->created_at]);
-        });
-
-        return $this->successResponse(['message_id' => (int) $messageId, 'deleted' => true], 'Message deleted.');
+        return app(ChatExtrasController::class)->deleteMessages($request);
     }
 
     // ============================================================
@@ -451,6 +446,9 @@ class ChatController extends BaseApiController
         }
         if (!$message->conversation || !$this->isParticipant($message->conversation, $user)) {
             return $this->forbidden('Unauthorized.');
+        }
+        if ($message->is_deleted) {
+            return $this->errorResponse('This message was deleted.', 422);
         }
 
         $emoji = trim((string) $request->input('reaction', ''));
@@ -487,6 +485,9 @@ class ChatController extends BaseApiController
         if (!$message->conversation || !$this->isParticipant($message->conversation, $user)) {
             return $this->forbidden('Unauthorized.');
         }
+        if ($message->is_deleted) {
+            return $this->errorResponse('This message was deleted.', 422);
+        }
 
         $star = MessageStar::where('user_id', $user->id)->where('message_id', $message->id)->first();
         if ($star) {
@@ -516,6 +517,8 @@ class ChatController extends BaseApiController
 
         $messages = Message::with(['sender:id,name', 'replyTo.sender:id,name'])
             ->where('conversation_id', $conversation->id)
+            ->visibleTo($user->id)
+            ->whereNull('deleted_for_everyone_at')
             ->whereIn('id', $ids)
             ->orderByDesc('id')
             ->limit(200)
@@ -542,6 +545,9 @@ class ChatController extends BaseApiController
         $conversation = $message->conversation;
         if (!$conversation || !$this->isParticipant($conversation, $user)) {
             return $this->forbidden('Unauthorized.');
+        }
+        if ($message->is_deleted) {
+            return $this->errorResponse('This message was deleted.', 422);
         }
 
         $pin = MessagePin::where('message_id', $message->id)->first();
@@ -613,6 +619,13 @@ class ChatController extends BaseApiController
             if (!$s->conversation || !$this->isParticipant($s->conversation, $user)) {
                 return $this->forbidden('Unauthorized.');
             }
+            if ($s->is_deleted) {
+                return $this->errorResponse('This message was deleted.', 422);
+            }
+            if ($s->is_encrypted) {
+                // Ciphertext is wrapped for the original peer only; the new chat could not read it.
+                return $this->errorResponse('Encrypted messages cannot be forwarded.', 422);
+            }
         }
 
         $targetIds = array_values(array_unique(array_map('intval', $request->conversation_ids)));
@@ -661,6 +674,7 @@ class ChatController extends BaseApiController
                             'sender_type'     => $isCustomer ? 'customer' : 'fundi',
                             'message_type'    => $s->message_type,
                             'content'         => $s->content,
+                            'has_link'        => (bool) $s->has_link,
                             'is_forwarded'    => true,
                             'is_read'         => false,
                             'is_delivered'    => false,
@@ -707,6 +721,9 @@ class ChatController extends BaseApiController
         if (!$message->conversation || !$this->isParticipant($message->conversation, $user)) {
             return $this->forbidden('Unauthorized.');
         }
+        if ($message->is_deleted) {
+            return $this->errorResponse('This message was deleted.', 422);
+        }
 
         return $this->successResponse([
             'message_id'   => $message->id,
@@ -731,7 +748,7 @@ class ChatController extends BaseApiController
         $user    = $request->user();
         $message = Message::with('conversation')->find($messageId);
 
-        if (!$message || !$message->file_path) {
+        if (!$message || !$message->file_path || $message->is_deleted) {
             return $this->notFound('File not found.');
         }
         if (!$message->conversation || !$this->isParticipant($message->conversation, $user)) {
@@ -747,11 +764,13 @@ class ChatController extends BaseApiController
         $filename = preg_replace('/[^A-Za-z0-9._ -]/', '_', $message->file_name ?: basename($fullPath));
 
         return response()->file($fullPath, [
-            'Content-Type'           => $message->file_mime_type ?: 'application/octet-stream',
-            'Content-Disposition'    => ($inline ? 'inline' : 'attachment') . '; filename="' . $filename . '"',
-            'X-Content-Type-Options' => 'nosniff',
-            'Accept-Ranges'          => 'bytes',
-            'Cache-Control'          => 'private, max-age=3600',
+            'Content-Type'                 => $message->file_mime_type ?: 'application/octet-stream',
+            'Content-Disposition'          => ($inline ? 'inline' : 'attachment') . '; filename="' . $filename . '"',
+            'X-Content-Type-Options'       => 'nosniff',
+            'Content-Security-Policy'      => "default-src 'none'; sandbox",
+            'Cross-Origin-Resource-Policy' => 'same-origin',
+            'Accept-Ranges'                => 'bytes',
+            'Cache-Control'                => 'private, max-age=3600',
         ]);
     }
 
@@ -775,8 +794,11 @@ class ChatController extends BaseApiController
             'sender_id'    => $reply->sender_id,
             'sender_name'  => $reply->sender?->name,
             'message_type' => $reply->message_type,
-            'content'      => $reply->message_type === 'text' ? Str::limit((string) $reply->content, 120) : null,
-            'file_name'    => $reply->file_name,
+            'content'      => ($reply->message_type === 'text' && !$reply->is_deleted && !$reply->is_encrypted)
+                ? Str::limit((string) $reply->content, 120)
+                : null,
+            'is_deleted'   => $reply->is_deleted,
+            'file_name'    => $reply->is_deleted ? null : $reply->file_name,
         ] : null;
 
         return $data;
@@ -828,6 +850,8 @@ class ChatController extends BaseApiController
 
         $msgs = Message::with(['sender:id,name', 'replyTo.sender:id,name'])
             ->whereIn('id', $ids)
+            ->visibleTo($meId)
+            ->whereNull('deleted_for_everyone_at')
             ->get()
             ->sortBy(fn ($m) => $ids->search($m->id))
             ->values();
@@ -839,29 +863,6 @@ class ChatController extends BaseApiController
     {
         return (int) $user->id === (int) $conversation->customer_id
             || (int) $user->id === (int) $conversation->fundi_id;
-    }
-
-    private function presentConversation(Conversation $c, User $me, ?Message $last = null, int $unread = 0): array
-    {
-        $isCustomer = (int) $c->customer_id === (int) $me->id;
-        $other      = $isCustomer ? $c->fundi : $c->customer;
-
-        return [
-            'id'              => $c->id,
-            'customer_id'     => $c->customer_id,
-            'fundi_id'        => $c->fundi_id,
-            'user_role'       => $isCustomer ? 'customer' : 'fundi',
-            'other_party'     => [
-                'id'    => $other->id ?? 0,
-                'name'  => $other->name ?? 'Unknown User',
-                'email' => $other->email ?? '',
-                'phone' => $other->phone ?? null,
-            ],
-            'last_message'    => $last ? $this->present($last) : null,
-            'unread_count'    => $unread,
-            'last_message_at' => $c->last_message_at?->toIso8601String(),
-            'is_active'       => (bool) $c->is_active,
-        ];
     }
 
     /** Validates and stores an upload. Returns [message_type, columns]. */
@@ -976,7 +977,7 @@ class ChatController extends BaseApiController
                 'image' => '📷 Photo',
                 'video' => '🎬 Video',
                 'file'  => '📎 ' . ($message->file_name ?: 'File'),
-                default => $message->content ?: 'New message',
+                default => $message->is_encrypted ? '🔒 New message' : ($message->content ?: 'New message'),
             };
 
             Notification::create([

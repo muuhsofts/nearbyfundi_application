@@ -44,6 +44,7 @@ use App\Http\Controllers\Api\MiniAppController;
 use App\Http\Controllers\Api\MiniAppQrController;
 use App\Http\Controllers\Api\BannerController;
 use App\Http\Controllers\Api\MediaController;
+use App\Http\Controllers\Api\ChatExtrasController;
 
 // Health check
 Route::get('/health', fn () => response()->json(['status' => 'ok', 'timestamp' => now()]));
@@ -409,24 +410,37 @@ Route::prefix('v13')->middleware(['auth:sanctum', 'active.session'])->group(func
 // =============================================
 Route::prefix('v14')->middleware(['auth:sanctum', 'active.session'])->group(function () {
     Route::prefix('chat')->group(function () {
-        Route::post('conversation', [ChatController::class, 'getOrCreateConversation']);
+        // conversations
+        Route::post('conversation', [ChatController::class, 'getOrCreateConversation'])->middleware('throttle:30,1');
         Route::get('conversations', [ChatController::class, 'getConversations']);
         Route::get('conversations/{id}/messages', [ChatController::class, 'getMessages']);
         Route::get('conversations/{id}/starred', [ChatController::class, 'starred']);
         Route::get('conversations/{id}/pins', [ChatController::class, 'pins']);
+        Route::get('conversations/{id}/media', [ChatExtrasController::class, 'media']);
         Route::post('conversations/{id}/read', [ChatController::class, 'markConversationAsRead']);
-        Route::delete('conversations/{id}', [ChatController::class, 'deleteConversation']);
+        Route::post('conversations/{id}/state', [ChatExtrasController::class, 'conversationState'])->middleware('throttle:60,1');
+        Route::delete('conversations/{id}', [ChatController::class, 'deleteConversation'])->middleware('throttle:20,1');
 
-        Route::post('send', [ChatController::class, 'sendMessage']);
-        Route::post('typing', [ChatController::class, 'typing']);       // was missing -> 404 before
-        Route::post('forward', [ChatController::class, 'forward']);
-
-        Route::delete('messages/{id}', [ChatController::class, 'deleteMessage']);
-        Route::get('messages/{id}/file', [ChatController::class, 'viewFile']);
+        // messages
+        Route::post('send', [ChatController::class, 'sendMessage'])->middleware('throttle:60,1');
+        Route::post('typing', [ChatController::class, 'typing'])->middleware('throttle:90,1');
+        Route::post('forward', [ChatController::class, 'forward'])->middleware('throttle:20,1');
+        Route::post('messages/delete', [ChatExtrasController::class, 'deleteMessages'])->middleware('throttle:30,1'); // MUST be before {id}
+        Route::delete('messages/{id}', [ChatController::class, 'deleteMessage']);       // legacy = delete for everyone
+        Route::get('messages/{id}/file', [ChatController::class, 'viewFile'])->middleware('throttle:240,1');
         Route::get('messages/{id}/info', [ChatController::class, 'info']);
-        Route::post('messages/{id}/react', [ChatController::class, 'react']);
+        Route::post('messages/{id}/react', [ChatController::class, 'react'])->middleware('throttle:90,1');
         Route::post('messages/{id}/star', [ChatController::class, 'toggleStar']);
         Route::post('messages/{id}/pin', [ChatController::class, 'togglePin']);
+
+        // updates tab + DP ring
+        Route::get('updates', [ChatExtrasController::class, 'updates']);
+        Route::post('status/{technicianId}/seen', [ChatExtrasController::class, 'markStatusSeen']);
+
+        // profile picture + e2ee keys
+        Route::post('me/avatar', [ChatExtrasController::class, 'uploadAvatar'])->middleware('throttle:10,1');
+        Route::post('e2ee/key', [ChatExtrasController::class, 'publishKey'])->middleware('throttle:10,1');
+        Route::get('e2ee/key/{userId}', [ChatExtrasController::class, 'fetchKey'])->middleware('throttle:60,1');
 
         Route::get('unread', [ChatController::class, 'getUnreadCount']);
     });
