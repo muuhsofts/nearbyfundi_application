@@ -205,6 +205,12 @@ Route::prefix('v4')->middleware(['auth:sanctum', 'active.session'])->group(funct
         ->whereNumber('id');
 
     // ── TICKETS (read-only, for FUNDI & CUSTOMER) ───────────────────────
+    // Query params accepted by TicketController@index:
+    //   ?status=pending|on-progress|completed
+    //   ?search=<free text>
+    //   ?sort=created_at|completed_at|status|title|ticket_number
+    //   ?order=asc|desc
+    //   ?limit=1..200 (default 50)
     Route::get('tickets', [TicketController::class, 'index']);
     Route::get('tickets/{id}', [TicketController::class, 'show'])->whereNumber('id');
 
