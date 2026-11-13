@@ -46,6 +46,10 @@ import FinanceSubscriptions from 'pages/finance/FinanceSubscriptions';
 import FinanceTechnicians from 'pages/finance/FinanceTechnicians';
 import FinanceCustomers from 'pages/finance/FinanceCustomers';
 import FinanceRequests from 'pages/finance/FinanceRequests';
+import JobsList from 'pages/jobs/JobsList';
+
+// Reports Page (NEW)
+import PrintReport from 'pages/print_report/PrintReport';
 
 // SMS Logs Pages
 import SmsLogsList from 'pages/sms/SmsLogsList';
@@ -55,6 +59,9 @@ import MiniAppQrList from 'pages/miniappqr/MiniAppQrList';
 
 // Banners Page
 import BannerList from 'pages/banners/BannerList';
+
+// System Updates Page
+import SystemUpdatesList from 'pages/system-updates/SystemUpdatesList';
 
 // Context Providers
 import { LanguageProvider } from 'context/LanguageContext';
@@ -75,6 +82,8 @@ import { PostProvider } from 'context/PostContext';
 import { CommentProvider } from 'context/CommentContext';
 import { LikeProvider } from 'context/LikeContext';
 import { RequestProvider } from 'context/RequestContext';
+import { JobProvider } from 'context/JobContext';
+import { PrintReportProvider } from 'context/PrintReportContext'; // NEW
 import { ReportProvider } from 'context/ReportContext';
 import {
     RateCardProvider,
@@ -84,7 +93,8 @@ import {
 import { PrivacyPolicyProvider } from 'context/PrivacyPolicyContext';
 import { SmsProvider } from 'context/SmsContext';
 import { MiniAppQrProvider } from 'context/MiniAppQrContext';
-import { BannerProvider } from 'context/BannerContext';   // ← ADDED
+import { BannerProvider } from 'context/BannerContext';
+import { SystemUpdateProvider } from 'context/SystemUpdateContext';
 
 // Route Guards
 const PrivateRoute = ({ children, isAuthenticated }) => {
@@ -127,38 +137,10 @@ function AppContent() {
     return (
         <Routes>
             {/* Public Routes */}
-            <Route
-                path="/login"
-                element={
-                    <PublicRoute isAuthenticated={isAuthenticated}>
-                        <Login />
-                    </PublicRoute>
-                }
-            />
-            <Route
-                path="/verify-otp"
-                element={
-                    <PublicRoute isAuthenticated={isAuthenticated}>
-                        <VerifyOTP />
-                    </PublicRoute>
-                }
-            />
-            <Route
-                path="/reset-password"
-                element={
-                    <PublicRoute isAuthenticated={isAuthenticated}>
-                        <ResetPassword />
-                    </PublicRoute>
-                }
-            />
-            <Route
-                path="/forgot-password"
-                element={
-                    <PublicRoute isAuthenticated={isAuthenticated}>
-                        <ForgotPassword />
-                    </PublicRoute>
-                }
-            />
+            <Route path="/login" element={<PublicRoute isAuthenticated={isAuthenticated}><Login /></PublicRoute>} />
+            <Route path="/verify-otp" element={<PublicRoute isAuthenticated={isAuthenticated}><VerifyOTP /></PublicRoute>} />
+            <Route path="/reset-password" element={<PublicRoute isAuthenticated={isAuthenticated}><ResetPassword /></PublicRoute>} />
+            <Route path="/forgot-password" element={<PublicRoute isAuthenticated={isAuthenticated}><ForgotPassword /></PublicRoute>} />
 
             {/* Error Pages */}
             <Route path="/403" element={<Error code={403} />} />
@@ -168,14 +150,7 @@ function AppContent() {
             <Route path="/documentation/*" element={<Documentation />} />
 
             {/* Protected Routes */}
-            <Route
-                path="/app/*"
-                element={
-                    <PrivateRoute isAuthenticated={isAuthenticated}>
-                        <Layout />
-                    </PrivateRoute>
-                }
-            >
+            <Route path="/app/*" element={<PrivateRoute isAuthenticated={isAuthenticated}><Layout /></PrivateRoute>}>
                 <Route path="profile" element={<Profile />} />
                 <Route path="dashboard" element={<Dashboard />} />
                 <Route path="users" element={<UsersList />} />
@@ -207,26 +182,27 @@ function AppContent() {
                 <Route path="posts" element={<PostsList />} />
                 <Route path="requests" element={<RequestsList />} />
                 <Route path="monitoring" element={<MonitoringMap />} />
-                <Route path="reports" element={<Dashboard />} />
+
+                {/* NEW Reports Route */}
+                <Route path="reports" element={<PrintReport />} />
+
                 <Route path="subscriptions" element={<SubscriptionList />} />
                 <Route path="rate-cards" element={<RateCardManagement />} />
                 <Route path="payment-methods" element={<PaymentMethodManagement />} />
                 <Route path="privacy-policy" element={<PrivacyPolicyPage />} />
                 <Route path="sms-logs" element={<SmsLogsList />} />
 
-                {/* Mini App QR Route */}
                 <Route path="miniappqr" element={<MiniAppQrList />} />
-
-                {/* Banners Route */}
                 <Route path="banners" element={<BannerList />} />
+                <Route path="system-updates" element={<SystemUpdatesList />} />
 
-                {/* Finance Module Routes */}
                 <Route path="finance" element={<FinanceLayout />}>
                     <Route index element={<Navigate to="/app/finance/subscriptions" replace />} />
                     <Route path="subscriptions" element={<FinanceSubscriptions />} />
                     <Route path="technicians" element={<FinanceTechnicians />} />
                     <Route path="customers" element={<FinanceCustomers />} />
                     <Route path="requests" element={<FinanceRequests />} />
+                    <Route path="jobs" element={<JobsList />} />
                     <Route path="*" element={<Navigate to="/app/finance/subscriptions" replace />} />
                 </Route>
 
@@ -263,13 +239,16 @@ const PROVIDERS = [
     CommentProvider,
     LikeProvider,
     RequestProvider,
+    JobProvider,
+    PrintReportProvider, // NEW
     ReportProvider,
     RateCardProvider,
     PaymentMethodProvider,
     SubscriptionProvider,
     SmsProvider,
     MiniAppQrProvider,
-    BannerProvider,           // ← ADDED
+    BannerProvider,
+    SystemUpdateProvider,
 ];
 
 const AppProviders = ({ children }) =>

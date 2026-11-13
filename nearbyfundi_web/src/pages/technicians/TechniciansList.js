@@ -239,18 +239,25 @@ const TechniciansList = () => {
     const sortedData = sortData(technicians);
     const totalCount = pagination.total || 0;
 
-    // stats (current page / current tab)
-    const verifiedCount = technicians.filter(isVerifiedTech).length;
-    const pendingCount = technicians.filter(
-        (tc) => !isVerifiedTech(tc) && tc.verification_status !== 'rejected'
-    ).length;
-    const servicesCount = new Set(technicians.flatMap((tc) => tc.services?.map((s) => s.id) || [])).size;
-
     const statCards = [
-        { label: t('tech.list.stat.total'),    value: totalCount,    color: '#3b82f6', icon: <PeopleIcon sx={{ fontSize: 20 }} /> },
-        { label: t('tech.list.stat.verified'), value: verifiedCount, color: '#10b981', icon: <VerifiedIcon sx={{ fontSize: 20 }} /> },
-        { label: t('tech.list.stat.pending'),  value: pendingCount,  color: '#f59e0b', icon: <PersonIcon sx={{ fontSize: 20 }} /> },
-        { label: t('tech.list.stat.services'), value: servicesCount, color: '#8b5cf6', icon: <WorkIcon sx={{ fontSize: 20 }} /> },
+        {
+            label: t('tech.list.stat.total'),
+            value: counts.pending + counts.approved,
+            color: '#3b82f6',
+            icon: <PeopleIcon sx={{ fontSize: 20 }} />
+        },
+        {
+            label: t('tech.list.stat.verified'),
+            value: counts.approved,
+            color: '#10b981',
+            icon: <VerifiedIcon sx={{ fontSize: 20 }} />
+        },
+        {
+            label: t('tech.list.stat.pending'),
+            value: counts.pending,
+            color: '#f59e0b',
+            icon: <PersonIcon sx={{ fontSize: 20 }} />
+        },
     ];
 
     return (
@@ -334,7 +341,7 @@ const TechniciansList = () => {
 
                 {/* SUMMARY CARDS — equal-width responsive grid */}
                 <Box sx={{ px: { xs: 2, sm: 3 }, pt: 2.5, pb: 2.5 }}>
-                    <Box sx={gridSx({ xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' })}>
+                    <Box sx={gridSx({ xs: 'repeat(1, 1fr)', sm: 'repeat(3, 1fr)' })}>
                         {statCards.map((item, idx) => (
                             <Card
                                 key={idx}

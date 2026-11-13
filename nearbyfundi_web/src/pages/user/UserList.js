@@ -110,7 +110,6 @@ const getHeadCells = (t) => [
     { id: 'phone', label: t('user.col.phone') },
     { id: 'role', label: t('user.col.role') },
     { id: 'status', label: t('user.col.status') },
-    { id: 'subscription', label: t('user.col.subscription') },
     { id: 'created_at', label: t('user.col.created') },
     { id: 'actions', label: t('user.col.actions'), disableSort: true },
 ];
@@ -297,10 +296,6 @@ const UsersList = () => {
                 case 'status':
                     aValue = a.status || '';
                     bValue = b.status || '';
-                    break;
-                case 'subscription':
-                    aValue = a.subscription_status || 'inactive';
-                    bValue = b.subscription_status || 'inactive';
                     break;
                 case 'created_at':
                     aValue = a.created_at || '';
@@ -603,29 +598,6 @@ const UsersList = () => {
         );
     };
 
-    const getSubscriptionStatus = (user) => {
-        const status = user.subscription_status || 'inactive';
-        const expiresAt = user.subscription_expires_at;
-
-        if (status === 'active' && expiresAt) {
-            const expiry = new Date(expiresAt);
-            const now = new Date();
-            if (expiry < now) {
-                return { label: t('user.sub.expired'), color: '#b91c1c', bg: '#fee2e2', border: '#ef4444' };
-            }
-            const days = Math.ceil((expiry - now) / (1000 * 60 * 60 * 24));
-            return { label: `${days}${t('user.sub.daysLeft')}`, color: '#047857', bg: '#d1fae5', border: '#10b981' };
-        }
-
-        const map = {
-            active: { label: t('user.sub.active'), color: '#047857', bg: '#d1fae5', border: '#10b981' },
-            inactive: { label: t('user.sub.inactive'), color: '#4b5563', bg: '#f3f4f6', border: '#9ca3af' },
-            expired: { label: t('user.sub.expired'), color: '#b91c1c', bg: '#fee2e2', border: '#ef4444' },
-            pending: { label: t('user.sub.pending'), color: '#b45309', bg: '#fef3c7', border: '#f59e0b' },
-        };
-        return map[status] || map.inactive;
-    };
-
     // ── Permission / Error states ───────────────────────────────────────────
     if (!canView) {
         return (
@@ -923,7 +895,6 @@ const UsersList = () => {
                                     </TableRow>
                                 ) : (
                                     currentData.map((user) => {
-                                        const subscriptionStatus = getSubscriptionStatus(user);
                                         const isVerified = !!user.email_verified_at;
 
                                         return (
@@ -1046,21 +1017,6 @@ const UsersList = () => {
                                                     )}
                                                 </TableCell>
 
-                                                {/* Subscription */}
-                                                <TableCell>
-                                                    <Chip
-                                                        label={subscriptionStatus.label}
-                                                        size="small"
-                                                        sx={{
-                                                            fontWeight: 700,
-                                                            bgcolor: subscriptionStatus.bg,
-                                                            color: subscriptionStatus.color,
-                                                            border: `1.5px solid ${subscriptionStatus.border}`,
-                                                            height: 28,
-                                                        }}
-                                                    />
-                                                </TableCell>
-
                                                 {/* Created */}
                                                 <TableCell>
                                                     <Typography variant="body2" fontWeight={500} color="text.secondary">
@@ -1115,7 +1071,6 @@ const UsersList = () => {
                         ) : (
                             <Stack spacing={2}>
                                 {currentData.map((user) => {
-                                    const subscriptionStatus = getSubscriptionStatus(user);
                                     const isVerified = !!user.email_verified_at;
 
                                     return (
@@ -1230,17 +1185,6 @@ const UsersList = () => {
                                                         ) : (
                                                             getStatusChip(user.status)
                                                         )}
-                                                        <Chip
-                                                            label={subscriptionStatus.label}
-                                                            size="small"
-                                                            sx={{
-                                                                fontWeight: 700,
-                                                                bgcolor: subscriptionStatus.bg,
-                                                                color: subscriptionStatus.color,
-                                                                border: `1.5px solid ${subscriptionStatus.border}`,
-                                                                height: 26,
-                                                            }}
-                                                        />
                                                     </Stack>
                                                     <Typography variant="caption" color="text.secondary" fontWeight={500}>
                                                         {t('user.joined')} {formatDate(user.created_at)}

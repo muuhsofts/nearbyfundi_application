@@ -41,7 +41,9 @@ function Layout() {
   // Recompute sidebar when permissions or language change
   const dynamicStructure = React.useMemo(() => {
     if (!permissionsReady) return [];
-    return getSidebarStructure(can, t);
+    // ✅ Passes `language` as the 3rd argument so the SidebarStructure
+    // can properly fetch translations (including the new Reports menu) from sidebarTranslations.js
+    return getSidebarStructure(can, t, language);
   }, [permissionsReady, permissions, language, t, can]);
 
   return (
@@ -56,7 +58,6 @@ function Layout() {
         >
           <div className={classes.fakeToolbar} />
 
-          {/* Temporary safe call – will fix properly when you send BreadCrumbs */}
           <BreadCrumbs structure={dynamicStructure || []} />
 
           <Outlet />

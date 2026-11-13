@@ -130,6 +130,8 @@ export const financeTranslations = {
         'fin.tech.table.col.created': 'Created',
         'fin.tech.legend.registrations': 'Registrations',
 
+        'fin.layout.jobs': 'Jobs',
+
         // ── Toasts ────────────────────────────────────────────────
         'fin.toast.exportSuccess': 'Report exported successfully',
         'fin.toast.exportFailed': 'Export failed',
@@ -223,6 +225,8 @@ export const financeTranslations = {
         'fin.req.table.col.status': 'Hali',
         'fin.req.table.col.created': 'Imeundwa',
         'fin.req.legend.requests': 'Maombi',
+
+        'fin.layout.jobs': 'Kazi',
 
         // ── Finance Subscriptions ─────────────────────────────────
         'fin.sub.stat.total': 'Jumla ya Usajili',

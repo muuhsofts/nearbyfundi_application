@@ -11,6 +11,7 @@ import { FinanceSubscriptionProvider } from 'context/FinanceSubscriptionContext'
 import { FinanceTechnicianProvider } from 'context/FinanceTechnicianContext';
 import { FinanceCustomerProvider } from 'context/FinanceCustomerContext';
 import { FinanceRequestProvider } from 'context/FinanceRequestContext';
+import { JobProvider } from 'context/JobContext'; // ← ADDED
 
 const colors = appConfig.app.colors;
 
@@ -19,6 +20,7 @@ const getTabs = (t) => [
     { label: t('fin.layout.technicians'), value: '/app/finance/technicians' },
     { label: t('fin.layout.customers'), value: '/app/finance/customers' },
     { label: t('fin.layout.requests'), value: '/app/finance/requests' },
+    { label: t('fin.layout.jobs') || 'Jobs', value: '/app/finance/jobs' }, // ← ADDED
 ];
 
 const FinanceLayoutContent = () => {
@@ -85,6 +87,7 @@ const FINANCE_PROVIDERS = [
     FinanceTechnicianProvider,
     FinanceCustomerProvider,
     FinanceRequestProvider,
+    JobProvider, // ← ADDED
 ];
 
 const FinanceProviders = ({ children }) =>
