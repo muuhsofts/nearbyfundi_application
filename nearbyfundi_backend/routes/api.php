@@ -45,6 +45,9 @@ use App\Http\Controllers\Api\MiniAppQrController;
 use App\Http\Controllers\Api\BannerController;
 use App\Http\Controllers\Api\MediaController;
 use App\Http\Controllers\Api\ChatExtrasController;
+use App\Http\Controllers\Api\SystemUpdateController;
+use App\Http\Controllers\Api\PrintReportController;
+
 
 // Health check
 Route::get('/health', fn () => response()->json(['status' => 'ok', 'timestamp' => now()]));
@@ -191,12 +194,23 @@ Route::prefix('v4')->middleware(['auth:sanctum', 'active.session'])->group(funct
     Route::get('my-requests', [RequestController::class, 'myRequests']);
 
     // ── JOBS ────────────────────────────────────────────────────────────
+    // Customer / Fundi scoped:
     Route::get('jobs', [JobController::class, 'index']);
     Route::get('jobs/{id}', [JobController::class, 'show'])->whereNumber('id');
     Route::post('jobs/{id}/request-completion', [JobController::class, 'requestCompletion'])
         ->whereNumber('id')->middleware('throttle:6,1');
     Route::post('jobs/{id}/verify-completion', [JobController::class, 'verifyCompletion'])
         ->whereNumber('id')->middleware('throttle:10,1');
+
+    // ── JOBS ────────────────────────────────────────────────────
+    // Static path BEFORE {id}. Same controller, extended filters.
+    // Query params: ?status= ?technician_id= ?customer_id= ?search=
+    //               ?from= ?to= ?sort= ?order= ?limit= ?page=
+    Route::get('admin/jobs/stats', [JobController::class, 'stats']);
+    Route::get('admin/jobs/histogram', [JobController::class, 'histogram']);
+    Route::get('admin/jobs/chart-data', [JobController::class, 'chartData']);
+    Route::get('admin/jobs', [JobController::class, 'index']);
+    Route::get('admin/jobs/{id}', [JobController::class, 'show'])->whereNumber('id');
 
     // ── REVIEWS (customer reviews a COMPLETED job, once) ────────────────
     Route::post('jobs/{id}/review', [ReviewController::class, 'store'])
@@ -725,6 +739,42 @@ Route::prefix('v25')->group(function () {
         Route::delete('banners/{id}', [BannerController::class, 'destroy']);
         Route::patch('banners/{id}/status', [BannerController::class, 'updateStatus']);
     });
+});
+
+
+
+// =============================================
+// V26 – SYSTEM UPDATES
+// =============================================
+Route::prefix('v26')->group(function () {
+    // Public (token optional: tracks views/dismissals per user when present)
+    Route::get('system-updates', [SystemUpdateController::class, 'active'])->middleware('throttle:60,1');
+    Route::get('system-updates/{id}', [SystemUpdateController::class, 'showPublic'])->whereNumber('id');
+    Route::post('system-updates/{id}/view', [SystemUpdateController::class, 'markViewed'])
+        ->whereNumber('id')->middleware('throttle:60,1');
+    Route::post('system-updates/{id}/dismiss', [SystemUpdateController::class, 'dismiss'])
+        ->whereNumber('id')->middleware('throttle:60,1');
+
+    // Admin
+    Route::middleware(['auth:sanctum', 'active.session', 'permission:system-updates.manage'])
+        ->prefix('admin')->group(function () {
+            Route::post('system-updates/draft', [SystemUpdateController::class, 'saveDraft']); // before {id}
+            Route::get('system-updates', [SystemUpdateController::class, 'index']);
+            Route::post('system-updates', [SystemUpdateController::class, 'store']);
+            Route::get('system-updates/{id}', [SystemUpdateController::class, 'show'])->whereNumber('id');
+            Route::put('system-updates/{id}', [SystemUpdateController::class, 'update'])->whereNumber('id');
+            Route::delete('system-updates/{id}', [SystemUpdateController::class, 'destroy'])->whereNumber('id');
+            Route::post('system-updates/{id}/publish', [SystemUpdateController::class, 'publish'])->whereNumber('id');
+            Route::post('system-updates/{id}/close', [SystemUpdateController::class, 'close'])->whereNumber('id');
+        });
+});
+
+// =============================================
+// V27 – PRINT REPORTS
+// =============================================
+Route::prefix('v27')->middleware(['auth:sanctum', 'active.session'])->group(function () {
+    Route::get('reports', [PrintReportController::class, 'index']);
+    Route::get('reports/export', [PrintReportController::class, 'export']);
 });
 
 // =============================================

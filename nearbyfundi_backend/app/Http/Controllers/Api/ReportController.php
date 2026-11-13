@@ -7,6 +7,8 @@ use App\Models\ServiceRequest;
 use App\Models\Subscription;
 use App\Models\Technician;
 use App\Models\User;
+use App\Models\Job;
+use App\Models\Ticket;
 use App\Traits\FinanceRangeTrait;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
@@ -14,30 +16,12 @@ use Illuminate\Http\Request;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
-/**
- * Consolidates FinanceCustomerController, FinanceRequestController,
- * FinanceSubscriptionController and FinanceTechnicianController behind a
- * single set of endpoints:
- *
- *   GET /v12/reports/summary    ?type=&status=&(range params)
- *   GET /v12/reports/trends     ?type=&status=&granularity=&(range params)
- *   GET /v12/reports/detailed   ?type=(required)&status=&search=&per_page=&(range params)
- *   GET /v12/reports/overview   ?(range params)
- *   GET /v12/reports/export     ?type=&format=csv|xlsx&status=&(range params)
- *
- * `type` is one of: customers | requests | subscriptions | technicians | all
- * (all is the default for summary/trends, and means "every domain combined";
- * detailed always needs one specific type since the tables don't share columns).
- */
 class ReportController extends BaseApiController
 {
     use FinanceRangeTrait;
 
-    private const DOMAINS = ['customers', 'requests', 'subscriptions', 'technicians'];
+    private const DOMAINS = ['customers', 'requests', 'technicians', 'jobs', 'tickets'];
 
-    // =====================================================================
-    //  GET /v12/reports/summary
-    // =====================================================================
     public function summary(Request $request)
     {
         [$start, $end, $range] = $this->resolveRange($request);
@@ -56,28 +40,27 @@ class ReportController extends BaseApiController
 
         $customers     = $this->buildSummary('customers', $request, $start, $end);
         $requests      = $this->buildSummary('requests', $request, $start, $end);
-        $subscriptions = $this->buildSummary('subscriptions', $request, $start, $end);
         $technicians   = $this->buildSummary('technicians', $request, $start, $end);
+        $jobs          = $this->buildSummary('jobs', $request, $start, $end);
+        $tickets       = $this->buildSummary('tickets', $request, $start, $end);
 
         return $this->successResponse([
             'range' => $this->rangePayload($start, $end, $range),
             'combined_totals' => [
                 'customers'          => $customers['totals']['count'],
                 'requests'           => $requests['totals']['count'],
-                'subscriptions'      => $subscriptions['totals']['count'],
-                'subscriptions_revenue' => $subscriptions['totals']['revenue'],
                 'technicians'        => $technicians['totals']['count'],
+                'jobs'               => $jobs['totals']['count'],
+                'tickets'            => $tickets['totals']['count'],
             ],
             'customers'     => $customers,
             'requests'      => $requests,
-            'subscriptions' => $subscriptions,
             'technicians'   => $technicians,
+            'jobs'          => $jobs,
+            'tickets'       => $tickets,
         ]);
     }
 
-    // =====================================================================
-    //  GET /v12/reports/trends
-    // =====================================================================
     public function trends(Request $request)
     {
         [$start, $end, $range] = $this->resolveRange($request);
@@ -110,21 +93,19 @@ class ReportController extends BaseApiController
             ]);
         }
 
-        // Combined: one bucket loop, one series per domain (status filter is
-        // ignored here since it means something different per domain).
         $buckets = [];
         foreach (CarbonPeriod::create($start, "1 {$unit}", $end) as $date) {
             $bStart = $date->copy()->startOf($unit);
             $bEnd   = $date->copy()->endOf($unit);
 
             $buckets[] = [
-                'label' => $this->bucketLabel($bStart, $unit),
-                'date'  => $bStart->toDateString(),
-                'customers'             => $this->bucketPoint('customers', $bStart, $bEnd, null)['count'],
-                'requests'              => $this->bucketPoint('requests', $bStart, $bEnd, null)['count'],
-                'subscriptions'         => $this->bucketPoint('subscriptions', $bStart, $bEnd, null)['count'],
-                'subscriptions_revenue' => $this->bucketPoint('subscriptions', $bStart, $bEnd, null)['revenue'],
-                'technicians'           => $this->bucketPoint('technicians', $bStart, $bEnd, null)['count'],
+                'label'         => $this->bucketLabel($bStart, $unit),
+                'date'          => $bStart->toDateString(),
+                'customers'     => $this->bucketPoint('customers', $bStart, $bEnd, null)['count'],
+                'requests'      => $this->bucketPoint('requests', $bStart, $bEnd, null)['count'],
+                'technicians'   => $this->bucketPoint('technicians', $bStart, $bEnd, null)['count'],
+                'jobs'          => $this->bucketPoint('jobs', $bStart, $bEnd, null)['count'],
+                'tickets'       => $this->bucketPoint('tickets', $bStart, $bEnd, null)['count'],
             ];
         }
 
@@ -134,11 +115,6 @@ class ReportController extends BaseApiController
         ]);
     }
 
-    // =====================================================================
-    //  GET /v12/reports/detailed
-    //  A single-domain paginated table (equivalent to the old `table()`
-    //  endpoints). `type` is required since schemas differ per domain.
-    // =====================================================================
     public function detailed(Request $request)
     {
         $type = $request->input('type');
@@ -156,9 +132,11 @@ class ReportController extends BaseApiController
             'customers' => User::role('CUSTOMER')->whereBetween('created_at', [$start, $end]),
             'requests'  => ServiceRequest::with(['customer', 'technician.user', 'service'])
                 ->whereBetween('created_at', [$start, $end]),
-            'subscriptions' => Subscription::with(['user', 'rateCard'])
-                ->whereBetween('created_at', [$start, $end]),
             'technicians' => Technician::with('user')->whereBetween('created_at', [$start, $end]),
+            'jobs'      => Job::with(['customer', 'technician.user', 'request.service'])
+                ->whereBetween('created_at', [$start, $end]),
+            'tickets'   => Ticket::with(['job.customer', 'job.technician.user'])
+                ->whereBetween('created_at', [$start, $end]),
         };
 
         if ($status && $status !== 'all') {
@@ -175,11 +153,6 @@ class ReportController extends BaseApiController
         );
     }
 
-    // =====================================================================
-    //  GET /v12/reports/overview
-    //  Dashboard snapshot: headline totals + growth vs. the previous period
-    //  of equal length, plus a compact combined trend.
-    // =====================================================================
     public function overview(Request $request)
     {
         [$start, $end, $range] = $this->resolveRange($request);
@@ -188,15 +161,17 @@ class ReportController extends BaseApiController
         $current = [
             'customers'     => $this->buildSummary('customers', $request, $start, $end),
             'requests'      => $this->buildSummary('requests', $request, $start, $end),
-            'subscriptions' => $this->buildSummary('subscriptions', $request, $start, $end),
             'technicians'   => $this->buildSummary('technicians', $request, $start, $end),
+            'jobs'          => $this->buildSummary('jobs', $request, $start, $end),
+            'tickets'       => $this->buildSummary('tickets', $request, $start, $end),
         ];
 
         $previous = [
             'customers'     => $this->buildSummary('customers', $request, $prevStart, $prevEnd),
             'requests'      => $this->buildSummary('requests', $request, $prevStart, $prevEnd),
-            'subscriptions' => $this->buildSummary('subscriptions', $request, $prevStart, $prevEnd),
             'technicians'   => $this->buildSummary('technicians', $request, $prevStart, $prevEnd),
+            'jobs'          => $this->buildSummary('jobs', $request, $prevStart, $prevEnd),
+            'tickets'       => $this->buildSummary('tickets', $request, $prevStart, $prevEnd),
         ];
 
         $headline = [];
@@ -209,13 +184,7 @@ class ReportController extends BaseApiController
                 ),
             ];
         }
-        $headline['subscriptions']['revenue'] = $current['subscriptions']['totals']['revenue'];
-        $headline['subscriptions']['revenue_growth'] = $this->growth(
-            $current['subscriptions']['totals']['revenue'],
-            $previous['subscriptions']['totals']['revenue']
-        );
 
-        // Compact combined trend for a quick chart on the same screen.
         $granularity = $this->resolveGranularity($request, $range);
         $unit = $this->bucketUnit($granularity);
         $buckets = [];
@@ -228,8 +197,9 @@ class ReportController extends BaseApiController
                 'date'          => $bStart->toDateString(),
                 'customers'     => $this->bucketPoint('customers', $bStart, $bEnd, null)['count'],
                 'requests'      => $this->bucketPoint('requests', $bStart, $bEnd, null)['count'],
-                'subscriptions' => $this->bucketPoint('subscriptions', $bStart, $bEnd, null)['count'],
                 'technicians'   => $this->bucketPoint('technicians', $bStart, $bEnd, null)['count'],
+                'jobs'          => $this->bucketPoint('jobs', $bStart, $bEnd, null)['count'],
+                'tickets'       => $this->bucketPoint('tickets', $bStart, $bEnd, null)['count'],
             ];
         }
 
@@ -244,11 +214,6 @@ class ReportController extends BaseApiController
         ]);
     }
 
-    // =====================================================================
-    //  GET /v12/reports/export
-    //  Single domain -> csv/xlsx (same output as the old export() methods).
-    //  type=all -> combined multi-sheet xlsx only.
-    // =====================================================================
     public function export(Request $request)
     {
         [$start, $end] = $this->resolveRange($request);
@@ -277,10 +242,6 @@ class ReportController extends BaseApiController
             ? $this->exportExcel($rows, $headers, $filename, $mapRow)
             : $this->exportCsv($rows, $headers, $filename, $mapRow);
     }
-
-    // =====================================================================
-    //  Internal helpers
-    // =====================================================================
 
     private function isValidType(?string $type): bool
     {
@@ -323,10 +284,6 @@ class ReportController extends BaseApiController
         return round((($current - $previous) / $previous) * 100, 2);
     }
 
-    /**
-     * Builds the same {totals, status_breakdown} shape the original
-     * Finance*Controllers::summary() returned, for one domain.
-     */
     private function buildSummary(string $type, Request $request, Carbon $start, Carbon $end): array
     {
         $status = $request->input('status');
@@ -334,8 +291,9 @@ class ReportController extends BaseApiController
         return match ($type) {
             'customers' => $this->summaryCustomers($start, $end, $status),
             'requests' => $this->summaryRequests($start, $end, $status),
-            'subscriptions' => $this->summarySubscriptions($start, $end, $status),
             'technicians' => $this->summaryTechnicians($start, $end, $status),
+            'jobs' => $this->summaryJobs($start, $end, $status),
+            'tickets' => $this->summaryTickets($start, $end, $status),
         };
     }
 
@@ -390,50 +348,6 @@ class ReportController extends BaseApiController
         ];
     }
 
-    private function summarySubscriptions(Carbon $start, Carbon $end, ?string $status): array
-    {
-        $query = Subscription::whereBetween('created_at', [$start, $end]);
-        if ($status && $status !== 'all') {
-            $query->where('status', $status);
-        }
-
-        $activeCount = (clone $query)
-            ->where('status', 'active')
-            ->where(fn ($q) => $q->whereNull('expiry_date')->orWhere('expiry_date', '>', now()))
-            ->count();
-
-        $expiredCount = (clone $query)
-            ->where(function ($q) {
-                $q->where('status', 'expired')
-                  ->orWhere(function ($sub) {
-                      $sub->where('status', 'active')
-                          ->whereNotNull('expiry_date')
-                          ->where('expiry_date', '<=', now());
-                  });
-            })
-            ->count();
-
-        $breakdown = (clone $query)
-            ->selectRaw('status, count(*) as total, sum(amount_paid) as revenue')
-            ->groupBy('status')
-            ->get()
-            ->map(fn ($r) => [
-                'status'  => $r->status,
-                'total'   => (int) $r->total,
-                'revenue' => (float) $r->revenue,
-            ]);
-
-        return [
-            'totals' => [
-                'count'   => (clone $query)->count(),
-                'revenue' => (float) (clone $query)->sum('amount_paid'),
-                'active'  => $activeCount,
-                'expired' => $expiredCount,
-            ],
-            'status_breakdown' => $breakdown,
-        ];
-    }
-
     private function summaryTechnicians(Carbon $start, Carbon $end, ?string $status): array
     {
         $query = Technician::whereBetween('created_at', [$start, $end]);
@@ -458,9 +372,53 @@ class ReportController extends BaseApiController
         ];
     }
 
-    /**
-     * Count (+ revenue, for subscriptions) for one domain within one bucket window.
-     */
+    private function summaryJobs(Carbon $start, Carbon $end, ?string $status): array
+    {
+        $query = Job::whereBetween('created_at', [$start, $end]);
+        if ($status && $status !== 'all') {
+            $query->where('status', $status);
+        }
+
+        $breakdown = (clone $query)
+            ->selectRaw('status, count(*) as total')
+            ->groupBy('status')
+            ->get()
+            ->map(fn ($r) => ['status' => $r->status, 'total' => (int) $r->total]);
+
+        return [
+            'totals' => [
+                'count'      => (clone $query)->count(),
+                'pending'    => (clone $query)->where('status', 'pending')->count(),
+                'on_progress'=> (clone $query)->where('status', 'on-progress')->count(),
+                'completed'  => (clone $query)->where('status', 'completed')->count(),
+            ],
+            'status_breakdown' => $breakdown,
+        ];
+    }
+
+    private function summaryTickets(Carbon $start, Carbon $end, ?string $status): array
+    {
+        $query = Ticket::whereBetween('created_at', [$start, $end]);
+        if ($status && $status !== 'all') {
+            $query->where('status', $status);
+        }
+
+        $breakdown = (clone $query)
+            ->selectRaw('status, count(*) as total')
+            ->groupBy('status')
+            ->get()
+            ->map(fn ($r) => ['status' => $r->status, 'total' => (int) $r->total]);
+
+        return [
+            'totals' => [
+                'count'      => (clone $query)->count(),
+                'on_progress'=> (clone $query)->where('status', 'on-progress')->count(),
+                'completed'  => (clone $query)->where('status', 'completed')->count(),
+            ],
+            'status_breakdown' => $breakdown,
+        ];
+    }
+
     private function bucketPoint(string $type, Carbon $bStart, Carbon $bEnd, ?string $status): array
     {
         return match ($type) {
@@ -474,17 +432,19 @@ class ReportController extends BaseApiController
                 if ($status && $status !== 'all') $q->where('status', $status);
                 return ['count' => $q->count()];
             })(),
-            'subscriptions' => (function () use ($bStart, $bEnd, $status) {
-                $q = Subscription::whereBetween('created_at', [$bStart, $bEnd]);
-                if ($status && $status !== 'all') $q->where('status', $status);
-                return [
-                    'count'   => (clone $q)->count(),
-                    'revenue' => (float) (clone $q)->sum('amount_paid'),
-                ];
-            })(),
             'technicians' => (function () use ($bStart, $bEnd, $status) {
                 $q = Technician::whereBetween('created_at', [$bStart, $bEnd]);
                 if ($status && $status !== 'all') $q->where('verification_status', $status);
+                return ['count' => $q->count()];
+            })(),
+            'jobs' => (function () use ($bStart, $bEnd, $status) {
+                $q = Job::whereBetween('created_at', [$bStart, $bEnd]);
+                if ($status && $status !== 'all') $q->where('status', $status);
+                return ['count' => $q->count()];
+            })(),
+            'tickets' => (function () use ($bStart, $bEnd, $status) {
+                $q = Ticket::whereBetween('created_at', [$bStart, $bEnd]);
+                if ($status && $status !== 'all') $q->where('status', $status);
                 return ['count' => $q->count()];
             })(),
         };
@@ -506,21 +466,24 @@ class ReportController extends BaseApiController
                   ->orWhereHas('technician.user', fn ($u) => $u->where('name', 'LIKE', "%{$search}%"))
                   ->orWhereHas('service', fn ($s) => $s->where('name', 'LIKE', "%{$search}%"));
             }),
-            'subscriptions' => $query->whereHas('user', fn ($q) => $q->where('name', 'LIKE', "%{$search}%")
-                ->orWhere('email', 'LIKE', "%{$search}%")),
             'technicians' => $query->where(function ($q) use ($search) {
                 $q->where('area', 'LIKE', "%{$search}%")
                   ->orWhereHas('user', fn ($u) => $u->where('name', 'LIKE', "%{$search}%")
                       ->orWhere('email', 'LIKE', "%{$search}%"));
             }),
+            'jobs' => $query->where(function ($q) use ($search) {
+                $q->where('job_number', 'LIKE', "%{$search}%")
+                  ->orWhereHas('customer', fn ($u) => $u->where('name', 'LIKE', "%{$search}%"))
+                  ->orWhereHas('technician.user', fn ($u) => $u->where('name', 'LIKE', "%{$search}%"));
+            }),
+            'tickets' => $query->where(function ($q) use ($search) {
+                $q->where('ticket_number', 'LIKE', "%{$search}%")
+                  ->orWhere('title', 'LIKE', "%{$search}%");
+            }),
             default => null,
         };
     }
 
-    /**
-     * Returns [headers, rows, mapRow, filename] for a single-domain export,
-     * matching the original Finance*Controllers::export() column sets.
-     */
     private function exportDataFor(string $type, Carbon $start, Carbon $end, ?string $status): array
     {
         $timestamp = now()->format('Y-m-d_His');
@@ -529,73 +492,107 @@ class ReportController extends BaseApiController
             'customers' => (function () use ($start, $end, $status, $timestamp) {
                 $query = User::role('CUSTOMER')->whereBetween('created_at', [$start, $end]);
                 if ($status && $status !== 'all') $query->where('status', $status);
+                $rows = $query->orderBy('created_at', 'desc')->get();
 
                 return [
-                    ['ID', 'Name', 'Email', 'Phone', 'Status', 'Active', 'Created At'],
-                    $query->orderBy('created_at', 'desc')->get(),
-                    fn ($row) => [
-                        $row->id, $row->name, $row->email, $row->phone ?? '-',
-                        $row->status, $row->is_active ? 'Yes' : 'No',
-                        optional($row->created_at)->format('Y-m-d H:i'),
-                    ],
-                    "finance_customers_{$timestamp}",
+                    ['No.', 'Name', 'Email', 'Phone', 'Status', 'Active', 'Created At'],
+                    $rows,
+                    function ($row, $index) {
+                        return [
+                            $index + 1, $row->name, $row->email, $row->phone ?? '-',
+                            $row->status, $row->is_active ? 'Yes' : 'No',
+                            optional($row->created_at)->format('Y-m-d H:i'),
+                        ];
+                    },
+                    "customers_report_{$timestamp}",
                 ];
             })(),
             'requests' => (function () use ($start, $end, $status, $timestamp) {
                 $query = ServiceRequest::with(['customer', 'technician.user', 'service'])
                     ->whereBetween('created_at', [$start, $end]);
                 if ($status && $status !== 'all') $query->where('status', $status);
+                $rows = $query->orderBy('created_at', 'desc')->get();
 
                 return [
-                    ['ID', 'Customer', 'Technician', 'Service', 'Status', 'Description', 'Created At'],
-                    $query->orderBy('created_at', 'desc')->get(),
-                    fn ($row) => [
-                        $row->id, $row->customer->name ?? '-', $row->technician->user->name ?? '-',
-                        $row->service->name ?? '-', $row->status, $row->description,
-                        optional($row->created_at)->format('Y-m-d H:i'),
-                    ],
-                    "finance_requests_{$timestamp}",
-                ];
-            })(),
-            'subscriptions' => (function () use ($start, $end, $status, $timestamp) {
-                $query = Subscription::with(['user', 'rateCard'])->whereBetween('created_at', [$start, $end]);
-                if ($status && $status !== 'all') $query->where('status', $status);
-
-                return [
-                    ['ID', 'User', 'Email', 'Plan', 'Amount', 'Currency', 'Status', 'Payment Method', 'Created At', 'Expiry'],
-                    $query->orderBy('created_at', 'desc')->get(),
-                    fn ($row) => [
-                        $row->id, $row->user->name ?? '-', $row->user->email ?? '-', $row->rateCard->name ?? '-',
-                        $row->amount_paid, $row->currency, $row->status, $row->payment_method,
-                        optional($row->created_at)->format('Y-m-d H:i'), optional($row->expiry_date)->format('Y-m-d H:i'),
-                    ],
-                    "finance_subscriptions_{$timestamp}",
+                    ['No.', 'Customer', 'Technician', 'Service', 'Status', 'Description', 'Created At'],
+                    $rows,
+                    function ($row, $index) {
+                        return [
+                            $index + 1, $row->customer->name ?? '-', $row->technician->user->name ?? '-',
+                            $row->service->name ?? '-', $row->status, $row->description,
+                            optional($row->created_at)->format('Y-m-d H:i'),
+                        ];
+                    },
+                    "requests_report_{$timestamp}",
                 ];
             })(),
             'technicians' => (function () use ($start, $end, $status, $timestamp) {
                 $query = Technician::with('user')->whereBetween('created_at', [$start, $end]);
                 if ($status && $status !== 'all') $query->where('verification_status', $status);
+                $rows = $query->orderBy('created_at', 'desc')->get();
 
                 return [
-                    ['ID', 'Name', 'Email', 'Area', 'Rating', 'Verification Status', 'Online', 'Created At'],
-                    $query->orderBy('created_at', 'desc')->get(),
-                    fn ($row) => [
-                        $row->id, $row->user->name ?? '-', $row->user->email ?? '-', $row->area,
-                        $row->rating, $row->verification_status, $row->is_online ? 'Yes' : 'No',
-                        optional($row->created_at)->format('Y-m-d H:i'),
-                    ],
-                    "finance_technicians_{$timestamp}",
+                    ['No.', 'Name', 'Email', 'Area', 'Rating', 'Verification Status', 'Online', 'Created At'],
+                    $rows,
+                    function ($row, $index) {
+                        return [
+                            $index + 1, $row->user->name ?? '-', $row->user->email ?? '-', $row->area,
+                            $row->rating, $row->verification_status, $row->is_online ? 'Yes' : 'No',
+                            optional($row->created_at)->format('Y-m-d H:i'),
+                        ];
+                    },
+                    "technicians_report_{$timestamp}",
+                ];
+            })(),
+            'jobs' => (function () use ($start, $end, $status, $timestamp) {
+                $query = Job::with(['customer', 'technician.user', 'request.service'])
+                    ->whereBetween('created_at', [$start, $end]);
+                if ($status && $status !== 'all') $query->where('status', $status);
+                $rows = $query->orderBy('created_at', 'desc')->get();
+
+                return [
+                    ['No.', 'Job #', 'Customer', 'Technician', 'Service', 'Status', 'Created At'],
+                    $rows,
+                    function ($row, $index) {
+                        return [
+                            $index + 1, 
+                            $row->job_number,
+                            $row->customer->name ?? '-', 
+                            $row->technician->user->name ?? '-',
+                            $row->request->service->name ?? '-', 
+                            $row->status, 
+                            optional($row->created_at)->format('Y-m-d H:i'),
+                        ];
+                    },
+                    "jobs_report_{$timestamp}",
+                ];
+            })(),
+            'tickets' => (function () use ($start, $end, $status, $timestamp) {
+                $query = Ticket::with(['job.customer', 'job.technician.user'])
+                    ->whereBetween('created_at', [$start, $end]);
+                if ($status && $status !== 'all') $query->where('status', $status);
+                $rows = $query->orderBy('created_at', 'desc')->get();
+
+                return [
+                    ['No.', 'Ticket #', 'Title', 'Job #', 'Customer', 'Status', 'Created At'],
+                    $rows,
+                    function ($row, $index) {
+                        return [
+                            $index + 1, 
+                            $row->ticket_number,
+                            $row->title,
+                            $row->job->job_number ?? '-',
+                            $row->job->customer->name ?? '-',
+                            $row->status, 
+                            optional($row->created_at)->format('Y-m-d H:i'),
+                        ];
+                    },
+                    "tickets_report_{$timestamp}",
                 ];
             })(),
         };
     }
 
-    /**
-     * Combined multi-sheet xlsx export (one sheet per domain), built directly
-     * with PhpSpreadsheet so it doesn't depend on BaseApiController::exportExcel()
-     * being single-sheet only. Adjust namespace/imports above if your project
-     * uses a different Excel package.
-     */
     private function exportCombined(Carbon $start, Carbon $end, ?string $status)
     {
         $spreadsheet = new Spreadsheet();
@@ -604,8 +601,9 @@ class ReportController extends BaseApiController
         $sheetTitles = [
             'customers'     => 'Customers',
             'requests'      => 'Requests',
-            'subscriptions' => 'Subscriptions',
             'technicians'   => 'Technicians',
+            'jobs'          => 'Jobs',
+            'tickets'       => 'Tickets',
         ];
 
         foreach (self::DOMAINS as $type) {
@@ -616,8 +614,8 @@ class ReportController extends BaseApiController
             $sheet->fromArray($headers, null, 'A1');
 
             $rowIndex = 2;
-            foreach ($rows as $row) {
-                $sheet->fromArray($mapRow($row), null, "A{$rowIndex}");
+            foreach ($rows as $index => $row) {
+                $sheet->fromArray($mapRow($row, $index), null, "A{$rowIndex}");
                 $rowIndex++;
             }
 
@@ -626,7 +624,7 @@ class ReportController extends BaseApiController
             }
         }
 
-        $filename = 'finance_report_' . now()->format('Y-m-d_His') . '.xlsx';
+        $filename = 'report_all_' . now()->format('Y-m-d_His') . '.xlsx';
         $writer = new Xlsx($spreadsheet);
 
         return response()->streamDownload(function () use ($writer) {

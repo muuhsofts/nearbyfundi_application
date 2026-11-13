@@ -198,6 +198,60 @@ class FcmService
         return $this->sendSilentDataToDevice($token, $data);
     }
 
+    public function sendSystemUpdate(User $user, \App\Models\SystemUpdate $update): array
+    {
+        $token = $this->getUserToken($user);
+        if (!$token) {
+            return ['success' => false, 'skipped' => true, 'error' => 'No FCM token'];
+        }
+        if (!$this->isReady()) {
+            return ['success' => false, 'skipped' => true, 'error' => 'FCM disabled or not configured'];
+        }
+
+        $title = trim($update->title);
+        $body  = \Illuminate\Support\Str::limit(trim($update->description), 140);
+        $ttl   = 60 * 60 * 24 * 28; // FCM keeps messages for offline devices up to 4 weeks
+
+        $data = [
+            'type'         => 'system_update',
+            'update_id'    => (string) $update->id,
+            'title'        => $title,
+            'body'         => $body,
+            'description'  => \Illuminate\Support\Str::limit(trim($update->description), 500),
+            'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+        ];
+
+        $message = CloudMessage::new()
+            ->withToken($token)
+            ->withNotification(Notification::create($title, $body))
+            ->withAndroidConfig([
+                'priority' => 'high',
+                'ttl'      => "{$ttl}s",
+                'notification' => [
+                    'sound'        => 'default',
+                    'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+                    'channel_id'   => 'fundi_channel',
+                ],
+            ])
+            ->withApnsConfig([
+                'headers' => [
+                    'apns-priority'   => '10',
+                    'apns-push-type'  => 'alert',
+                    'apns-expiration' => (string) (time() + $ttl),
+                ],
+                'payload' => ['aps' => [
+                    'alert' => ['title' => $title, 'body' => $body],
+                    'sound' => 'default',
+                    'badge' => $this->unreadCountFor($user) + 1,
+                ]],
+            ])
+            ->withData($this->sanitizeData($data));
+
+        $ok = $this->dispatch($message, $token);
+
+        return ['success' => $ok, 'error' => $ok ? null : 'FCM send failed'];
+    }
+
     protected function dispatch(CloudMessage $message, string $deviceToken): bool
     {
         try {

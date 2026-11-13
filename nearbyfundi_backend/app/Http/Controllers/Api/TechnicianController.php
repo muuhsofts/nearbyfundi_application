@@ -4,10 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Jobs\SendAdminNotificationJob;
 use App\Models\Otp;
-use App\Models\RateCard;
 use App\Models\RegistrationDraft;
 use App\Models\ServiceRequest;
-use App\Models\Subscription;
 use App\Models\Technician;
 use App\Models\User;
 use App\Services\ApprovalNotificationService;
@@ -581,7 +579,7 @@ class TechnicianController extends BaseApiController
             $id, $notifier, $sms,
             requireCompleted: true,
             event: 'approved',
-            message: 'Technician approved and free trial activated.'
+            message: 'Technician approved successfully.'
         );
     }
 
@@ -591,7 +589,7 @@ class TechnicianController extends BaseApiController
             $id, $notifier, $sms,
             requireCompleted: false,
             event: 'verified',
-            message: 'Technician verified successfully and free trial activated.'
+            message: 'Technician verified successfully.'
         );
     }
 
@@ -1211,7 +1209,7 @@ class TechnicianController extends BaseApiController
     }
 
     // ═══════════════════════════════════════════════════════
-    // PRIVATE — approval
+    // PRIVATE — approval (no free trial / no subscription)
     // ═══════════════════════════════════════════════════════
     private function approveTechnician(
         $id,
@@ -1237,23 +1235,21 @@ class TechnicianController extends BaseApiController
         }
 
         try {
-            $subscription = $this->activateApprovedTechnician($technician);
+            $this->activateApprovedTechnician($technician);
         } catch (\Throwable $e) {
             Log::error('Technician approval failed', ['technician_id' => $id, 'error' => $e->getMessage()]);
             return $this->serverError('Approval failed: ' . $e->getMessage());
         }
 
-        $notifier->notifyApproved($technician->user, $subscription, $technician->id, $event);
-
-        $trialDays = max(1, (int) ($subscription->rateCard->duration_days ?? 1));
-        $sms->notifyFundiApproved($technician->user, $trialDays);
+        $notifier->notifyApproved($technician->user, null, $technician->id, $event);
+        $sms->notifyFundiApproved($technician->user);
 
         $this->logAudit("{$event}_technician", 'technician', $technician->id, "Technician #{$technician->id} {$event}");
 
         return $this->successResponse($technician->fresh()->load('user'), $message);
     }
 
-    private function activateApprovedTechnician(Technician $technician): Subscription
+    private function activateApprovedTechnician(Technician $technician): void
     {
         DB::beginTransaction();
         try {
@@ -1262,39 +1258,12 @@ class TechnicianController extends BaseApiController
                 'verification_status' => 'approved',
             ]);
 
-            $user = $technician->user;
-            $user->update(['status' => 'active', 'is_active' => true]);
-
-            $freeTrialRate = RateCard::firstOrCreate(
-                ['slug' => 'free-trial'],
-                [
-                    'name'          => 'Free Trial',
-                    'price'         => 0,
-                    'duration_days' => 1,
-                    'currency'      => 'TZS',
-                    'description'   => '1-day free trial after verification',
-                    'is_active'     => true,
-                    'display_order' => 0,
-                ]
-            );
-
-            $subscription = Subscription::create([
-                'user_id'        => $user->id,
-                'rate_card_id'   => $freeTrialRate->id,
-                'status'         => Subscription::STATUS_ACTIVE,
-                'start_date'     => now(),
-                'expiry_date'    => now()->addDays(max(1, (int) $freeTrialRate->duration_days)),
-                'amount_paid'    => 0,
-                'currency'       => 'TZS',
-                'payment_method' => 'Free Trial',
-                'approved_at'    => now(),
-                'approved_by'    => auth()->id(),
+            $technician->user->update([
+                'status'    => 'active',
+                'is_active' => true,
             ]);
 
-            $user->activateSubscription($subscription);
-
             DB::commit();
-            return $subscription;
         } catch (\Throwable $e) {
             DB::rollBack();
             throw $e;

@@ -7,6 +7,8 @@ use App\Models\Comment;
 use App\Models\Like;
 use App\Models\Service;
 use App\Models\ServiceRequest;
+use App\Models\Job;
+use App\Models\Ticket;
 use App\Models\User;
 use App\Models\Technician;
 use App\Models\Role;
@@ -90,6 +92,17 @@ class AnalyticsController extends BaseApiController
         $completedRequests = ServiceRequest::where('status', 'completed')->count();
         $cancelledRequests = ServiceRequest::where('status', 'cancelled')->count();
         $rejectedRequests = ServiceRequest::where('status', 'rejected')->count();
+
+        // ---------- Jobs & Tickets (NEW) ----------
+        $totalJobs = Job::count();
+        $jobsByStatus = Job::select('status', DB::raw('count(*) as total'))
+            ->groupBy('status')
+            ->get();
+            
+        $totalTickets = Ticket::count();
+        $ticketsByStatus = Ticket::select('status', DB::raw('count(*) as total'))
+            ->groupBy('status')
+            ->get();
 
         // Recent requests (last 10) with EAT timestamps
         $recentRequests = ServiceRequest::with(['customer', 'technician.user', 'service'])
@@ -184,6 +197,14 @@ class AnalyticsController extends BaseApiController
                 'recent' => $recentRequests,
                 'last_30_days' => $requestsLast30Days,
             ],
+            'jobs' => [ // NEW
+                'total' => $totalJobs,
+                'by_status' => $jobsByStatus,
+            ],
+            'tickets' => [ // NEW
+                'total' => $totalTickets,
+                'by_status' => $ticketsByStatus,
+            ],
             'engagement_metrics' => $engagementMetrics,
             'weekly_requests' => $weeklyRequests,
             'user_trend' => $userTrend,
@@ -214,6 +235,8 @@ class AnalyticsController extends BaseApiController
             'total_comments' => Comment::count(),
             'total_services' => Service::count(),
             'total_requests' => ServiceRequest::count(),
+            'total_jobs' => Job::count(),       // NEW
+            'total_tickets' => Ticket::count(), // NEW
             'requests_by_status' => ServiceRequest::select('status', DB::raw('count(*) as total'))
                 ->groupBy('status')
                 ->get(),
@@ -224,10 +247,6 @@ class AnalyticsController extends BaseApiController
 
     // ---------- PRIVATE HELPERS (EAT-aware) ----------
 
-    /**
-     * Get requests per day of the week.
-     * Defaults to current week (Mon–Sun) in EAT if no date filter.
-     */
     private function getWeeklyRequests(Request $request)
     {
         list($startEat, $endEat) = $this->parseDateRangeEat($request);
@@ -251,10 +270,6 @@ class AnalyticsController extends BaseApiController
             ->get();
     }
 
-    /**
-     * Get daily user registration trend (technicians vs customers).
-     * Defaults to current week in EAT if no date filter.
-     */
     private function getUserTrend(Request $request)
     {
         list($startEat, $endEat) = $this->parseDateRangeEat($request);
@@ -280,9 +295,6 @@ class AnalyticsController extends BaseApiController
             ->get();
     }
 
-    /**
-     * Top technicians by number of requests.
-     */
     private function getTopTechnicians(Request $request)
     {
         $limit = $request->get('limit', 10);
@@ -294,10 +306,6 @@ class AnalyticsController extends BaseApiController
             ->get();
     }
 
-    /**
-     * Blog posts trend (posts per day).
-     * No default filter – uses request filters if provided.
-     */
     private function getPostsTrend(Request $request)
     {
         list($startEat, $endEat) = $this->parseDateRangeEat($request);
@@ -315,10 +323,6 @@ class AnalyticsController extends BaseApiController
             ->get();
     }
 
-    /**
-     * Requests grouped by technician area.
-     * Shows all-time data (no default filter).
-     */
     private function getRequestsByArea(Request $request)
     {
         list($startEat, $endEat) = $this->parseDateRangeEat($request);
@@ -338,10 +342,6 @@ class AnalyticsController extends BaseApiController
             ->get();
     }
 
-    /**
-     * Parse date range from request filters (period + date).
-     * Returns [startEat, endEat] or [null, null] if none.
-     */
     private function parseDateRangeEat(Request $request)
     {
         $period = $request->get('period');
@@ -369,10 +369,6 @@ class AnalyticsController extends BaseApiController
         return [$start, $end];
     }
 
-    /**
-     * Weekly revenue for the current month.
-     * Groups by week number (Monday-based) and returns labels.
-     */
     private function getWeeklyRevenueForCurrentMonth(Request $request)
     {
         $now = Carbon::now('Africa/Dar_es_Salaam');

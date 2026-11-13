@@ -170,6 +170,22 @@ class SmsNotificationService
         return $results;
     }
 
+    /**
+     * SMS delivery for System Updates has been DISABLED.
+     * 
+     * This method is kept only as a safety stub. If an old queued job 
+     * tries to fire an SMS for a system update, it will immediately return
+     * a "skipped" success state without sending an SMS or throwing an error.
+     */
+    public function notifySystemUpdate(User $user, \App\Models\SystemUpdate $update): array
+    {
+        return [
+            'success' => false, 
+            'skipped' => true, 
+            'error'   => 'SMS delivery for system updates is disabled.'
+        ];
+    }
+
     protected function sendSms(User $user, string $message, string $type, array $metadata = []): array
     {
         if (empty($user->phone)) {
@@ -177,7 +193,9 @@ class SmsNotificationService
             return ['success' => false, 'error' => 'User has no phone number', 'type' => $type];
         }
 
-        $logMessage = in_array($type, ['registration_otp', 'job_completion_code']) ? 'Nearbyfundi: [OTP hidden]' : $message;
+        $logMessage = in_array($type, ['registration_otp', 'job_completion_code']) 
+            ? 'OG SUPER APP: [OTP hidden]' 
+            : $message;
 
         try {
             $result = $this->smsService->sendSms($user->phone, $message);

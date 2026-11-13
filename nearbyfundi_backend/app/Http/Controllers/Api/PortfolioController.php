@@ -9,6 +9,47 @@ use Illuminate\Support\Facades\Storage;
 
 class PortfolioController extends BaseApiController
 {
+    /**
+     * GET /v3/portfolios
+     * Admin list: paginated, searchable, filterable by technician.
+     */
+    public function index(Request $request)
+    {
+        $query = Portfolio::with(['technician.user', 'images']);
+
+        // Filter by specific technician
+        if ($request->filled('technician_id') && $request->technician_id !== 'all') {
+            $query->where('technician_id', $request->technician_id);
+        }
+
+        // Search by technician name or email (if search term is provided)
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->whereHas('technician.user', function ($q) use ($search) {
+                $q->where('name', 'LIKE', "%{$search}%")
+                  ->orWhere('email', 'LIKE', "%{$search}%");
+            });
+        }
+
+        $perPage = $request->input('per_page', 10);
+        $portfolios = $query->orderByDesc('created_at')->paginate($perPage);
+
+        // Map the paginated items through the existing serialize() helper
+        $items = collect($portfolios->items())->map(fn ($p) => $this->serialize($p))->values();
+
+        return $this->successResponse([
+            'data' => $items,
+            'pagination' => [
+                'total'        => $portfolios->total(),
+                'per_page'     => $portfolios->perPage(),
+                'current_page' => $portfolios->currentPage(),
+                'last_page'    => $portfolios->lastPage(),
+                'from'         => $portfolios->firstItem(),
+                'to'           => $portfolios->lastItem(),
+            ]
+        ], 'Portfolios retrieved successfully');
+    }
+
     /** GET /v3/portfolios/technician/{id} */
     public function getByTechnician($technicianId)
     {
@@ -140,7 +181,18 @@ class PortfolioController extends BaseApiController
             'id'          => $p->id,
             'image_count' => $p->images->count(),
             'created_at'  => $p->created_at?->toIso8601String(),
-            'images'      => $p->images
+            'technician'  => [
+                'id'            => $p->technician?->id,
+                'profile_photo' => $p->technician?->profile_photo,
+                'area'          => $p->technician?->area,
+                'rating'        => $p->technician?->rating,
+                'verified'      => $p->technician?->verified,
+                'user'          => [
+                    'name'  => $p->technician?->user?->name,
+                    'email' => $p->technician?->user?->email,
+                ],
+            ],
+            'images' => $p->images
                 ->filter(fn ($i) => !empty($i->image))
                 ->map(fn ($i) => [
                     'id'  => $i->id,
