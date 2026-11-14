@@ -743,19 +743,43 @@ class AuthController extends BaseApiController
     // ──────────────────────────────────────────────
 
     public function updateDeviceToken(Request $request)
-    {
-        $request->validate(['token' => 'required|string|min:10']);
+{
+    $request->validate([
+        'token'    => 'required|string|min:10',
+        'app'      => 'nullable|string|in:og_one_super,fundi,nearby',
+        'platform' => 'nullable|string|in:android,ios',
+    ]);
 
-        $user = $request->user();
-        $user->fcm_device_token = $request->token;
-        $user->save();
+    $user = $request->user();
+    $app  = $request->input('app', \App\Models\UserDeviceToken::APP_SUPER);
 
-        $this->logAudit('update_device_token', 'user', $user->id, 'FCM token updated for ' . ($user->email ?? $user->phone));
+    try {
+        \App\Models\UserDeviceToken::updateOrCreate(
+            ['token' => $request->token, 'app' => $app],
+            [
+                'user_id'      => $user->id,
+                'platform'     => $request->input('platform', 'android'),
+                'last_seen_at' => now(),
+            ]
+        );
 
-        return $this->successResponse([
-            'message' => 'Device token updated successfully.',
-        ], 'Device token updated.');
+        if ($app === \App\Models\UserDeviceToken::APP_SUPER) {
+            $user->forceFill(['fcm_device_token' => $request->token])->save();
+        }
+
+        $this->logAudit('update_device_token', 'user', $user->id, "FCM token updated for app={$app}");
+
+        return $this->successResponse(
+            ['message' => 'Device token updated successfully.'],
+            'Device token updated.'
+        );
+    } catch (\Throwable $e) {
+        \Log::error('updateDeviceToken failed: ' . $e->getMessage());
+        return $this->errorResponse('Could not update device token.', 500);
     }
+}
+
+   
 
     public function getDeviceToken(Request $request)
     {
@@ -767,16 +791,32 @@ class AuthController extends BaseApiController
         ]);
     }
 
-    public function deleteDeviceToken(Request $request)
-    {
-        $user = $request->user();
-        $user->fcm_device_token = null;
-        $user->save();
+   public function deleteDeviceToken(Request $request)
+{
+    $request->validate([
+        'app' => 'nullable|string|in:og_one_super,fundi,nearby',
+    ]);
 
-        $this->logAudit('delete_device_token', 'user', $user->id, 'FCM token deleted for ' . ($user->email ?? $user->phone));
+    $user = $request->user();
+    $app  = $request->input('app', \App\Models\UserDeviceToken::APP_SUPER);
+
+    try {
+        \App\Models\UserDeviceToken::where('user_id', $user->id)
+            ->where('app', $app)
+            ->delete();
+
+        if ($app === \App\Models\UserDeviceToken::APP_SUPER) {
+            $user->forceFill(['fcm_device_token' => null])->save();
+        }
+
+        $this->logAudit('delete_device_token', 'user', $user->id, "FCM token deleted for app={$app}");
 
         return $this->successResponse(null, 'Device token deleted.');
+    } catch (\Throwable $e) {
+        \Log::error('deleteDeviceToken failed: ' . $e->getMessage());
+        return $this->errorResponse('Could not delete device token.', 500);
     }
+}
 
     // ──────────────────────────────────────────────
     // ACCOUNT DELETION

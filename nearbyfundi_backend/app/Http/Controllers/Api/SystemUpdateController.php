@@ -146,14 +146,14 @@ class SystemUpdateController extends BaseApiController
     // ───────────── PUBLIC / USER ─────────────
 
     /**
-     * HOME CARD — latest published update from TODAY only.
-     * Returns [] if nothing was published today.
+     * HOME CARD — latest active update (regardless of when it was published).
+     * Returns [] if nothing is active/closed.
      */
     public function active(Request $request)
     {
+        // Removed whereDate('published_at', today()) so all active updates show
         $latest = SystemUpdate::published()
             ->whereNull('closed_at')
-            ->whereDate('published_at', today())
             ->latest('published_at')
             ->first();
 

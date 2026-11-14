@@ -48,6 +48,8 @@ use App\Http\Controllers\Api\ChatExtrasController;
 use App\Http\Controllers\Api\SystemUpdateController;
 use App\Http\Controllers\Api\PrintReportController;
 
+// ▲▲▲ NEW — public device token controller (anonymous super app)
+use App\Http\Controllers\Api\DeviceTokenController;
 
 // Health check
 Route::get('/health', fn () => response()->json(['status' => 'ok', 'timestamp' => now()]));
@@ -55,7 +57,15 @@ Route::get('/health', fn () => response()->json(['status' => 'ok', 'timestamp' =
 // Media streaming with HTTP Range support (iOS video)
 Route::get('/media/{path}', [MediaController::class, 'stream'])->where('path', '.*');
 
-Route::get('system-updates/all', [SystemUpdateController::class, 'all']); 
+// ▲▲▲ Moved under v26 as `v26/system-updates/all` (kept here as legacy alias)
+Route::get('system-updates/all', [SystemUpdateController::class, 'all']);
+
+// ▲▲▲ NEW — PUBLIC device-token registration (super app, anonymous)
+//     No auth required so the super app can register its FCM token at boot.
+Route::post('v1/device-token', [DeviceTokenController::class, 'store'])
+    ->middleware('throttle:60,1');
+Route::delete('v1/device-token', [DeviceTokenController::class, 'destroy'])
+    ->middleware('throttle:60,1');
 
 // =============================================
 // V1 – AUTH & PUBLIC
@@ -90,12 +100,18 @@ Route::prefix('v1')->group(function () {
             Route::post('change-password', [AuthController::class, 'changePassword']);
             Route::post('locale', [AuthController::class, 'updateLocale']);
             Route::delete('account', [AuthController::class, 'deleteAccount']);
+
+            // ▲▲▲ NEW — link this device to the logged-in user
+            //     (mini apps call this right after login so anonymous super-app
+            //     tokens can be traced back to the user)
+            Route::post('device-token/link', [DeviceTokenController::class, 'link'])
+                ->middleware('throttle:30,1');
         });
     });
 
     Route::get('verification/verify-token', [AuthController::class, 'verifyToken']);
 
-    // Device Token
+    // Device Token — AUTHENTICATED (mini apps, technicians)
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('device-token', [AuthController::class, 'updateDeviceToken']);
         Route::get('device-token', [AuthController::class, 'getDeviceToken']);
@@ -152,7 +168,6 @@ Route::prefix('v2')->middleware(['auth:sanctum', 'active.session', 'subscription
     Route::post('technicians/heartbeat', [TechnicianController::class, 'heartbeat']);
 });
 
-// Verification (no subscription required)
 Route::prefix('v2')->middleware(['auth:sanctum', 'active.session'])->group(function () {
     Route::patch('technicians/{id}/verify', [TechnicianController::class, 'verify'])
         ->middleware('permission:technicians.verify');
@@ -174,29 +189,18 @@ Route::prefix('v3')->middleware(['auth:sanctum', 'active.session'])->group(funct
 
 // =============================================
 // V4 – REQUESTS, JOBS, TICKETS, REVIEWS & MONITORING
-//   requests.status: pending | accepted | cancelled | rejected
-//     pending -> accepted/rejected (fundi) | pending -> cancelled (customer)
-//     accepted / cancelled / rejected are LOCKED
-//   jobs.status:    pending | on-progress | completed
-//   tickets.status: on-progress | completed
-//     accepted request --[mark-as-job]--> job + ticket (on-progress)
-//     job --[request-completion]--> OTP by SMS to the customer
-//     job --[verify-completion]--> job + ticket completed
-//     completed job --[review]--> customer rating (1-5) + remark, once per job
 // =============================================
 Route::prefix('v4')->middleware(['auth:sanctum', 'active.session'])->group(function () {
     Route::get('request-services', [RequestController::class, 'getServicesWithCategories']);
     Route::get('technicians/by-service-category', [RequestController::class, 'getTechniciansByServiceCategory']);
 
     Route::post('requests', [RequestController::class, 'store']);
-    Route::patch('requests/{id}/status', [RequestController::class, 'updateStatus']);      // accepted | rejected | cancelled
-    Route::delete('requests/{id}/cancel', [RequestController::class, 'cancel']);           // customer, pending only (sets status = cancelled)
+    Route::patch('requests/{id}/status', [RequestController::class, 'updateStatus']);
+    Route::delete('requests/{id}/cancel', [RequestController::class, 'cancel']);
     Route::patch('requests/{id}/location', [RequestController::class, 'updateLocation']);
     Route::get('requests/{id}/tracking', [RequestController::class, 'trackingData']);
     Route::get('my-requests', [RequestController::class, 'myRequests']);
 
-    // ── JOBS ────────────────────────────────────────────────────────────
-    // Customer / Fundi scoped:
     Route::get('jobs', [JobController::class, 'index']);
     Route::get('jobs/{id}', [JobController::class, 'show'])->whereNumber('id');
     Route::post('jobs/{id}/request-completion', [JobController::class, 'requestCompletion'])
@@ -204,33 +208,20 @@ Route::prefix('v4')->middleware(['auth:sanctum', 'active.session'])->group(funct
     Route::post('jobs/{id}/verify-completion', [JobController::class, 'verifyCompletion'])
         ->whereNumber('id')->middleware('throttle:10,1');
 
-    // ── JOBS ────────────────────────────────────────────────────
-    // Static path BEFORE {id}. Same controller, extended filters.
-    // Query params: ?status= ?technician_id= ?customer_id= ?search=
-    //               ?from= ?to= ?sort= ?order= ?limit= ?page=
     Route::get('admin/jobs/stats', [JobController::class, 'stats']);
     Route::get('admin/jobs/histogram', [JobController::class, 'histogram']);
     Route::get('admin/jobs/chart-data', [JobController::class, 'chartData']);
     Route::get('admin/jobs', [JobController::class, 'index']);
     Route::get('admin/jobs/{id}', [JobController::class, 'show'])->whereNumber('id');
 
-    // ── REVIEWS (customer reviews a COMPLETED job, once) ────────────────
     Route::post('jobs/{id}/review', [ReviewController::class, 'store'])
         ->whereNumber('id')->middleware('throttle:10,1');
     Route::get('technicians/{id}/reviews', [ReviewController::class, 'technicianReviews'])
         ->whereNumber('id');
 
-    // ── TICKETS (read-only, for FUNDI & CUSTOMER) ───────────────────────
-    // Query params accepted by TicketController@index:
-    //   ?status=pending|on-progress|completed
-    //   ?search=<free text>
-    //   ?sort=created_at|completed_at|status|title|ticket_number
-    //   ?order=asc|desc
-    //   ?limit=1..200 (default 50)
     Route::get('tickets', [TicketController::class, 'index']);
     Route::get('tickets/{id}', [TicketController::class, 'show'])->whereNumber('id');
 
-    // Admin (static paths BEFORE {id})
     Route::get('admin/requests/stats', [RequestController::class, 'stats']);
     Route::get('admin/requests', [RequestController::class, 'index']);
     Route::get('admin/requests/{id}', [RequestController::class, 'show'])->whereNumber('id');
@@ -240,7 +231,6 @@ Route::prefix('v4')->middleware(['auth:sanctum', 'active.session'])->group(funct
     Route::get('customer/requests', [RequestController::class, 'customerRequests']);
     Route::get('technician/requests', [RequestController::class, 'technicianRequests']);
 
-    // Monitoring
     Route::prefix('monitoring')->group(function () {
         Route::get('map', [MonitoringController::class, 'map']);
         Route::get('notifications', [MonitoringController::class, 'getNotifications']);
@@ -307,7 +297,6 @@ Route::prefix('v7')->middleware(['auth:sanctum', 'active.session'])->group(funct
 // V8 – USER MANAGEMENT
 // =============================================
 Route::prefix('v8')->middleware(['auth:sanctum', 'active.session'])->group(function () {
-    // static paths BEFORE /users/{id}
     Route::get('/users/trashed', [UserManagementController::class, 'trashed']);
 
     Route::get('/users', [UserManagementController::class, 'index']);
@@ -381,7 +370,6 @@ Route::prefix('v10')->middleware(['auth:sanctum', 'active.session'])->group(func
 // V11 – SERVICES
 // =============================================
 Route::prefix('v11')->group(function () {
-    // Static paths FIRST (before {id})
     Route::get('services/dropdown', [ServiceController::class, 'getServicesDropdown']);
     Route::get('services/grouped-by-category', [ServiceController::class, 'getServicesGroupedByCategory']);
     Route::get('services/by-category/{categoryId}', [ServiceController::class, 'getServicesByCategory']);
@@ -432,7 +420,6 @@ Route::prefix('v13')->middleware(['auth:sanctum', 'active.session'])->group(func
 // =============================================
 Route::prefix('v14')->middleware(['auth:sanctum', 'active.session'])->group(function () {
     Route::prefix('chat')->group(function () {
-        // conversations
         Route::post('conversation', [ChatController::class, 'getOrCreateConversation'])->middleware('throttle:30,1');
         Route::get('conversations', [ChatController::class, 'getConversations']);
         Route::get('conversations/{id}/messages', [ChatController::class, 'getMessages']);
@@ -443,23 +430,20 @@ Route::prefix('v14')->middleware(['auth:sanctum', 'active.session'])->group(func
         Route::post('conversations/{id}/state', [ChatExtrasController::class, 'conversationState'])->middleware('throttle:60,1');
         Route::delete('conversations/{id}', [ChatController::class, 'deleteConversation'])->middleware('throttle:20,1');
 
-        // messages
         Route::post('send', [ChatController::class, 'sendMessage'])->middleware('throttle:60,1');
         Route::post('typing', [ChatController::class, 'typing'])->middleware('throttle:90,1');
         Route::post('forward', [ChatController::class, 'forward'])->middleware('throttle:20,1');
-        Route::post('messages/delete', [ChatExtrasController::class, 'deleteMessages'])->middleware('throttle:30,1'); // MUST be before {id}
-        Route::delete('messages/{id}', [ChatController::class, 'deleteMessage']);       // legacy = delete for everyone
+        Route::post('messages/delete', [ChatExtrasController::class, 'deleteMessages'])->middleware('throttle:30,1');
+        Route::delete('messages/{id}', [ChatController::class, 'deleteMessage']);
         Route::get('messages/{id}/file', [ChatController::class, 'viewFile'])->middleware('throttle:240,1');
         Route::get('messages/{id}/info', [ChatController::class, 'info']);
         Route::post('messages/{id}/react', [ChatController::class, 'react'])->middleware('throttle:90,1');
         Route::post('messages/{id}/star', [ChatController::class, 'toggleStar']);
         Route::post('messages/{id}/pin', [ChatController::class, 'togglePin']);
 
-        // updates tab + DP ring
         Route::get('updates', [ChatExtrasController::class, 'updates']);
         Route::post('status/{technicianId}/seen', [ChatExtrasController::class, 'markStatusSeen']);
 
-        // profile picture + e2ee keys
         Route::post('me/avatar', [ChatExtrasController::class, 'uploadAvatar'])->middleware('throttle:10,1');
         Route::post('e2ee/key', [ChatExtrasController::class, 'publishKey'])->middleware('throttle:10,1');
         Route::get('e2ee/key/{userId}', [ChatExtrasController::class, 'fetchKey'])->middleware('throttle:60,1');
@@ -530,10 +514,8 @@ Route::prefix('v17')->group(function () {
     Route::get('service-categories/dropdown/paginated', [ServiceCategoryController::class, 'dropdownPaginated']);
 
     Route::middleware(['auth:sanctum', 'active.session'])->group(function () {
-        // static paths BEFORE {id}
         Route::get('service-categories/stats', [ServiceCategoryController::class, 'stats']);
         Route::delete('service-categories/bulk-delete', [ServiceCategoryController::class, 'bulkDelete']);
-
         Route::post('service-categories', [ServiceCategoryController::class, 'store']);
         Route::put('service-categories/{id}', [ServiceCategoryController::class, 'update']);
         Route::delete('service-categories/{id}', [ServiceCategoryController::class, 'destroy']);
@@ -560,11 +542,9 @@ Route::prefix('v18')->group(function () {
 });
 
 // =============================================
-// V19 – TECHNICIAN 6-STEP REGISTRATION (draft-based)
+// V19 – TECHNICIAN 6-STEP REGISTRATION
 // =============================================
 Route::prefix('v19')->group(function () {
-
-    // ── Public ──
     Route::post('technicians/register/step1', [TechnicianController::class, 'registerStep1'])
         ->middleware('throttle:6,1');
     Route::post('technicians/register/verify-otp', [TechnicianController::class, 'verifyDraftOtp'])
@@ -574,7 +554,6 @@ Route::prefix('v19')->group(function () {
     Route::get('technicians/register/status/{id}', [TechnicianController::class, 'registrationStatus'])
         ->whereNumber('id');
 
-    // ── Draft-authenticated: steps 2–6 (no active.session: drafts have no User) ──
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('technicians/register/step2', [TechnicianController::class, 'registerStep2']);
         Route::post('technicians/register/step3', [TechnicianController::class, 'registerStep3']);
@@ -583,11 +562,9 @@ Route::prefix('v19')->group(function () {
         Route::post('technicians/register/step6', [TechnicianController::class, 'registerStep6']);
     });
 
-    // ── Admin approve ──
     Route::post('admin/technicians/{id}/approve', [TechnicianController::class, 'approve'])
         ->middleware(['auth:sanctum', 'active.session', 'permission:technicians.approve']);
 
-    // ── Authenticated technician (no subscription check) ──
     Route::middleware(['auth:sanctum', 'active.session'])->group(function () {
         Route::get('technicians/my-registration-status', [TechnicianController::class, 'myRegistrationStatus']);
         Route::get('technicians/profile', [TechnicianController::class, 'getOwnProfile']);
@@ -603,15 +580,12 @@ Route::prefix('v19')->group(function () {
 // V20 – ADMIN TECHNICIANS
 // =============================================
 Route::prefix('v20')->middleware(['auth:sanctum', 'active.session'])->group(function () {
-
     Route::get('admin/technicians/pending', [TechnicianController::class, 'adminPendingIndex'])
         ->middleware('permission:technicians.view');
     Route::get('admin/technicians/approved', [TechnicianController::class, 'adminApprovedIndex'])
         ->middleware('permission:technicians.view');
-
     Route::get('admin/technicians', [TechnicianController::class, 'adminIndex'])
         ->middleware('permission:technicians.view');
-
     Route::get('admin/technicians/{id}/biometrics', [TechnicianController::class, 'adminBiometrics'])
         ->whereNumber('id')
         ->middleware('permission:technicians.view');
@@ -629,21 +603,18 @@ Route::prefix('v21')
             Route::get('table', [FinanceSubscriptionController::class, 'table']);
             Route::get('export', [FinanceSubscriptionController::class, 'export']);
         });
-
         Route::prefix('finance/technicians')->group(function () {
             Route::get('summary', [FinanceTechnicianController::class, 'summary']);
             Route::get('trends', [FinanceTechnicianController::class, 'trends']);
             Route::get('table', [FinanceTechnicianController::class, 'table']);
             Route::get('export', [FinanceTechnicianController::class, 'export']);
         });
-
         Route::prefix('finance/customers')->group(function () {
             Route::get('summary', [FinanceCustomerController::class, 'summary']);
             Route::get('trends', [FinanceCustomerController::class, 'trends']);
             Route::get('table', [FinanceCustomerController::class, 'table']);
             Route::get('export', [FinanceCustomerController::class, 'export']);
         });
-
         Route::prefix('finance/requests')->group(function () {
             Route::get('summary', [FinanceRequestController::class, 'summary']);
             Route::get('trends', [FinanceRequestController::class, 'trends']);
@@ -662,15 +633,12 @@ Route::prefix('v22')->middleware(['auth:sanctum', 'active.session'])->group(func
         Route::get('sms-balance', [SmsLogController::class, 'balance']);
         Route::get('sms-stats', [SmsLogController::class, 'stats']);
     });
-
     Route::middleware('permission:sms.send')->group(function () {
         Route::post('send-sms', [SmsLogController::class, 'sendSms']);
     });
-
     Route::middleware('permission:sms.resend')->group(function () {
         Route::post('sms-logs/{id}/resend', [SmsLogController::class, 'resendSms']);
     });
-
     Route::middleware('permission:sms.delete')->group(function () {
         Route::delete('sms-logs/{id}', [SmsLogController::class, 'deleteSmsLog']);
     });
@@ -688,11 +656,9 @@ Route::prefix('v23')->group(function () {
             Route::get('feedback', [FeedbackController::class, 'index']);
             Route::get('feedback/{id}', [FeedbackController::class, 'show']);
         });
-
         Route::middleware('permission:feedback.edit')->group(function () {
             Route::put('feedback/{id}', [FeedbackController::class, 'update']);
         });
-
         Route::middleware('permission:feedback.delete')->group(function () {
             Route::delete('feedback/{id}', [FeedbackController::class, 'destroy']);
         });
@@ -716,7 +682,6 @@ Route::prefix('v24')->group(function () {
             Route::put('mini-apps/{id}', [MiniAppController::class, 'update']);
             Route::delete('mini-apps/{id}', [MiniAppController::class, 'destroy']);
         });
-
         Route::get('mini-app-qrs/stats', [MiniAppQrController::class, 'stats'])->middleware('permission:miniapp-qrs.view');
         Route::get('mini-app-qrs', [MiniAppQrController::class, 'index'])->middleware('permission:miniapp-qrs.view');
         Route::get('mini-app-qrs/{id}', [MiniAppQrController::class, 'show'])->middleware('permission:miniapp-qrs.view');
@@ -743,14 +708,16 @@ Route::prefix('v25')->group(function () {
     });
 });
 
-
-
 // =============================================
 // V26 – SYSTEM UPDATES
 // =============================================
 Route::prefix('v26')->group(function () {
-    // Public (token optional: tracks views/dismissals per user when present)
+    // Public
     Route::get('system-updates', [SystemUpdateController::class, 'active'])->middleware('throttle:60,1');
+
+    // ▲▲▲ NEW — /v26/system-updates/all (alias for /system-updates/all)
+    Route::get('system-updates/all', [SystemUpdateController::class, 'all']);
+
     Route::get('system-updates/{id}', [SystemUpdateController::class, 'showPublic'])->whereNumber('id');
     Route::post('system-updates/{id}/view', [SystemUpdateController::class, 'markViewed'])
         ->whereNumber('id')->middleware('throttle:60,1');
@@ -760,7 +727,7 @@ Route::prefix('v26')->group(function () {
     // Admin
     Route::middleware(['auth:sanctum', 'active.session', 'permission:system-updates.manage'])
         ->prefix('admin')->group(function () {
-            Route::post('system-updates/draft', [SystemUpdateController::class, 'saveDraft']); // before {id}
+            Route::post('system-updates/draft', [SystemUpdateController::class, 'saveDraft']);
             Route::get('system-updates', [SystemUpdateController::class, 'index']);
             Route::post('system-updates', [SystemUpdateController::class, 'store']);
             Route::get('system-updates/{id}', [SystemUpdateController::class, 'show'])->whereNumber('id');
@@ -780,7 +747,7 @@ Route::prefix('v27')->middleware(['auth:sanctum', 'active.session'])->group(func
 });
 
 // =============================================
-// PUBLIC TRACKING & REGISTRATION STATUS (backward-compatible legacy aliases)
+// PUBLIC TRACKING & REGISTRATION STATUS
 // =============================================
 Route::get('tracking/{requestId}', [TechnicianController::class, 'getTrackingData']);
 Route::get('technicians/registration-status/{id}', [TechnicianController::class, 'registrationStatus']);

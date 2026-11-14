@@ -26,7 +26,7 @@ class User extends Authenticatable
         'last_login_at',
         'locale',
         'email_verified_at',
-        'phone_verified_at',          
+        'phone_verified_at',
         'subscription_status',
         'subscription_expires_at',
         'current_subscription_id',
@@ -40,7 +40,7 @@ class User extends Authenticatable
 
     protected $casts = [
         'email_verified_at'       => 'datetime',
-        'phone_verified_at'       => 'datetime',   // <-- ADDED
+        'phone_verified_at'       => 'datetime',
         'last_login_at'           => 'datetime',
         'is_active'               => 'boolean',
         'subscription_expires_at' => 'datetime',
@@ -62,7 +62,7 @@ class User extends Authenticatable
         return !is_null($this->email_verified_at);
     }
 
-    // ── Relationships (unchanged) ─────────────────────────
+    // ── Relationships ─────────────────────────────────────
     public function technician()          { return $this->hasOne(Technician::class); }
     public function customerRequests()    { return $this->hasMany(ServiceRequest::class, 'customer_id'); }
     public function comments()            { return $this->hasMany(Comment::class); }
@@ -108,7 +108,53 @@ class User extends Authenticatable
     public function currentSubscription() { return $this->belongsTo(Subscription::class, 'current_subscription_id'); }
     public function invoices()            { return $this->hasMany(Invoice::class)->orderBy('created_at', 'desc'); }
 
-    // ── Subscription helpers (unchanged) ──────────────────
+    // ── Device token relationships ────────────────────────
+    public function deviceTokens()
+    {
+        return $this->hasMany(UserDeviceToken::class);
+    }
+
+    public function superAppDeviceTokens()
+    {
+        return $this->deviceTokens()->where('app', UserDeviceToken::APP_SUPER);
+    }
+
+    /**
+     * Most recent super-app FCM token, or null.
+     * Used by push (FcmService) — never returns mini-app tokens.
+     */
+    public function fcmTokenForSuperApp(): ?string
+    {
+        $tokens = $this->superAppDeviceTokens()
+            ->orderByDesc('last_seen_at')
+            ->orderByDesc('id')
+            ->pluck('token')
+            ->all();
+
+        if (!empty($tokens)) {
+            return $tokens[0];
+        }
+
+        // Legacy fallback: only safe because we nulled the column above
+        return $this->fcm_device_token ?: null;
+    }
+
+    public function allSuperAppTokens(): array
+    {
+        $tokens = $this->superAppDeviceTokens()
+            ->orderByDesc('last_seen_at')
+            ->orderByDesc('id')
+            ->pluck('token')
+            ->all();
+
+        if (empty($tokens) && !empty($this->fcm_device_token)) {
+            $tokens = [(string) $this->fcm_device_token];
+        }
+
+        return array_values(array_unique(array_filter($tokens)));
+    }
+
+    // ── Subscription helpers ──────────────────────────────
     public function hasActiveSubscription(): bool
     {
         if ($this->subscription_status !== 'active') return false;

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Notification as NotificationModel;
 use App\Models\User;
+use App\Models\UserDeviceToken;
 use Illuminate\Support\Facades\Log;
 use Kreait\Firebase\Exception\Messaging\NotFound;
 use Kreait\Firebase\Factory;
@@ -27,7 +28,6 @@ class FcmService
         }
 
         $credentialsPath = config('firebase.credentials');
-
         if (!$credentialsPath) {
             Log::warning('FCM credentials path not set in config.');
             return;
@@ -56,18 +56,154 @@ class FcmService
         return $this->enabled && $this->messaging !== null;
     }
 
+    // ================================================================
+    // SYSTEM UPDATE — SUPER APP ONLY
+    // ================================================================
+
+    public function sendSystemUpdate(User $user, \App\Models\SystemUpdate $update): array
+    {
+        if (!$this->isReady()) {
+            return [
+                'success' => false,
+                'skipped' => true,
+                'error'   => 'FCM disabled or not configured',
+                'sent'    => 0,
+                'failed'  => 0,
+            ];
+        }
+
+        $tokens = $user->allSuperAppTokens();
+
+        if (empty($tokens)) {
+            return [
+                'success' => false,
+                'skipped' => true,
+                'error'   => 'No super-app FCM token',
+                'sent'    => 0,
+                'failed'  => 0,
+            ];
+        }
+
+        $title = trim((string) $update->title);
+        $body  = \Illuminate\Support\Str::limit(trim((string) $update->description), 140);
+        $ttl   = 60 * 60 * 24 * 28;
+
+        $data = [
+            'type'         => 'system_update',
+            'update_id'    => (string) $update->id,
+            'title'        => $title,
+            'body'         => $body,
+            'description'  => \Illuminate\Support\Str::limit(trim((string) $update->description), 500),
+            'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+        ];
+
+        $sent   = 0;
+        $failed = 0;
+
+        foreach ($tokens as $token) {
+            $message = CloudMessage::new()
+                ->withToken($token)
+                ->withNotification(Notification::create($title, $body))
+                ->withAndroidConfig([
+                    'priority' => 'high',
+                    'ttl'      => "{$ttl}s",
+                    'notification' => [
+                        'sound'        => 'default',
+                        'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+                        'channel_id'   => 'fundi_channel',
+                    ],
+                ])
+                ->withApnsConfig([
+                    'headers' => [
+                        'apns-priority'   => '10',
+                        'apns-push-type'  => 'alert',
+                        'apns-expiration' => (string) (time() + $ttl),
+                    ],
+                    'payload' => ['aps' => [
+                        'alert' => ['title' => $title, 'body' => $body],
+                        'sound' => 'default',
+                        'badge' => $this->unreadCountFor($user) + 1,
+                    ]],
+                ])
+                ->withData($this->sanitizeData($data));
+
+            if ($this->dispatch($message, $token)) {
+                $sent++;
+            } else {
+                $failed++;
+            }
+        }
+
+        return [
+            'success' => $sent > 0,
+            'skipped' => false,
+            'sent'    => $sent,
+            'failed'  => $failed,
+            'error'   => $sent === 0 ? 'All super-app FCM sends failed' : null,
+        ];
+    }
+
+    // ================================================================
+    // CHAT — SUPER APP ONLY
+    // ================================================================
+
+    public function sendChatNotification($receiver, $sender, $message, $conversationId): bool
+    {
+        if (!$receiver || !$sender || !$message) {
+            Log::warning('Missing data for chat notification');
+            return false;
+        }
+
+        $tokens = $receiver instanceof User
+            ? $receiver->allSuperAppTokens()
+            : [];
+
+        if (empty($tokens)) {
+            return false;
+        }
+
+        $senderName = trim((string) ($sender->name ?? ''));
+        $title      = $senderName !== '' ? $senderName : 'New Message';
+        $body       = trim($this->getNotificationBody($message));
+
+        $data = [
+            'type'            => 'chat_message',
+            'title'           => $title,
+            'body'            => $body,
+            'conversation_id' => (string) $conversationId,
+            'message_id'      => (string) ($message->id ?? ''),
+            'sender_id'       => (string) ($sender->id ?? ''),
+            'sender_name'     => $senderName !== '' ? $senderName : 'Unknown',
+            'msg_type'        => $message->message_type ?? 'text',
+            'unread_count'    => (string) ($this->unreadCountFor($receiver) + 1),
+            'timestamp'       => now()->toIso8601String(),
+            'priority'        => 'high',
+        ];
+
+        $any = false;
+        foreach ($tokens as $token) {
+            if ($this->sendSilentDataToDevice($token, $data)) {
+                $any = true;
+            }
+        }
+        return $any;
+    }
+
+    // ================================================================
+    // NOTIFICATION ROW — SUPER APP ONLY
+    // ================================================================
+
     public function sendFromNotification(NotificationModel $notification): bool
     {
         $user = $notification->user;
-
         if (!$user) {
             Log::warning('Notification has no user', ['id' => $notification->id]);
             return false;
         }
 
-        $token = $this->getUserToken($user);
-        if (!$token) {
-            Log::info('User has no FCM token', ['user_id' => $user->id]);
+        $tokens = $user->allSuperAppTokens();
+        if (empty($tokens)) {
+            Log::info('User has no super-app FCM token', ['user_id' => $user->id]);
             return false;
         }
 
@@ -95,12 +231,22 @@ class FcmService
             ]
         );
 
-        if (in_array($type, self::SILENT_TYPES, true)) {
-            return $this->sendSilentDataToDevice($token, $data);
-        }
+        $any = false;
+        foreach ($tokens as $token) {
+            $ok = in_array($type, self::SILENT_TYPES, true)
+                ? $this->sendSilentDataToDevice($token, $data)
+                : $this->sendVisible($token, $title, $body, $data, $this->unreadCountFor($user));
 
-        return $this->sendVisible($token, $title, $body, $data, $this->unreadCountFor($user));
+            if ($ok) {
+                $any = true;
+            }
+        }
+        return $any;
     }
+
+    // ================================================================
+    // LOW-LEVEL
+    // ================================================================
 
     protected function sendVisible(
         string $deviceToken,
@@ -165,100 +311,14 @@ class FcmService
         return $this->dispatch($message, $deviceToken);
     }
 
-    public function sendChatNotification($receiver, $sender, $message, $conversationId): bool
-    {
-        if (!$receiver || !$sender || !$message) {
-            Log::warning('Missing data for chat notification');
-            return false;
-        }
-
-        $token = $this->getUserToken($receiver);
-        if (!$token) {
-            return false;
-        }
-
-        $senderName = trim((string) ($sender->name ?? ''));
-        $title      = $senderName !== '' ? $senderName : 'New Message';
-        $body       = trim($this->getNotificationBody($message));
-
-        $data = [
-            'type'            => 'chat_message',
-            'title'           => $title,
-            'body'            => $body,
-            'conversation_id' => (string) $conversationId,
-            'message_id'      => (string) ($message->id ?? ''),
-            'sender_id'       => (string) ($sender->id ?? ''),
-            'sender_name'     => $senderName !== '' ? $senderName : 'Unknown',
-            'msg_type'        => $message->message_type ?? 'text', // 👈 FIXED: Renamed from reserved 'message_type' to 'msg_type'
-            'unread_count'    => (string) ($this->unreadCountFor($receiver) + 1),
-            'timestamp'       => now()->toIso8601String(),
-            'priority'        => 'high',
-        ];
-
-        return $this->sendSilentDataToDevice($token, $data);
-    }
-
-    public function sendSystemUpdate(User $user, \App\Models\SystemUpdate $update): array
-    {
-        $token = $this->getUserToken($user);
-        if (!$token) {
-            return ['success' => false, 'skipped' => true, 'error' => 'No FCM token'];
-        }
-        if (!$this->isReady()) {
-            return ['success' => false, 'skipped' => true, 'error' => 'FCM disabled or not configured'];
-        }
-
-        $title = trim($update->title);
-        $body  = \Illuminate\Support\Str::limit(trim($update->description), 140);
-        $ttl   = 60 * 60 * 24 * 28; // FCM keeps messages for offline devices up to 4 weeks
-
-        $data = [
-            'type'         => 'system_update',
-            'update_id'    => (string) $update->id,
-            'title'        => $title,
-            'body'         => $body,
-            'description'  => \Illuminate\Support\Str::limit(trim($update->description), 500),
-            'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
-        ];
-
-        $message = CloudMessage::new()
-            ->withToken($token)
-            ->withNotification(Notification::create($title, $body))
-            ->withAndroidConfig([
-                'priority' => 'high',
-                'ttl'      => "{$ttl}s",
-                'notification' => [
-                    'sound'        => 'default',
-                    'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
-                    'channel_id'   => 'fundi_channel',
-                ],
-            ])
-            ->withApnsConfig([
-                'headers' => [
-                    'apns-priority'   => '10',
-                    'apns-push-type'  => 'alert',
-                    'apns-expiration' => (string) (time() + $ttl),
-                ],
-                'payload' => ['aps' => [
-                    'alert' => ['title' => $title, 'body' => $body],
-                    'sound' => 'default',
-                    'badge' => $this->unreadCountFor($user) + 1,
-                ]],
-            ])
-            ->withData($this->sanitizeData($data));
-
-        $ok = $this->dispatch($message, $token);
-
-        return ['success' => $ok, 'error' => $ok ? null : 'FCM send failed'];
-    }
-
     protected function dispatch(CloudMessage $message, string $deviceToken): bool
     {
         try {
             $this->messaging->send($message);
             return true;
         } catch (NotFound $e) {
-            Log::warning('FCM token is no longer valid — clearing it.');
+            Log::warning('FCM token invalid — deleting', ['suffix' => substr($deviceToken, -8)]);
+            UserDeviceToken::where('token', $deviceToken)->delete();
             User::where('fcm_device_token', $deviceToken)->update(['fcm_device_token' => null]);
             return false;
         } catch (\Throwable $e) {
@@ -291,24 +351,16 @@ class FcmService
 
     protected function sanitizeData(array $data): array
     {
-        $sanitized = [];
-        foreach ($data as $key => $value) {
-            $sanitized[$key] = match (true) {
-                $value === null                       => '',
-                is_bool($value)                       => $value ? 'true' : 'false',
-                is_array($value), is_object($value)   => json_encode($value),
-                default                               => (string) $value,
+        $out = [];
+        foreach ($data as $k => $v) {
+            $out[$k] = match (true) {
+                $v === null                     => '',
+                is_bool($v)                     => $v ? 'true' : 'false',
+                is_array($v), is_object($v)     => json_encode($v),
+                default                         => (string) $v,
             };
         }
-        return $sanitized;
-    }
-
-    protected function getUserToken($user): ?string
-    {
-        if (!$user) return null;
-        if (!empty($user->fcm_device_token)) return $user->fcm_device_token;
-        if (!empty($user->device_token)) return $user->device_token;
-        return null;
+        return $out;
     }
 
     protected function getNotificationBody($message): string
