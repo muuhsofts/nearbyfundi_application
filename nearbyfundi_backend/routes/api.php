@@ -55,6 +55,8 @@ Route::get('/health', fn () => response()->json(['status' => 'ok', 'timestamp' =
 // Media streaming with HTTP Range support (iOS video)
 Route::get('/media/{path}', [MediaController::class, 'stream'])->where('path', '.*');
 
+Route::get('system-updates/all', [SystemUpdateController::class, 'all']); 
+
 // =============================================
 // V1 – AUTH & PUBLIC
 // =============================================

@@ -8,13 +8,15 @@ use App\Services\SystemUpdateService;
 use App\Traits\Auditable;
 use DomainException;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log; 
+use Illuminate\Support\Facades\Log;
 
 class SystemUpdateController extends BaseApiController
 {
     use Auditable;
 
     public function __construct(private SystemUpdateService $service) {}
+
+    // ───────────── ADMIN ─────────────
 
     public function index(Request $request)
     {
@@ -26,12 +28,11 @@ class SystemUpdateController extends BaseApiController
                       ->orWhere('description', 'LIKE', "%{$request->search}%");
                 }))
                 ->withCount([
-                    // 👇 SMS counts removed. Only Push notifications remain.
-                    'notifications as push_sent'   => fn ($n) => $n->where('channel', 'push')->where('status', 'sent'),
-                    'notifications as push_failed' => fn ($n) => $n->where('channel', 'push')->where('status', 'failed'),
-                    'userStates as received_count' => fn ($n) => $n->whereNotNull('received_at'),
-                    'userStates as viewed_count'   => fn ($n) => $n->whereNotNull('viewed_at'),
-                    'userStates as dismissed_count'=> fn ($n) => $n->whereNotNull('dismissed_at'),
+                    'notifications as push_sent'    => fn ($n) => $n->where('channel', 'push')->where('status', 'sent'),
+                    'notifications as push_failed'  => fn ($n) => $n->where('channel', 'push')->where('status', 'failed'),
+                    'userStates as received_count'  => fn ($n) => $n->whereNotNull('received_at'),
+                    'userStates as viewed_count'    => fn ($n) => $n->whereNotNull('viewed_at'),
+                    'userStates as dismissed_count' => fn ($n) => $n->whereNotNull('dismissed_at'),
                 ])
                 ->latest();
 
@@ -48,12 +49,11 @@ class SystemUpdateController extends BaseApiController
         return $update ? $this->successResponse($update) : $this->notFound('Update not found.');
     }
 
-    /** Create as draft; pass publish=true to publish immediately. */
     public function store(Request $request)
     {
-        $data = $this->validateContent($request);
+        $data   = $this->validateContent($request);
         $update = $this->service->createDraft($data, $request->user()->id);
-        
+
         $this->logAudit('create_system_update', 'system_update', $update->id, "Update created: {$update->title}");
 
         if ($request->boolean('publish')) {
@@ -68,7 +68,6 @@ class SystemUpdateController extends BaseApiController
         return $this->created($update, $request->boolean('publish') ? 'Update published.' : 'Draft saved.');
     }
 
-    /** Save as draft: creates a new draft, or updates an existing draft when `id` is given. */
     public function saveDraft(Request $request)
     {
         $data = $this->validateContent($request);
@@ -144,22 +143,59 @@ class SystemUpdateController extends BaseApiController
         return $this->successResponse($update, 'Update closed.');
     }
 
-    // ───────────── PUBLIC / USER (optional auth) ─────────────
+    // ───────────── PUBLIC / USER ─────────────
 
+    /**
+     * HOME CARD — latest published update from TODAY only.
+     * Returns [] if nothing was published today.
+     */
     public function active(Request $request)
     {
-        $user = auth('sanctum')->user();
+        $latest = SystemUpdate::published()
+            ->whereNull('closed_at')
+            ->whereDate('published_at', today())
+            ->latest('published_at')
+            ->first();
 
-        $list = $this->service->activeFor($user instanceof User ? $user : null)
-            ->map(fn ($u) => $this->publicShape($u))
-            ->values();
+        $list = $latest
+            ? collect([$this->publicShape($latest)])
+            : collect();
 
-        return $this->successResponse($list);
+        return $this->successResponse($list->values());
+    }
+
+    /**
+     * LIST SCREEN — ALL published, non-closed updates (any date), newest first.
+     * Optional query: ?limit=200 (flat array) | ?page=1&per_page=15 (paginated).
+     */
+    public function all(Request $request)
+    {
+        $limit = (int) $request->input('limit', 0);
+
+        $q = SystemUpdate::published()
+            ->whereNull('closed_at')
+            ->orderByDesc('published_at');
+
+        if ($limit > 0) {
+            $list = $q->limit(min($limit, 200))
+                ->get()
+                ->map(fn ($u) => $this->publicShape($u))
+                ->values();
+
+            return $this->successResponse($list);
+        }
+
+        return $this->successResponse(
+            $q->paginate((int) $request->input('per_page', 15))
+              ->through(fn ($u) => $this->publicShape($u))
+        );
     }
 
     public function showPublic($id)
     {
-        $update = SystemUpdate::published()->find($id);
+        $update = SystemUpdate::published()
+            ->whereNull('closed_at')
+            ->find($id);
 
         return $update
             ? $this->successResponse($this->publicShape($update))
@@ -168,7 +204,10 @@ class SystemUpdateController extends BaseApiController
 
     public function markViewed($id)
     {
-        $update = SystemUpdate::published()->find($id);
+        $update = SystemUpdate::published()
+            ->whereNull('closed_at')
+            ->find($id);
+
         if (!$update) return $this->notFound('Update not found.');
 
         $user = auth('sanctum')->user();
@@ -181,7 +220,10 @@ class SystemUpdateController extends BaseApiController
 
     public function dismiss($id)
     {
-        $update = SystemUpdate::find($id);
+        $update = SystemUpdate::published()
+            ->whereNull('closed_at')
+            ->find($id);
+
         if (!$update) return $this->notFound('Update not found.');
 
         $user = auth('sanctum')->user();
@@ -198,7 +240,6 @@ class SystemUpdateController extends BaseApiController
     {
         $req = $partial ? 'sometimes|required' : 'required';
 
-        // 👇 send_sms removed from validation
         return $request->validate([
             'title'       => "{$req}|string|min:3|max:255",
             'description' => "{$req}|string|min:3|max:5000",
