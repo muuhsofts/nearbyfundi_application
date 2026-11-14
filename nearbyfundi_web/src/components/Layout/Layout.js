@@ -82,7 +82,7 @@ function Layout() {
                   target="_blank"
                   className={classes.link}
               >
-                OG ONEGROUP
+                Og One-Group
               </Link>
             </div>
             <div>
