@@ -105,6 +105,7 @@ const getStatusStyles = (t) => ({
 
 // ── Head cells (labels resolved via t()) ────────────────────────────────
 const getHeadCells = (t) => [
+    { id: 'count', label: '#', disableSort: true },
     { id: 'name', label: t('user.col.user') },
     { id: 'email', label: t('user.col.email') },
     { id: 'phone', label: t('user.col.phone') },
@@ -120,8 +121,19 @@ const UsersList = () => {
     const showTableView = useMediaQuery(theme.breakpoints.up('md'));
 
     const { language } = useLanguage();
+
+    // Enhanced translation function with fallback for missing keys
     const t = (key, replacements) => {
         let str = tUser(language, key);
+
+        // Fallback if translation is missing (returns the key itself or undefined)
+        if (!str || str === key) {
+            // Convert 'user.col.user' to 'User'
+            const parts = key.split('.');
+            const lastPart = parts[parts.length - 1];
+            str = lastPart.charAt(0).toUpperCase() + lastPart.slice(1).replace(/_/g, ' ');
+        }
+
         if (replacements) {
             Object.entries(replacements).forEach(([k, v]) => {
                 str = str.replace(new RegExp(`\\{${k}\\}`, 'g'), v);
@@ -861,7 +873,7 @@ const UsersList = () => {
                                     }}
                                 >
                                     {headCells.map((cell) => (
-                                        <TableCell key={cell.id} sx={{ whiteSpace: 'nowrap' }}>
+                                        <TableCell key={cell.id} sx={{ whiteSpace: 'nowrap', width: cell.id === 'count' ? '50px' : 'auto' }}>
                                             {!cell.disableSort && !showDeleted ? (
                                                 <TableSortLabel
                                                     active={orderBy === cell.id}
@@ -894,8 +906,9 @@ const UsersList = () => {
                                         </TableCell>
                                     </TableRow>
                                 ) : (
-                                    currentData.map((user) => {
+                                    currentData.map((user, index) => {
                                         const isVerified = !!user.email_verified_at;
+                                        const rowNumber = page * rowsPerPage + index + 1;
 
                                         return (
                                             <TableRow
@@ -906,6 +919,11 @@ const UsersList = () => {
                                                     transition: 'background-color 0.15s',
                                                 }}
                                             >
+                                                {/* Count/Row Number */}
+                                                <TableCell sx={{ py: 2, color: 'text.secondary', fontWeight: 500, fontSize: '0.875rem' }}>
+                                                    {rowNumber}
+                                                </TableCell>
+
                                                 {/* User */}
                                                 <TableCell sx={{ py: 2 }}>
                                                     <Stack direction="row" spacing={1.5} alignItems="center">
@@ -925,9 +943,6 @@ const UsersList = () => {
                                                         <Box>
                                                             <Typography variant="body2" fontWeight={600} color="text.primary">
                                                                 {user.name}
-                                                            </Typography>
-                                                            <Typography variant="caption" color="text.secondary">
-                                                                ID: {user.id}
                                                             </Typography>
                                                         </Box>
                                                     </Stack>
@@ -1070,8 +1085,9 @@ const UsersList = () => {
                             </Paper>
                         ) : (
                             <Stack spacing={2}>
-                                {currentData.map((user) => {
+                                {currentData.map((user, index) => {
                                     const isVerified = !!user.email_verified_at;
+                                    const rowNumber = page * rowsPerPage + index + 1;
 
                                     return (
                                         <Card
@@ -1092,25 +1108,47 @@ const UsersList = () => {
                                                     mb={1.5}
                                                 >
                                                     <Stack direction="row" spacing={1.5} alignItems="center">
-                                                        <Avatar
-                                                            sx={{
-                                                                width: 44,
-                                                                height: 44,
-                                                                bgcolor: isVerified
-                                                                    ? colors.salat || '#10b981'
-                                                                    : '#64748b',
-                                                                fontSize: 16,
-                                                                fontWeight: 700,
-                                                            }}
-                                                        >
-                                                            {user.name?.[0]?.toUpperCase() || 'U'}
-                                                        </Avatar>
+                                                        <Box sx={{ position: 'relative' }}>
+                                                            <Avatar
+                                                                sx={{
+                                                                    width: 44,
+                                                                    height: 44,
+                                                                    bgcolor: isVerified
+                                                                        ? colors.salat || '#10b981'
+                                                                        : '#64748b',
+                                                                    fontSize: 16,
+                                                                    fontWeight: 700,
+                                                                }}
+                                                            >
+                                                                {user.name?.[0]?.toUpperCase() || 'U'}
+                                                            </Avatar>
+                                                            {/* Mobile Number Badge */}
+                                                            <Box
+                                                                sx={{
+                                                                    position: 'absolute',
+                                                                    top: -6,
+                                                                    left: -6,
+                                                                    bgcolor: 'background.paper',
+                                                                    border: '1px solid',
+                                                                    borderColor: 'divider',
+                                                                    borderRadius: '50%',
+                                                                    width: 22,
+                                                                    height: 22,
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    fontSize: '0.7rem',
+                                                                    fontWeight: 700,
+                                                                    color: 'text.secondary',
+                                                                    zIndex: 1,
+                                                                }}
+                                                            >
+                                                                {rowNumber}
+                                                            </Box>
+                                                        </Box>
                                                         <Box>
                                                             <Typography variant="body1" fontWeight={700}>
                                                                 {user.name}
-                                                            </Typography>
-                                                            <Typography variant="caption" color="text.secondary">
-                                                                ID: {user.id}
                                                             </Typography>
                                                         </Box>
                                                     </Stack>
